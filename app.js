@@ -21,7 +21,7 @@ const AREAS = {
     mapa: MAPA_ESTANDAR
   },
   "ACABADO": {
-    habilitada: false,               // PENDIENTE: compartir libro como lector + confirmar cabeceras
+    habilitada: true,               // PENDIENTE: compartir libro como lector + confirmar cabeceras
     sheetId: "1R2FqLRZpFjdA7rzUk6dsTyj898yUYO0aKU_OYG4e0Xc",
     hoja: "ALMACEN",
     mapa: MAPA_ESTANDAR              // ajustar cuando se vean sus columnas reales
