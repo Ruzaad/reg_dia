@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0D3B85">
+<link rel="manifest" href="manifest.json">
+<title>Samitex — Registro de Producción</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-pagina="operario">
+<header>
+  <div class="titulo" id="tituloArea">ÁREA</div>
+  <div class="badges">
+    <div class="badge avance" id="badgeAvance"></div>
+    <div class="badge" id="quienBadge"></div>
+    <button class="btn-salir" id="btnSalir">Salir</button>
+  </div>
+</header>
+<main>
+  <div class="banner-error" id="bannerError"></div>
+
+  <section class="pantalla activa" id="pasoCarga">
+    <div id="zonaCarga"></div>
+  </section>
+
+  <!-- OF -->
+  <section class="pantalla" id="pasoOF">
+    <h1>¿En qué OF trabajas?</h1>
+    <div class="sub">Escribe los números de la OF</div>
+    <div class="zona-of">
+      <input class="input-grande" id="inputOF" inputmode="numeric" placeholder="Ej: 9424" maxlength="6" autocomplete="off">
+      <div class="sugerencias" id="sugerenciasOF"></div>
+    </div>
+  </section>
+
+  <!-- Módulos -->
+  <section class="pantalla" id="pasoModulos">
+    <button class="btn-volver" onclick="irA('pasoOF')">← Cambiar OF</button>
+    <h1 id="tituloModulos"></h1>
+    <div class="sub">Toca tu módulo</div>
+    <div class="lista-cards" id="listaModulos"></div>
+  </section>
+
+  <!-- Operaciones -->
+  <section class="pantalla" id="pasoOps">
+    <button class="btn-volver" onclick="irA('pasoModulos')">← Volver</button>
+    <h1 id="tituloOps"></h1>
+    <div class="sub">Toca tu operación</div>
+    <div class="lista-cards" id="listaOps"></div>
+  </section>
+
+  <!-- Tickets -->
+  <section class="pantalla" id="pasoTickets">
+    <button class="btn-volver" onclick="irA('pasoOps')">← Volver</button>
+    <h1 id="tituloTickets"></h1>
+    <div class="sub">Busca la numeración de tu paquete</div>
+    <div class="lista-tickets" id="listaTickets"></div>
+  </section>
+
+  <!-- Confirmación -->
+  <section class="pantalla" id="pasoConf">
+    <button class="btn-volver" onclick="irA('pasoTickets')">← Volver</button>
+    <div class="zona-conf">
+      <h1>¿Este es tu paquete?</h1>
+      <div class="conf-card">
+        <div class="tk-label">Numeración</div>
+        <div class="conf-num" id="confNum"></div>
+        <div class="conf-det" id="confDet"></div>
+      </div>
+      <button class="btn-principal" id="btnRegistrar" onclick="registrar()">SÍ, REGISTRAR</button>
+      <button class="btn-secundario" onclick="irA('pasoTickets')">NO, VOLVER</button>
+    </div>
+  </section>
+</main>
+
+<div class="pantalla-exito" id="exito">
+  <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"
+    stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+  <div class="ex-titulo" id="exTitulo"></div>
+  <div class="ex-detalle" id="exDetalle"></div>
+  <div class="ex-avance" id="exAvance"></div>
+  <div class="ex-timer" id="exTimer"></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0D3B85">
+<link rel="manifest" href="manifest.json">
+<title>Samitex — Ingreso</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-pagina="login">
+<header>
+  <div class="titulo">SAMITEX · PRODUCCIÓN</div>
+</header>
+<main>
+  <div class="banner-error" id="bannerError"></div>
+
+  <!-- Paso 1: DNI + PIN -->
+  <section class="pantalla activa" id="pasoLogin">
+    <div class="zona-login">
+      <h1>Ingreso</h1>
+      <div class="campo-label">DNI (8 dígitos)</div>
+      <div class="campo-display" id="dispDni"></div>
+      <div class="campo-label">Clave (4 dígitos)</div>
+      <div class="campo-display pin" id="dispPin"></div>
+      <div class="msg-error" id="msgLogin"></div>
+      <div class="teclado" id="tecladoLogin"></div>
+    </div>
+  </section>
+
+  <!-- Paso 2: selección de área -->
+  <section class="pantalla" id="pasoArea">
+    <h1 id="nombreSaludo">Elige tu área</h1>
+    <div class="sub">Toca el área donde trabajas hoy</div>
+    <div class="grid-areas" id="gridAreas"></div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
