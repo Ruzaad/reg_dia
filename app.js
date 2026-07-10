@@ -37,11 +37,24 @@ const normKey = s => String(s==null?"":s).trim().toUpperCase()
   .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
   .replace(/[.°º"']/g,"").replace(/\s+/g,"");
 const norm = s => String(s==null?"":s).trim();
-const COLORES = {NEGRO:"#212529",ROSADO:"#e8a0b4",BLANCO:"#fafafa",AZUL:"#0D3B85",
-  CELESTE:"#a8d0e6","CELESTECLARO":"#c9e4f5",CREMA:"#f5e9d0",MARFIL:"#f2ead9",
-  "PLATACLARO":"#d9dde1",PLOMO:"#8d949c",GRIS:"#adb5bd",LILA:"#c8a2c8",
-  VINO:"#722f37",VERDE:"#4a7c59"};
-const colorDe = c => COLORES[normKey(c)] || "#ccc";
+const COLORES = {NEGRO:"#212529",BLANCO:"#fafafa",ROSADO:"#e8a0b4",ROSA:"#e8a0b4",
+  CELESTE:"#a8d0e6",AZUL:"#0D3B85",MARINO:"#0a2a5e",CREMA:"#f5e9d0",MARFIL:"#f2ead9",
+  PLATA:"#d9dde1",PLOMO:"#8d949c",GRIS:"#adb5bd",LILA:"#c8a2c8",MORADO:"#8e6bb5",
+  VINO:"#722f37",GUINDA:"#7b2d3b",VERDE:"#4a7c59",OLIVO:"#708238",ROJO:"#c0392b",
+  AMARILLO:"#e4c441",MOSTAZA:"#d4a017",NARANJA:"#e08a3c",BEIGE:"#e6d8c3",
+  HUESO:"#f1ece0",CAMEL:"#c19a6b",TURQUESA:"#5bc0be",AQUA:"#7fd4d4",
+  CORAL:"#e8756a",FUCSIA:"#d3548f",MELON:"#f5b895",LACRE:"#a13d2d",
+  PALOROSA:"#dcb2a7",PERLA:"#eae6de",ACERO:"#7f8c9b",PETROLEO:"#2f5d62"};
+function colorDe(nombre){
+  const k = normKey(nombre);
+  if(!k) return "#ccc";
+  if(COLORES[k]) return COLORES[k];                      // exacto
+  for(const base in COLORES){                            // parcial: "CELESTE CLARO" -> CELESTE
+    if(k.includes(base)) return COLORES[base];
+  }
+  let h=0; for(let i=0;i<k.length;i++) h=(h*31+k.charCodeAt(i))>>>0;  // desconocido: pastel estable
+  return `hsl(${h%360},45%,78%)`;
+}
 const esc = s => String(s).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 
 function irA(id){
@@ -73,10 +86,11 @@ async function rpc(fn, args){
     body: JSON.stringify(args)
   });
   if(!r.ok){
-    const t = await r.text();
-    if(t.includes("SESION_INVALIDA")) { cerrarSesion(); throw new Error("Sesión vencida"); }
-    if(t.includes("NO_AUTORIZADA")) throw new Error("No autorizada para esta acción");
-    throw new Error("Error de servidor ("+r.status+")");
+    let detalle = "";
+    try{ const j = await r.json(); detalle = j.message || j.hint || ""; }catch(e){}
+    if(detalle.includes("SESION_INVALIDA")){ cerrarSesion(); throw new Error("Sesión vencida"); }
+    if(detalle.includes("NO_AUTORIZADA")) throw new Error("No autorizada para esta acción");
+    throw new Error("Servidor: " + (detalle || ("error " + r.status)));
   }
   return await r.json();
 }
@@ -312,34 +326,43 @@ function pintarOperaciones(){
         <div class="cf-detalle">STD <b>${o.std.toFixed(2)}</b> min</div>
       </div>
       <div class="badge-disp ${o.libres===0?'vacio':''}">${o.libres} de ${o.total} libres</div>`;
-    c.onclick=()=>{ sel.op=op; pintarTickets(); irA("pasoTickets"); };
+    c.onclick=()=>{ sel.op=op; modoSel=false; marcados={}; pintarTickets(); irA("pasoTickets"); };
     l.appendChild(c);
   });
 }
 
-/* --- paso tickets (numeración protagonista) --- */
+/* --- paso tickets (numeración protagonista + selección múltiple) --- */
+let modoSel=false, marcados={};
+
+function ticketsActuales(){
+  return ALM.tickets.filter(t=>t.of===sel.of && t.modulo===sel.modulo && t.op===sel.op);
+}
 function pintarTickets(){
   $("tituloTickets").textContent = sel.op;
+  pintarBarraSel();
   const l=$("listaTickets"); l.innerHTML="";
-  ALM.tickets
-    .filter(t=>t.of===sel.of && t.modulo===sel.modulo && t.op===sel.op)
-    .forEach(t=>{
-      const r = RECL[t.codigo];
-      const c=document.createElement("div");
-      c.className="card-ticket"+(r?" tomado":"");
-      c.innerHTML=`
-        <div class="tk-min">${t.minutos} min</div>
-        <div class="tk-label">Numeración</div>
-        <div class="tk-numeracion">${esc(t.num)}</div>
-        <div class="tk-fila">
-          <div><span class="chip-color" style="background:${colorDe(t.color)}"></span>${esc(t.color)}</div>
-          <div>Talla <b>${esc(t.talla)}</b></div>
-          <div><b>${t.cant}</b> und</div>
-          <div>Corte <b>${esc(t.corte)}</b></div>
-        </div>
-        ${r?`<div class="tk-tomado-por">Tomado por ${esc(r.nombre)} · ${esc(r.hora)}</div>`:""}`;
-      if(!r){
-        c.onclick=()=>{
+  ticketsActuales().forEach(t=>{
+    const r = RECL[t.codigo];
+    const marcado = modoSel && marcados[t.codigo];
+    const c=document.createElement("div");
+    c.className="card-ticket"+(r?" tomado":"")+(marcado?" marcada":"");
+    c.innerHTML=`
+      <div class="tk-min">${t.minutos} min</div>
+      <div class="tk-label">Numeración</div>
+      <div class="tk-numeracion">${esc(t.num)}</div>
+      <div class="tk-fila">
+        <div><span class="chip-color" style="background:${colorDe(t.color)}"></span>${esc(t.color)}</div>
+        <div>Talla <b>${esc(t.talla)}</b></div>
+        <div><b>${t.cant}</b> und</div>
+        <div>Corte <b>${esc(t.corte)}</b></div>
+      </div>
+      ${r?`<div class="tk-tomado-por">Tomado por ${esc(r.nombre)} · ${esc(r.hora)}</div>`:""}`;
+    if(!r){
+      c.onclick=()=>{
+        if(modoSel){
+          if(marcados[t.codigo]) delete marcados[t.codigo]; else marcados[t.codigo]=t;
+          pintarTickets();
+        } else {
           sel.ticket=t;
           $("confNum").textContent=t.num;
           $("confDet").innerHTML=
@@ -347,36 +370,95 @@ function pintarTickets(){
             `<span style="color:#5a6270">STD ${t.std.toFixed(2)} min · vale <b>${t.minutos} min</b></span>`;
           $("btnRegistrar").disabled=false;
           irA("pasoConf");
-        };
-      }
-      l.appendChild(c);
-    });
+        }
+      };
+    }
+    l.appendChild(c);
+  });
+}
+function pintarBarraSel(){
+  const libres = ticketsActuales().filter(t=>!RECL[t.codigo]);
+  const nSel = Object.keys(marcados).length;
+  const minSel = Object.values(marcados).reduce((a,t)=>a+t.minutos,0);
+  const b=$("barraSel");
+  if(!modoSel){
+    b.innerHTML = libres.length>1
+      ? `<button class="btn-sel" onclick="activarSel()">MARCAR VARIOS</button>`
+      : "";
+  } else {
+    b.innerHTML = `
+      <button class="btn-sel" onclick="marcarTodos()">MARCAR TODOS (${libres.length})</button>
+      <button class="btn-sel primario" ${nSel?"":"disabled"} onclick="confirmarLote()">REGISTRAR ${nSel} · ${Math.round(minSel*10)/10} min</button>
+      <button class="btn-sel cancelar" onclick="cancelarSel()">CANCELAR</button>`;
+  }
+}
+function activarSel(){ modoSel=true; marcados={}; pintarTickets(); }
+function cancelarSel(){ modoSel=false; marcados={}; pintarTickets(); }
+function marcarTodos(){
+  marcados={};
+  ticketsActuales().forEach(t=>{ if(!RECL[t.codigo]) marcados[t.codigo]=t; });
+  pintarTickets();
+}
+function confirmarLote(){
+  const lista=Object.values(marcados);
+  if(!lista.length) return;
+  const min = Math.round(lista.reduce((a,t)=>a+t.minutos,0)*10)/10;
+  const nums = lista.slice(0,6).map(t=>t.num).join(", ") + (lista.length>6?"…":"");
+  $("confNum").textContent = lista.length + " paquetes";
+  $("confDet").innerHTML =
+    `${esc(sel.op)} · OF ${esc(sel.of)}<br>`+
+    `<span style="color:#5a6270">${esc(nums)}</span><br>`+
+    `Total: <b>${min} min</b> a tu nombre`;
+  $("btnRegistrar").disabled=false;
+  irA("pasoConf");
 }
 
-/* --- reclamar --- */
+/* --- reclamar (individual o lote) --- */
 async function registrar(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
-  const t=sel.ticket, btn=$("btnRegistrar");
+  const btn=$("btnRegistrar");
   btn.disabled=true; btn.textContent="REGISTRANDO…";
+  const esLote = modoSel && Object.keys(marcados).length>0;
   try{
-    const r = await rpc("fn_reclamar", {p_dni:s.dni,p_token:s.token,p_area:s.area,
-      p_codigo:t.codigo,p_of:t.of,p_modulo:t.modulo,p_op:t.op,p_std:t.std,p_cant:t.cant,
-      p_numeracion:t.num,p_articulo:t.articulo,p_color:t.color,p_talla:t.talla,p_corte:t.corte});
+    let r;
+    if(esLote){
+      const lote=Object.values(marcados).map(t=>({codigo:t.codigo,of:t.of,modulo:t.modulo,
+        op:t.op,std:t.std,cant:t.cant,num:t.num,articulo:t.articulo,color:t.color,
+        talla:t.talla,corte:t.corte}));
+      r = await rpc("fn_reclamar_lote",{p_dni:s.dni,p_token:s.token,p_area:s.area,p_tickets:lote});
+    } else {
+      const t=sel.ticket;
+      r = await rpc("fn_reclamar", {p_dni:s.dni,p_token:s.token,p_area:s.area,
+        p_codigo:t.codigo,p_of:t.of,p_modulo:t.modulo,p_op:t.op,p_std:t.std,p_cant:t.cant,
+        p_numeracion:t.num,p_articulo:t.articulo,p_color:t.color,p_talla:t.talla,p_corte:t.corte});
+    }
     btn.textContent="SÍ, REGISTRAR";
     if(!r.ok){
       mostrarError(r.error||"No se pudo registrar");
       if(r.conflicto){ await refrescarReclamos(s); pintarTickets(); irA("pasoTickets"); }
       btn.disabled=false; return;
     }
-    RECL[t.codigo]={nombre:s.nombre,hora:"ahora"};
     setAvance(r);
-    $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
-    $("exDetalle").innerHTML=`${esc(sel.op)}<br>Numeración <b>${esc(t.num)}</b> · ${t.cant} und · +${t.minutos} min`;
+    if(esLote){
+      Object.values(marcados).forEach(t=>{ RECL[t.codigo]={nombre:s.nombre,hora:"ahora"}; });
+      const conf = (r.conflictos||[]);
+      $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
+      $("exDetalle").innerHTML =
+        `<b>${r.reclamados}</b> paquete(s) registrados · ${esc(sel.op)}`+
+        (conf.length?`<br><span style="opacity:.85">No se pudieron (ya tomados): ${esc(conf.join(", "))}</span>`:"");
+      modoSel=false; marcados={};
+      if(conf.length) await refrescarReclamos(s);
+    } else {
+      const t=sel.ticket;
+      RECL[t.codigo]={nombre:s.nombre,hora:"ahora"};
+      $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
+      $("exDetalle").innerHTML=`${esc(sel.op)}<br>Numeración <b>${esc(t.num)}</b> · ${t.cant} und · +${t.minutos} min`;
+    }
     $("exAvance").textContent=`Tu día: ${r.eficiencia}%`;
     mostrarExito();
   }catch(e){
     btn.textContent="SÍ, REGISTRAR"; btn.disabled=false;
-    mostrarError(e.message==="Sesión vencida"?e.message:"Sin conexión, no se registró. Intenta de nuevo.");
+    mostrarError(e.message);
   }
 }
 async function refrescarReclamos(s){

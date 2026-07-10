@@ -150,3 +150,15 @@ h1{font-size:26px;font-weight:800;color:var(--azul);text-align:center;margin-bot
   color:#fff;font-size:38px;font-weight:800;cursor:pointer;}
 .stepper .valor{font-size:44px;font-weight:800;min-width:120px;text-align:center;color:var(--azul);}
 .opciones-alcance{display:flex;flex-direction:column;gap:10px;max-width:540px;margin:0 auto;width:100%;}
+
+/* ---- selección múltiple de tickets ---- */
+.barra-sel{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:0 0 14px;}
+.btn-sel{background:var(--blanco);color:var(--enlace);border:2px solid var(--enlace);
+  border-radius:12px;font-size:17px;font-weight:800;padding:11px 18px;cursor:pointer;}
+.btn-sel.primario{background:var(--exito);color:#fff;border-color:var(--exito);}
+.btn-sel.primario:disabled{background:var(--tomado);border-color:var(--tomado);}
+.btn-sel.cancelar{color:var(--alerta);border-color:var(--alerta);}
+.card-ticket.marcada{border-color:var(--exito);background:#eef7f0;}
+.card-ticket.marcada::after{content:"✓";position:absolute;bottom:10px;right:12px;
+  width:30px;height:30px;border-radius:50%;background:var(--exito);color:#fff;
+  font-size:19px;font-weight:800;display:flex;align-items:center;justify-content:center;}
