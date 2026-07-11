@@ -684,7 +684,14 @@ function alcanceAlgunos(){
 function continuarSeleccion(){
   oc.multiple=false;
   $("nombreAfectado").textContent = oc.dnis.length+" persona(s) seleccionada(s)";
-  elegirTipo("OTROS");
+  irA("pasoTipo");           // antes: elegirTipo("OTROS")
+  if(oc.multiple){
+  const i=oc.dnis.indexOf(p.dni);
+  if(i>=0) oc.dnis.splice(i,1); else oc.dnis.push(p.dni);
+  pintarPersonal();
+  $("btnContinuarSel").disabled = oc.dnis.length===0;
+  $("btnContinuarSel").textContent = oc.dnis.length ? `CONTINUAR (${oc.dnis.length})` : "CONTINUAR";
+}
 }
 
 /* ---------------- PWA ---------------- */

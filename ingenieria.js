@@ -131,7 +131,7 @@ function pintarTk(){
 }
 
 /* ================= BASES ================= */
-const CAB_BASE = ["PRENDA","CLIENTE","MÓDULO","ARTICULO","OPERACIÓN","STD","MAX OP.","N_OP"];
+const CAB_BASE = ["PRENDA","CLIENTE","MÓDULO","ARTICULO","OPERACIÓN","STD","MAX OP.","NOP"];
 let BASE=[];
 async function cargarBases(){
   $("zonaDiff").style.display="none";
