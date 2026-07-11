@@ -19,6 +19,11 @@
 <main>
   <div class="banner-error" id="bannerError"></div>
 
+  <div class="tabs">
+    <button id="tabPersonal" class="tab activo">PERSONAL</button>
+    <button id="tabAvance" class="tab">AVANCE DEL DÍA</button>
+  </div>
+
   <!-- Personal -->
   <section class="pantalla activa" id="pasoPersonal">
     <h1>Tu personal</h1>
@@ -63,6 +68,9 @@
     <div class="opciones-alcance">
       <button class="btn-principal" style="background:var(--alerta);" onclick="elegirTipo('MAQUINA')">MÁQUINA PARADA</button>
       <button class="btn-principal" style="background:var(--exito);" onclick="elegirTipo('HORA_EXTRA')">HORA EXTRA</button>
+      <button class="btn-principal" style="background:#b0722a;" onclick="elegirTipo('TARDANZA')">TARDANZA</button>
+      <button class="btn-principal" style="background:#5e548e;" onclick="elegirTipo('SEGURO')">SEGURO</button>
+      <button class="btn-principal" style="background:#3a6ea5;" onclick="elegirTipo('PERMISO')">PERMISO</button>
       <button class="btn-principal" style="background:var(--enlace);" onclick="elegirTipo('OTROS')">OTROS</button>
     </div>
   </section>
@@ -87,9 +95,24 @@
       <input class="input-grande" id="inputMinutos" inputmode="numeric" placeholder="Minutos" maxlength="3" autocomplete="off">
     </div>
 
+    <div class="zona-of" id="zonaMotivo" style="display:none;margin-top:12px;">
+      <div class="campo-label">Motivo (hora de salida / regreso)</div>
+      <input class="input-grande" id="inputMotivo" autocomplete="off" maxlength="120"
+             placeholder="Ej: salió al seguro 10:00, regresó 11:30"
+             style="font-size:19px;letter-spacing:normal;text-align:left;">
+    </div>
+
     <div style="max-width:560px;margin:16px auto 0;width:100%;">
       <button class="btn-principal" id="btnGuardarOc" onclick="confirmarOcurrencia()">GUARDAR</button>
     </div>
+  </section>
+
+  <!-- Avance del día -->
+  <section class="pantalla" id="pasoAvance">
+    <h1>Avance del área</h1>
+    <div class="sub" id="avHora">Se actualiza cada 60 segundos</div>
+    <div class="kpis" id="avResumen"></div>
+    <div class="lista-cards" id="avItems" style="margin-top:14px;"></div>
   </section>
 </main>
 

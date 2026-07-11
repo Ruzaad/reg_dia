@@ -19,12 +19,20 @@
   <section class="pantalla activa" id="pasoLogin">
     <div class="zona-login">
       <h1>Ingreso</h1>
-      <div class="campo-label">DNI (8 dígitos)</div>
-      <div class="campo-display" id="dispDni"></div>
+      <div id="zonaDniNum">
+        <div class="campo-label">DNI (8 dígitos)</div>
+        <div class="campo-display" id="dispDni"></div>
+      </div>
+      <div id="zonaDniTxt" style="display:none;">
+        <div class="campo-label">Usuario de ingeniería</div>
+        <input class="input-grande" id="inputUsuario" autocomplete="off"
+               style="font-size:26px;letter-spacing:2px;text-transform:uppercase;">
+      </div>
       <div class="campo-label">Clave (4 dígitos)</div>
       <div class="campo-display pin" id="dispPin"></div>
       <div class="msg-error" id="msgLogin"></div>
       <div class="teclado" id="tecladoLogin"></div>
+      <button type="button" id="linkIng" class="link-ing">Ingreso ingeniería</button>
     </div>
   </section>
 

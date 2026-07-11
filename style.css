@@ -162,3 +162,45 @@ h1{font-size:26px;font-weight:800;color:var(--azul);text-align:center;margin-bot
 .card-ticket.marcada::after{content:"✓";position:absolute;bottom:10px;right:12px;
   width:30px;height:30px;border-radius:50%;background:var(--exito);color:#fff;
   font-size:19px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+
+/* ---- tabs / kpis / ingeniería ---- */
+.tabs{display:flex;gap:8px;padding:12px 18px 0;max-width:760px;margin:0 auto;width:100%;}
+.tab{flex:1;background:var(--blanco);border:3px solid var(--azul);color:var(--azul);
+  border-radius:12px 12px 0 0;font-size:16px;font-weight:800;padding:12px 6px;cursor:pointer;}
+.tab.activo{background:var(--azul);color:#fff;}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;
+  max-width:760px;margin:0 auto;width:100%;}
+.kpi{background:var(--blanco);border-radius:14px;padding:14px;text-align:center;
+  box-shadow:0 2px 6px rgba(13,59,133,.10);border-top:6px solid var(--ocre);}
+.kpi-num{font-size:30px;font-weight:800;color:var(--azul);}
+.kpi-lbl{font-size:13px;font-weight:700;color:#5a6270;margin-top:3px;}
+.link-ing{background:none;border:none;color:var(--enlace);font-size:16px;font-weight:700;
+  text-decoration:underline;cursor:pointer;margin-top:14px;padding:8px;}
+.tabla{width:100%;border-collapse:collapse;background:var(--blanco);border-radius:12px;
+  overflow:hidden;box-shadow:0 2px 6px rgba(13,59,133,.10);font-size:14px;}
+.tabla th{background:var(--azul);color:#fff;padding:9px 8px;text-align:left;font-size:12px;
+  text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;}
+.tabla td{padding:7px 8px;border-bottom:1px solid var(--gris-fondo);}
+.tabla tr:nth-child(even) td{background:#f7f9fc;}
+.tabla .ef-alta{color:var(--exito);font-weight:800;}
+.tabla .ef-baja{color:var(--alerta);font-weight:800;}
+.fila-filtros{display:flex;gap:10px;flex-wrap:wrap;max-width:1100px;margin:0 auto 12px;width:100%;align-items:center;}
+.fila-filtros input[type=text], .fila-filtros input[type=date], .fila-filtros select{
+  background:var(--blanco);border:2px solid var(--azul);border-radius:10px;
+  font-size:16px;font-weight:700;padding:9px 12px;color:var(--texto);outline:none;}
+.fila-filtros .btn-mini{background:var(--enlace);color:#fff;border:none;border-radius:10px;
+  font-size:15px;font-weight:800;padding:10px 16px;cursor:pointer;}
+.fila-filtros .btn-mini.verde{background:var(--exito);}
+.fila-filtros .btn-mini.gris{background:var(--tomado);}
+.pill{display:inline-block;font-size:12px;font-weight:800;padding:3px 9px;border-radius:999px;
+  background:var(--gris-fondo);color:var(--texto);}
+.pill.FALTA,.pill.DM,.pill.VACACIONES{background:#fdecea;color:var(--alerta);}
+.pill.ACTIVO{background:#eef7f0;color:var(--exito);}
+.pill.LIBERADO{background:#fdecea;color:var(--alerta);}
+.contenedor-ancho{max-width:1100px;margin:0 auto;width:100%;}
+.diff-box{background:var(--blanco);border-radius:12px;padding:14px;margin-bottom:10px;
+  box-shadow:0 2px 6px rgba(13,59,133,.10);}
+.diff-box h3{font-size:17px;color:var(--azul);margin-bottom:6px;}
+.diff-add{color:var(--exito);font-weight:700;font-size:14px;}
+.diff-del{color:var(--alerta);font-weight:700;font-size:14px;text-decoration:line-through;}
+.diff-mod{color:#b0722a;font-weight:700;font-size:14px;}

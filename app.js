@@ -21,7 +21,7 @@ const AREAS = {
     mapa: MAPA_ESTANDAR
   },
   "ACABADO": {
-    habilitada: true,               // PENDIENTE: compartir libro como lector + confirmar cabeceras
+    habilitada: false,               // PENDIENTE: compartir libro como lector + confirmar cabeceras
     sheetId: "1R2FqLRZpFjdA7rzUk6dsTyj898yUYO0aKU_OYG4e0Xc",
     hoja: "ALMACEN",
     mapa: MAPA_ESTANDAR              // ajustar cuando se vean sus columnas reales
@@ -139,6 +139,7 @@ async function cargarAlmacen(nombreArea){
     const cant = parseFloat(f[idx.cant]) || 0;
     tickets.push({
       codigo, std, cant,
+      nop:     parseInt(f[idx.nop]) || null,
       of:      norm(f[idx.of]),
       modulo:  norm(f[idx.modulo]),
       op:      norm(f[idx.op]),
@@ -156,12 +157,27 @@ async function cargarAlmacen(nombreArea){
 /* ============================================================
    PÁGINA: LOGIN + ÁREA (index.html)
    ============================================================ */
+function destinoPorCargo(cargo){
+  if(cargo==="INGENIERIA") return "ingenieria.html";
+  if(cargo==="SUPERVISORA") return "supervisora.html";
+  return "operario.html";
+}
 function initLogin(){
   const s = sesionActual();
-  if(s && s.area){ location.href = s.cargo==="SUPERVISORA" ? "supervisora.html" : "operario.html"; return; }
+  if(s && (s.area || s.cargo==="INGENIERIA")){ location.href = destinoPorCargo(s.cargo); return; }
 
-  let dni="", pin="", foco="dni";
+  let dni="", pin="", foco="dni", modoIng=false;
+  $("linkIng").onclick = ()=>{
+    modoIng = !modoIng; dni=""; pin="";
+    $("zonaDniNum").style.display  = modoIng ? "none" : "block";
+    $("zonaDniTxt").style.display  = modoIng ? "block" : "none";
+    $("linkIng").textContent = modoIng ? "← Ingreso de personal" : "Ingreso ingeniería";
+    if(modoIng){ $("inputUsuario").value=""; $("inputUsuario").focus(); foco="pin"; }
+    else foco="dni";
+    pintar();
+  };
   const pintar = ()=>{
+    if(modoIng) dni = normKey($("inputUsuario").value);
     $("dispDni").textContent = dni.padEnd(8,"•");
     $("dispPin").textContent = "•".repeat(pin.length).padEnd(4,"·");
     $("dispDni").style.borderColor = foco==="dni" ? "var(--enlace)" : "var(--azul)";
@@ -179,7 +195,7 @@ function initLogin(){
       if(k==="BORRAR"){ if(foco==="dni") dni=dni.slice(0,-1); else pin=pin.slice(0,-1); }
       else if(k==="ENTRAR"){ intentarLogin(); return; }
       else {
-        if(foco==="dni"){ if(dni.length<8) dni+=String(k); if(dni.length===8) foco="pin"; }
+        if(foco==="dni" && !modoIng){ if(dni.length<8) dni+=String(k); if(dni.length===8) foco="pin"; }
         else if(pin.length<4) pin+=String(k);
       }
       pintar();
@@ -190,13 +206,16 @@ function initLogin(){
 
   async function intentarLogin(){
     $("msgLogin").textContent="";
-    if(dni.length!==8){ $("msgLogin").textContent="El DNI debe tener 8 dígitos"; return; }
+    if(modoIng) dni = normKey($("inputUsuario").value);
+    if(!modoIng && dni.length!==8){ $("msgLogin").textContent="El DNI debe tener 8 dígitos"; return; }
+    if(modoIng && !dni){ $("msgLogin").textContent="Escribe tu usuario"; return; }
     if(pin.length!==4){ $("msgLogin").textContent="La clave debe tener 4 dígitos"; return; }
     $("msgLogin").textContent="Verificando…";
     try{
       const r = await rpc("fn_login", {p_dni:dni, p_pin:pin});
       if(!r.ok){ $("msgLogin").textContent=r.error; pin=""; pintar(); return; }
       guardarSesion({dni:r.dni, nombre:r.nombre, cargo:r.cargo, token:r.token, area:null});
+      if(r.cargo==="INGENIERIA"){ location.href="ingenieria.html"; return; }
       $("nombreSaludo").textContent = "Hola, " + r.nombre.split(" ")[0];
       pintarAreas(r.cargo);
       irA("pasoArea");
@@ -214,7 +233,7 @@ function initLogin(){
       if(cfg.habilitada){
         c.onclick=()=>{
           const s=sesionActual(); s.area=a; guardarSesion(s);
-          location.href = cargo==="SUPERVISORA" ? "supervisora.html" : "operario.html";
+          location.href = destinoPorCargo(cargo);
         };
       }
       g.appendChild(c);
@@ -424,13 +443,13 @@ async function registrar(){
     if(esLote){
       const lote=Object.values(marcados).map(t=>({codigo:t.codigo,of:t.of,modulo:t.modulo,
         op:t.op,std:t.std,cant:t.cant,num:t.num,articulo:t.articulo,color:t.color,
-        talla:t.talla,corte:t.corte}));
+        talla:t.talla,corte:t.corte,nop:t.nop}));
       r = await rpc("fn_reclamar_lote",{p_dni:s.dni,p_token:s.token,p_area:s.area,p_tickets:lote});
     } else {
       const t=sel.ticket;
       r = await rpc("fn_reclamar", {p_dni:s.dni,p_token:s.token,p_area:s.area,
         p_codigo:t.codigo,p_of:t.of,p_modulo:t.modulo,p_op:t.op,p_std:t.std,p_cant:t.cant,
-        p_numeracion:t.num,p_articulo:t.articulo,p_color:t.color,p_talla:t.talla,p_corte:t.corte});
+        p_numeracion:t.num,p_articulo:t.articulo,p_color:t.color,p_talla:t.talla,p_corte:t.corte,p_nop:t.nop});
     }
     btn.textContent="SÍ, REGISTRAR";
     if(!r.ok){
@@ -485,15 +504,59 @@ function mostrarExito(){
    ============================================================ */
 let PERSONAL=[], oc={tipo:null,minutos:0,dnis:[]};
 
+let timerAvance=null;
 function initSupervisora(){
   const s=sesionActual();
   if(!s || !s.area){ location.href="index.html"; return; }
-  if(s.cargo!=="SUPERVISORA"){ location.href="operario.html"; return; }
+  if(s.cargo!=="SUPERVISORA"){ location.href = destinoPorCargo(s.cargo); return; }
   $("tituloArea").textContent = s.area + " · Supervisión";
   $("quienBadge").textContent = s.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
   $("filtroNombre").addEventListener("input", pintarPersonal);
+  $("tabPersonal").onclick = ()=>{ pararAvance(); marcarTab("tabPersonal"); irA("pasoPersonal"); };
+  $("tabAvance").onclick  = ()=>{ marcarTab("tabAvance"); irA("pasoAvance"); cargarAvance(); timerAvance=setInterval(cargarAvance, 60000); };
   cargarPersonal(s);
+}
+function marcarTab(id){
+  ["tabPersonal","tabAvance"].forEach(t=>$(t).classList.toggle("activo", t===id));
+}
+function pararAvance(){ clearInterval(timerAvance); timerAvance=null; }
+
+async function cargarAvance(){
+  const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  try{
+    const r = await rpc("fn_avance_area",{p_dni:s.dni,p_token:s.token,p_area:s.area});
+    if(!r.ok){ mostrarError(r.error||"Error"); return; }
+    $("avResumen").innerHTML = `
+      <div class="kpi"><div class="kpi-num">${r.eficiencia}%</div><div class="kpi-lbl">Eficiencia del área</div></div>
+      <div class="kpi"><div class="kpi-num">${r.personas}</div><div class="kpi-lbl">Presentes</div></div>
+      <div class="kpi"><div class="kpi-num">${Math.round(r.minutos_prod)}</div><div class="kpi-lbl">Min producidos</div></div>
+      <div class="kpi"><div class="kpi-num">${Math.round(r.minutos_disp)}</div><div class="kpi-lbl">Min disponibles</div></div>`;
+    const l=$("avItems"); l.innerHTML="";
+    if(r.sin_base && r.sin_base.length){
+      const w=document.createElement("div");
+      w.className="banner-error visible"; w.style.margin="0 0 12px";
+      w.textContent="SIN BASE cargada: "+r.sin_base.join(", ")+" — pide a ingeniería subir la BASE de estos artículos.";
+      l.appendChild(w);
+    }
+    if(!r.items.length){
+      l.insertAdjacentHTML("beforeend",'<div class="vacio-msg">Aún no hay notificaciones en la última operación hoy</div>');
+    }
+    r.items.forEach(it=>{
+      l.insertAdjacentHTML("beforeend", `
+        <div class="card-fila" style="cursor:default;">
+          <div>
+            <div class="cf-titulo">${esc(it.articulo)} · OF ${esc(it.of)}</div>
+            <div class="cf-detalle">Prenda completa: ${it.t_total} min</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="cf-titulo" style="color:var(--azul);">${it.unidades} und</div>
+            <div class="cf-detalle">${Math.round(it.minutos)} min</div>
+          </div>
+        </div>`);
+    });
+    $("avHora").textContent = "Actualizado " + new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  }catch(e){ mostrarError(e.message); }
 }
 async function cargarPersonal(s){
   $("gridPersonal").innerHTML = cargandoHTML("Cargando personal…");
@@ -537,8 +600,11 @@ function pintarPersonal(){
 }
 
 /* --- selección de tipo --- */
+const TIPOS_MOTIVO = ["TARDANZA","SEGURO","PERMISO"];
 function elegirTipo(tipo){
   oc.tipo=tipo; oc.minutos=0;
+  $("zonaMotivo").style.display = TIPOS_MOTIVO.includes(tipo) ? "block" : "none";
+  $("inputMotivo").value="";
   if(tipo==="HORA_EXTRA"){
     oc.horas=1;
     $("tituloMin").textContent="Horas extra";
@@ -546,14 +612,16 @@ function elegirTipo(tipo){
     $("zonaStepper").style.display="flex"; $("zonaMinutos").style.display="none";
     $("valorStepper").textContent="1 h";
   } else {
-    $("tituloMin").textContent = tipo==="MAQUINA" ? "Minutos de máquina parada" : "Minutos (Otros)";
-    $("subMin").textContent = tipo==="MAQUINA"
-      ? "Se restan de los minutos disponibles del día"
-      : "Elige si suma o resta minutos disponibles";
+    const titulos = {MAQUINA:"Minutos de máquina parada", TARDANZA:"Minutos de tardanza",
+                     SEGURO:"Minutos por seguro", PERMISO:"Minutos de permiso", OTROS:"Minutos (Otros)"};
+    $("tituloMin").textContent = titulos[tipo] || "Minutos";
+    $("subMin").textContent = tipo==="OTROS"
+      ? "Elige si suma o resta minutos disponibles"
+      : "Se restan de los minutos disponibles del día";
     $("zonaStepper").style.display="none"; $("zonaMinutos").style.display="block";
     $("inputMinutos").value="";
     $("segSigno").style.display = tipo==="OTROS" ? "flex" : "none";
-    oc.signo = tipo==="MAQUINA" ? -1 : -1;
+    oc.signo = -1;
     if(tipo==="OTROS") marcarSigno(-1);
   }
   irA("pasoMinutos");
@@ -578,10 +646,12 @@ async function confirmarOcurrencia(){
     if(!v || v<=0){ mostrarError("Ingresa los minutos"); return; }
     minutos = v * oc.signo;
   }
+  const motivo = ($("inputMotivo") ? $("inputMotivo").value.trim() : "");
+  if(TIPOS_MOTIVO.includes(oc.tipo) && !motivo){ mostrarError("Indica el motivo (hora de salida/regreso)"); return; }
   const btn=$("btnGuardarOc"); btn.disabled=true; btn.textContent="GUARDANDO…";
   try{
     const r = await rpc("fn_ocurrencia",{p_dni:s.dni,p_token:s.token,p_area:s.area,
-      p_tipo:oc.tipo,p_minutos:minutos,p_detalle:oc.tipo,p_dnis:oc.dnis});
+      p_tipo:oc.tipo,p_minutos:minutos,p_detalle:(motivo||oc.tipo),p_dnis:oc.dnis});
     btn.disabled=false; btn.textContent="GUARDAR";
     if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); return; }
     $("exTitulo").textContent="Registrado";

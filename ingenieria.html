@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0D3B85">
+<link rel="manifest" href="manifest.json">
+<title>Samitex — Ingeniería</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body data-pagina="ingenieria">
+<header>
+  <div class="titulo">INGENIERÍA</div>
+  <div class="badges">
+    <div class="badge" id="quienBadge"></div>
+    <button class="btn-salir" id="btnSalir">Salir</button>
+  </div>
+</header>
+<main>
+  <div class="banner-error" id="bannerError"></div>
+
+  <div class="tabs" style="max-width:1100px;">
+    <button class="tab activo" data-tab="pasoEf">EFICIENCIAS</button>
+    <button class="tab" data-tab="pasoAsis">ASISTENCIA</button>
+    <button class="tab" data-tab="pasoTk">TICKETS DEL DÍA</button>
+    <button class="tab" data-tab="pasoBases">BASES</button>
+  </div>
+
+  <!-- EFICIENCIAS -->
+  <section class="pantalla activa" id="pasoEf">
+    <div class="fila-filtros">
+      <label class="campo-label" style="margin:0;">Fecha</label>
+      <input type="date" id="fechaEf">
+      <button class="btn-mini" onclick="cargarEf()">VER</button>
+    </div>
+    <div class="kpis contenedor-ancho" id="efAreas" style="margin-bottom:14px;"></div>
+    <div class="contenedor-ancho" style="overflow-x:auto;">
+      <table class="tabla" id="tablaEf"></table>
+    </div>
+  </section>
+
+  <!-- ASISTENCIA -->
+  <section class="pantalla" id="pasoAsis">
+    <div class="fila-filtros">
+      <input type="date" id="fechaAsis">
+      <select id="filtroAreaAsis"><option value="">Todas las áreas</option></select>
+      <input type="text" id="filtroNomAsis" placeholder="Buscar nombre…">
+      <button class="btn-mini" onclick="cargarAsis()">VER</button>
+    </div>
+    <div class="fila-filtros" id="accionesAsis">
+      <span class="campo-label" style="margin:0;">Con <b id="nSelAsis">0</b> seleccionados:</span>
+      <select id="selEstado"></select>
+      <button class="btn-mini verde" onclick="aplicarEstado()">MARCAR ESTADO</button>
+      <select id="selArea"></select>
+      <button class="btn-mini" onclick="aplicarArea()">CAMBIAR ÁREA</button>
+      <button class="btn-mini gris" onclick="limpiarSelAsis()">LIMPIAR</button>
+    </div>
+    <div class="grid-personal contenedor-ancho" id="gridAsis"></div>
+  </section>
+
+  <!-- TICKETS -->
+  <section class="pantalla" id="pasoTk">
+    <div class="fila-filtros">
+      <input type="date" id="fechaTk">
+      <input type="text" id="filtroTk" placeholder="Filtrar (nombre, OF, artículo, operación)…" style="min-width:280px;">
+      <button class="btn-mini" onclick="cargarTk()">VER</button>
+      <span class="campo-label" id="resumenTk" style="margin:0;"></span>
+    </div>
+    <div class="contenedor-ancho" style="overflow-x:auto;">
+      <table class="tabla" id="tablaTk"></table>
+    </div>
+  </section>
+
+  <!-- BASES -->
+  <section class="pantalla" id="pasoBases">
+    <div class="fila-filtros">
+      <select id="areaBase"></select>
+      <button class="btn-mini" onclick="cargarBases()">VER BASE</button>
+      <input type="file" id="fileBase" accept=".xlsx" style="display:none;" onchange="leerExcelBase(this)">
+      <button class="btn-mini verde" onclick="document.getElementById('fileBase').click()">SUBIR EXCEL</button>
+      <button class="btn-mini" onclick="descargarBase()">DESCARGAR EXCEL</button>
+    </div>
+    <div class="fila-filtros">
+      <input type="text" id="fArt" placeholder="Filtrar artículo…" oninput="pintarBases()">
+      <input type="text" id="fOp" placeholder="Filtrar operación…" oninput="pintarBases()">
+      <input type="text" id="fCli" placeholder="Filtrar cliente…" oninput="pintarBases()">
+      <span class="campo-label" id="resumenBases" style="margin:0;"></span>
+    </div>
+    <div class="contenedor-ancho" id="zonaDiff" style="display:none;"></div>
+    <div class="contenedor-ancho" style="overflow-x:auto;">
+      <table class="tabla" id="tablaBases"></table>
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+<script src="ingenieria.js"></script>
+</body>
+</html>

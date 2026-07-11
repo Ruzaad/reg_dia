@@ -1,7 +1,7 @@
 /* Service worker mínimo: cachea el cascarón de la app para carga rápida.
    Los datos (almacén y Supabase) SIEMPRE van a red — nunca se cachean. */
-const CACHE = "samitex-v1";
-const SHELL = ["index.html","operario.html","supervisora.html","style.css","app.js","manifest.json"];
+const CACHE = "samitex-v2";
+const SHELL = ["index.html","operario.html","supervisora.html","ingenieria.html","style.css","app.js","ingenieria.js","manifest.json"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(()=>self.skipWaiting()));
