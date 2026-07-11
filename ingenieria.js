@@ -186,7 +186,7 @@ function leerExcelBase(input){
         if(k==="PRENDA")idx.prenda=i; if(k==="CLIENTE")idx.cliente=i;
         if(k==="MODULO")idx.modulo=i; if(k==="ARTICULO")idx.articulo=i;
         if(k==="OPERACION")idx.operacion=i; if(k==="STD")idx.std=i;
-        if(k==="MAXOP")idx.max_op=i; if(k==="NOP")idx.n_op=i;
+        if(k==="MAXOP")idx.max_op=i; if(k==="NOP" || k==="N_OP")idx.n_op=i;
       });
       if(idx.articulo===undefined||idx.operacion===undefined||idx.std===undefined||idx.n_op===undefined)
         throw new Error("Faltan cabeceras: se esperan "+CAB_BASE.join(", "));
