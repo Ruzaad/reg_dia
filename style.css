@@ -185,7 +185,7 @@ h1{font-size:26px;font-weight:800;color:var(--azul);text-align:center;margin-bot
 .tabla .ef-alta{color:var(--exito);font-weight:800;}
 .tabla .ef-baja{color:var(--alerta);font-weight:800;}
 .fila-filtros{display:flex;gap:10px;flex-wrap:wrap;max-width:1100px;margin:0 auto 12px;width:100%;align-items:center;}
-.fila-filtros input[type=text], .fila-filtros input[type=date], .fila-filtros select{
+.fila-filtros input[type=text], .fila-filtros input[type=date], .fila-filtros input[type=month], .fila-filtros select{
   background:var(--blanco);border:2px solid var(--azul);border-radius:10px;
   font-size:16px;font-weight:700;padding:9px 12px;color:var(--texto);outline:none;}
 .fila-filtros .btn-mini{background:var(--enlace);color:#fff;border:none;border-radius:10px;
@@ -204,3 +204,45 @@ h1{font-size:26px;font-weight:800;color:var(--azul);text-align:center;margin-bot
 .diff-add{color:var(--exito);font-weight:700;font-size:14px;}
 .diff-del{color:var(--alerta);font-weight:700;font-size:14px;text-decoration:line-through;}
 .diff-mod{color:#b0722a;font-weight:700;font-size:14px;}
+
+/* ---- modal genérico (personal / asignar estado por rango) ---- */
+.modal-overlay{position:fixed;inset:0;background:rgba(13,59,133,.55);display:none;
+  align-items:center;justify-content:center;z-index:200;padding:18px;}
+.modal-overlay.visible{display:flex;}
+.modal-box{background:var(--blanco);border-radius:18px;padding:24px;max-width:520px;width:100%;
+  max-height:88vh;overflow-y:auto;box-shadow:0 10px 34px rgba(0,0,0,.35);}
+.modal-box h2{font-size:22px;font-weight:800;color:var(--azul);margin-bottom:14px;}
+.modal-campo{margin-bottom:14px;}
+.modal-campo label{display:block;font-size:14px;font-weight:700;color:var(--azul);margin-bottom:5px;}
+.modal-campo input, .modal-campo select{width:100%;background:var(--gris-fondo);
+  border:2px solid var(--azul);border-radius:10px;font-size:16px;padding:10px 12px;
+  color:var(--texto);outline:none;}
+.modal-campo input:disabled{opacity:.6;}
+.modal-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.modal-acciones{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;}
+.modal-acciones button{flex:1;min-width:140px;}
+.modal-msg{font-size:15px;font-weight:700;color:var(--alerta);min-height:20px;margin-top:6px;}
+.btn-pin{background:var(--ocre);color:var(--texto);border:none;border-radius:10px;
+  font-size:14px;font-weight:800;padding:10px 14px;cursor:pointer;}
+
+/* ---- resumen de personal en cantidad (chips) ---- */
+.resumen-estados{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 14px;max-width:1100px;width:100%;}
+.chip-estado{background:var(--blanco);border-radius:12px;padding:10px 18px;text-align:center;
+  box-shadow:0 2px 6px rgba(13,59,133,.10);border-top:5px solid var(--ocre);min-width:110px;}
+.chip-estado .ce-num{font-size:24px;font-weight:800;color:var(--azul);}
+.chip-estado .ce-lbl{font-size:12px;font-weight:700;color:#5a6270;margin-top:2px;}
+
+/* ---- tabla de asistencia mensual (persona x día) ---- */
+.tabla-asis-mes{border-collapse:collapse;font-size:13px;background:var(--blanco);}
+.tabla-asis-mes th, .tabla-asis-mes td{padding:6px 8px;text-align:center;
+  border:1px solid var(--gris-fondo);white-space:nowrap;}
+.tabla-asis-mes th{background:var(--azul);color:#fff;position:sticky;top:0;z-index:3;
+  font-size:11px;text-transform:uppercase;}
+.tabla-asis-mes th.col-check, .tabla-asis-mes td.col-check{position:sticky;left:0;
+  background:var(--azul);z-index:4;min-width:34px;}
+.tabla-asis-mes td.col-check{background:var(--blanco);z-index:2;}
+.tabla-asis-mes th.col-nombre, .tabla-asis-mes td.col-nombre{position:sticky;left:34px;
+  background:var(--azul);z-index:4;text-align:left;min-width:190px;cursor:pointer;}
+.tabla-asis-mes td.col-nombre{background:var(--blanco);color:var(--azul);font-weight:800;z-index:2;}
+.tabla-asis-mes td.col-nombre:active{background:var(--gris-fondo);}
+.tabla-asis-mes .pill{font-size:11px;padding:3px 7px;}

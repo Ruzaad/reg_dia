@@ -3,7 +3,11 @@
    ============================================================ */
 let ING=null;
 const AREAS_LISTA = Object.keys(AREAS);
+const CARGOS_LISTA = ["OPERARIO","SUPERVISORA","INGENIERIA"];
+const ESTADOS_OPERARIO = ["ACTIVO","LIBERADO"];
+let ESTADOS_ASIS = [];
 function hoyISO(){ return new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"}); }
+function mesActualISO(){ const d=hoyISO(); return d.slice(0,7); } // YYYY-MM
 
 document.addEventListener("DOMContentLoaded", ()=>{
   if(document.body.dataset.pagina!=="ingenieria") return;
@@ -21,17 +25,19 @@ document.addEventListener("DOMContentLoaded", ()=>{
     };
   });
 
-  ["fechaEf","fechaAsis","fechaTk"].forEach(id=>{ $(id).value = hoyISO(); });
-  [["selArea",""],["areaBase",""],["filtroAreaAsis","Todas las áreas"]].forEach(([id])=>{});
+  ["fechaEf","fechaTk"].forEach(id=>{ $(id).value = hoyISO(); });
+  $("mesAsis").value = mesActualISO();
   AREAS_LISTA.forEach(a=>{
     $("selArea").insertAdjacentHTML("beforeend",`<option>${esc(a)}</option>`);
     $("areaBase").insertAdjacentHTML("beforeend",`<option>${esc(a)}</option>`);
     $("filtroAreaAsis").insertAdjacentHTML("beforeend",`<option>${esc(a)}</option>`);
   });
-  $("filtroNomAsis").addEventListener("input", pintarAsis);
-  $("filtroAreaAsis").addEventListener("change", pintarAsis);
+  $("filtroNomAsis").addEventListener("input", pintarAsisMes);
+  $("filtroAreaAsis").addEventListener("change", cargarAsisMes);
   $("filtroTk").addEventListener("input", pintarTk);
   cargarEf();
+  cargarEstadosAsis();
+  cargarAsisMes();
 });
 
 /* ================= EFICIENCIAS ================= */
@@ -54,56 +60,230 @@ async function cargarEf(){
   }catch(e){ $("efAreas").innerHTML=""; mostrarError(e.message); }
 }
 
-/* ================= ASISTENCIA ================= */
-let ASIS=[], selAsis={};
-async function cargarAsis(){
-  $("gridAsis").innerHTML=cargandoHTML("Cargando personal…"); selAsis={};
+/* ================= ASISTENCIA (mes completo) ================= */
+let ASIS_MES=[], ASIS_DIAS=[], selAsis={};
+
+async function cargarEstadosAsis(){
   try{
-    const r = await rpc("fn_asistencia_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:$("fechaAsis").value});
-    if(!r.ok){ mostrarError(r.error||"Error"); return; }
-    ASIS = r.personal;
-    $("selEstado").innerHTML = (r.estados||[]).map(e=>`<option>${esc(e)}</option>`).join("");
-    pintarAsis();
-  }catch(e){ $("gridAsis").innerHTML=""; mostrarError(e.message); }
+    ESTADOS_ASIS = await rpc("fn_estados_asistencia_listar",{p_dni:ING.dni,p_token:ING.token});
+  }catch(e){ ESTADOS_ASIS = []; }
 }
-function pintarAsis(){
-  const q=normKey($("filtroNomAsis").value), fa=$("filtroAreaAsis").value;
-  const g=$("gridAsis"); g.innerHTML="";
-  ASIS.filter(p=>(!fa||p.area===fa) && (!q||normKey(p.nombre).includes(q))).forEach(p=>{
-    const c=document.createElement("div");
-    c.className="card-persona"+(selAsis[p.dni]?" marcada":"");
-    c.innerHTML=`<div><div class="cp-nombre">${esc(p.nombre)}</div>
-      <div class="cp-dni">${esc(p.dni)} · ${esc(p.area)}</div></div>
-      <span class="pill ${esc(p.estado)}">${esc(p.estado)}</span>`;
-    c.onclick=()=>{
-      if(selAsis[p.dni]) delete selAsis[p.dni]; else selAsis[p.dni]=true;
-      $("nSelAsis").textContent=Object.keys(selAsis).length;
-      pintarAsis();
-    };
-    g.appendChild(c);
+
+async function cargarAsisMes(){
+  const [anio, mes] = $("mesAsis").value.split("-").map(Number);
+  $("tablaAsisMes").innerHTML = cargandoHTML("Cargando asistencia del mes…");
+  selAsis={}; actualizarNSel();
+  try{
+    const r = await rpc("fn_asistencia_mes",{p_dni:ING.dni,p_token:ING.token,
+      p_area:$("filtroAreaAsis").value, p_anio:anio, p_mes:mes});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("tablaAsisMes").innerHTML=""; return; }
+    ASIS_DIAS = r.dias; ASIS_MES = r.personal;
+    pintarResumenAsis();
+    pintarAsisMes();
+  }catch(e){ $("tablaAsisMes").innerHTML=""; mostrarError(e.message); }
+}
+
+function pintarResumenAsis(){
+  const total = ASIS_MES.length;
+  const porEstado = {};
+  ASIS_MES.forEach(p=>{ porEstado[p.estado_actual] = (porEstado[p.estado_actual]||0)+1; });
+  let html = `<div class="chip-estado"><div class="ce-num">${total}</div><div class="ce-lbl">TOTAL PERSONAL</div></div>`;
+  Object.keys(porEstado).sort().forEach(e=>{
+    html += `<div class="chip-estado"><div class="ce-num">${porEstado[e]}</div><div class="ce-lbl">${esc(e)}</div></div>`;
   });
-  $("nSelAsis").textContent=Object.keys(selAsis).length;
+  $("resumenEstadosAsis").innerHTML = html;
 }
-function limpiarSelAsis(){ selAsis={}; pintarAsis(); }
-async function aplicarEstado(){
-  const dnis=Object.keys(selAsis);
-  if(!dnis.length){ mostrarError("No hay personas seleccionadas"); return; }
-  try{
-    const r = await rpc("fn_marcar_asistencia",{p_dni:ING.dni,p_token:ING.token,
-      p_dnis:dnis,p_estado:$("selEstado").value,p_fecha:$("fechaAsis").value});
-    if(!r.ok){ mostrarError(r.error); return; }
-    await cargarAsis();
-  }catch(e){ mostrarError(e.message); }
+
+function pintarAsisMes(){
+  const q = normKey($("filtroNomAsis").value);
+  const lista = ASIS_MES.filter(p=>!q || normKey(p.nombres_apellidos).includes(q));
+
+  let thead = `<thead><tr><th class="col-check"></th><th class="col-nombre">Nombre</th>`;
+  ASIS_DIAS.forEach(d=>{
+    const dia = d.slice(8,10);
+    thead += `<th>${dia}</th>`;
+  });
+  thead += `</tr></thead>`;
+
+  let tbody = "<tbody>";
+  if(!lista.length){
+    tbody += `<tr><td colspan="${ASIS_DIAS.length+2}"><div class="vacio-msg">Sin personal para este filtro</div></td></tr>`;
+  }
+  lista.forEach(p=>{
+    const marcado = !!selAsis[p.dni];
+    tbody += `<tr>
+      <td class="col-check"><input type="checkbox" ${marcado?"checked":""} onclick="toggleSelAsis('${p.dni}')"></td>
+      <td class="col-nombre" onclick="abrirModalPersonal('${p.dni}')">${esc(p.nombres_apellidos)}</td>`;
+    ASIS_DIAS.forEach(d=>{
+      const est = p.registros[d];
+      tbody += `<td>${est ? `<span class="pill ${esc(est)}">${esc(est)}</span>` : "—"}</td>`;
+    });
+    tbody += `</tr>`;
+  });
+  tbody += "</tbody>";
+  $("tablaAsisMes").innerHTML = thead + tbody;
 }
+
+function toggleSelAsis(dni){
+  if(selAsis[dni]) delete selAsis[dni]; else selAsis[dni]=true;
+  actualizarNSel();
+}
+function actualizarNSel(){ $("nSelAsis").textContent = Object.keys(selAsis).length; }
+function limpiarSelAsis(){ selAsis={}; actualizarNSel(); pintarAsisMes(); }
+
 async function aplicarArea(){
-  const dnis=Object.keys(selAsis);
+  const dnis = Object.keys(selAsis);
   if(!dnis.length){ mostrarError("No hay personas seleccionadas"); return; }
   try{
     const r = await rpc("fn_cambiar_area",{p_dni:ING.dni,p_token:ING.token,
       p_dnis:dnis,p_area:$("selArea").value});
     if(!r.ok){ mostrarError(r.error); return; }
-    await cargarAsis();
+    await cargarAsisMes();
   }catch(e){ mostrarError(e.message); }
+}
+
+/* ================= MODAL genérico ================= */
+function abrirModal(html){
+  $("modalBox").innerHTML = html;
+  $("modalOverlay").classList.add("visible");
+}
+function cerrarModal(){
+  $("modalOverlay").classList.remove("visible");
+  $("modalBox").innerHTML = "";
+}
+
+/* ---- Modal: crear / editar personal ---- */
+async function abrirModalPersonal(dni){
+  let datos = {dni:"", nombres_apellidos:"", area_origen:AREAS_LISTA[0]||"", area_actual:AREAS_LISTA[0]||"",
+    estado:"ACTIVO", cargo:"OPERARIO"};
+  const esEdicion = !!dni;
+  if(esEdicion){
+    abrirModal(cargandoHTML("Cargando datos…"));
+    try{
+      const r = await rpc("fn_personal_detalle",{p_dni_ing:ING.dni,p_token:ING.token,p_dni:dni});
+      if(!r.ok){ mostrarError(r.error||"No se pudo cargar"); cerrarModal(); return; }
+      datos = r;
+    }catch(e){ mostrarError(e.message); cerrarModal(); return; }
+  }
+  const html = `
+    <h2>${esEdicion? "Editar personal":"Agregar personal"}</h2>
+    <div class="modal-campo">
+      <label>DNI / Usuario</label>
+      <input id="mpDni" value="${esc(datos.dni)}" ${esEdicion?"disabled":""} maxlength="15">
+    </div>
+    <div class="modal-campo">
+      <label>Nombres y apellidos</label>
+      <input id="mpNombres" value="${esc(datos.nombres_apellidos)}" maxlength="120">
+    </div>
+    <div class="modal-2col">
+      <div class="modal-campo">
+        <label>Área origen</label>
+        <select id="mpAreaOrigen">${AREAS_LISTA.map(a=>`<option ${a===datos.area_origen?"selected":""}>${esc(a)}</option>`).join("")}</select>
+      </div>
+      <div class="modal-campo">
+        <label>Área actual</label>
+        <select id="mpAreaActual">${AREAS_LISTA.map(a=>`<option ${a===datos.area_actual?"selected":""}>${esc(a)}</option>`).join("")}</select>
+      </div>
+    </div>
+    <div class="modal-2col">
+      <div class="modal-campo">
+        <label>Estado</label>
+        <select id="mpEstado">${ESTADOS_OPERARIO.map(e=>`<option ${e===datos.estado?"selected":""}>${esc(e)}</option>`).join("")}</select>
+      </div>
+      <div class="modal-campo">
+        <label>Cargo</label>
+        <select id="mpCargo">${CARGOS_LISTA.map(c=>`<option ${c===datos.cargo?"selected":""}>${esc(c)}</option>`).join("")}</select>
+      </div>
+    </div>
+    <div class="modal-msg" id="mpMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal" onclick="guardarPersonal(${esEdicion?`'${esc(datos.dni)}'`:"null"})">GUARDAR</button>
+      ${esEdicion?`<button class="btn-pin" onclick="resetearPin('${esc(datos.dni)}')">RESETEAR PIN</button>`:""}
+      <button class="btn-secundario" style="width:auto;flex:1;" onclick="cerrarModal()">CANCELAR</button>
+    </div>`;
+  abrirModal(html);
+}
+
+async function guardarPersonal(dniOriginal){
+  const dni = dniOriginal || $("mpDni").value.trim();
+  const nombres = $("mpNombres").value.trim();
+  const areaOrigen = $("mpAreaOrigen").value;
+  const areaActual = $("mpAreaActual").value;
+  const estado = $("mpEstado").value;
+  const cargo = $("mpCargo").value;
+  if(!dni || !nombres){ $("mpMsg").textContent = "DNI y nombres son obligatorios"; return; }
+  try{
+    let r;
+    if(dniOriginal){
+      r = await rpc("fn_personal_editar",{p_dni_ing:ING.dni,p_token:ING.token,
+        p_dni:dni,p_nombres:nombres,p_area_origen:areaOrigen,p_area_actual:areaActual,
+        p_estado:estado,p_cargo:cargo});
+    } else {
+      r = await rpc("fn_personal_crear",{p_dni_ing:ING.dni,p_token:ING.token,
+        p_dni:dni,p_nombres:nombres,p_area_origen:areaOrigen,p_area_actual:areaActual,
+        p_estado:estado,p_cargo:cargo});
+    }
+    if(!r.ok){ $("mpMsg").textContent = r.error||"No se pudo guardar"; return; }
+    cerrarModal();
+    await cargarAsisMes();
+  }catch(e){ $("mpMsg").textContent = e.message; }
+}
+
+async function resetearPin(dni){
+  if(!confirm("¿Resetear el PIN de este operario?")) return;
+  try{
+    const r = await rpc("fn_personal_resetear_pin",{p_dni_ing:ING.dni,p_token:ING.token,p_dni:dni});
+    if(!r.ok){ $("mpMsg").textContent = r.error||"No se pudo resetear"; return; }
+    $("mpMsg").style.color = "var(--exito)";
+    $("mpMsg").textContent = "PIN reseteado a " + r.pin_nuevo;
+  }catch(e){ $("mpMsg").textContent = e.message; }
+}
+
+/* ---- Modal: asignar estado por rango de fechas ---- */
+function abrirModalRango(){
+  const dnis = Object.keys(selAsis);
+  if(!dnis.length){ mostrarError("Selecciona al menos una persona en la tabla"); return; }
+  const html = `
+    <h2>Asignar estado por rango</h2>
+    <div class="sub" style="margin-bottom:14px;">${dnis.length} persona(s) seleccionada(s)</div>
+    <div class="modal-campo">
+      <label>Estado</label>
+      <select id="mrEstado">${ESTADOS_ASIS.map(e=>`<option>${esc(e)}</option>`).join("") || '<option value="">Sin estados configurados</option>'}</select>
+    </div>
+    <div class="modal-2col">
+      <div class="modal-campo">
+        <label>Desde</label>
+        <input type="date" id="mrDesde" value="${hoyISO()}">
+      </div>
+      <div class="modal-campo">
+        <label>Hasta</label>
+        <input type="date" id="mrHasta" value="${hoyISO()}">
+      </div>
+    </div>
+    <div class="modal-msg" id="mrMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal" onclick="guardarRango()">APLICAR A ${dnis.length} PERSONA(S)</button>
+      <button class="btn-secundario" style="width:auto;flex:1;" onclick="cerrarModal()">CANCELAR</button>
+    </div>`;
+  abrirModal(html);
+}
+
+async function guardarRango(){
+  const dnis = Object.keys(selAsis);
+  const estado = $("mrEstado").value;
+  const desde = $("mrDesde").value;
+  const hasta = $("mrHasta").value;
+  if(!estado){ $("mrMsg").textContent = "Elige un estado"; return; }
+  if(!desde || !hasta){ $("mrMsg").textContent = "Elige ambas fechas"; return; }
+  if(hasta < desde){ $("mrMsg").textContent = "La fecha final no puede ser menor a la inicial"; return; }
+  try{
+    const r = await rpc("fn_asignar_estado_rango",{p_dni:ING.dni,p_token:ING.token,
+      p_dnis:dnis,p_estado:estado,p_fecha_desde:desde,p_fecha_hasta:hasta});
+    if(!r.ok){ $("mrMsg").textContent = r.error||"No se pudo guardar"; return; }
+    cerrarModal();
+    selAsis={}; actualizarNSel();
+    await cargarAsisMes();
+  }catch(e){ $("mrMsg").textContent = e.message; }
 }
 
 /* ================= TICKETS DEL DÍA ================= */
@@ -161,7 +341,7 @@ function pintarBases(){
 function descargarBase(){
   const lista = basesFiltradas();
   if(!lista.length){ mostrarError("No hay filas para descargar (revisa filtros o carga la base)"); return; }
-  const filas = lista.map(b=>[b.prenda,b.cliente,b.modulo,b.articulo,b.operacion,b.std,b.max_op,b.n_op]);
+  const filas = lista.map(b=>[b.prenda,b.cliente,b.modulo,b.articulo,b.operacion,b.std,b.max_op,b.nop]);
   const ws = XLSX.utils.aoa_to_sheet([CAB_BASE, ...filas]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Hoja1");
@@ -186,7 +366,7 @@ function leerExcelBase(input){
         if(k==="PRENDA")idx.prenda=i; if(k==="CLIENTE")idx.cliente=i;
         if(k==="MODULO")idx.modulo=i; if(k==="ARTICULO")idx.articulo=i;
         if(k==="OPERACION")idx.operacion=i; if(k==="STD")idx.std=i;
-        if(k==="MAXOP")idx.max_op=i; if(k==="NOP" || k==="N_OP")idx.n_op=i;
+        if(k==="MAXOP")idx.max_op=i; if(k==="NOP")idx.n_op=i;
       });
       if(idx.articulo===undefined||idx.operacion===undefined||idx.std===undefined||idx.n_op===undefined)
         throw new Error("Faltan cabeceras: se esperan "+CAB_BASE.join(", "));

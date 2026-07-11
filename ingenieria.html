@@ -40,23 +40,29 @@
     </div>
   </section>
 
-  <!-- ASISTENCIA -->
+  <!-- ASISTENCIA (mes completo) -->
   <section class="pantalla" id="pasoAsis">
     <div class="fila-filtros">
-      <input type="date" id="fechaAsis">
+      <input type="month" id="mesAsis">
       <select id="filtroAreaAsis"><option value="">Todas las áreas</option></select>
       <input type="text" id="filtroNomAsis" placeholder="Buscar nombre…">
-      <button class="btn-mini" onclick="cargarAsis()">VER</button>
+      <button class="btn-mini" onclick="cargarAsisMes()">VER MES</button>
+      <button class="btn-mini verde" onclick="abrirModalPersonal(null)">+ AGREGAR PERSONAL</button>
     </div>
+
+    <div class="resumen-estados" id="resumenEstadosAsis"></div>
+
     <div class="fila-filtros" id="accionesAsis">
       <span class="campo-label" style="margin:0;">Con <b id="nSelAsis">0</b> seleccionados:</span>
-      <select id="selEstado"></select>
-      <button class="btn-mini verde" onclick="aplicarEstado()">MARCAR ESTADO</button>
+      <button class="btn-mini verde" onclick="abrirModalRango()">ASIGNAR ESTADO (RANGO DE FECHAS)</button>
       <select id="selArea"></select>
       <button class="btn-mini" onclick="aplicarArea()">CAMBIAR ÁREA</button>
-      <button class="btn-mini gris" onclick="limpiarSelAsis()">LIMPIAR</button>
+      <button class="btn-mini gris" onclick="limpiarSelAsis()">LIMPIAR SELECCIÓN</button>
     </div>
-    <div class="grid-personal contenedor-ancho" id="gridAsis"></div>
+
+    <div class="contenedor-ancho" style="overflow:auto;max-height:65vh;">
+      <table class="tabla-asis-mes" id="tablaAsisMes"></table>
+    </div>
   </section>
 
   <!-- TICKETS -->
@@ -93,6 +99,12 @@
     </div>
   </section>
 </main>
+
+<!-- Modal genérico: gestión de personal / asignar estado por rango -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this) cerrarModal()">
+  <div class="modal-box" id="modalBox"></div>
+</div>
+
 <script src="app.js"></script>
 <script src="ingenieria.js"></script>
 </body>
