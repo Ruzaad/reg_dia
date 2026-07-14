@@ -10,13 +10,15 @@
 </head>
 <body data-pagina="operario">
 <header>
+  <button type="button" class="btn-volver-hdr" id="btnVolverHdr">← Volver</button>
   <div class="titulo" id="tituloArea">ÁREA</div>
   <div class="badges">
     <div class="badge avance" id="badgeAvance"></div>
+    <button type="button" class="btn-reloj" id="btnReloj" title="Solicitar ajuste de tiempo">🕐</button>
     <div class="badge" id="quienBadge"></div>
-    <button class="btn-salir" id="btnSalir">Salir</button>
   </div>
 </header>
+<div class="breadcrumb-of" id="crumbOF"></div>
 <main>
   <div class="banner-error" id="bannerError"></div>
 
@@ -36,7 +38,6 @@
 
   <!-- Módulos -->
   <section class="pantalla" id="pasoModulos">
-    <button class="btn-volver" onclick="irA('pasoOF')">← Cambiar OF</button>
     <h1 id="tituloModulos"></h1>
     <div class="sub">Toca tu módulo</div>
     <div class="lista-cards" id="listaModulos"></div>
@@ -44,7 +45,6 @@
 
   <!-- Operaciones -->
   <section class="pantalla" id="pasoOps">
-    <button class="btn-volver" onclick="irA('pasoModulos')">← Volver</button>
     <h1 id="tituloOps"></h1>
     <div class="sub">Toca tu operación</div>
     <div class="lista-cards" id="listaOps"></div>
@@ -52,7 +52,6 @@
 
   <!-- Tickets -->
   <section class="pantalla" id="pasoTickets">
-    <button class="btn-volver" onclick="irA('pasoOps')">← Volver</button>
     <h1 id="tituloTickets"></h1>
     <div class="sub">Busca la numeración de tu paquete</div>
     <div class="barra-sel" id="barraSel"></div>
@@ -61,7 +60,6 @@
 
   <!-- Confirmación -->
   <section class="pantalla" id="pasoConf">
-    <button class="btn-volver" onclick="irA('pasoTickets')">← Volver</button>
     <div class="zona-conf">
       <h1>¿Este es tu paquete?</h1>
       <div class="conf-card">
@@ -74,6 +72,14 @@
     </div>
   </section>
 </main>
+
+<footer class="pie-app">
+  <button type="button" class="btn-salir-pie" id="btnSalir">Salir</button>
+  <div class="disclaimer">Developed by Lead Developer Adamari Lopez, with support from Analysts Luis Fabian, James Mayta, and Maycool Vega.
+    Todos los derechos reservados.</div>
+</footer>
+
+<div class="modal-overlay" id="modalOverlay"><div class="modal-box" id="modalBox"></div></div>
 
 <div class="pantalla-exito" id="exito">
   <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"

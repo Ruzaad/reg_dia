@@ -22,24 +22,9 @@
   <div class="tabs">
     <button id="tabPersonal" class="tab activo">PERSONAL</button>
     <button id="tabAvance" class="tab">AVANCE DEL DÍA</button>
+    <button id="tabIncidencias" class="tab">INCIDENCIAS</button>
   </div>
 
-  <section class="pantalla" id="pasoSeleccion">
-    <button class="btn-volver" onclick="irA('pasoAlcance')">← Volver</button>
-    <h1>Marca a las personas</h1>
-    <div class="sub">Toca para marcar o desmarcar</div>
-    <div class="grid-personal" id="gridPersonalSel"></div>
-    <div style="max-width:560px;margin:14px auto 0;width:100%;">
-      <button class="btn-principal" id="btnContinuarSel" disabled onclick="continuarSeleccion()">CONTINUAR</button>
-    </div>
-  </section>
-  <section class="pantalla" id="pasoAvance">
-  <h1>Avance del área</h1>
-  <div class="sub" id="avHora">Se actualiza cada 60 segundos</div>
-  <button class="btn-mini" style="margin-bottom:10px;" onclick="cargarAvance()">RECARGAR AHORA</button>
-  <div class="kpis" id="avResumen"></div>
-  <div class="lista-cards" id="avItems" style="margin-top:14px;"></div>
-</section>
   <!-- Personal -->
   <section class="pantalla activa" id="pasoPersonal">
     <h1>Tu personal</h1>
@@ -48,9 +33,11 @@
       <input class="input-grande" id="filtroNombre" placeholder="Buscar por nombre…"
              autocomplete="off" style="font-size:22px;letter-spacing:normal;text-align:left;">
     </div>
-    <div style="max-width:560px;margin:0 auto 14px;width:100%;">
-      <button class="btn-secundario" style="color:var(--enlace);border-color:var(--enlace);"
+    <div style="max-width:560px;margin:0 auto 14px;width:100%;display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn-secundario" style="color:var(--enlace);border-color:var(--enlace);flex:1;min-width:220px;"
               onclick="ocurrenciaGrupal()">OCURRENCIA GRUPAL (OTROS)</button>
+      <button class="btn-secundario" style="color:var(--azul);border-color:var(--azul);flex:1;min-width:220px;"
+              onclick="moverAreaInicio()">CAMBIAR ÁREA A PERSONAL</button>
     </div>
     <div class="grid-personal" id="gridPersonal"></div>
   </section>
@@ -65,7 +52,7 @@
     </div>
   </section>
 
-  <!-- Selección múltiple -->
+  <!-- Selección múltiple (ocurrencia) -->
   <section class="pantalla" id="pasoSeleccion">
     <button class="btn-volver" onclick="irA('pasoAlcance')">← Volver</button>
     <h1>Marca a las personas</h1>
@@ -123,14 +110,47 @@
     </div>
   </section>
 
+  <!-- Cambiar área: selección de personal -->
+  <section class="pantalla" id="pasoMoverSel">
+    <button class="btn-volver" onclick="irA('pasoPersonal')">← Volver</button>
+    <h1>¿A quiénes cambias de área?</h1>
+    <div class="sub">Toca para marcar o desmarcar — se registra la hora del cambio</div>
+    <div class="grid-personal" id="gridPersonalMov"></div>
+    <div style="max-width:560px;margin:14px auto 0;width:100%;">
+      <button class="btn-principal" id="btnContinuarMov" disabled onclick="moverAreaElegir()">ELEGIR ÁREA DESTINO</button>
+    </div>
+  </section>
+
+  <!-- Cambiar área: elegir destino -->
+  <section class="pantalla" id="pasoMoverArea">
+    <button class="btn-volver" onclick="irA('pasoMoverSel')">← Volver</button>
+    <h1>¿A qué área?</h1>
+    <div class="sub">Toca el área destino</div>
+    <div class="lista-cards" id="listaAreasMov"></div>
+  </section>
+
   <!-- Avance del día -->
   <section class="pantalla" id="pasoAvance">
     <h1>Avance del área</h1>
     <div class="sub" id="avHora">Se actualiza cada 60 segundos</div>
-    <div class="kpis" id="avResumen"></div>
+    <button type="button" class="btn-recargar" onclick="cargarAvance()">↻ RECARGAR AHORA</button>
+    <div class="kpis" id="avResumen" style="margin-top:14px;"></div>
     <div class="lista-cards" id="avItems" style="margin-top:14px;"></div>
   </section>
+
+  <!-- Incidencias del personal -->
+  <section class="pantalla" id="pasoIncidencias">
+    <h1>Incidencias del personal</h1>
+    <div class="sub">Solicitudes de ajuste de tiempo enviadas por el personal</div>
+    <button type="button" class="btn-recargar" onclick="cargarIncidencias()">↻ RECARGAR</button>
+    <div class="lista-cards" id="listaIncidencias" style="margin-top:14px;"></div>
+  </section>
 </main>
+
+<footer class="pie-app">
+  <div class="disclaimer">Developed by Lead Developer Adamari Lopez, with support from Analysts Luis Fabian, James Mayta, and Maycool Vega.
+    Todos los derechos reservados.</div>
+</footer>
 
 <div class="pantalla-exito" id="exito">
   <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"

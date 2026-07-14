@@ -33,9 +33,13 @@ const SESION_HORAS = 4;
 
 /* ---------------- UTILIDADES ---------------- */
 const $ = id => document.getElementById(id);
+/* normKey: mayúsculas, sin tildes y SOLO letras/números.
+   Cubre todas las variantes reales de cabecera:
+   "N°OP" / "N° OP" / "N_OP" -> "NOP" · "N° CORTE" -> "NCORTE"
+   "CANT." -> "CANT" · "O.F" -> "OF" · "EFICIENCIA%" -> "EFICIENCIA" */
 const normKey = s => String(s==null?"":s).trim().toUpperCase()
   .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-  .replace(/[.°º"']/g,"").replace(/\s+/g,"");
+  .replace(/[^A-Z0-9]/g,"");
 const norm = s => String(s==null?"":s).trim();
 const COLORES = {NEGRO:"#212529",BLANCO:"#fafafa",ROSADO:"#e8a0b4",ROSA:"#e8a0b4",
   CELESTE:"#a8d0e6",AZUL:"#0D3B85",MARINO:"#0a2a5e",CREMA:"#f5e9d0",MARFIL:"#f2ead9",
@@ -61,10 +65,13 @@ function irA(id){
   document.querySelectorAll(".pantalla").forEach(p=>p.classList.remove("activa"));
   const el = $(id); if(el) el.classList.add("activa");
   ocultarError();
+  if(typeof window.onCambioPaso === "function") window.onCambioPaso(id);
 }
 function mostrarError(msg){ const b=$("bannerError"); if(b){b.textContent=msg;b.classList.add("visible");} }
 function ocultarError(){ const b=$("bannerError"); if(b) b.classList.remove("visible"); }
 function cargandoHTML(txt){ return `<div class="cargando"><div class="spinner"></div>${esc(txt)}</div>`; }
+function abrirModal(html){ const o=$("modalOverlay"); if(!o) return; $("modalBox").innerHTML=html; o.classList.add("visible"); }
+function cerrarModal(){ const o=$("modalOverlay"); if(!o) return; o.classList.remove("visible"); $("modalBox").innerHTML=""; }
 
 /* ---------------- SESIÓN (localStorage, 4h) ---------------- */
 function guardarSesion(s){ s.exp = Date.now() + SESION_HORAS*3600*1000; localStorage.setItem("stx_sesion", JSON.stringify(s)); }
@@ -95,6 +102,25 @@ async function rpc(fn, args){
   return await r.json();
 }
 
+/* ---------------- ÁREAS DESDE LA BASE DE DATOS ----------------
+   fn_areas_listar devuelve el distinct de area_actual/area_origen de
+   operarios (incluye CORTE, REPROCESOS, etc.). AREAS (arriba) solo
+   define qué áreas tienen almacén en Sheets para el flujo de operario. */
+let AREAS_DB = null;
+async function cargarAreasDB(){
+  if(AREAS_DB) return AREAS_DB;
+  const s = sesionActual();
+  try{
+    const r = await rpc("fn_areas_listar",{p_dni:s.dni, p_token:s.token});
+    AREAS_DB = [...new Set([...(Array.isArray(r)?r:[]), ...Object.keys(AREAS)])]
+      .filter(Boolean).sort();
+  }catch(e){
+    console.warn("fn_areas_listar no disponible, uso AREAS locales:", e.message);
+    AREAS_DB = Object.keys(AREAS);
+  }
+  return AREAS_DB;
+}
+
 /* ---------------- LECTOR DE ALMACÉN (Google Sheets CSV) ---------------- */
 function parseCSV(texto){
   const filas=[]; let fila=[], campo="", dentro=false;
@@ -123,8 +149,15 @@ async function cargarAlmacen(nombreArea){
   const filas = parseCSV(await r.text());
   if(filas.length < 2) throw new Error("El almacén está vacío");
 
-  const idx = {};
-  filas[0].forEach((h,i)=>{ const k = normKey(h); if(cfg.mapa[k]) idx[cfg.mapa[k]] = i; });
+  const idx = {}; const sinMapear = [];
+  filas[0].forEach((h,i)=>{
+    const k = normKey(h);
+    if(cfg.mapa[k]) idx[cfg.mapa[k]] = i;
+    else if(k) sinMapear.push(h);
+  });
+  // Diagnóstico: si una columna esperada no aparece, se ve aquí en consola.
+  console.info("Almacén "+nombreArea+" — columnas mapeadas:", idx,
+               sinMapear.length ? "· sin mapear: "+sinMapear.join(", ") : "");
   if(idx.codigo===undefined || idx.op===undefined || idx.of===undefined)
     throw new Error("El almacén no tiene las columnas esperadas (CÓDIGO/OP/O.F)");
 
@@ -241,18 +274,75 @@ function initLogin(){
   }
 }
 
-/* ============================================================
-   PÁGINA: OPERARIO (operario.html)
-   OF → módulos → operaciones → tickets → confirmación → éxito
-   ============================================================ */
 let ALM=null, RECL={}, sel={of:null,modulo:null,op:null,ticket:null};
 
+const VOLVER_OPERARIO = {
+  pasoModulos:"pasoOF", pasoOps:"pasoModulos",
+  pasoTickets:"pasoOps", pasoConf:"pasoTickets"
+};
+
+let sa={signo:-1};
+function abrirSolicitudAjuste(){
+  sa={signo:-1};
+  abrirModal(`
+    <h2>Solicitar ajuste de tiempo</h2>
+    <div class="sub" style="margin-bottom:12px;">Pides a supervisión sumar o restar minutos de tu día</div>
+    <div class="seg" id="saSeg">
+      <button id="saResta" class="activo" onclick="saSigno(-1)">RESTA min</button>
+      <button id="saSuma" onclick="saSigno(1)">SUMA min</button>
+    </div>
+    <div class="modal-campo"><label>Minutos</label>
+      <input id="saMin" inputmode="numeric" maxlength="3" placeholder="Ej: 30"></div>
+    <div class="modal-campo"><label>Motivo</label>
+      <input id="saMotivo" maxlength="140" placeholder="Ej: máquina parada 9:00 a 9:30"></div>
+    <div class="modal-msg" id="saMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="enviarSolicitudAjuste()">ENVIAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+}
+function saSigno(s){ sa.signo=s; $("saResta").classList.toggle("activo",s===-1); $("saSuma").classList.toggle("activo",s===1); }
+async function enviarSolicitudAjuste(){
+  const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  const v=parseInt($("saMin").value,10);
+  const motivo=$("saMotivo").value.trim();
+  if(!v||v<=0){ $("saMsg").textContent="Ingresa los minutos"; return; }
+  if(!motivo){ $("saMsg").textContent="Indica el motivo"; return; }
+  try{
+    const r=await rpc("fn_solicitud_ajuste_crear",{p_dni:s.dni,p_token:s.token,p_area:s.area,
+      p_minutos:v*sa.signo,p_motivo:motivo});
+    if(!r.ok){ $("saMsg").textContent=r.error||"No se pudo enviar"; return; }
+    cerrarModal();
+    $("exTitulo").textContent="Solicitud enviada";
+    $("exDetalle").innerHTML=`${sa.signo>0?"+":"-"}${v} min · esperando aprobación`;
+    $("exAvance").textContent=""; $("exTimer").textContent="";
+    const ex=$("exito"); ex.classList.add("visible");
+    setTimeout(()=>ex.classList.remove("visible"),2200);
+  }catch(e){ $("saMsg").textContent=e.message; }
+}
+function pintarCrumb(id){
+  const el=$("crumbOF"); if(!el) return;
+  if(id==="pasoCarga" || id==="pasoOF" || !sel.of){ el.style.display="none"; el.innerHTML=""; return; }
+  const partes=[`OF <b>${esc(sel.of)}</b>`];
+  if(sel.modulo) partes.push(`Módulo <b>${esc(sel.modulo)}</b>`);
+  if(sel.op)     partes.push(`Operación <b>${esc(sel.op)}</b>`);
+  el.innerHTML = partes.join(' <span class="crumb-sep">\u203A</span> ');
+  el.style.display="block";
+}
 function initOperario(){
   const s = sesionActual();
   if(!s || !s.area){ location.href="index.html"; return; }
   $("tituloArea").textContent = s.area;
   $("quienBadge").textContent = s.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
+  { const rb=$("btnReloj"); if(rb) rb.onclick=abrirSolicitudAjuste; }
+  window.onCambioPaso = (id)=>{
+    pintarCrumb(id);
+    const b=$("btnVolverHdr"); if(!b) return;
+    const destino = VOLVER_OPERARIO[id];
+    if(destino){ b.style.display="inline-block"; b.onclick=()=>irA(destino); }
+    else b.style.display="none";
+  };
   cargarTodo(s);
   $("inputOF").addEventListener("input", pintarSugerencias);
 }
@@ -300,7 +390,7 @@ function pintarSugerencias(){
     const d=document.createElement("div");
     d.className="sug";
     d.innerHTML=`<span>OF ${esc(of)}</span><small>${ofs[of].libres} de ${ofs[of].total} libres</small>`;
-    d.onclick=()=>{ sel.of=of; pintarModulos(); irA("pasoModulos"); };
+    d.onclick=()=>{ sel.of=of; sel.modulo=null; sel.op=null; pintarModulos(); irA("pasoModulos"); };
     z.appendChild(d);
   });
   if(!Object.keys(ofs).length) z.innerHTML=`<div class="vacio-msg">Ninguna OF contiene "${esc(q)}"</div>`;
@@ -374,6 +464,7 @@ function pintarTickets(){
         <div>Talla <b>${esc(t.talla)}</b></div>
         <div><b>${t.cant}</b> und</div>
         <div>Corte <b>${esc(t.corte)}</b></div>
+        <div>N°OP <b>${t.nop ?? "—"}</b></div>
       </div>
       ${r?`<div class="tk-tomado-por">Tomado por ${esc(r.nombre)} · ${esc(r.hora)}</div>`:""}`;
     if(!r){
@@ -504,6 +595,48 @@ function mostrarExito(){
    ============================================================ */
 let PERSONAL=[], oc={tipo:null,minutos:0,dnis:[]};
 
+async function cargarIncidencias(){
+  const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  const z=$("listaIncidencias"); z.innerHTML=cargandoHTML("Cargando incidencias…");
+  try{
+    const r=await rpc("fn_solicitudes_listar",{p_dni:s.dni,p_token:s.token,p_area:s.area});
+    if(!r.ok){ mostrarError(r.error||"Error"); z.innerHTML=""; return; }
+    pintarIncidencias(r.items||[], z, "inc", "resolverIncidencia");
+  }catch(e){ z.innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`; }
+}
+function pintarIncidencias(items, z, pref, fn){
+  if(!items.length){ z.innerHTML=`<div class="vacio-msg">Sin incidencias pendientes</div>`; return; }
+  z.innerHTML="";
+  items.forEach(it=>{
+    const d=document.createElement("div");
+    d.className="card-fila"; d.style.cursor="default"; d.style.flexWrap="wrap";
+    d.innerHTML=`
+      <div style="flex:1;min-width:220px;">
+        <div class="cf-titulo">${esc(it.nombre)}</div>
+        <div class="cf-detalle">${esc(it.motivo)}</div>
+        <div class="cf-detalle">${esc(it.area)} · ${esc(it.fecha)} ${esc(it.hora)}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="number" id="${pref}_${it.id}" value="${it.minutos}"
+          style="width:90px;background:var(--gris-fondo);border:2px solid var(--azul);border-radius:10px;font-size:16px;font-weight:800;padding:8px;text-align:center;">
+        <span class="cf-detalle">min</span>
+        <button class="btn-mini verde" onclick="${fn}(${it.id},true)">APROBAR</button>
+        <button class="btn-mini rojo" onclick="${fn}(${it.id},false)">RECHAZAR</button>
+      </div>`;
+    z.appendChild(d);
+  });
+}
+async function resolverIncidencia(id, aprobar){
+  const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  let mf=null;
+  if(aprobar){ mf=parseInt($("inc_"+id).value,10); if(!mf){ mostrarError("Minutos inválidos"); return; } }
+  try{
+    const r=await rpc("fn_solicitud_resolver",{p_dni:s.dni,p_token:s.token,p_id:id,p_aprobar:aprobar,p_minutos_final:mf});
+    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+    await cargarIncidencias();
+  }catch(e){ mostrarError(e.message); }
+}
+
 let timerAvance=null;
 function initSupervisora(){
   const s=sesionActual();
@@ -515,10 +648,11 @@ function initSupervisora(){
   $("filtroNombre").addEventListener("input", pintarPersonal);
   $("tabPersonal").onclick = ()=>{ pararAvance(); marcarTab("tabPersonal"); irA("pasoPersonal"); };
   $("tabAvance").onclick  = ()=>{ marcarTab("tabAvance"); irA("pasoAvance"); cargarAvance(); timerAvance=setInterval(cargarAvance, 60000); };
+  $("tabIncidencias").onclick = ()=>{ pararAvance(); marcarTab("tabIncidencias"); irA("pasoIncidencias"); cargarIncidencias(); };
   cargarPersonal(s);
 }
 function marcarTab(id){
-  ["tabPersonal","tabAvance"].forEach(t=>$(t).classList.toggle("activo", t===id));
+  ["tabPersonal","tabAvance","tabIncidencias"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });
 }
 function pararAvance(){ clearInterval(timerAvance); timerAvance=null; }
 
@@ -588,7 +722,7 @@ function pintarPersonal(){
         const i=oc.dnis.indexOf(p.dni);
         if(i>=0) oc.dnis.splice(i,1); else oc.dnis.push(p.dni);
         pintarPersonal();
-        $("btnContinuarSel").disabled = oc.dnis.length===0;
+        actualizarBtnContinuar();
       } else {
         oc.dnis=[p.dni];
         $("nombreAfectado").textContent = p.nombre;
@@ -597,6 +731,11 @@ function pintarPersonal(){
     };
     g.appendChild(c);
   });
+}
+function actualizarBtnContinuar(){
+  const b=$("btnContinuarSel"); if(!b) return;
+  b.disabled = oc.dnis.length===0;
+  b.textContent = oc.dnis.length ? `CONTINUAR (${oc.dnis.length})` : "CONTINUAR";
 }
 
 /* --- selección de tipo --- */
@@ -677,21 +816,81 @@ function alcanceTodos(){
 }
 function alcanceAlgunos(){
   oc.dnis=[]; oc.multiple=true;
-  $("btnContinuarSel").disabled=true;
+  actualizarBtnContinuar();
   pintarPersonal();
   irA("pasoSeleccion");
 }
 function continuarSeleccion(){
+  if(!oc.dnis.length) return;
   oc.multiple=false;
   $("nombreAfectado").textContent = oc.dnis.length+" persona(s) seleccionada(s)";
-  irA("pasoTipo");           // antes: elegirTipo("OTROS")
-  if(oc.multiple){
-  const i=oc.dnis.indexOf(p.dni);
-  if(i>=0) oc.dnis.splice(i,1); else oc.dnis.push(p.dni);
-  pintarPersonal();
-  $("btnContinuarSel").disabled = oc.dnis.length===0;
-  $("btnContinuarSel").textContent = oc.dnis.length ? `CONTINUAR (${oc.dnis.length})` : "CONTINUAR";
+  irA("pasoTipo");
 }
+
+/* --- mover personal de área (cubrir puestos en otras áreas) ---
+   Registra el movimiento con hora en Supabase (movimientos_area);
+   el servidor prorratea los minutos disponibles entre áreas. */
+let mv={dnis:[]};
+function moverAreaInicio(){
+  mv={dnis:[]};
+  pintarPersonalMov();
+  irA("pasoMoverSel");
+}
+function pintarPersonalMov(){
+  const g=$("gridPersonalMov"); g.innerHTML="";
+  if(!PERSONAL.length){ g.innerHTML=`<div class="vacio-msg">Sin personal en el área</div>`; return; }
+  PERSONAL.forEach(p=>{
+    const c=document.createElement("div");
+    c.className="card-persona"+(mv.dnis.includes(p.dni)?" marcada":"");
+    c.innerHTML=`<div>
+        <div class="cp-nombre">${esc(p.nombre)}</div>
+        <div class="cp-dni">DNI ${esc(p.dni)}</div>
+      </div>
+      <div class="cp-disp">${p.disp} min</div>`;
+    c.onclick=()=>{
+      const i=mv.dnis.indexOf(p.dni);
+      if(i>=0) mv.dnis.splice(i,1); else mv.dnis.push(p.dni);
+      pintarPersonalMov();
+    };
+    g.appendChild(c);
+  });
+  const b=$("btnContinuarMov");
+  b.disabled = mv.dnis.length===0;
+  b.textContent = mv.dnis.length ? `ELEGIR ÁREA DESTINO (${mv.dnis.length})` : "ELEGIR ÁREA DESTINO";
+}
+async function moverAreaElegir(){
+  if(!mv.dnis.length) return;
+  const s=sesionActual();
+  const l=$("listaAreasMov"); l.innerHTML=cargandoHTML("Cargando áreas…");
+  irA("pasoMoverArea");
+  const areas = (await cargarAreasDB()).filter(a=>a!==s.area);
+  l.innerHTML="";
+  if(!areas.length){ l.innerHTML=`<div class="vacio-msg">No hay otras áreas registradas</div>`; return; }
+  areas.forEach(a=>{
+    const c=document.createElement("div");
+    c.className="card-fila";
+    c.innerHTML=`<div class="cf-titulo">${esc(a)}</div>`;
+    c.onclick=()=>moverAreaConfirmar(a);
+    l.appendChild(c);
+  });
+}
+async function moverAreaConfirmar(area){
+  const s=sesionActual(); if(!s){location.href="index.html";return;}
+  if(!confirm(`¿Mover ${mv.dnis.length} persona(s) de ${s.area} a ${area}?\nSe registra la hora del cambio para el cálculo de minutos.`)) return;
+  try{
+    const r = await rpc("fn_cambiar_area",{p_dni:s.dni,p_token:s.token,p_dnis:mv.dnis,p_area:area});
+    if(!r.ok){ mostrarError(r.error||"No se pudo mover"); return; }
+    $("exTitulo").textContent="Movimiento registrado";
+    $("exDetalle").innerHTML=`${mv.dnis.length} persona(s) → <b>${esc(area)}</b>`;
+    $("exAvance").textContent="";
+    const ex=$("exito"); ex.classList.add("visible");
+    setTimeout(async ()=>{
+      ex.classList.remove("visible");
+      mv={dnis:[]};
+      await cargarPersonal(s);
+      irA("pasoPersonal");
+    },2200);
+  }catch(e){ mostrarError(e.message); }
 }
 
 /* ---------------- PWA ---------------- */
