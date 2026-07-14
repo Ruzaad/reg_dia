@@ -3,7 +3,7 @@
    ============================================================ */
 let ING=null;
 let AREAS_LISTA = Object.keys(AREAS);       // se reemplaza con fn_areas_listar al iniciar
-const CARGOS_LISTA = ["OPERARIO","SUPERVISORA"];
+const CARGOS_LISTA = ["OPERARIO","SUPERVISORA","ESTAJERO"];
 const ESTADOS_OPERARIO = ["ACTIVO","INACTIVO"];
 const USUARIO_LIBERA = "ALOPEZ";            // único usuario que puede retirar tickets desde la app
 let ESTADOS_ASIS = [];

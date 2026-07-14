@@ -26,10 +26,19 @@
     <div id="zonaCarga"></div>
   </section>
 
+  <!-- Área (solo ESTAJERO) -->
+  <section class="pantalla" id="pasoAreaEstajero">
+    <h1>¿En qué área trabajarás?</h1>
+    <div class="sub">Elige el área para este reclamo</div>
+    <div class="grid-areas" id="gridAreaEstajero"></div>
+  </section>
+
   <!-- OF -->
   <section class="pantalla" id="pasoOF">
     <h1>¿En qué OF trabajas?</h1>
     <div class="sub">Escribe los números de la OF</div>
+    <button type="button" class="btn-secundario" id="btnCambiarAreaEst"
+      style="display:none;max-width:300px;margin:0 auto 14px;">CAMBIAR ÁREA</button>
     <div class="zona-of">
       <input class="input-grande" id="inputOF" inputmode="numeric" placeholder="Ej: 9424" maxlength="6" autocomplete="off">
       <div class="sugerencias" id="sugerenciasOF"></div>

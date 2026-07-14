@@ -275,6 +275,7 @@ function initLogin(){
 }
 
 let ALM=null, RECL={}, sel={of:null,modulo:null,op:null,ticket:null};
+let AREA_ESTAJERO = null;   // área elegida por el estajero para este reclamo (no persiste en operarios.area_actual)
 
 const VOLVER_OPERARIO = {
   pasoModulos:"pasoOF", pasoOps:"pasoModulos",
@@ -309,7 +310,7 @@ async function enviarSolicitudAjuste(){
   if(!v||v<=0){ $("saMsg").textContent="Ingresa los minutos"; return; }
   if(!motivo){ $("saMsg").textContent="Indica el motivo"; return; }
   try{
-    const r=await rpc("fn_solicitud_ajuste_crear",{p_dni:s.dni,p_token:s.token,p_area:s.area,
+    const r=await rpc("fn_solicitud_ajuste_crear",{p_dni:s.dni,p_token:s.token,p_area:AREA_ESTAJERO||s.area,
       p_minutos:v*sa.signo,p_motivo:motivo});
     if(!r.ok){ $("saMsg").textContent=r.error||"No se pudo enviar"; return; }
     cerrarModal();
@@ -332,7 +333,6 @@ function pintarCrumb(id){
 function initOperario(){
   const s = sesionActual();
   if(!s || !s.area){ location.href="index.html"; return; }
-  $("tituloArea").textContent = s.area;
   $("quienBadge").textContent = s.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
   { const rb=$("btnReloj"); if(rb) rb.onclick=abrirSolicitudAjuste; }
@@ -343,17 +343,49 @@ function initOperario(){
     if(destino){ b.style.display="inline-block"; b.onclick=()=>irA(destino); }
     else b.style.display="none";
   };
-  cargarTodo(s);
   $("inputOF").addEventListener("input", pintarSugerencias);
+
+  if(s.cargo==='ESTAJERO'){
+    const btnCambiar=$("btnCambiarAreaEst");
+    if(btnCambiar){ btnCambiar.style.display="block"; btnCambiar.onclick=()=>irA("pasoAreaEstajero"); }
+    $("tituloArea").textContent = "ESTAJERO";
+    pintarAreasEstajero(s);
+    irA("pasoAreaEstajero");
+  } else {
+    AREA_ESTAJERO = s.area;
+    $("tituloArea").textContent = s.area;
+    cargarTodo(s);
+  }
+}
+
+function pintarAreasEstajero(s){
+  const g=$("gridAreaEstajero"); if(!g) return;
+  g.innerHTML="";
+  Object.keys(AREAS).forEach(a=>{
+    const cfg=AREAS[a];
+    const c=document.createElement("div");
+    c.className="card-area"+(cfg.habilitada?"":" off");
+    c.innerHTML=`<div class="ca-nombre">${esc(a)}</div>
+      <div class="ca-sub">${cfg.habilitada?"Disponible":"Próximamente"}</div>`;
+    if(cfg.habilitada){
+      c.onclick=()=>{
+        AREA_ESTAJERO = a;
+        $("tituloArea").textContent = "ESTAJERO · " + a;
+        cargarTodo(s);
+      };
+    }
+    g.appendChild(c);
+  });
 }
 
 async function cargarTodo(s){
   irA("pasoCarga");
-  $("zonaCarga").innerHTML = cargandoHTML("Cargando almacén de "+s.area+"…");
+  const area = AREA_ESTAJERO || s.area;
+  $("zonaCarga").innerHTML = cargandoHTML("Cargando almacén de "+area+"…");
   try{
     const [alm, recl, dia] = await Promise.all([
-      cargarAlmacen(s.area),
-      rpc("fn_reclamados", {p_dni:s.dni, p_token:s.token, p_area:s.area}),
+      cargarAlmacen(area),
+      rpc("fn_reclamados", {p_dni:s.dni, p_token:s.token, p_area:area}),
       rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token})
     ]);
     ALM = alm;
@@ -526,6 +558,7 @@ function confirmarLote(){
 /* --- reclamar (individual o lote) --- */
 async function registrar(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  const area = AREA_ESTAJERO || s.area;
   const btn=$("btnRegistrar");
   btn.disabled=true; btn.textContent="REGISTRANDO…";
   const esLote = modoSel && Object.keys(marcados).length>0;
@@ -535,10 +568,10 @@ async function registrar(){
       const lote=Object.values(marcados).map(t=>({codigo:t.codigo,of:t.of,modulo:t.modulo,
         op:t.op,std:t.std,cant:t.cant,num:t.num,articulo:t.articulo,color:t.color,
         talla:t.talla,corte:t.corte,nop:t.nop}));
-      r = await rpc("fn_reclamar_lote",{p_dni:s.dni,p_token:s.token,p_area:s.area,p_tickets:lote});
+      r = await rpc("fn_reclamar_lote",{p_dni:s.dni,p_token:s.token,p_area:area,p_tickets:lote});
     } else {
       const t=sel.ticket;
-      r = await rpc("fn_reclamar", {p_dni:s.dni,p_token:s.token,p_area:s.area,
+      r = await rpc("fn_reclamar", {p_dni:s.dni,p_token:s.token,p_area:area,
         p_codigo:t.codigo,p_of:t.of,p_modulo:t.modulo,p_op:t.op,p_std:t.std,p_cant:t.cant,
         p_numeracion:t.num,p_articulo:t.articulo,p_color:t.color,p_talla:t.talla,p_corte:t.corte,p_nop:t.nop});
     }
@@ -573,7 +606,8 @@ async function registrar(){
 }
 async function refrescarReclamos(s){
   try{
-    const recl = await rpc("fn_reclamados",{p_dni:s.dni,p_token:s.token,p_area:s.area});
+    const area = AREA_ESTAJERO || s.area;
+    const recl = await rpc("fn_reclamados",{p_dni:s.dni,p_token:s.token,p_area:area});
     RECL={}; recl.forEach(x=>{RECL[x.codigo]={nombre:x.nombre,hora:x.hora};});
   }catch(e){}
 }

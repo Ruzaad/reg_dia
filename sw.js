@@ -1,5 +1,5 @@
 /* SAMITEX — Service Worker mínimo (PWA) */
-const CACHE = "samitex-v6";
+const CACHE = "samitex-v7";
 
 self.addEventListener("install", (e) => {
   self.skipWaiting();
