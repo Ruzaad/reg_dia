@@ -437,7 +437,7 @@ async function cargarTodo(s){
       rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token})
     ]);
     ALM = alm;
-    RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={hora:x.hora}; });
+    RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
     setAvance(dia);
     if(alm.duplicados.length) console.warn("Códigos duplicados en almacén:", alm.duplicados);
     irA("pasoOF");
@@ -558,7 +558,7 @@ function pintarTickets(){
         <div>Corte <b>${esc(t.corte)}</b></div>
         <div>N°OP <b>${t.nop ?? "—"}</b></div>
       </div>
-      ${r?`<div class="tk-tomado-por">Ya tomado · ${esc(r.hora)}</div>`:""}`;
+      ${r?`<div class="tk-tomado-por">Tomado por ${esc(soloApellidos(r.nombre))} · ${esc(r.hora)}</div>`:""}`;
     if(!r){
       c.onclick=()=>{
         if(modoSel){
@@ -643,7 +643,7 @@ async function registrar(){
     }
     setAvance(r);
     if(esLote){
-      Object.values(marcados).forEach(t=>{ RECL[t.codigo]={hora:"ahora"}; });
+      Object.values(marcados).forEach(t=>{ RECL[t.codigo]={nombre:s.nombre,hora:"ahora"}; });
       const conf = (r.conflictos||[]);
       $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
       $("exDetalle").innerHTML =
@@ -653,7 +653,7 @@ async function registrar(){
       if(conf.length) await refrescarReclamos(s);
     } else {
       const t=sel.ticket;
-      RECL[t.codigo]={hora:"ahora"};
+      RECL[t.codigo]={nombre:s.nombre,hora:"ahora"};
       $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
       $("exDetalle").innerHTML=`${esc(sel.op)}<br>Numeración <b>${esc(t.num)}</b> · ${t.cant} und · +${t.minutos} min`;
     }
@@ -668,7 +668,7 @@ async function refrescarReclamos(s){
   try{
     const area = AREA_ESTAJERO || s.area;
     const recl = await rpc("fn_reclamados",{p_dni:s.dni,p_token:s.token,p_area:area});
-    RECL={}; recl.forEach(x=>{RECL[x.codigo]={hora:x.hora};});
+    RECL={}; recl.forEach(x=>{RECL[x.codigo]={nombre:x.nombre,hora:x.hora};});
   }catch(e){}
 }
 let timerReset=null;
@@ -686,12 +686,17 @@ function mostrarExito(){
    PÁGINA: SUPERVISORA (supervisora.html)
    ============================================================ */
 let PERSONAL=[], oc={tipo:null,minutos:0,dnis:[]};
+/* Área activa del panel de supervisión.
+   - Supervisora: su propia área (session).
+   - Ingeniería operando "como supervisora": el área elegida (override). */
+let SUP_AREA_OVERRIDE=null;
+function areaSup(){ return SUP_AREA_OVERRIDE || ((sesionActual()||{}).area) || ""; }
 
 async function cargarIncidencias(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   const z=$("listaIncidencias"); z.innerHTML=cargandoHTML("Cargando incidencias…");
   try{
-    const r=await rpc("fn_solicitudes_listar",{p_dni:s.dni,p_token:s.token,p_area:s.area});
+    const r=await rpc("fn_solicitudes_listar",{p_dni:s.dni,p_token:s.token,p_area:areaSup()});
     if(!r.ok){ mostrarError(r.error||"Error"); z.innerHTML=""; return; }
     pintarIncidencias(r.items||[], z, "inc", "resolverIncidencia");
   }catch(e){ z.innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`; }
@@ -730,20 +735,26 @@ async function resolverIncidencia(id, aprobar){
 }
 
 let timerAvance=null;
-function initSupervisora(){
-  const s=sesionActual();
-  if(!s || !s.area){ location.href="index.html"; return; }
-  if(s.cargo!=="SUPERVISORA"){ location.href = destinoPorCargo(s.cargo); return; }
-  $("tituloArea").textContent = s.area + " · Supervisión";
-  $("quienBadge").textContent = s.nombre; $("quienBadge").classList.add("visible");
-  $("btnSalir").onclick = cerrarSesion;
-  { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
-  { const rc=$("btnRecargar"); if(rc) rc.onclick=()=>{ recargarSupervisora(); }; }
+/* Bindings del panel de supervisión (reutilizables por la vista de supervisora
+   y por ingeniería operando "como supervisora"). */
+function bindSupervisoraUI(){
   $("filtroNombre").addEventListener("input", pintarPersonal);
   $("tabPersonal").onclick = ()=>{ pararAvance(); marcarTab("tabPersonal"); irA("pasoPersonal"); };
   $("tabAvance").onclick  = ()=>{ marcarTab("tabAvance"); irA("pasoAvance"); cargarAvance(); timerAvance=setInterval(cargarAvance, 60000); };
   $("tabIncidencias").onclick = ()=>{ pararAvance(); marcarTab("tabIncidencias"); irA("pasoIncidencias"); cargarIncidencias(); };
   cargarEstadosSup();
+}
+function initSupervisora(){
+  const s=sesionActual();
+  if(!s || !s.area){ location.href="index.html"; return; }
+  if(s.cargo!=="SUPERVISORA"){ location.href = destinoPorCargo(s.cargo); return; }
+  SUP_AREA_OVERRIDE=null;
+  $("tituloArea").textContent = s.area + " · Supervisión";
+  $("quienBadge").textContent = s.nombre; $("quienBadge").classList.add("visible");
+  $("btnSalir").onclick = cerrarSesion;
+  { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
+  { const rc=$("btnRecargar"); if(rc) rc.onclick=()=>{ recargarSupervisora(); }; }
+  bindSupervisoraUI();
   cargarPersonal(s);
 }
 /* Recargar según la pestaña activa (botón ↻ del header). */
@@ -834,7 +845,7 @@ function pararAvance(){ clearInterval(timerAvance); timerAvance=null; }
 async function cargarAvance(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   try{
-    const r = await rpc("fn_avance_area",{p_dni:s.dni,p_token:s.token,p_area:s.area});
+    const r = await rpc("fn_avance_area",{p_dni:s.dni,p_token:s.token,p_area:areaSup()});
     if(!r.ok){ mostrarError(r.error||"Error"); return; }
     $("avResumen").innerHTML = `
       <div class="kpi"><div class="kpi-num">${r.eficiencia}%</div><div class="kpi-lbl">Eficiencia del área</div></div>
@@ -870,7 +881,7 @@ async function cargarAvance(){
 async function cargarPersonal(s){
   $("gridPersonal").innerHTML = cargandoHTML("Cargando personal…");
   try{
-    PERSONAL = await rpc("fn_personal",{p_dni:s.dni,p_token:s.token,p_area:s.area});
+    PERSONAL = await rpc("fn_personal",{p_dni:s.dni,p_token:s.token,p_area:areaSup()});
     pintarPersonal();
   }catch(e){
     $("gridPersonal").innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`;
@@ -964,7 +975,7 @@ async function confirmarOcurrencia(){
   if(TIPOS_MOTIVO.includes(oc.tipo) && !motivo){ mostrarError("Indica el motivo (hora de salida/regreso)"); return; }
   const btn=$("btnGuardarOc"); btn.disabled=true; btn.textContent="GUARDANDO…";
   try{
-    const r = await rpc("fn_ocurrencia",{p_dni:s.dni,p_token:s.token,p_area:s.area,
+    const r = await rpc("fn_ocurrencia",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),
       p_tipo:oc.tipo,p_minutos:minutos,p_detalle:(motivo||oc.tipo),p_dnis:oc.dnis});
     btn.disabled=false; btn.textContent="GUARDAR";
     if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); return; }
@@ -1038,7 +1049,7 @@ async function moverAreaElegir(){
   const s=sesionActual();
   const l=$("listaAreasMov"); l.innerHTML=cargandoHTML("Cargando áreas…");
   irA("pasoMoverArea");
-  const areas = (await cargarAreasDB()).filter(a=>a!==s.area);
+  const areas = (await cargarAreasDB()).filter(a=>a!==areaSup());
   l.innerHTML="";
   if(!areas.length){ l.innerHTML=`<div class="vacio-msg">No hay otras áreas registradas</div>`; return; }
   areas.forEach(a=>{
@@ -1051,7 +1062,7 @@ async function moverAreaElegir(){
 }
 async function moverAreaConfirmar(area){
   const s=sesionActual(); if(!s){location.href="index.html";return;}
-  if(!confirm(`¿Mover ${mv.dnis.length} persona(s) de ${s.area} a ${area}?\nSe registra la hora del cambio para el cálculo de minutos.`)) return;
+  if(!confirm(`¿Mover ${mv.dnis.length} persona(s) de ${areaSup()} a ${area}?\nSe registra la hora del cambio para el cálculo de minutos.`)) return;
   try{
     const r = await rpc("fn_cambiar_area",{p_dni:s.dni,p_token:s.token,p_dnis:mv.dnis,p_area:area});
     if(!r.ok){ mostrarError(r.error||"No se pudo mover"); return; }
