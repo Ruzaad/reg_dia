@@ -686,12 +686,17 @@ function mostrarExito(){
    PÁGINA: SUPERVISORA (supervisora.html)
    ============================================================ */
 let PERSONAL=[], oc={tipo:null,minutos:0,dnis:[]};
+/* Área activa del panel de supervisión.
+   - Supervisora: su propia área (session).
+   - Ingeniería operando "como supervisora": el área elegida (override). */
+let SUP_AREA_OVERRIDE=null;
+function areaSup(){ return SUP_AREA_OVERRIDE || ((sesionActual()||{}).area) || ""; }
 
 async function cargarIncidencias(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   const z=$("listaIncidencias"); z.innerHTML=cargandoHTML("Cargando incidencias…");
   try{
-    const r=await rpc("fn_solicitudes_listar",{p_dni:s.dni,p_token:s.token,p_area:s.area});
+    const r=await rpc("fn_solicitudes_listar",{p_dni:s.dni,p_token:s.token,p_area:areaSup()});
     if(!r.ok){ mostrarError(r.error||"Error"); z.innerHTML=""; return; }
     pintarIncidencias(r.items||[], z, "inc", "resolverIncidencia");
   }catch(e){ z.innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`; }
@@ -730,20 +735,26 @@ async function resolverIncidencia(id, aprobar){
 }
 
 let timerAvance=null;
-function initSupervisora(){
-  const s=sesionActual();
-  if(!s || !s.area){ location.href="index.html"; return; }
-  if(s.cargo!=="SUPERVISORA"){ location.href = destinoPorCargo(s.cargo); return; }
-  $("tituloArea").textContent = s.area + " · Supervisión";
-  $("quienBadge").textContent = s.nombre; $("quienBadge").classList.add("visible");
-  $("btnSalir").onclick = cerrarSesion;
-  { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
-  { const rc=$("btnRecargar"); if(rc) rc.onclick=()=>{ recargarSupervisora(); }; }
+/* Bindings del panel de supervisión (reutilizables por la vista de supervisora
+   y por ingeniería operando "como supervisora"). */
+function bindSupervisoraUI(){
   $("filtroNombre").addEventListener("input", pintarPersonal);
   $("tabPersonal").onclick = ()=>{ pararAvance(); marcarTab("tabPersonal"); irA("pasoPersonal"); };
   $("tabAvance").onclick  = ()=>{ marcarTab("tabAvance"); irA("pasoAvance"); cargarAvance(); timerAvance=setInterval(cargarAvance, 60000); };
   $("tabIncidencias").onclick = ()=>{ pararAvance(); marcarTab("tabIncidencias"); irA("pasoIncidencias"); cargarIncidencias(); };
   cargarEstadosSup();
+}
+function initSupervisora(){
+  const s=sesionActual();
+  if(!s || !s.area){ location.href="index.html"; return; }
+  if(s.cargo!=="SUPERVISORA"){ location.href = destinoPorCargo(s.cargo); return; }
+  SUP_AREA_OVERRIDE=null;
+  $("tituloArea").textContent = s.area + " · Supervisión";
+  $("quienBadge").textContent = s.nombre; $("quienBadge").classList.add("visible");
+  $("btnSalir").onclick = cerrarSesion;
+  { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
+  { const rc=$("btnRecargar"); if(rc) rc.onclick=()=>{ recargarSupervisora(); }; }
+  bindSupervisoraUI();
   cargarPersonal(s);
 }
 /* Recargar según la pestaña activa (botón ↻ del header). */
@@ -834,7 +845,7 @@ function pararAvance(){ clearInterval(timerAvance); timerAvance=null; }
 async function cargarAvance(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   try{
-    const r = await rpc("fn_avance_area",{p_dni:s.dni,p_token:s.token,p_area:s.area});
+    const r = await rpc("fn_avance_area",{p_dni:s.dni,p_token:s.token,p_area:areaSup()});
     if(!r.ok){ mostrarError(r.error||"Error"); return; }
     $("avResumen").innerHTML = `
       <div class="kpi"><div class="kpi-num">${r.eficiencia}%</div><div class="kpi-lbl">Eficiencia del área</div></div>
@@ -870,7 +881,7 @@ async function cargarAvance(){
 async function cargarPersonal(s){
   $("gridPersonal").innerHTML = cargandoHTML("Cargando personal…");
   try{
-    PERSONAL = await rpc("fn_personal",{p_dni:s.dni,p_token:s.token,p_area:s.area});
+    PERSONAL = await rpc("fn_personal",{p_dni:s.dni,p_token:s.token,p_area:areaSup()});
     pintarPersonal();
   }catch(e){
     $("gridPersonal").innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`;
@@ -964,7 +975,7 @@ async function confirmarOcurrencia(){
   if(TIPOS_MOTIVO.includes(oc.tipo) && !motivo){ mostrarError("Indica el motivo (hora de salida/regreso)"); return; }
   const btn=$("btnGuardarOc"); btn.disabled=true; btn.textContent="GUARDANDO…";
   try{
-    const r = await rpc("fn_ocurrencia",{p_dni:s.dni,p_token:s.token,p_area:s.area,
+    const r = await rpc("fn_ocurrencia",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),
       p_tipo:oc.tipo,p_minutos:minutos,p_detalle:(motivo||oc.tipo),p_dnis:oc.dnis});
     btn.disabled=false; btn.textContent="GUARDAR";
     if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); return; }
@@ -1038,7 +1049,7 @@ async function moverAreaElegir(){
   const s=sesionActual();
   const l=$("listaAreasMov"); l.innerHTML=cargandoHTML("Cargando áreas…");
   irA("pasoMoverArea");
-  const areas = (await cargarAreasDB()).filter(a=>a!==s.area);
+  const areas = (await cargarAreasDB()).filter(a=>a!==areaSup());
   l.innerHTML="";
   if(!areas.length){ l.innerHTML=`<div class="vacio-msg">No hay otras áreas registradas</div>`; return; }
   areas.forEach(a=>{
@@ -1051,7 +1062,7 @@ async function moverAreaElegir(){
 }
 async function moverAreaConfirmar(area){
   const s=sesionActual(); if(!s){location.href="index.html";return;}
-  if(!confirm(`¿Mover ${mv.dnis.length} persona(s) de ${s.area} a ${area}?\nSe registra la hora del cambio para el cálculo de minutos.`)) return;
+  if(!confirm(`¿Mover ${mv.dnis.length} persona(s) de ${areaSup()} a ${area}?\nSe registra la hora del cambio para el cálculo de minutos.`)) return;
   try{
     const r = await rpc("fn_cambiar_area",{p_dni:s.dni,p_token:s.token,p_dnis:mv.dnis,p_area:area});
     if(!r.ok){ mostrarError(r.error||"No se pudo mover"); return; }

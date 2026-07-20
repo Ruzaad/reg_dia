@@ -371,14 +371,13 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .btn-principal{font-size:21px;}
 .btn-secundario{font-size:16px;}
 
-/* Disclaimer: mucho más pequeño y NO fijo al viewport en supervisora/ingeniería */
+/* Disclaimer: mucho más pequeño y NO fijo al viewport en supervisora */
 .disclaimer{font-size:9px;line-height:1.4;color:#9aa3ae;max-width:560px;}
 footer.pie-app{padding:8px 16px 10px;}
-body[data-pagina="supervisora"], body[data-pagina="ingenieria"]{overflow-y:auto;}
-body[data-pagina="supervisora"] main, body[data-pagina="ingenieria"] main{overflow:visible;}
-body[data-pagina="supervisora"] .pantalla, body[data-pagina="ingenieria"] .pantalla{overflow:visible;}
-body[data-pagina="supervisora"] footer.pie-app, body[data-pagina="ingenieria"] footer.pie-app{
-  background:transparent;}
+body[data-pagina="supervisora"]{overflow-y:auto;}
+body[data-pagina="supervisora"] main{overflow:visible;}
+body[data-pagina="supervisora"] .pantalla{overflow:visible;}
+body[data-pagina="supervisora"] footer.pie-app{background:transparent;}
 
 /* Ingeniería: pensada para PC (escritorio) */
 body[data-pagina="ingenieria"] main{min-width:0;}
@@ -391,3 +390,69 @@ body[data-pagina="ingenieria"] main{min-width:0;}
 /* Separador de área en la tabla de eficiencia (áreas bien separadas) */
 .tabla tr.grupo-area td{background:var(--azul)!important;color:#fff;text-align:left;
   font-weight:800;font-size:13px;letter-spacing:.4px;padding:8px 10px;position:sticky;left:0;}
+
+/* ============================================================
+   PARCHE 4 — Ingeniería SIDEBAR (PC) + Por módulo + Detallado asistencia
+   ============================================================ */
+
+/* La vista de ingeniería usa scroll interno (header + sidebar fijos). */
+body[data-pagina="ingenieria"]{overflow:hidden;}
+body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
+.ing-shell{display:flex;flex:1;min-height:0;width:100%;}
+.ing-sidebar{flex:0 0 232px;background:#0b2f6a;overflow-y:auto;padding:14px 10px;}
+.ing-nav{display:flex;flex-direction:column;gap:6px;}
+.ing-nav .nav-item{display:flex;align-items:center;gap:10px;text-align:left;
+  background:transparent;border:none;color:#dbe6fb;font-size:15px;font-weight:700;
+  padding:12px 14px;border-radius:11px;cursor:pointer;width:100%;}
+.ing-nav .nav-item span{width:22px;text-align:center;font-size:17px;}
+.ing-nav .nav-item:hover{background:rgba(255,255,255,.08);}
+.ing-nav .nav-item.activo{background:var(--blanco);color:var(--azul);font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+.ing-nav .nav-sep{color:#8fb0e8;font-size:11px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.6px;margin:14px 6px 4px;border-top:1px solid rgba(255,255,255,.15);padding-top:10px;}
+.ing-main{flex:1;min-width:0;overflow-y:auto;padding:18px;position:relative;}
+.ing-main .pantalla{padding:0;overflow:visible;}
+
+/* Sub-tabs del panel de supervisión dentro de ingeniería */
+.sup-subtabs{display:flex;align-items:center;gap:8px;padding:0 0 12px;max-width:100%;
+  flex-wrap:wrap;margin:0 0 6px;}
+.sup-subtabs .tab{border-radius:12px;flex:0 0 auto;padding:10px 16px;font-size:14px;}
+.sup-area-lbl{font-size:16px;font-weight:800;color:var(--azul);margin-right:auto;}
+
+/* Botón de descarga reubicado (eficiencia día×día): fila alineada a la derecha */
+.fila-acciones-der{display:flex;align-items:center;justify-content:flex-end;gap:12px;
+  max-width:1100px;margin:0 auto 10px;width:100%;}
+.fila-acciones-der .sub{margin-right:auto;}
+
+/* Aviso PC: en escritorio no se muestra; en pantallas chicas avisa */
+@media (max-width:900px){
+  .ing-sidebar{flex-basis:150px;}
+  .ing-nav .nav-item{font-size:13px;padding:10px;}
+}
+
+/* ---- Por módulo ---- */
+.mod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;align-items:start;}
+.mod-card{background:var(--blanco);border-radius:14px;box-shadow:0 2px 8px rgba(13,59,133,.12);
+  overflow:hidden;border-top:6px solid var(--ocre);}
+.mod-head{background:var(--gris-fondo);padding:12px 14px;}
+.mod-nombre{font-size:19px;font-weight:800;color:var(--azul);}
+.mod-sub{font-size:13px;color:#5a6270;font-weight:700;margin-top:2px;}
+.mod-persona{padding:10px 14px;border-top:1px solid var(--gris-fondo);}
+.mp-cab{display:flex;justify-content:space-between;align-items:center;font-size:15px;}
+.mp-cab span{font-size:12px;color:#5a6270;font-weight:700;}
+.mp-tks{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+.mp-tk{background:var(--gris-fondo);border-radius:7px;padding:3px 8px;font-size:12px;font-weight:700;color:var(--azul);}
+
+/* ---- Asistencia: separar chips de estado del resto + sub-tabs + detallado ---- */
+.resumen-estados{margin:0 0 18px;flex-wrap:wrap;}
+.seg-sub{display:flex;gap:8px;max-width:520px;margin:0 auto 14px;width:100%;}
+.seg-sub button{flex:1;background:var(--blanco);border:2px solid var(--enlace);color:var(--enlace);
+  border-radius:11px;font-size:14px;font-weight:800;padding:10px 8px;cursor:pointer;}
+.seg-sub button.activo{background:var(--enlace);color:#fff;}
+.det-asis-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;align-items:start;}
+.det-card{background:var(--blanco);border-radius:14px;box-shadow:0 2px 8px rgba(13,59,133,.12);
+  overflow:hidden;border-top:6px solid var(--ocre);}
+.det-head{display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--gris-fondo);font-size:14px;}
+.det-list{max-height:320px;overflow-y:auto;}
+.det-persona{display:flex;justify-content:space-between;gap:10px;padding:8px 14px;
+  border-top:1px solid var(--gris-fondo);font-size:14px;font-weight:700;}
+.det-persona span{color:#5a6270;font-size:12px;font-weight:600;}

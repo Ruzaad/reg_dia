@@ -20,21 +20,30 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
   { const rc=$("btnRecargar"); if(rc) rc.onclick=recargarIngenieria; }
 
-  document.querySelectorAll(".tab[data-tab]").forEach(b=>{
+  // Navegación por SIDEBAR (solo PC).
+  document.querySelectorAll(".nav-item[data-tab]").forEach(b=>{
     b.onclick = ()=>{
-      document.querySelectorAll(".tab[data-tab]").forEach(x=>x.classList.remove("activo"));
+      document.querySelectorAll(".nav-item[data-tab]").forEach(x=>x.classList.remove("activo"));
       b.classList.add("activo");
-      irA(b.dataset.tab);
-      if(b.dataset.tab==='pasoIncid') cargarIncidI();
+      pararAvance();                       // corta el refresco de avance si venía de supervisión
+      $("supTabs").style.display = "none"; // sub-tabs de supervisión ocultos por defecto
+      const tab=b.dataset.tab;
+      if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
+      irA(tab);
+      if(tab==='pasoIncid') cargarIncidI();
+      else if(tab==='pasoTk') cargarTk();
+      else if(tab==='pasoMod') cargarMod();
     };
   });
 
-  ["fechaEf","fechaTk"].forEach(id=>{ $(id).value = hoyISO(); });
+  ["fechaEf","fechaTk","fechaMod"].forEach(id=>{ const el=$(id); if(el) el.value = hoyISO(); });
+  { const fd=$("fechaDetAsis"); if(fd) fd.value = hoyISO(); }
   $("mesAsis").value = mesActualISO();
 
   // Áreas desde la base de datos (incluye CORTE, REPROCESOS, etc.)
   AREAS_LISTA = await cargarAreasDB();
   poblarSelectsArea();
+  pintarSupAreas();
 
   $("filtroNomAsis").addEventListener("input", pintarAsisMes);
   $("filtroAreaAsis").addEventListener("change", cargarAsisMes);
@@ -65,11 +74,14 @@ function poblarSelectsArea(){
 /* Recargar la pestaña activa (botón ↻ del header). */
 function recargarIngenieria(){
   const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),600); }
-  if($("pasoEf").classList.contains("activa")){ cargarEf(); if(EFR.personal.length) cargarEfRango(); }
-  else if($("pasoTk").classList.contains("activa")) cargarTk();
-  else if($("pasoBases").classList.contains("activa")) cargarBases();
-  else if($("pasoAsis").classList.contains("activa")) cargarAsisMes();
-  else if($("pasoIncid").classList.contains("activa")) cargarIncidI();
+  const act = id => $(id) && $(id).classList.contains("activa");
+  if(act("pasoEf")){ cargarEf(); if(EFR.personal.length) cargarEfRango(); }
+  else if(act("pasoTk")) cargarTk();
+  else if(act("pasoMod")) cargarMod();
+  else if(act("pasoBases")) cargarBases();
+  else if(act("pasoAsis")) cargarAsisMes();
+  else if(act("pasoIncid")) cargarIncidI();
+  else if(act("pasoPersonal")||act("pasoAvance")||act("pasoIncidencias")) recargarSupervisora();
 }
 /* Censura de eficiencia: reemplaza los % por **** en toda la pestaña. */
 function censEf(v){ return EF_CENS_ING ? "****" : v; }
@@ -80,6 +92,103 @@ function toggleCensuraEf(){
     b.classList.toggle("verde", EF_CENS_ING); b.classList.toggle("gris", !EF_CENS_ING); }
   if(EF) pintarEf();
   if(EFR.personal.length) pintarEfRango();
+}
+
+/* ================= SUPERVISIÓN (ingeniería opera como supervisora) ================= */
+let supBound=false;
+function pintarSupAreas(){
+  const g=$("gridSupAreas"); if(!g) return;
+  g.innerHTML="";
+  (AREAS_LISTA||[]).forEach(a=>{
+    const c=document.createElement("div");
+    c.className="card-area";
+    c.innerHTML=`<div class="ca-nombre">${esc(a)}</div><div class="ca-sub">Supervisar</div>`;
+    c.onclick=()=>ingSupElegirArea(a);
+    g.appendChild(c);
+  });
+}
+function ingSupVolverAreas(){
+  pararAvance();
+  SUP_AREA_OVERRIDE=null;
+  $("supTabs").style.display="none";
+  irA("pasoSupArea");
+  document.querySelectorAll(".nav-item[data-tab]").forEach(x=>x.classList.toggle("activo", x.dataset.tab==="pasoSupArea"));
+}
+function ingSupElegirArea(area){
+  SUP_AREA_OVERRIDE=area;
+  if(!supBound){ bindSupervisoraUI(); supBound=true; }
+  $("supAreaActual").textContent = area;
+  $("supTabs").style.display="flex";
+  marcarTab("tabPersonal");
+  cargarPersonal(sesionActual());
+  irA("pasoPersonal");
+}
+
+/* ================= FAB de áreas para EFICIENCIAS ================= */
+function pintarFabAreasEf(){
+  const z=$("fabAreasEf"); if(!z || !EF) return;
+  const areas=(EF.areas||[]).map(a=>a.area).filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),"es"));
+  const cur=$("filtroAreaEf").value;
+  if(!areas.length){ z.innerHTML=""; return; }
+  z.innerHTML = `<div class="fab-area-titulo">ÁREA</div>`
+    + `<button class="fab-area-btn${cur===""?" activo":""}" onclick="filtrarEfArea('')">TODAS</button>`
+    + areas.map(a=>`<button class="fab-area-btn${cur===a?" activo":""}" onclick="filtrarEfArea('${esc(a)}')">${esc(a)}</button>`).join("");
+}
+function filtrarEfArea(a){ $("filtroAreaEf").value=a; pintarEf(); pintarFabAreasEf(); }
+
+/* ================= TICKETS POR MÓDULO ================= */
+let MODTK=[], modArea="";
+async function cargarMod(){
+  $("zonaModulos").innerHTML=cargandoHTML("Cargando…");
+  $("resumenMod").textContent="";
+  try{
+    MODTK = await rpc("fn_tickets_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:$("fechaMod").value});
+    if(modArea && !MODTK.some(t=>t.area===modArea)) modArea="";
+    pintarFabAreasMod();
+    pintarMod();
+  }catch(e){ $("zonaModulos").innerHTML=""; mostrarError(e.message); }
+}
+function pintarFabAreasMod(){
+  const z=$("fabAreasMod"); if(!z) return;
+  const areas=[...new Set(MODTK.map(t=>t.area).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"es"));
+  if(!areas.length){ z.innerHTML=""; return; }
+  z.innerHTML = `<div class="fab-area-titulo">ÁREA</div>`
+    + `<button class="fab-area-btn${modArea===""?" activo":""}" onclick="filtrarModArea('')">TODAS</button>`
+    + areas.map(a=>`<button class="fab-area-btn${modArea===a?" activo":""}" onclick="filtrarModArea('${esc(a)}')">${esc(a)}</button>`).join("");
+}
+function filtrarModArea(a){ modArea=a; pintarFabAreasMod(); pintarMod(); }
+function pintarMod(){
+  const q=normKey($("filtroMod").value);
+  const activos = MODTK.filter(t=>t.estado==='ACTIVO' && (!modArea||t.area===modArea));
+  // Agrupar: área|módulo -> dni -> {nombre, tickets[], min}
+  const mods={};
+  activos.forEach(t=>{
+    const mod = norm(t.modulo)||"(sin módulo)";
+    const key = t.area+" · "+mod;
+    if(!q || normKey(key+" "+t.nombre+" "+t.of).includes(q)){
+      const m = mods[key] = mods[key] || {area:t.area, modulo:mod, personas:{}, total:0, min:0};
+      const p = m.personas[t.dni] = m.personas[t.dni] || {nombre:t.nombre, tickets:[], min:0};
+      p.tickets.push(t); p.min += Number(t.minutos)||0;
+      m.total++; m.min += Number(t.minutos)||0;
+    }
+  });
+  const claves=Object.keys(mods).sort((a,b)=>a.localeCompare(b,"es"));
+  $("resumenMod").textContent = `${claves.length} módulo(s) con actividad · ${activos.length} tickets activos`
+    + (modArea?` · área: ${modArea}`:"");
+  if(!claves.length){ $("zonaModulos").innerHTML=`<div class="vacio-msg">Sin tickets activos para este filtro</div>`; return; }
+  $("zonaModulos").innerHTML = claves.map(k=>{
+    const m=mods[k];
+    const personas=Object.values(m.personas).sort((a,b)=>b.min-a.min);
+    return `<div class="mod-card">
+      <div class="mod-head"><div class="mod-nombre">${esc(m.modulo)}</div>
+        <div class="mod-sub">${esc(m.area)} · ${personas.length} persona(s) · ${m.total} tickets · ${Math.round(m.min)} min</div></div>
+      ${personas.map(p=>`<div class="mod-persona">
+        <div class="mp-cab"><b>${esc(soloApellidos(p.nombre))}</b>
+          <span>${p.tickets.length} tk · ${Math.round(p.min)} min</span></div>
+        <div class="mp-tks">${p.tickets.map(t=>`<span class="mp-tk" title="${esc(t.op)} · OF ${esc(t.of)}">${esc(t.num||t.codigo)}</span>`).join("")}</div>
+      </div>`).join("")}
+    </div>`;
+  }).join("");
 }
 
 /* ================= EFICIENCIAS ================= */
@@ -140,6 +249,7 @@ function pintarEf(){
     });
   }
   $("tablaEf").innerHTML = thead + "<tbody>" + tbody + "</tbody>";
+  pintarFabAreasEf();
 }
 
 /* ================= EFICIENCIA DÍA × DÍA POR RANGO ================= */
@@ -224,7 +334,41 @@ async function cargarAsisMes(){
     ASIS_DIAS = r.dias; ASIS_MES = r.personal;
     pintarResumenAsis();
     pintarAsisMes();
+    pintarDetalleAsis();
   }catch(e){ $("tablaAsisMes").innerHTML=""; mostrarError(e.message); }
+}
+
+/* --- Sub-vistas de asistencia: matriz mensual / detallado por día y estado --- */
+function asisVista(v){
+  const det = v==='detalle';
+  $("asisMatriz").style.display = det ? "none" : "block";
+  $("asisDetalle").style.display = det ? "block" : "none";
+  $("asisTabMatriz").classList.toggle("activo", !det);
+  $("asisTabDetalle").classList.toggle("activo", det);
+  if(det) pintarDetalleAsis();
+}
+function pintarDetalleAsis(){
+  const z=$("detalleAsis"); if(!z) return;
+  const fecha=$("fechaDetAsis") ? $("fechaDetAsis").value : "";
+  if(!fecha){ z.innerHTML=`<div class="vacio-msg">Elige un día</div>`; $("resumenDetAsis").textContent=""; return; }
+  if(!ASIS_DIAS.includes(fecha)){
+    z.innerHTML=`<div class="vacio-msg">Ese día no pertenece al mes cargado. Cambia el mes arriba y recarga.</div>`;
+    $("resumenDetAsis").textContent=""; return;
+  }
+  const porEstado={};
+  ASIS_MES.forEach(p=>{
+    const est = p.registros[fecha] || 'ACTIVO';   // sin registro ese día = ACTIVO (igual que _estado_dia)
+    (porEstado[est]=porEstado[est]||[]).push(p);
+  });
+  const estados=Object.keys(porEstado).sort((a,b)=>a.localeCompare(b,"es"));
+  $("resumenDetAsis").textContent = `${ASIS_MES.length} persona(s) · ${estados.length} estado(s) · ${fecha}`;
+  z.innerHTML = estados.map(est=>{
+    const gente=[...porEstado[est]].sort((a,b)=>String(a.nombres_apellidos).localeCompare(String(b.nombres_apellidos),"es"));
+    return `<div class="det-card">
+      <div class="det-head"><span class="pill ${esc(est)}">${esc(est)}</span> <b>${gente.length}</b> persona(s)</div>
+      <div class="det-list">${gente.map(p=>`<div class="det-persona">${esc(p.nombres_apellidos)} <span>${esc(p.area_actual)}</span></div>`).join("")}</div>
+    </div>`;
+  }).join("");
 }
 
 function pintarResumenAsis(){
@@ -680,7 +824,14 @@ function pintarBases(){
     });
   }
   const arts = new Set(lista.map(b=>b.articulo));
-  $("resumenBases").textContent = `${arts.size} artículo(s) · ${lista.length} operaciones`;
+  // Cap de render: la base puede tener miles de filas; pintarlas todas cuelga la
+  // pestaña. Mostramos hasta LIMITE_BASE y pedimos filtrar para ver más.
+  const LIMITE_BASE = 400;
+  const totalFilas = lista.length;
+  const recortado = totalFilas > LIMITE_BASE;
+  if(recortado) lista = lista.slice(0, LIMITE_BASE);
+  $("resumenBases").textContent = `${arts.size} artículo(s) · ${totalFilas} operaciones`
+    + (recortado ? ` · mostrando ${LIMITE_BASE} (usa los filtros para acotar)` : "");
   const flecha = k => baseSort.col===k ? (baseSort.dir===1?" \u25B2":" \u25BC") : "";
   // Final = mayor N°OP del artículo (⭐ dorada); penúltima = 2º mayor (estrella plateada).
   const finalPorArt = calcularFinalesBase(BASE);
