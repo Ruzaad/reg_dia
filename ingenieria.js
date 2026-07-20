@@ -5,8 +5,8 @@ let ING=null;
 let AREAS_LISTA = Object.keys(AREAS);       // se reemplaza con fn_areas_listar al iniciar
 const CARGOS_LISTA = ["OPERARIO","SUPERVISORA","ESTAJERO"];
 const ESTADOS_OPERARIO = ["ACTIVO","INACTIVO"];
-const USUARIO_LIBERA = "ALOPEZ";            // único usuario que puede retirar tickets desde la app
 let ESTADOS_ASIS = [];
+let EF_CENS_ING = false;                     // censura de eficiencia (****) en toda la pestaña
 function hoyISO(){ return new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"}); }
 function mesActualISO(){ const d=hoyISO(); return d.slice(0,7); } // YYYY-MM
 
@@ -17,6 +17,8 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   if(ING.cargo!=="INGENIERIA"){ location.href = destinoPorCargo(ING.cargo); return; }
   $("quienBadge").textContent = ING.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
+  { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
+  { const rc=$("btnRecargar"); if(rc) rc.onclick=recargarIngenieria; }
 
   document.querySelectorAll(".tab[data-tab]").forEach(b=>{
     b.onclick = ()=>{
@@ -60,6 +62,26 @@ function poblarSelectsArea(){
   $("filtroAreaEfR").innerHTML  = `<option value="">Todas las áreas</option>` + AREAS_LISTA.map(op).join("");
 }
 
+/* Recargar la pestaña activa (botón ↻ del header). */
+function recargarIngenieria(){
+  const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),600); }
+  if($("pasoEf").classList.contains("activa")){ cargarEf(); if(EFR.personal.length) cargarEfRango(); }
+  else if($("pasoTk").classList.contains("activa")) cargarTk();
+  else if($("pasoBases").classList.contains("activa")) cargarBases();
+  else if($("pasoAsis").classList.contains("activa")) cargarAsisMes();
+  else if($("pasoIncid").classList.contains("activa")) cargarIncidI();
+}
+/* Censura de eficiencia: reemplaza los % por **** en toda la pestaña. */
+function censEf(v){ return EF_CENS_ING ? "****" : v; }
+function toggleCensuraEf(){
+  EF_CENS_ING = !EF_CENS_ING;
+  const b=$("btnCensEf");
+  if(b){ b.textContent = EF_CENS_ING ? "👁 MOSTRAR" : "👁 CENSURAR";
+    b.classList.toggle("verde", EF_CENS_ING); b.classList.toggle("gris", !EF_CENS_ING); }
+  if(EF) pintarEf();
+  if(EFR.personal.length) pintarEfRango();
+}
+
 /* ================= EFICIENCIAS ================= */
 let EF=null, efSort={col:null,dir:1};
 const EF_COLS=[
@@ -83,30 +105,41 @@ function ordenarEf(col){
 function pintarEf(){
   if(!EF) return;
   $("efAreas").innerHTML = (EF.areas||[]).map(a=>`
-    <div class="kpi"><div class="kpi-num">${a.eficiencia}%</div>
+    <div class="kpi"><div class="kpi-num">${censEf(a.eficiencia+"%")}</div>
     <div class="kpi-lbl">${esc(a.area)}<br>${Math.round(a.prod)} / ${Math.round(a.disp)} min</div></div>`).join("")
     || '<div class="vacio-msg">Sin datos ese día</div>';
 
   const fArea = $("filtroAreaEf").value;
   let lista = (EF.personas||[]).filter(p=>!fArea || p.area===fArea);
-  if(efSort.col){
-    lista = [...lista].sort((a,b)=>{
-      const va=a[efSort.col], vb=b[efSort.col];
-      const na=parseFloat(va), nb=parseFloat(vb);
-      const c = (!isNaN(na)&&!isNaN(nb)) ? na-nb : String(va??"").localeCompare(String(vb??""),"es");
-      return c*efSort.dir;
-    });
-  }
+  const cmp = (a,b)=>{
+    if(!efSort.col) return String(a.nombre||"").localeCompare(String(b.nombre||""),"es");
+    const va=a[efSort.col], vb=b[efSort.col];
+    const na=parseFloat(va), nb=parseFloat(vb);
+    const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es");
+    return c*efSort.dir;
+  };
   const flecha = k => efSort.col===k ? (efSort.dir===1?" \u25B2":" \u25BC") : "";
   const thead = "<thead><tr>"+EF_COLS.map(c=>
     `<th class="ord" onclick="ordenarEf('${c.k}')">${c.t}${flecha(c.k)}</th>`).join("")+"</tr></thead>";
-  const filas = lista.map(p=>`
-    <tr><td>${esc(p.nombre)}</td><td>${esc(p.dni)}</td><td>${esc(p.area)}</td>
-    <td><span class="pill ${esc(p.estado)}">${esc(p.estado)}</span></td>
-    <td>${p.tickets}</td><td>${p.prod}</td><td>${p.disp}</td>
-    <td class="${p.eficiencia>=80?'ef-alta':p.eficiencia<50?'ef-baja':''}">${p.eficiencia}%</td></tr>`).join("");
-  $("tablaEf").innerHTML = thead + "<tbody>" +
-    (filas || `<tr><td colspan="8"><div class="vacio-msg">Sin personas para este filtro</div></td></tr>`) + "</tbody>";
+  // Áreas bien separadas: agrupadas con encabezado de área.
+  const porArea={};
+  lista.forEach(p=>{ (porArea[p.area]=porArea[p.area]||[]).push(p); });
+  const areas=Object.keys(porArea).sort((a,b)=>String(a).localeCompare(String(b),"es"));
+  let tbody="";
+  if(!lista.length){
+    tbody = `<tr><td colspan="8"><div class="vacio-msg">Sin personas para este filtro</div></td></tr>`;
+  } else {
+    areas.forEach(area=>{
+      const gente=[...porArea[area]].sort(cmp);
+      tbody += `<tr class="grupo-area"><td colspan="8">${esc(area)} · ${gente.length} persona(s)</td></tr>`;
+      tbody += gente.map(p=>`
+        <tr><td>${esc(p.nombre)}</td><td>${esc(p.dni)}</td><td>${esc(p.area)}</td>
+        <td><span class="pill ${esc(p.estado)}">${esc(p.estado)}</span></td>
+        <td>${p.tickets}</td><td>${p.prod}</td><td>${p.disp}</td>
+        <td class="${p.eficiencia>=80?'ef-alta':p.eficiencia<50?'ef-baja':''}">${censEf(p.eficiencia+"%")}</td></tr>`).join("");
+    });
+  }
+  $("tablaEf").innerHTML = thead + "<tbody>" + tbody + "</tbody>";
 }
 
 /* ================= EFICIENCIA DÍA × DÍA POR RANGO ================= */
@@ -146,10 +179,10 @@ function pintarEfRango(){
         <div>${esc(p.nombre)}</div>
         <div style="font-size:11px;color:#5a6270;font-weight:600">DNI ${esc(p.dni)} · ${esc(p.area)}</div>
       </td>
-      <td class="${efClase(p.promedio)}"><b>${p.promedio}%</b></td>`;
+      <td class="${efClase(p.promedio)}"><b>${censEf(p.promedio+"%")}</b></td>`;
     EFR.dias.forEach(d=>{
       const v = p.registros[d];
-      tbody += (v==null) ? `<td>\u2014</td>` : `<td class="${efClase(v)}">${v}</td>`;
+      tbody += (v==null) ? `<td>\u2014</td>` : `<td class="${efClase(v)}">${censEf(v)}</td>`;
     });
     tbody += `</tr>`;
   });
@@ -160,9 +193,10 @@ function pintarEfRango(){
 function descargarEfRango(){
   if(!EFR.personal.length){ mostrarError("Carga primero un rango"); return; }
   const CAB = ["DNI","Nombre","Área","Promedio %", ...EFR.dias.map(d=>d.slice(5))]; // MM-DD
+  // Porcentajes enteros (88, 34), no decimales (87.1, 33.3).
   const filas = EFR.personal.map(p=>[
-    p.dni, p.nombre, p.area, p.promedio,
-    ...EFR.dias.map(d=>{ const v=p.registros[d]; return v==null ? "" : v; })
+    p.dni, p.nombre, p.area, Math.round(p.promedio),
+    ...EFR.dias.map(d=>{ const v=p.registros[d]; return v==null ? "" : Math.round(v); })
   ]);
   const ws = XLSX.utils.aoa_to_sheet([CAB, ...filas]);
   const wb = XLSX.utils.book_new();
@@ -433,6 +467,8 @@ async function guardarRango(){
 /* ================= TICKETS DEL DÍA ================= */
 let TK=[], TK_VISTA=[], BASES_CACHE={};
 let tkSort={col:null,dir:1};
+let tkArea="";                 // filtro de área activo (FAB); "" = todas
+let modoLibTk=false, libSel={}; // modo liberar en lote + códigos marcados
 const TK_COLS=[
   {k:"hora",t:"Hora"},{k:"nombre",t:"Nombre"},{k:"area",t:"Área"},{k:"of",t:"OF"},
   {k:"articulo",t:"Artículo"},{k:"op",t:"Operación"},{k:"nop",t:"N°OP"},{k:"num",t:"Num."},
@@ -453,16 +489,60 @@ function descargarTk(){
 async function cargarTk(){
   $("tablaTk").innerHTML=cargandoHTML("Cargando…");
   $("resumenUltimas").innerHTML="";
+  libSel={};
   try{
     TK = await rpc("fn_tickets_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:$("fechaTk").value});
+    // Si el área filtrada ya no tiene tickets hoy, vuelve a "todas".
+    if(tkArea && !TK.some(t=>t.area===tkArea)) tkArea="";
+    pintarFabAreasTk();
     pintarTk();
     cargarResumenUltimas();   // no bloquea la tabla
   }catch(e){ $("tablaTk").innerHTML=""; mostrarError(e.message); }
 }
+
+/* FAB de áreas: solo las áreas que registraron tickets hoy. */
+function pintarFabAreasTk(){
+  const z=$("fabAreasTk"); if(!z) return;
+  const areas=[...new Set(TK.map(t=>t.area).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"es"));
+  if(!areas.length){ z.innerHTML=""; return; }
+  z.innerHTML = `<div class="fab-area-titulo">ÁREA</div>`
+    + `<button class="fab-area-btn${tkArea===""?" activo":""}" onclick="filtrarTkArea('')">TODAS</button>`
+    + areas.map(a=>`<button class="fab-area-btn${tkArea===a?" activo":""}" onclick="filtrarTkArea('${esc(a)}')">${esc(a)}</button>`).join("");
+}
+function filtrarTkArea(a){ tkArea=a; pintarFabAreasTk(); pintarTk(); cargarResumenUltimas(); }
+
+/* Liberar en lote: alterna el modo de selección con checkboxes. */
+function toggleModoLiberar(){
+  modoLibTk=!modoLibTk; libSel={};
+  const bm=$("btnModoLiberar"), bs=$("btnLiberarSel");
+  if(bm){ bm.textContent = modoLibTk ? "CANCELAR LOTE" : "LIBERAR EN LOTE"; bm.classList.toggle("gris",modoLibTk); }
+  if(bs) bs.style.display = modoLibTk ? "inline-block" : "none";
+  pintarTk();
+}
+function toggleLibSel(codigo){
+  if(libSel[codigo]) delete libSel[codigo]; else libSel[codigo]=true;
+  const n=Object.keys(libSel).length;
+  const bs=$("btnLiberarSel"); if(bs) bs.textContent=`LIBERAR SELECCIONADOS (${n})`;
+}
+async function liberarLote(){
+  const codigos=Object.keys(libSel);
+  if(!codigos.length){ mostrarError("No hay tickets seleccionados"); return; }
+  const motivo=prompt(`Liberar ${codigos.length} ticket(s) seleccionado(s).\nMotivo:`);
+  if(motivo===null) return;
+  try{
+    const r=await rpc("fn_liberar_lote",{p_dni:ING.dni,p_token:ING.token,
+      p_codigos:codigos,p_motivo:motivo.trim()});
+    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
+    modoLibTk=false; libSel={};
+    const bm=$("btnModoLiberar"); if(bm){ bm.textContent="LIBERAR EN LOTE"; bm.classList.remove("gris"); }
+    const bs=$("btnLiberarSel"); if(bs) bs.style.display="none";
+    await cargarTk();
+  }catch(e){ mostrarError(e.message); }
+}
 function pintarTk(){
   const q=normKey($("filtroTk").value);
-  TK_VISTA = TK.filter(t=>!q ||
-    normKey(t.nombre+" "+t.of+" "+t.articulo+" "+t.op+" "+t.codigo+" "+t.area).includes(q));
+  TK_VISTA = TK.filter(t=>(!tkArea || t.area===tkArea) && (!q ||
+    normKey(t.nombre+" "+t.of+" "+t.articulo+" "+t.op+" "+t.codigo+" "+t.area).includes(q)));
   if(tkSort.col){
     TK_VISTA.sort((a,b)=>{
       const va=a[tkSort.col], vb=b[tkSort.col];
@@ -473,18 +553,22 @@ function pintarTk(){
   }
   const lista=TK_VISTA;
   const min=lista.reduce((a,t)=>a+(t.estado==='ACTIVO'?Number(t.minutos):0),0);
-  $("resumenTk").textContent=`${lista.length} tickets · ${Math.round(min)} min activos`;
-  const puedeLiberar = ING && normKey(ING.dni)===USUARIO_LIBERA;
+  $("resumenTk").textContent=`${lista.length} tickets · ${Math.round(min)} min activos`
+    + (tkArea?` · área: ${tkArea}`:"");
+  // Cualquier cargo INGENIERIA puede liberar (el servidor revalida).
   const flecha=k=>tkSort.col===k?(tkSort.dir===1?" \u25B2":" \u25BC"):"";
-  const thead="<thead><tr>"+TK_COLS.map(c=>
-    `<th class="ord" onclick="ordenarTk('${c.k}')">${c.t}${flecha(c.k)}</th>`).join("")
-    +(puedeLiberar?"<th></th>":"")+"</tr></thead>";
+  const thead="<thead><tr>"
+    +(modoLibTk?`<th></th>`:"")
+    +TK_COLS.map(c=>`<th class="ord" onclick="ordenarTk('${c.k}')">${c.t}${flecha(c.k)}</th>`).join("")
+    +"<th></th></tr></thead>";
   $("tablaTk").innerHTML = thead+"<tbody>"+
-    lista.map((t,i)=>`<tr><td>${esc(t.hora)}</td><td>${esc(t.nombre)}</td><td>${esc(t.area)}</td>
+    lista.map((t,i)=>`<tr>
+      ${modoLibTk?`<td>${t.estado==='ACTIVO'?`<input type="checkbox" class="chk-lib" ${libSel[t.codigo]?"checked":""} onclick="toggleLibSel('${esc(t.codigo)}')">`:""}</td>`:""}
+      <td>${esc(t.hora)}</td><td>${esc(t.nombre)}</td><td>${esc(t.area)}</td>
       <td>${esc(t.of)}</td><td>${esc(t.articulo)}</td><td>${esc(t.op)}</td><td>${t.nop??""}</td>
       <td>${esc(t.num)}</td><td>${t.cant}</td><td>${t.minutos}</td><td>${esc(t.codigo)}</td>
       <td><span class="pill ${esc(t.estado)}">${esc(t.estado)}</span></td>
-      ${puedeLiberar?`<td>${t.estado==='ACTIVO'?`<button class="btn-mini rojo" onclick="liberarTicket(${i})">LIBERAR</button>`:""}</td>`:""}
+      <td>${t.estado==='ACTIVO'?`<button class="btn-mini rojo" onclick="liberarTicket(${i})">LIBERAR</button>`:""}</td>
       </tr>`).join("")+"</tbody>";
 }
 
@@ -510,7 +594,7 @@ async function cargarResumenUltimas(){
   const z=$("resumenUltimas"); if(!z) return;
   z.innerHTML="";
   if(!TK.length) return;
-  const areas=[...new Set(TK.map(t=>t.area).filter(Boolean))];
+  const areas=[...new Set(TK.map(t=>t.area).filter(Boolean))].filter(a=>!tkArea||a===tkArea);
   for(const a of areas){
     if(!BASES_CACHE[a]){
       try{ BASES_CACHE[a] = await rpc("fn_bases_listar",{p_dni:ING.dni,p_token:ING.token,p_area:a}); }
@@ -538,6 +622,7 @@ async function cargarResumenUltimas(){
   let c1=0,c2=0,sinNop=0; const o1=new Set(), o2=new Set();
   TK.forEach(t=>{
     if(t.estado!=="ACTIVO") return;
+    if(tkArea && t.area!==tkArea) return;
     const i=info[t.area+"|"+normKey(t.articulo)];
     if(!i) return;
     if(t.nop==null || t.nop===""){ sinNop++; return; }
@@ -597,12 +682,40 @@ function pintarBases(){
   const arts = new Set(lista.map(b=>b.articulo));
   $("resumenBases").textContent = `${arts.size} artículo(s) · ${lista.length} operaciones`;
   const flecha = k => baseSort.col===k ? (baseSort.dir===1?" \u25B2":" \u25BC") : "";
+  // Final = mayor N°OP del artículo (⭐ dorada); penúltima = 2º mayor (estrella plateada).
+  const finalPorArt = calcularFinalesBase(BASE);
   const thead = "<thead><tr>"+BASE_COLS.map(c=>
-    `<th class="ord${c.k==='operacion'?' izq':''}" onclick="ordenarBase('${c.k}')">${c.t}${flecha(c.k)}</th>`).join("")+"</tr></thead>";
+    `<th class="ord${c.k==='operacion'?' izq':''}" onclick="ordenarBase('${c.k}')">${c.t}${flecha(c.k)}</th>`).join("")
+    +"<th></th></tr></thead>";
   $("tablaBases").innerHTML = thead + "<tbody>"+
-    lista.map(b=>`<tr><td>${esc(b.prenda)}</td><td>${esc(b.cliente)}</td><td>${esc(b.modulo)}</td>
-      <td><b>${esc(b.articulo)}</b></td><td class="izq">${esc(b.operacion)}</td><td>${b.std}</td>
-      <td>${b.max_op}</td><td>${b.n_op}</td></tr>`).join("")+"</tbody>";
+    lista.map(b=>{
+      const f=finalPorArt[normKey(b.articulo)]||{};
+      const n=Number(b.n_op);
+      const estrella = (f.n1!=null && n===f.n1)
+        ? `<span class="estrella estrella-final" title="Operación final">★</span> `
+        : (f.n2!=null && n===f.n2)
+          ? `<span class="estrella estrella-pen" title="Penúltima operación">★</span> `
+          : "";
+      return `<tr><td>${esc(b.prenda)}</td><td>${esc(b.cliente)}</td><td>${esc(b.modulo)}</td>
+      <td><b>${esc(b.articulo)}</b></td><td class="izq">${estrella}${esc(b.operacion)}</td><td>${b.std}</td>
+      <td>${b.max_op}</td><td>${b.n_op}</td>
+      <td><div class="acc-base">
+        <button class="acc-editar" onclick="abrirModalBaseOp(${b.id})">Editar</button>
+        <button class="acc-borrar" onclick="eliminarBaseOp(${b.id},'${esc((b.operacion||"").replace(/'/g,""))}')">Borrar</button>
+      </div></td></tr>`;
+    }).join("")+"</tbody>";
+}
+
+/* Mapa articulo(normKey) -> {n1: mayor N°OP, n2: 2º mayor} sobre TODA la base. */
+function calcularFinalesBase(filas){
+  const porArt={};
+  (filas||[]).forEach(b=>{ (porArt[normKey(b.articulo)]=porArt[normKey(b.articulo)]||[]).push(b); });
+  const res={};
+  Object.keys(porArt).forEach(k=>{
+    const nops=[...new Set(porArt[k].map(b=>Number(b.n_op)).filter(n=>!isNaN(n)&&n>0))].sort((x,y)=>y-x);
+    res[k]={ n1: nops.length?nops[0]:null, n2: nops.length>1?nops[1]:null };
+  });
+  return res;
 }
 function descargarBase(){
   const lista = basesFiltradas();
@@ -613,6 +726,70 @@ function descargarBase(){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Hoja1");
   XLSX.writeFile(wb, `BASE_${$("areaBase").value.replace(/ /g,"_")}_${hoyISO()}.xlsx`);
+}
+
+/* --- CRUD de BASE por fila (editar STD / artículos / operaciones) --- */
+function abrirModalBaseOp(id){
+  const area = $("areaBase").value;
+  const b = id!=null ? (BASE.find(x=>Number(x.id)===Number(id))||{}) : {};
+  const esEdicion = id!=null;
+  const v = k => esc(b[k]!=null?b[k]:"");
+  abrirModal(`
+    <h2>${esEdicion?"Editar operación":"Agregar operación"}</h2>
+    <div class="sub" style="margin-bottom:12px;">Área: ${esc(area)}</div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>Prenda</label><input id="boPrenda" value="${v('prenda')}" maxlength="80"></div>
+      <div class="modal-campo"><label>Cliente</label><input id="boCliente" value="${v('cliente')}" maxlength="80"></div>
+    </div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>Módulo</label><input id="boModulo" value="${v('modulo')}" maxlength="80"></div>
+      <div class="modal-campo"><label>Artículo</label><input id="boArticulo" value="${v('articulo')}" maxlength="80"></div>
+    </div>
+    <div class="modal-campo"><label>Operación</label><input id="boOperacion" value="${v('operacion')}" maxlength="120"></div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>STD (min)</label><input id="boStd" inputmode="decimal" value="${v('std')}"></div>
+      <div class="modal-campo"><label>N°OP (orden)</label><input id="boNop" inputmode="numeric" value="${v('n_op')}"></div>
+    </div>
+    <div class="modal-campo"><label>Max Op.</label><input id="boMaxOp" inputmode="numeric" value="${v('max_op')}"></div>
+    <div class="cf-detalle" style="margin-top:-4px;">El mayor N°OP del artículo es la operación final (★ dorada); el 2º mayor, la penúltima.</div>
+    <div class="modal-msg" id="boMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="guardarBaseOp(${esEdicion?id:"null"})">GUARDAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+}
+async function guardarBaseOp(id){
+  const area=$("areaBase").value;
+  const datos={
+    p_prenda:$("boPrenda").value.trim(), p_cliente:$("boCliente").value.trim(),
+    p_modulo:$("boModulo").value.trim(), p_articulo:$("boArticulo").value.trim(),
+    p_operacion:$("boOperacion").value.trim(),
+    p_std:parseFloat($("boStd").value)||0,
+    p_max_op:parseInt($("boMaxOp").value,10)||0,
+    p_n_op:parseInt($("boNop").value,10)||0
+  };
+  if(!datos.p_articulo || !datos.p_operacion){ $("boMsg").textContent="Artículo y operación son obligatorios"; return; }
+  try{
+    let r;
+    if(id!=null){
+      r=await rpc("fn_base_op_editar",{p_dni:ING.dni,p_token:ING.token,p_id:id,...datos});
+    } else {
+      r=await rpc("fn_base_op_crear",{p_dni:ING.dni,p_token:ING.token,p_area:area,...datos});
+    }
+    if(!r.ok){ $("boMsg").textContent=r.error||"No se pudo guardar"; return; }
+    cerrarModal();
+    delete BASES_CACHE[area];
+    await cargarBases();
+  }catch(e){ $("boMsg").textContent=e.message; }
+}
+async function eliminarBaseOp(id, nombre){
+  if(!confirm(`¿Eliminar la operación "${nombre}"?`)) return;
+  try{
+    const r=await rpc("fn_base_op_eliminar",{p_dni:ING.dni,p_token:ING.token,p_id:id});
+    if(!r.ok){ mostrarError(r.error||"No se pudo eliminar"); return; }
+    delete BASES_CACHE[$("areaBase").value];
+    await cargarBases();
+  }catch(e){ mostrarError(e.message); }
 }
 
 /* --- subida con diff previo --- */

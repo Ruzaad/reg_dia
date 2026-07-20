@@ -26,7 +26,12 @@ const AREAS = {
     hoja: "ALMACEN",
     mapa: MAPA_ESTANDAR              // ajustar cuando se vean sus columnas reales
   },
-  "PANTALON COSTURA": { habilitada:false },
+  "PANTALON COSTURA": {
+    habilitada: true,
+    sheetId: "1Or0seuSsiqmHSPAQ39RAfh1nWhpUtGi_ugFu4C4XCns",
+    hoja: "ALMACEN",              // pestaña gid=0 del libro de PANTALONES
+    mapa: MAPA_ESTANDAR           // GRUPO queda sin mapear (no se usa en el flujo)
+  },
   "SACO COSTURA":     { habilitada:false }
 };
 const SESION_HORAS = 4;
@@ -60,6 +65,40 @@ function colorDe(nombre){
   return `hsl(${h%360},45%,78%)`;
 }
 const esc = s => String(s).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+/* Solo apellidos: todo lo que va ANTES de la primera coma del registro.
+   "PEREZ GOMEZ, JUAN CARLOS" -> "PEREZ GOMEZ". Sin coma, devuelve todo. */
+const soloApellidos = s => String(s==null?"":s).split(",")[0].trim() || String(s||"").trim();
+
+/* ---------------- CAMBIO DE PIN (compartido, todas las vistas) ---------------- */
+function abrirCambioPin(){
+  abrirModal(`
+    <h2>Cambiar mi PIN</h2>
+    <div class="sub" style="margin-bottom:12px;">Ingresa tu PIN actual y el nuevo (4 dígitos)</div>
+    <div class="modal-campo"><label>PIN actual</label>
+      <input id="cpActual" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••"></div>
+    <div class="modal-campo"><label>PIN nuevo</label>
+      <input id="cpNuevo" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••"></div>
+    <div class="modal-campo"><label>Repite el PIN nuevo</label>
+      <input id="cpNuevo2" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••"></div>
+    <div class="modal-msg" id="cpMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="guardarCambioPin()">GUARDAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+}
+async function guardarCambioPin(){
+  const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  const actual=$("cpActual").value.trim(), nuevo=$("cpNuevo").value.trim(), nuevo2=$("cpNuevo2").value.trim();
+  const msg=$("cpMsg");
+  if(!/^\d{4}$/.test(nuevo)){ msg.textContent="El nuevo PIN debe tener 4 dígitos"; return; }
+  if(nuevo!==nuevo2){ msg.textContent="Los PIN nuevos no coinciden"; return; }
+  try{
+    const r=await rpc("fn_cambiar_pin",{p_dni:s.dni,p_token:s.token,p_pin_actual:actual,p_pin_nuevo:nuevo});
+    if(!r.ok){ msg.textContent=r.error||"No se pudo cambiar"; return; }
+    msg.style.color="var(--exito)"; msg.textContent="PIN actualizado";
+    setTimeout(cerrarModal, 900);
+  }catch(e){ msg.textContent=e.message; }
+}
 
 function irA(id){
   document.querySelectorAll(".pantalla").forEach(p=>p.classList.remove("activa"));
@@ -330,13 +369,22 @@ function pintarCrumb(id){
   el.innerHTML = partes.join(' <span class="crumb-sep">\u203A</span> ');
   el.style.display="block";
 }
+let EF_CENSURADA = false;   // operario: ojo para censurar su propia eficiencia
 function initOperario(){
   const s = sesionActual();
   if(!s || !s.area){ location.href="index.html"; return; }
-  $("quienBadge").textContent = s.nombre; $("quienBadge").classList.add("visible");
+  $("quienBadge").textContent = soloApellidos(s.nombre); $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
   { const rb=$("btnReloj"); if(rb) rb.onclick=abrirSolicitudAjuste; }
+  { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
+  { const rc=$("btnRecargar"); if(rc) rc.onclick=recargarMiEficiencia; }
+  { const oj=$("btnOjoEf"); if(oj) oj.onclick=()=>{ EF_CENSURADA=!EF_CENSURADA; setAvance(ULTIMO_DIA); }; }
   window.onCambioPaso = (id)=>{
+    // Al retroceder, limpiar la selección más profunda para que el
+    // breadcrumb del encabezado no deje pasos viejos colgados.
+    if(id==="pasoOF"){ sel.of=null; sel.modulo=null; sel.op=null; }
+    else if(id==="pasoModulos"){ sel.modulo=null; sel.op=null; }
+    else if(id==="pasoOps"){ sel.op=null; }
     pintarCrumb(id);
     const b=$("btnVolverHdr"); if(!b) return;
     const destino = VOLVER_OPERARIO[id];
@@ -389,7 +437,7 @@ async function cargarTodo(s){
       rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token})
     ]);
     ALM = alm;
-    RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
+    RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={hora:x.hora}; });
     setAvance(dia);
     if(alm.duplicados.length) console.warn("Códigos duplicados en almacén:", alm.duplicados);
     irA("pasoOF");
@@ -398,10 +446,22 @@ async function cargarTodo(s){
     mostrarError("No se pudo cargar. Revisa la conexión y vuelve a intentar.");
   }
 }
+let ULTIMO_DIA = {eficiencia:0,minutos_prod:0,minutos_disp:0};
 function setAvance(d){
+  ULTIMO_DIA = d || ULTIMO_DIA;
   const b=$("badgeAvance");
-  b.textContent = `Hoy: ${d.eficiencia}% · ${d.minutos_prod} de ${d.minutos_disp} min`;
+  const ef = EF_CENSURADA ? "****" : (ULTIMO_DIA.eficiencia + "%");
+  b.textContent = `Hoy: ${ef} · ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
   b.classList.add("visible");
+}
+async function recargarMiEficiencia(){
+  const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  const b=$("btnRecargar"); if(b) b.classList.add("girando");
+  try{
+    const d=await rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token});
+    setAvance(d);
+  }catch(e){ mostrarError(e.message); }
+  finally{ if(b) setTimeout(()=>b.classList.remove("girando"),500); }
 }
 const libre = t => !RECL[t.codigo];
 
@@ -498,7 +558,7 @@ function pintarTickets(){
         <div>Corte <b>${esc(t.corte)}</b></div>
         <div>N°OP <b>${t.nop ?? "—"}</b></div>
       </div>
-      ${r?`<div class="tk-tomado-por">Tomado por ${esc(r.nombre)} · ${esc(r.hora)}</div>`:""}`;
+      ${r?`<div class="tk-tomado-por">Ya tomado · ${esc(r.hora)}</div>`:""}`;
     if(!r){
       c.onclick=()=>{
         if(modoSel){
@@ -583,7 +643,7 @@ async function registrar(){
     }
     setAvance(r);
     if(esLote){
-      Object.values(marcados).forEach(t=>{ RECL[t.codigo]={nombre:s.nombre,hora:"ahora"}; });
+      Object.values(marcados).forEach(t=>{ RECL[t.codigo]={hora:"ahora"}; });
       const conf = (r.conflictos||[]);
       $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
       $("exDetalle").innerHTML =
@@ -593,7 +653,7 @@ async function registrar(){
       if(conf.length) await refrescarReclamos(s);
     } else {
       const t=sel.ticket;
-      RECL[t.codigo]={nombre:s.nombre,hora:"ahora"};
+      RECL[t.codigo]={hora:"ahora"};
       $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
       $("exDetalle").innerHTML=`${esc(sel.op)}<br>Numeración <b>${esc(t.num)}</b> · ${t.cant} und · +${t.minutos} min`;
     }
@@ -608,20 +668,18 @@ async function refrescarReclamos(s){
   try{
     const area = AREA_ESTAJERO || s.area;
     const recl = await rpc("fn_reclamados",{p_dni:s.dni,p_token:s.token,p_area:area});
-    RECL={}; recl.forEach(x=>{RECL[x.codigo]={nombre:x.nombre,hora:x.hora};});
+    RECL={}; recl.forEach(x=>{RECL[x.codigo]={hora:x.hora};});
   }catch(e){}
 }
 let timerReset=null;
 function mostrarExito(){
   const ex=$("exito"); ex.classList.add("visible");
-  let seg=4; $("exTimer").textContent="Volviendo en "+seg+"…";
-  clearInterval(timerReset);
-  timerReset=setInterval(()=>{
-    seg--;
-    if(seg<=0){ clearInterval(timerReset); ex.classList.remove("visible");
-      pintarTickets(); irA("pasoTickets"); }
-    else $("exTimer").textContent="Volviendo en "+seg+"…";
-  },1000);
+  $("exTimer").textContent="Volviendo…";
+  clearTimeout(timerReset);
+  timerReset=setTimeout(()=>{
+    ex.classList.remove("visible");
+    pintarTickets(); irA("pasoTickets");
+  }, 2500);
 }
 
 /* ============================================================
@@ -679,11 +737,94 @@ function initSupervisora(){
   $("tituloArea").textContent = s.area + " · Supervisión";
   $("quienBadge").textContent = s.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
+  { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
+  { const rc=$("btnRecargar"); if(rc) rc.onclick=()=>{ recargarSupervisora(); }; }
   $("filtroNombre").addEventListener("input", pintarPersonal);
   $("tabPersonal").onclick = ()=>{ pararAvance(); marcarTab("tabPersonal"); irA("pasoPersonal"); };
   $("tabAvance").onclick  = ()=>{ marcarTab("tabAvance"); irA("pasoAvance"); cargarAvance(); timerAvance=setInterval(cargarAvance, 60000); };
   $("tabIncidencias").onclick = ()=>{ pararAvance(); marcarTab("tabIncidencias"); irA("pasoIncidencias"); cargarIncidencias(); };
+  cargarEstadosSup();
   cargarPersonal(s);
+}
+/* Recargar según la pestaña activa (botón ↻ del header). */
+function recargarSupervisora(){
+  const s=sesionActual(); if(!s) return;
+  const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),500); }
+  if($("pasoAvance").classList.contains("activa")) cargarAvance();
+  else if($("pasoIncidencias").classList.contains("activa")) cargarIncidencias();
+  else cargarPersonal(s);
+}
+
+/* --- Marcar faltantes (estados de asistencia, misma lógica que ingeniería) ---
+   NO suma minutos al área: un estado ausente deja disp = 0 ese día. */
+let ESTADOS_SUP = [], mf_sup = {dnis:[]};
+async function cargarEstadosSup(){
+  const s=sesionActual(); if(!s) return;
+  try{ ESTADOS_SUP = await rpc("fn_estados_asistencia_listar",{p_dni:s.dni,p_token:s.token}); }
+  catch(e){ ESTADOS_SUP = ["FALTA","DM","VACACIONES","ACTIVO"]; }
+}
+function marcarFaltantesInicio(){
+  mf_sup={dnis:[]};
+  pintarPersonalFalta();
+  irA("pasoFaltantes");
+}
+function pintarPersonalFalta(){
+  const g=$("gridPersonalFalta"); if(!g) return;
+  g.innerHTML="";
+  if(!PERSONAL.length){ g.innerHTML=`<div class="vacio-msg">Sin personal en el área</div>`; return; }
+  PERSONAL.forEach(p=>{
+    const c=document.createElement("div");
+    c.className="card-persona"+(mf_sup.dnis.includes(p.dni)?" marcada":"");
+    c.innerHTML=`<div>
+        <div class="cp-nombre">${esc(p.nombre)}</div>
+        <div class="cp-dni">DNI ${esc(p.dni)}</div>
+      </div>
+      <div class="cp-disp">${p.disp} min</div>`;
+    c.onclick=()=>{
+      const i=mf_sup.dnis.indexOf(p.dni);
+      if(i>=0) mf_sup.dnis.splice(i,1); else mf_sup.dnis.push(p.dni);
+      pintarPersonalFalta();
+    };
+    g.appendChild(c);
+  });
+  const b=$("btnContinuarFalta");
+  if(b){ b.disabled = mf_sup.dnis.length===0;
+    b.textContent = mf_sup.dnis.length ? `ELEGIR ESTADO (${mf_sup.dnis.length})` : "ELEGIR ESTADO"; }
+}
+function marcarFaltantesEstado(){
+  if(!mf_sup.dnis.length) return;
+  const opts = ESTADOS_SUP.map(e=>`<option>${esc(e)}</option>`).join("") || '<option value="">Sin estados</option>';
+  abrirModal(`
+    <h2>Marcar estado</h2>
+    <div class="sub" style="margin-bottom:12px;">${mf_sup.dnis.length} persona(s) · hoy</div>
+    <div class="modal-campo"><label>Estado</label>
+      <select id="mfEstado">${opts}</select></div>
+    <div class="modal-msg" id="mfMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="guardarFaltantes()">APLICAR A ${mf_sup.dnis.length}</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+}
+async function guardarFaltantes(){
+  const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  const estado=$("mfEstado").value;
+  if(!estado){ $("mfMsg").textContent="Elige un estado"; return; }
+  try{
+    const r=await rpc("fn_marcar_asistencia",{p_dni:s.dni,p_token:s.token,
+      p_dnis:mf_sup.dnis,p_estado:estado,p_fecha:null});
+    if(!r.ok){ $("mfMsg").textContent=r.error||"No se pudo"; return; }
+    cerrarModal();
+    $("exTitulo").textContent="Estado registrado";
+    $("exDetalle").innerHTML=`${esc(estado)} · <b>${r.afectados}</b> persona(s)`;
+    $("exAvance").textContent=""; $("exTimer").textContent="";
+    const ex=$("exito"); ex.classList.add("visible");
+    setTimeout(async ()=>{
+      ex.classList.remove("visible");
+      mf_sup={dnis:[]};
+      await cargarPersonal(s);
+      irA("pasoPersonal");
+    }, 2200);
+  }catch(e){ $("mfMsg").textContent=e.message; }
 }
 function marcarTab(id){
   ["tabPersonal","tabAvance","tabIncidencias"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });

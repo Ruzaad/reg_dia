@@ -13,6 +13,8 @@
   <div class="titulo" id="tituloArea">SUPERVISIÓN</div>
   <div class="badges">
     <div class="badge" id="quienBadge"></div>
+    <button type="button" class="btn-hdr-icon" id="btnRecargar" title="Recargar">↻</button>
+    <button type="button" class="btn-hdr-icon" id="btnLlave" title="Cambiar mi PIN">🔑</button>
     <button class="btn-salir" id="btnSalir">Salir</button>
   </div>
 </header>
@@ -33,13 +35,24 @@
       <input class="input-grande" id="filtroNombre" placeholder="Buscar por nombre…"
              autocomplete="off" style="font-size:22px;letter-spacing:normal;text-align:left;">
     </div>
-    <div style="max-width:560px;margin:0 auto 14px;width:100%;display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn-secundario" style="color:var(--enlace);border-color:var(--enlace);flex:1;min-width:220px;"
-              onclick="ocurrenciaGrupal()">OCURRENCIA GRUPAL (OTROS)</button>
-      <button class="btn-secundario" style="color:var(--azul);border-color:var(--azul);flex:1;min-width:220px;"
-              onclick="moverAreaInicio()">CAMBIAR ÁREA A PERSONAL</button>
-    </div>
     <div class="grid-personal" id="gridPersonal"></div>
+    <!-- Acciones POST flotantes a la derecha -->
+    <div class="fab-acciones">
+      <button class="fab-btn enlace" onclick="ocurrenciaGrupal()">OCURRENCIA GRUPAL</button>
+      <button class="fab-btn azul" onclick="moverAreaInicio()">CAMBIAR ÁREA</button>
+      <button class="fab-btn alerta" onclick="marcarFaltantesInicio()">MARCAR FALTANTES</button>
+    </div>
+  </section>
+
+  <!-- Marcar faltantes: selección de personal -->
+  <section class="pantalla" id="pasoFaltantes">
+    <button class="btn-volver" onclick="irA('pasoPersonal')">← Volver</button>
+    <h1>Marcar faltantes / estado</h1>
+    <div class="sub">Toca a quienes no están en tu área hoy — no suma minutos a tu área</div>
+    <div class="grid-personal" id="gridPersonalFalta"></div>
+    <div style="max-width:560px;margin:14px auto 0;width:100%;">
+      <button class="btn-principal" id="btnContinuarFalta" disabled onclick="marcarFaltantesEstado()">ELEGIR ESTADO</button>
+    </div>
   </section>
 
   <!-- Alcance de OTROS -->
@@ -159,6 +172,11 @@
   <div class="ex-detalle" id="exDetalle"></div>
   <div class="ex-avance" id="exAvance"></div>
   <div class="ex-timer" id="exTimer"></div>
+</div>
+
+<!-- Modal genérico (cambiar PIN / marcar estado) -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box" id="modalBox"></div>
 </div>
 <script src="app.js"></script>
 </body>
