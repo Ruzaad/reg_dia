@@ -14,10 +14,13 @@
   <div class="titulo">INGENIERÍA</div>
   <div class="badges">
     <div class="badge" id="quienBadge"></div>
+    <button type="button" class="btn-hdr-icon" id="btnRecargar" title="Recargar pestaña">↻</button>
+    <button type="button" class="btn-hdr-icon" id="btnLlave" title="Cambiar mi PIN">🔑</button>
     <button class="btn-salir" id="btnSalir">Salir</button>
   </div>
 </header>
 <main>
+  <div class="aviso-pc">Esta vista está pensada para computadora (PC). En pantallas pequeñas algunas tablas se ven incómodas.</div>
   <div class="banner-error" id="bannerError"></div>
 
   <div class="tabs">
@@ -33,6 +36,7 @@
     <div class="fila-filtros">
       <input type="date" id="fechaEf" onchange="cargarEf()">
       <select id="filtroAreaEf"></select>
+      <button class="btn-mini gris" id="btnCensEf" onclick="toggleCensuraEf()">👁 CENSURAR</button>
     </div>
     <div class="kpis" id="efAreas"></div>
     <div class="contenedor-ancho" style="overflow:auto;max-height:60vh;margin-top:14px;">
@@ -61,12 +65,16 @@
       <input type="text" id="filtroTk" placeholder="Buscar nombre / OF / artículo / código…">
       <button class="btn-mini" onclick="cargarTk()">↻ CARGAR</button>
       <button class="btn-mini verde" onclick="descargarTk()">DESCARGAR XLSX</button>
+      <button class="btn-mini" id="btnModoLiberar" onclick="toggleModoLiberar()">LIBERAR EN LOTE</button>
+      <button class="btn-mini rojo" id="btnLiberarSel" style="display:none;" onclick="liberarLote()">LIBERAR SELECCIONADOS (0)</button>
     </div>
     <div class="sub" id="resumenTk"></div>
     <div class="kpis" id="resumenUltimas" style="margin-bottom:14px;"></div>
     <div class="contenedor-ancho" style="overflow:auto;max-height:70vh;">
       <table class="tabla" id="tablaTk"></table>
     </div>
+    <!-- FAB de áreas: filtra tickets, tarjetas y últimas/penúltimas a un área -->
+    <div class="fab-areas" id="fabAreasTk"></div>
   </section>
 
   <!-- BASES -->
@@ -78,6 +86,7 @@
       <input type="text" id="fCli" placeholder="Filtrar cliente…" oninput="pintarBases()">
       <button class="btn-mini" onclick="cargarBases()">↻ CARGAR</button>
       <button class="btn-mini verde" onclick="descargarBase()">DESCARGAR XLSX</button>
+      <button class="btn-mini" onclick="abrirModalBaseOp(null)">+ AGREGAR OPERACIÓN</button>
       <label class="btn-mini" style="cursor:pointer;">
         SUBIR EXCEL
         <input type="file" accept=".xlsx,.xls" style="display:none" onchange="leerExcelBase(this)">
