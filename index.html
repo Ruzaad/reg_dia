@@ -28,8 +28,17 @@
         <input class="input-grande" id="inputUsuario" autocomplete="off"
                style="font-size:26px;letter-spacing:2px;text-transform:uppercase;">
       </div>
-      <div class="campo-label">Clave (4 dígitos)</div>
-      <div class="campo-display pin" id="dispPin"></div>
+      <!-- PIN con teclado en pantalla (operario) -->
+      <div id="zonaPinNum">
+        <div class="campo-label">Clave (4 dígitos)</div>
+        <div class="campo-display pin" id="dispPin"></div>
+      </div>
+      <!-- PIN escribible con el teclado de la PC (ingeniería) -->
+      <div id="zonaPinTxt" style="display:none;">
+        <div class="campo-label">Clave (4 dígitos)</div>
+        <input class="input-grande" id="inputPinIng" type="password" inputmode="numeric"
+               maxlength="4" autocomplete="off" style="letter-spacing:8px;text-align:center;">
+      </div>
       <div class="msg-error" id="msgLogin"></div>
       <div class="teclado" id="tecladoLogin"></div>
       <button type="button" id="linkIng" class="link-ing">Ingreso ingeniería</button>
