@@ -394,6 +394,75 @@ body[data-pagina="ingenieria"] main{min-width:0;}
   font-weight:800;font-size:13px;letter-spacing:.4px;padding:8px 10px;position:sticky;left:0;}
 
 /* ============================================================
+   PARCHE 6 · FASE 1 — Ingeniería: dashboard impecable + accesibilidad
+   (data-dense, teclado+mouse, sin FAB, paleta SAMITEX intacta)
+   ============================================================ */
+
+/* Accesibilidad global: foco visible por teclado y respeto a reduced-motion */
+:focus-visible{outline:3px solid var(--enlace);outline-offset:2px;border-radius:8px;}
+a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,
+[tabindex]:focus-visible,summary:focus-visible{outline:3px solid var(--enlace);outline-offset:2px;}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important;}
+}
+
+/* Tipografía dashboard (solo Ingeniería): Fira Sans + Fira Code para datos */
+body[data-pagina="ingenieria"]{font-family:"Fira Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
+body[data-pagina="ingenieria"] .tabla,
+body[data-pagina="ingenieria"] .tabla-asis-mes{font-variant-numeric:tabular-nums;}
+body[data-pagina="ingenieria"] .kpi-num,
+body[data-pagina="ingenieria"] .ce-num,
+body[data-pagina="ingenieria"] .mod-op-sub,
+body[data-pagina="ingenieria"] .mp-cab span,
+body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",monospace;font-variant-numeric:tabular-nums;}
+
+/* Encabezados de sección alineados a la izquierda (dashboard, no centrado) */
+.ing-main h1{text-align:left;font-size:22px;margin:0;}
+.seccion-cab{margin-bottom:16px;}
+.seccion-sub{font-size:13px;color:#5a6270;margin-top:3px;max-width:70ch;}
+
+/* Barra de control: contenedor claro de filtros/acciones por sección */
+.barra-control{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;
+  background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;padding:14px 16px;
+  box-shadow:0 1px 3px rgba(13,59,133,.06);}
+.barra-control .campo{display:flex;flex-direction:column;gap:5px;}
+.barra-control .campo>span{font-size:11px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.5px;color:#5a6270;}
+.barra-control select,.barra-control input[type=text],.barra-control input[type=date]{
+  background:var(--gris-fondo);border:2px solid #cfd8e6;border-radius:10px;
+  font-size:15px;font-weight:600;padding:9px 12px;color:var(--texto);outline:none;min-height:42px;}
+.barra-control select:hover,.barra-control input:hover{border-color:var(--enlace);}
+.barra-control .btn-mini{align-self:flex-end;min-height:42px;}
+
+/* Estado vacío / gating (elige área) */
+.estado-vacio{background:var(--blanco);border:1.5px dashed #c3ccdb;border-radius:16px;
+  padding:44px 22px;text-align:center;color:#5a6270;font-size:15px;font-weight:600;max-width:640px;}
+
+/* Contenedor de tabla con scroll (reemplaza overflow inline) */
+.tabla-scroll{overflow:auto;}
+
+/* Toolbar de acciones (supervisión: reemplaza el FAB flotante por barra estática) */
+.acc-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+.btn-accion{border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:800;
+  padding:11px 18px;cursor:pointer;transition:filter .15s ease,transform .06s ease;}
+.btn-accion:hover{filter:brightness(1.07);}
+.btn-accion:active{transform:translateY(1px);}
+.btn-accion.enlace{background:var(--enlace);}
+.btn-accion.azul{background:var(--azul);}
+.btn-accion.alerta{background:var(--alerta);}
+
+/* Micro-interacciones consistentes en botones e ítems del sidebar */
+.btn-mini{transition:filter .15s ease,background .15s ease;}
+.btn-mini:hover{filter:brightness(1.07);}
+.ing-nav .nav-item{transition:background .15s ease,color .15s ease;}
+
+/* Refinamiento del sidebar (más definido, teclado) */
+.ing-sidebar{border-right:1px solid rgba(255,255,255,.08);}
+.ing-nav .nav-item{letter-spacing:.2px;}
+.ing-nav .nav-item.activo{position:relative;}
+
+/* ============================================================
    PARCHE 4 — Ingeniería SIDEBAR (PC) + Por módulo + Detallado asistencia
    ============================================================ */
 

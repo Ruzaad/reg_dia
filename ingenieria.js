@@ -47,7 +47,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
 
   $("filtroNomAsis").addEventListener("input", pintarAsisMes);
   $("filtroAreaAsis").addEventListener("change", cargarAsisMes);
-  $("filtroAreaEf").addEventListener("change", pintarEf);
+  $("filtroAreaEf").addEventListener("change", ()=>{ if(EF) pintarEf(); else cargarEf(); });
   $("filtroNomEfR").addEventListener("input", ()=>{ if(EFR.personal.length) pintarEfRango(); });
   flatpickr("#rangoEf", {mode:"range", dateFormat:"Y-m-d", locale:{rangeSeparator:" a "},
     onChange:(dates)=>{
@@ -57,25 +57,30 @@ document.addEventListener("DOMContentLoaded", async ()=>{
       }
     }});
   $("filtroTk").addEventListener("input", pintarTk);
-  cargarEf();
+  cargarTk();            // landing por defecto: Tickets · Actual
   cargarEstadosAsis();
   cargarAsisMes();
 });
 
 function poblarSelectsArea(){
   const op = a=>`<option>${esc(a)}</option>`;
+  const elige = `<option value="">— Elige área —</option>`;
+  const todas = `<option value="">Todas las áreas</option>`;
   $("selArea").innerHTML = AREAS_LISTA.map(op).join("");
   $("areaBase").innerHTML = AREAS_LISTA.map(op).join("");
-  $("filtroAreaAsis").innerHTML = `<option value="">Todas las áreas</option>` + AREAS_LISTA.map(op).join("");
-  $("filtroAreaEf").innerHTML   = `<option value="">Todas las áreas</option>` + AREAS_LISTA.map(op).join("");
-  $("filtroAreaEfR").innerHTML  = `<option value="">Todas las áreas</option>` + AREAS_LISTA.map(op).join("");
+  $("filtroAreaAsis").innerHTML = todas + AREAS_LISTA.map(op).join("");
+  $("filtroAreaEf").innerHTML   = elige + AREAS_LISTA.map(op).join("");   // Efi. Área: requiere elegir
+  $("filtroAreaEfR").innerHTML  = todas + AREAS_LISTA.map(op).join("");
+  if($("areaTk"))  $("areaTk").innerHTML  = todas + AREAS_LISTA.map(op).join("");
+  if($("areaMod")) $("areaMod").innerHTML = elige + AREAS_LISTA.map(op).join("");
 }
 
 /* Recargar la pestaña activa (botón ↻ del header). */
 function recargarIngenieria(){
   const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),600); }
   const act = id => $(id) && $(id).classList.contains("activa");
-  if(act("pasoEf")){ cargarEf(); if(EFR.personal.length) cargarEfRango(); }
+  if(act("pasoEf")) cargarEf();
+  else if(act("pasoDia")){ if(EFR.personal.length) cargarEfRango(); }
   else if(act("pasoTk")) cargarTk();
   else if(act("pasoMod")) cargarMod();
   else if(act("pasoBases")) cargarBases();
@@ -88,7 +93,8 @@ function censEf(v){ return EF_CENS_ING ? "****" : v; }
 function toggleCensuraEf(){
   EF_CENS_ING = !EF_CENS_ING;
   const b=$("btnCensEf");
-  if(b){ b.textContent = EF_CENS_ING ? "👁 MOSTRAR" : "👁 CENSURAR";
+  if(b){ b.textContent = EF_CENS_ING ? "Mostrar %" : "Censurar %";
+    b.setAttribute("aria-pressed", EF_CENS_ING ? "true" : "false");
     b.classList.toggle("verde", EF_CENS_ING); b.classList.toggle("gris", !EF_CENS_ING); }
   if(EF) pintarEf();
   if(EFR.personal.length) pintarEfRango();
@@ -124,48 +130,33 @@ function ingSupElegirArea(area){
   irA("pasoPersonal");
 }
 
-/* ================= FAB de áreas para EFICIENCIAS ================= */
-function pintarFabAreasEf(){
-  const z=$("fabAreasEf"); if(!z || !EF) return;
-  const areas=(EF.areas||[]).map(a=>a.area).filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),"es"));
-  const cur=$("filtroAreaEf").value;
-  if(!areas.length){ z.innerHTML=""; return; }
-  z.innerHTML = `<div class="fab-area-titulo">ÁREA</div>`
-    + `<button class="fab-area-btn${cur===""?" activo":""}" onclick="filtrarEfArea('')">TODAS</button>`
-    + areas.map(a=>`<button class="fab-area-btn${cur===a?" activo":""}" onclick="filtrarEfArea('${esc(a)}')">${esc(a)}</button>`).join("");
-}
-function filtrarEfArea(a){ $("filtroAreaEf").value=a; pintarEf(); pintarFabAreasEf(); }
-
 /* ================= TICKETS POR MÓDULO ================= */
 let MODTK=[], modArea="";
 async function cargarMod(){
+  modArea = $("areaMod") ? $("areaMod").value : "";
+  if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
+  $("modGate").style.display="none";
   $("zonaModulos").innerHTML=cargandoHTML("Cargando…");
   $("resumenMod").textContent="";
   try{
     MODTK = await rpc("fn_tickets_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:$("fechaMod").value});
-    if(modArea && !MODTK.some(t=>t.area===modArea)) modArea="";
-    pintarFabAreasMod();
     pintarMod();
   }catch(e){ $("zonaModulos").innerHTML=""; mostrarError(e.message); }
 }
-function pintarFabAreasMod(){
-  const z=$("fabAreasMod"); if(!z) return;
-  const areas=[...new Set(MODTK.map(t=>t.area).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"es"));
-  if(!areas.length){ z.innerHTML=""; return; }
-  z.innerHTML = `<div class="fab-area-titulo">ÁREA</div>`
-    + `<button class="fab-area-btn${modArea===""?" activo":""}" onclick="filtrarModArea('')">TODAS</button>`
-    + areas.map(a=>`<button class="fab-area-btn${modArea===a?" activo":""}" onclick="filtrarModArea('${esc(a)}')">${esc(a)}</button>`).join("");
+function filtrarModArea(a){
+  modArea=a;
+  if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
+  cargarMod();
 }
-function filtrarModArea(a){ modArea=a; pintarFabAreasMod(); pintarMod(); }
 function pintarMod(){
-  const q=normKey($("filtroMod").value);
+  const q=normKey($("ofMod") ? $("ofMod").value : "");   // filtro por OF
   const activos = MODTK.filter(t=>t.estado==='ACTIVO' && (!modArea||t.area===modArea));
   // Agrupar: área·módulo -> operación -> dni -> {nombre, tickets[], min}
   const mods={};
   activos.forEach(t=>{
     const mod = norm(t.modulo)||"(sin módulo)";
     const key = t.area+" · "+mod;
-    if(q && !normKey(key+" "+t.nombre+" "+t.of+" "+t.op).includes(q)) return;
+    if(q && !normKey(t.of).includes(q)) return;
     const m = mods[key] = mods[key] || {area:t.area, modulo:mod, ops:{}, total:0, min:0};
     const opName = norm(t.op)||"(sin operación)";
     const op = m.ops[opName] = m.ops[opName] || {total:0, min:0, personas:{}};
@@ -224,13 +215,22 @@ function ordenarEf(col){
 }
 function pintarEf(){
   if(!EF) return;
-  $("efAreas").innerHTML = (EF.areas||[]).map(a=>`
+  const fArea = $("filtroAreaEf").value;
+  // Gating: sin área elegida no se muestran datos.
+  if(!fArea){
+    $("efGate").style.display = "block";
+    $("efContenido").hidden = true;
+    return;
+  }
+  $("efGate").style.display = "none";
+  $("efContenido").hidden = false;
+
+  $("efAreas").innerHTML = (EF.areas||[]).filter(a=>a.area===fArea).map(a=>`
     <div class="kpi"><div class="kpi-num">${censEf(a.eficiencia+"%")}</div>
     <div class="kpi-lbl">${esc(a.area)}<br>${Math.round(a.prod)} / ${Math.round(a.disp)} min</div></div>`).join("")
-    || '<div class="vacio-msg">Sin datos ese día</div>';
+    || '<div class="vacio-msg">Sin datos ese día para esta área</div>';
 
-  const fArea = $("filtroAreaEf").value;
-  let lista = (EF.personas||[]).filter(p=>!fArea || p.area===fArea);
+  let lista = (EF.personas||[]).filter(p=>p.area===fArea);
   const cmp = (a,b)=>{
     if(!efSort.col) return String(a.nombre||"").localeCompare(String(b.nombre||""),"es");
     const va=a[efSort.col], vb=b[efSort.col];
@@ -260,7 +260,6 @@ function pintarEf(){
     });
   }
   $("tablaEf").innerHTML = thead + "<tbody>" + tbody + "</tbody>";
-  pintarFabAreasEf();
 }
 
 /* ================= EFICIENCIA DÍA × DÍA POR RANGO ================= */
@@ -649,35 +648,46 @@ async function cargarTk(){
     TK = await rpc("fn_tickets_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:$("fechaTk").value});
     // Si el área filtrada ya no tiene tickets hoy, vuelve a "todas".
     if(tkArea && !TK.some(t=>t.area===tkArea)) tkArea="";
-    pintarFabAreasTk();
+    poblarAreaTk();
     pintarTk();
     cargarResumenUltimas();   // no bloquea la tabla
   }catch(e){ $("tablaTk").innerHTML=""; mostrarError(e.message); }
 }
 
-/* FAB de áreas: solo las áreas que registraron tickets hoy. */
-function pintarFabAreasTk(){
-  const z=$("fabAreasTk"); if(!z) return;
+/* Select de área: solo las áreas que registraron tickets hoy. */
+function poblarAreaTk(){
+  const s=$("areaTk"); if(!s) return;
   const areas=[...new Set(TK.map(t=>t.area).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"es"));
-  if(!areas.length){ z.innerHTML=""; return; }
-  z.innerHTML = `<div class="fab-area-titulo">ÁREA</div>`
-    + `<button class="fab-area-btn${tkArea===""?" activo":""}" onclick="filtrarTkArea('')">TODAS</button>`
-    + areas.map(a=>`<button class="fab-area-btn${tkArea===a?" activo":""}" onclick="filtrarTkArea('${esc(a)}')">${esc(a)}</button>`).join("");
+  s.innerHTML = `<option value="">Todas las áreas</option>`
+    + areas.map(a=>`<option ${a===tkArea?"selected":""}>${esc(a)}</option>`).join("");
+  s.value = tkArea;
 }
-function filtrarTkArea(a){ tkArea=a; pintarFabAreasTk(); pintarTk(); cargarResumenUltimas(); }
+function filtrarTkArea(a){ tkArea=a; pintarTk(); cargarResumenUltimas(); }
 
 /* Liberar en lote: alterna el modo de selección con checkboxes. */
 function toggleModoLiberar(){
   modoLibTk=!modoLibTk; libSel={};
-  const bm=$("btnModoLiberar"), bs=$("btnLiberarSel");
-  if(bm){ bm.textContent = modoLibTk ? "CANCELAR LOTE" : "LIBERAR EN LOTE"; bm.classList.toggle("gris",modoLibTk); }
-  if(bs) bs.style.display = modoLibTk ? "inline-block" : "none";
+  const bm=$("btnModoLiberar"), bs=$("btnLiberarSel"), bv=$("btnMarcarVisibles");
+  if(bm){ bm.textContent = modoLibTk ? "Cancelar lote" : "Liberar en lote"; bm.classList.toggle("gris",modoLibTk); }
+  if(bs){ bs.style.display = modoLibTk ? "inline-block" : "none"; bs.textContent="Liberar selección (0)"; }
+  if(bv) bv.style.display = modoLibTk ? "inline-block" : "none";
   pintarTk();
 }
 function toggleLibSel(codigo){
   if(libSel[codigo]) delete libSel[codigo]; else libSel[codigo]=true;
-  const n=Object.keys(libSel).length;
-  const bs=$("btnLiberarSel"); if(bs) bs.textContent=`LIBERAR SELECCIONADOS (${n})`;
+  actualizarLibSel();
+}
+function actualizarLibSel(){
+  const bs=$("btnLiberarSel"); if(bs) bs.textContent=`Liberar selección (${Object.keys(libSel).length})`;
+}
+/* Marcar todos los tickets ACTIVOS visibles (respeta filtro de área/búsqueda). */
+function marcarVisiblesLib(){
+  const todos = TK_VISTA.filter(t=>t.estado==='ACTIVO');
+  const faltan = todos.some(t=>!libSel[t.codigo]);
+  if(faltan) todos.forEach(t=>{ libSel[t.codigo]=true; });   // marca todos
+  else todos.forEach(t=>{ delete libSel[t.codigo]; });        // si ya estaban todos, desmarca
+  actualizarLibSel();
+  pintarTk();
 }
 async function liberarLote(){
   const codigos=Object.keys(libSel);

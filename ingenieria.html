@@ -6,6 +6,9 @@
 <meta name="theme-color" content="#0D3B85">
 <link rel="manifest" href="manifest.json">
 <title>Samitex — Ingeniería</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
 </head>
@@ -24,15 +27,20 @@
 <div class="ing-shell">
   <!-- ===== SIDEBAR (solo PC) ===== -->
   <aside class="ing-sidebar">
-    <nav class="ing-nav">
-      <button class="nav-item activo" data-tab="pasoEf"><span>📊</span> Eficiencias</button>
-      <button class="nav-item" data-tab="pasoTk"><span>🎫</span> Tickets del día</button>
-      <button class="nav-item" data-tab="pasoMod"><span>🧵</span> Por módulo</button>
-      <button class="nav-item" data-tab="pasoBases"><span>📐</span> Bases</button>
-      <button class="nav-item" data-tab="pasoAsis"><span>🗓️</span> Asistencia</button>
-      <button class="nav-item" data-tab="pasoIncid"><span>⏱️</span> Incidencias</button>
-      <div class="nav-sep">Supervisión</div>
-      <button class="nav-item" data-tab="pasoSupArea"><span>👥</span> Operar como supervisora</button>
+    <nav class="ing-nav" aria-label="Secciones de ingeniería">
+      <div class="nav-sep">Tickets</div>
+      <button class="nav-item activo" data-tab="pasoTk">Actual</button>
+      <button class="nav-item" data-tab="pasoMod">Por módulo</button>
+      <div class="nav-sep">Eficiencia</div>
+      <button class="nav-item" data-tab="pasoEf">Por área</button>
+      <button class="nav-item" data-tab="pasoDia">Por día</button>
+      <div class="nav-sep">Gestión</div>
+      <button class="nav-item" data-tab="pasoBases">Bases</button>
+      <button class="nav-item" data-tab="pasoAsis">Asistencia</button>
+      <button class="nav-item" data-tab="pasoIncid">Incidencias</button>
+      <div class="nav-sep">Operar como</div>
+      <button class="nav-item" data-tab="pasoSupArea">Supervisora</button>
+      <button class="nav-item" data-tab="pasoOpArea">Operario</button>
     </nav>
   </aside>
 
@@ -49,68 +57,95 @@
       <button id="tabIncidencias" class="tab">INCIDENCIAS</button>
     </div>
 
-    <!-- ===================== EFICIENCIAS ===================== -->
-    <section class="pantalla activa" id="pasoEf">
-      <div class="fila-filtros">
-        <input type="date" id="fechaEf" onchange="cargarEf()">
-        <select id="filtroAreaEf"></select>
-        <button class="btn-mini gris" id="btnCensEf" onclick="toggleCensuraEf()">👁 CENSURAR</button>
+    <!-- ===================== EFICIENCIA POR ÁREA ===================== -->
+    <section class="pantalla" id="pasoEf">
+      <div class="seccion-cab">
+        <h1>Eficiencia por área</h1>
+        <p class="seccion-sub">Elige un área para ver la eficiencia de todo su personal ese día.</p>
       </div>
-      <div class="kpis" id="efAreas"></div>
-      <div class="contenedor-ancho" style="overflow:auto;max-height:60vh;margin-top:14px;">
-        <table class="tabla" id="tablaEf"></table>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span>
+          <select id="filtroAreaEf"></select></label>
+        <label class="campo"><span>Fecha</span>
+          <input type="date" id="fechaEf" onchange="cargarEf()"></label>
+        <button class="btn-mini" onclick="cargarEf()">Cargar</button>
+        <button class="btn-mini gris" id="btnCensEf" onclick="toggleCensuraEf()" aria-pressed="false">Censurar %</button>
       </div>
-
-      <h1 style="margin-top:26px;">Eficiencia día × día</h1>
-      <div class="fila-filtros">
-        <input type="text" id="rangoEf" placeholder="Selecciona rango de fechas" readonly
-               style="min-width:240px;cursor:pointer;">
-        <select id="filtroAreaEfR"></select>
-        <input type="text" id="filtroNomEfR" placeholder="Buscar por nombre…">
-        <button class="btn-mini" onclick="cargarEfRango()">↻ CARGAR</button>
+      <div id="efGate" class="estado-vacio">Selecciona un área para mostrar su eficiencia.</div>
+      <div id="efContenido" hidden>
+        <div class="kpis" id="efAreas"></div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;margin-top:14px;">
+          <table class="tabla" id="tablaEf"></table>
+        </div>
       </div>
-      <div class="fila-acciones-der">
-        <span class="sub" id="resumenEfR" style="margin:0;"></span>
-        <button class="btn-mini verde" onclick="descargarEfRango()">⬇ DESCARGAR XLSX</button>
-      </div>
-      <div class="contenedor-ancho" style="overflow:auto;max-height:65vh;">
-        <table class="tabla-asis-mes" id="tablaEfR"></table>
-      </div>
-
-      <!-- FAB de áreas para eficiencias -->
-      <div class="fab-areas" id="fabAreasEf"></div>
     </section>
 
-    <!-- ===================== TICKETS DEL DÍA ===================== -->
-    <section class="pantalla" id="pasoTk">
-      <div class="fila-filtros">
-        <input type="date" id="fechaTk" onchange="cargarTk()">
-        <input type="text" id="filtroTk" placeholder="Buscar nombre / OF / artículo / código…">
-        <button class="btn-mini" onclick="cargarTk()">↻ CARGAR</button>
-        <button class="btn-mini verde" onclick="descargarTk()">DESCARGAR XLSX</button>
-        <button class="btn-mini" id="btnModoLiberar" onclick="toggleModoLiberar()">LIBERAR EN LOTE</button>
-        <button class="btn-mini rojo" id="btnLiberarSel" style="display:none;" onclick="liberarLote()">LIBERAR SELECCIONADOS (0)</button>
+    <!-- ===================== EFICIENCIA POR DÍA ===================== -->
+    <section class="pantalla" id="pasoDia">
+      <div class="seccion-cab">
+        <h1>Eficiencia día × día</h1>
+        <p class="seccion-sub">Rango de fechas por persona. Aparece todo el personal; si un día no estuvo activo, se muestra su estado.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Rango</span>
+          <input type="text" id="rangoEf" placeholder="Selecciona fechas" readonly style="min-width:220px;cursor:pointer;"></label>
+        <label class="campo"><span>Área</span>
+          <select id="filtroAreaEfR"></select></label>
+        <label class="campo"><span>Buscar</span>
+          <input type="text" id="filtroNomEfR" placeholder="Nombre…"></label>
+        <button class="btn-mini" onclick="cargarEfRango()">Cargar</button>
+        <button class="btn-mini verde" onclick="descargarEfRango()">Descargar XLSX</button>
+      </div>
+      <div class="sub" id="resumenEfR"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:70vh;">
+        <table class="tabla-asis-mes" id="tablaEfR"></table>
+      </div>
+    </section>
+
+    <!-- ===================== TICKETS · ACTUAL ===================== -->
+    <section class="pantalla activa" id="pasoTk">
+      <div class="seccion-cab">
+        <h1>Tickets reclamados hoy</h1>
+        <p class="seccion-sub">Registro del día por persona, con última y penúltima operación.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Fecha</span>
+          <input type="date" id="fechaTk" onchange="cargarTk()"></label>
+        <label class="campo"><span>Área</span>
+          <select id="areaTk" onchange="filtrarTkArea(this.value)"></select></label>
+        <label class="campo"><span>Buscar</span>
+          <input type="text" id="filtroTk" placeholder="Nombre / OF / artículo / código…"></label>
+        <button class="btn-mini" onclick="cargarTk()">Cargar</button>
+        <button class="btn-mini verde" onclick="descargarTk()">Descargar XLSX</button>
+        <button class="btn-mini" id="btnModoLiberar" onclick="toggleModoLiberar()">Liberar en lote</button>
+        <button class="btn-mini gris" id="btnMarcarVisibles" style="display:none;" onclick="marcarVisiblesLib()">Marcar visibles</button>
+        <button class="btn-mini rojo" id="btnLiberarSel" style="display:none;" onclick="liberarLote()">Liberar selección (0)</button>
       </div>
       <div class="sub" id="resumenTk"></div>
       <div class="kpis" id="resumenUltimas" style="margin-bottom:14px;"></div>
-      <div class="contenedor-ancho" style="overflow:auto;max-height:70vh;">
+      <div class="contenedor-ancho tabla-scroll" style="max-height:66vh;">
         <table class="tabla" id="tablaTk"></table>
       </div>
-      <div class="fab-areas" id="fabAreasTk"></div>
     </section>
 
     <!-- ===================== POR MÓDULO ===================== -->
     <section class="pantalla" id="pasoMod">
-      <h1>Tickets por módulo</h1>
-      <div class="sub">Personal trabajando en cada módulo y sus tickets reclamados hoy</div>
-      <div class="fila-filtros">
-        <input type="date" id="fechaMod" onchange="cargarMod()">
-        <input type="text" id="filtroMod" placeholder="Buscar módulo / nombre / OF…" oninput="pintarMod()">
-        <button class="btn-mini" onclick="cargarMod()">↻ CARGAR</button>
+      <div class="seccion-cab">
+        <h1>Tickets por módulo</h1>
+        <p class="seccion-sub">Elige área y OF para ver el avance por módulo y quién trabajó en cada operación.</p>
       </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span>
+          <select id="areaMod" onchange="filtrarModArea(this.value)"></select></label>
+        <label class="campo"><span>OF</span>
+          <input type="text" id="ofMod" placeholder="Todas las OF…" oninput="pintarMod()"></label>
+        <label class="campo"><span>Fecha</span>
+          <input type="date" id="fechaMod" onchange="cargarMod()"></label>
+        <button class="btn-mini" onclick="cargarMod()">Cargar</button>
+      </div>
+      <div id="modGate" class="estado-vacio">Selecciona un área para mostrar sus módulos.</div>
       <div class="sub" id="resumenMod"></div>
       <div id="zonaModulos" class="mod-grid"></div>
-      <div class="fab-areas" id="fabAreasMod"></div>
     </section>
 
     <!-- ===================== BASES ===================== -->
@@ -185,9 +220,20 @@
 
     <!-- ===================== SUPERVISIÓN: elegir área ===================== -->
     <section class="pantalla" id="pasoSupArea">
-      <h1>Operar como supervisora</h1>
-      <div class="sub">Elige el área que quieres supervisar</div>
+      <div class="seccion-cab">
+        <h1>Operar como supervisora</h1>
+        <p class="seccion-sub">Elige el área que quieres supervisar.</p>
+      </div>
       <div class="grid-areas" id="gridSupAreas"></div>
+    </section>
+
+    <!-- ===================== OPERAR COMO OPERARIO (shell — Fase 3) ===================== -->
+    <section class="pantalla" id="pasoOpArea">
+      <div class="seccion-cab">
+        <h1>Operar como operario</h1>
+        <p class="seccion-sub">Con permiso verbal del operario, ayúdale a reclamar sus tickets. Selecciona su área y escribe (o pega) su DNI y PIN.</p>
+      </div>
+      <div class="estado-vacio">Disponible en la siguiente fase. Aquí el ingeniero elegirá al operario por área e ingresará su DNI/PIN para entrar a su flujo de reclamo.</div>
     </section>
 
     <!-- ====== SUPERVISIÓN: pantallas reutilizadas de la supervisora ====== -->
@@ -198,12 +244,12 @@
         <input class="input-grande" id="filtroNombre" placeholder="Buscar por nombre…"
                autocomplete="off" style="font-size:22px;letter-spacing:normal;text-align:left;">
       </div>
-      <div class="grid-personal" id="gridPersonal"></div>
-      <div class="fab-acciones">
-        <button class="fab-btn enlace" onclick="ocurrenciaGrupal()">OCURRENCIA GRUPAL</button>
-        <button class="fab-btn azul" onclick="moverAreaInicio()">CAMBIAR ÁREA</button>
-        <button class="fab-btn alerta" onclick="marcarFaltantesInicio()">MARCAR FALTANTES</button>
+      <div class="acc-toolbar">
+        <button class="btn-accion enlace" onclick="ocurrenciaGrupal()">Ocurrencia grupal</button>
+        <button class="btn-accion azul" onclick="moverAreaInicio()">Cambiar área</button>
+        <button class="btn-accion alerta" onclick="marcarFaltantesInicio()">Marcar faltantes</button>
       </div>
+      <div class="grid-personal" id="gridPersonal"></div>
     </section>
 
     <section class="pantalla" id="pasoAlcance">
