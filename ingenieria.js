@@ -33,6 +33,9 @@ document.addEventListener("DOMContentLoaded", async ()=>{
       if(tab==='pasoIncid') cargarIncidI();
       else if(tab==='pasoTk') cargarTk();
       else if(tab==='pasoMod') cargarMod();
+      else if(tab==='pasoOpArea') cargarOpArea();
+      else if(tab==='pasoFechas') initFechas();
+      else if(tab==='pasoTkPer') initTkPer();
     };
   });
 
@@ -47,48 +50,59 @@ document.addEventListener("DOMContentLoaded", async ()=>{
 
   $("filtroNomAsis").addEventListener("input", pintarAsisMes);
   $("filtroAreaAsis").addEventListener("change", cargarAsisMes);
-  $("filtroAreaEf").addEventListener("change", pintarEf);
+  $("filtroAreaEf").addEventListener("change", ()=>{ if(EF) pintarEf(); else cargarEf(); });
   $("filtroNomEfR").addEventListener("input", ()=>{ if(EFR.personal.length) pintarEfRango(); });
   flatpickr("#rangoEf", {mode:"range", dateFormat:"Y-m-d", locale:{rangeSeparator:" a "},
     onChange:(dates)=>{
-      if(dates.length===2){
+      // Permite elegir solo la fecha de inicio: el fin toma HOY por defecto.
+      if(dates.length>=1){
         efRangoSel.desde = dates[0].toLocaleDateString("sv-SE");
-        efRangoSel.hasta = dates[1].toLocaleDateString("sv-SE");
+        efRangoSel.hasta = (dates[1] ? dates[1] : new Date()).toLocaleDateString("sv-SE");
       }
     }});
   $("filtroTk").addEventListener("input", pintarTk);
-  cargarEf();
+  cargarTk();            // landing por defecto: Tickets · Actual
   cargarEstadosAsis();
   cargarAsisMes();
 });
 
 function poblarSelectsArea(){
   const op = a=>`<option>${esc(a)}</option>`;
+  const elige = `<option value="">— Elige área —</option>`;
+  const todas = `<option value="">Todas las áreas</option>`;
   $("selArea").innerHTML = AREAS_LISTA.map(op).join("");
   $("areaBase").innerHTML = AREAS_LISTA.map(op).join("");
-  $("filtroAreaAsis").innerHTML = `<option value="">Todas las áreas</option>` + AREAS_LISTA.map(op).join("");
-  $("filtroAreaEf").innerHTML   = `<option value="">Todas las áreas</option>` + AREAS_LISTA.map(op).join("");
-  $("filtroAreaEfR").innerHTML  = `<option value="">Todas las áreas</option>` + AREAS_LISTA.map(op).join("");
+  $("filtroAreaAsis").innerHTML = todas + AREAS_LISTA.map(op).join("");
+  $("filtroAreaEf").innerHTML   = elige + AREAS_LISTA.map(op).join("");   // Efi. Área: requiere elegir
+  $("filtroAreaEfR").innerHTML  = todas + AREAS_LISTA.map(op).join("");
+  if($("areaTk"))  $("areaTk").innerHTML  = todas + AREAS_LISTA.map(op).join("");
+  if($("areaMod")) $("areaMod").innerHTML = elige + AREAS_LISTA.map(op).join("");
+  if($("areaOp"))  $("areaOp").innerHTML  = elige + AREAS_LISTA.map(op).join("");
+  if($("areaFec")) $("areaFec").innerHTML = elige + AREAS_LISTA.map(op).join("");
+  if($("areaTkPer")) $("areaTkPer").innerHTML = elige + AREAS_LISTA.map(op).join("");
 }
 
 /* Recargar la pestaña activa (botón ↻ del header). */
 function recargarIngenieria(){
   const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),600); }
   const act = id => $(id) && $(id).classList.contains("activa");
-  if(act("pasoEf")){ cargarEf(); if(EFR.personal.length) cargarEfRango(); }
+  if(act("pasoEf")) cargarEf();
+  else if(act("pasoDia")){ if(EFR.personal.length) cargarEfRango(); }
   else if(act("pasoTk")) cargarTk();
+  else if(act("pasoTkPer")){ if($("areaTkPer").value) cargarTkPer(); }
   else if(act("pasoMod")) cargarMod();
   else if(act("pasoBases")) cargarBases();
   else if(act("pasoAsis")) cargarAsisMes();
   else if(act("pasoIncid")) cargarIncidI();
-  else if(act("pasoPersonal")||act("pasoAvance")||act("pasoIncidencias")) recargarSupervisora();
+  else if(act("pasoPersonal")||act("pasoAvance")||act("pasoIncidencias")||act("pasoEfPersonal")) recargarSupervisora();
 }
 /* Censura de eficiencia: reemplaza los % por **** en toda la pestaña. */
 function censEf(v){ return EF_CENS_ING ? "****" : v; }
 function toggleCensuraEf(){
   EF_CENS_ING = !EF_CENS_ING;
   const b=$("btnCensEf");
-  if(b){ b.textContent = EF_CENS_ING ? "👁 MOSTRAR" : "👁 CENSURAR";
+  if(b){ b.textContent = EF_CENS_ING ? "Mostrar %" : "Censurar %";
+    b.setAttribute("aria-pressed", EF_CENS_ING ? "true" : "false");
     b.classList.toggle("verde", EF_CENS_ING); b.classList.toggle("gris", !EF_CENS_ING); }
   if(EF) pintarEf();
   if(EFR.personal.length) pintarEfRango();
@@ -124,80 +138,318 @@ function ingSupElegirArea(area){
   irA("pasoPersonal");
 }
 
-/* ================= FAB de áreas para EFICIENCIAS ================= */
-function pintarFabAreasEf(){
-  const z=$("fabAreasEf"); if(!z || !EF) return;
-  const areas=(EF.areas||[]).map(a=>a.area).filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),"es"));
-  const cur=$("filtroAreaEf").value;
-  if(!areas.length){ z.innerHTML=""; return; }
-  z.innerHTML = `<div class="fab-area-titulo">ÁREA</div>`
-    + `<button class="fab-area-btn${cur===""?" activo":""}" onclick="filtrarEfArea('')">TODAS</button>`
-    + areas.map(a=>`<button class="fab-area-btn${cur===a?" activo":""}" onclick="filtrarEfArea('${esc(a)}')">${esc(a)}</button>`).join("");
+/* ================= TICKETS POR PERSONAL (rango + Excel) ================= */
+let TKPER=[];
+function initTkPer(){
+  { const d=$("desdeTkPer"); if(d && !d.value) d.value=hoyISO(); }
+  { const h=$("hastaTkPer"); if(h && !h.value) h.value=hoyISO(); }
+  $("opTkPer").innerHTML = `<option value="">— Toda el área —</option>`;
 }
-function filtrarEfArea(a){ $("filtroAreaEf").value=a; pintarEf(); pintarFabAreasEf(); }
+async function cargarTkPerArea(){
+  const area=$("areaTkPer").value; const s=$("opTkPer");
+  if(!area){ s.innerHTML=`<option value="">— Elige área —</option>`; return; }
+  s.innerHTML=`<option value="">Cargando…</option>`;
+  try{
+    const per=await rpc("fn_personal",{p_dni:ING.dni,p_token:ING.token,p_area:area});
+    s.innerHTML=`<option value="">— Toda el área —</option>`
+      + per.map(p=>`<option value="${esc(p.dni)}">${esc(soloApellidos(p.nombre))} · ${esc(p.dni)}</option>`).join("");
+  }catch(e){ s.innerHTML=`<option value="">Error</option>`; mostrarError(e.message); }
+}
+async function cargarTkPer(){
+  const area=$("areaTkPer").value;
+  if(!area){ mostrarError("Elige un área"); return; }
+  const desde=$("desdeTkPer").value, hasta=$("hastaTkPer").value;
+  if(!desde || !hasta){ mostrarError("Elige el rango de fechas"); return; }
+  if(hasta<desde){ mostrarError("La fecha final no puede ser menor a la inicial"); return; }
+  $("tkPerGate").style.display="none";
+  $("tablaTkPer").innerHTML=cargandoHTML("Cargando…");
+  try{
+    const r=await rpc("fn_tickets_rango",{p_dni:ING.dni,p_token:ING.token,
+      p_area:area,p_dni_op:$("opTkPer").value,p_desde:desde,p_hasta:hasta});
+    TKPER = Array.isArray(r) ? r : [];
+    if(r && r.ok===false){ mostrarError(r.error||"Error"); TKPER=[]; }
+    pintarTkPer();
+  }catch(e){ $("tablaTkPer").innerHTML=""; mostrarError(e.message); }
+}
+function pintarTkPer(){
+  const min=TKPER.reduce((a,t)=>a+(t.estado==='ACTIVO'?Number(t.minutos):0),0);
+  $("resumenTkPer").textContent=`${TKPER.length} tickets · ${Math.round(min)} min activos`;
+  if(!TKPER.length){ $("tablaTkPer").innerHTML=`<div class="vacio-msg">Sin tickets en ese rango</div>`; return; }
+  const cols=["Fecha","Hora","Nombre","Área","Artículo","OF","Operación","STD","Cant","Min gen.","Numeración","Estado"];
+  const thead="<thead><tr>"+cols.map(c=>`<th>${c}</th>`).join("")+"</tr></thead>";
+  $("tablaTkPer").innerHTML = thead+"<tbody>"+TKPER.map(t=>`<tr>
+    <td>${esc(t.fecha)}</td><td>${esc(t.hora)}</td><td>${esc(t.nombre)}</td><td>${esc(t.area)}</td>
+    <td>${esc(t.articulo)}</td><td>${esc(t.of)}</td><td class="izq">${esc(t.op)}</td>
+    <td>${t.std!=null?t.std:""}</td><td>${t.cant}</td><td>${t.minutos}</td><td>${esc(t.num)}</td>
+    <td><span class="pill ${esc(t.estado)}">${esc(t.estado)}</span></td></tr>`).join("")+"</tbody>";
+}
+function descargarTkPer(){
+  if(!TKPER.length){ mostrarError("Carga primero un rango"); return; }
+  const CAB=["Fecha","Hora","DNI","Nombre","Área","Artículo","OF","Operación","STD","Cant","Min generado","Numeración","Código","Estado"];
+  const filas=TKPER.map(t=>[t.fecha,t.hora,t.dni,t.nombre,t.area,t.articulo,t.of,t.op,t.std,t.cant,t.minutos,t.num,t.codigo,t.estado]);
+  const ws=XLSX.utils.aoa_to_sheet([CAB,...filas]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "TicketsPersonal");
+  const suf=$("opTkPer").value || $("areaTkPer").value.replace(/ /g,"_");
+  XLSX.writeFile(wb, `TICKETS_${suf}_${$("desdeTkPer").value}_a_${$("hastaTkPer").value}.xlsx`);
+}
 
-/* ================= TICKETS POR MÓDULO ================= */
-let MODTK=[], modArea="";
+/* ================= CORREGIR FECHAS DE RECLAMO ================= */
+let FEC_RECL=[], FEC_SEL={}, FEC_MOTIVOS=[];
+async function initFechas(){
+  { const f=$("fechaFec"); if(f && !f.value) f.value=hoyISO(); }
+  { const f=$("fechaNuevaFec"); if(f && !f.value) f.value=hoyISO(); }
+  $("opFec").innerHTML = `<option value="">— Elige área primero —</option>`;
+  $("fecContenido").hidden = true; $("fecGate").style.display="block";
+  try{ FEC_MOTIVOS = await rpc("fn_motivos_fecha_listar",{p_dni:ING.dni,p_token:ING.token}); }
+  catch(e){ FEC_MOTIVOS=[]; }
+  pintarMotivosFec();
+}
+function pintarMotivosFec(){
+  const s=$("motivoFec"); if(!s) return;
+  s.innerHTML = `<option value="">— Elige motivo —</option>`
+    + (FEC_MOTIVOS||[]).map(m=>`<option>${esc(m)}</option>`).join("")
+    + `<option value="__OTRO__">OTRO (escribir)…</option>`;
+}
+function motivoFecCambio(){
+  const otro = $("motivoFec").value==="__OTRO__";
+  $("motivoOtroWrap").style.display = otro ? "flex" : "none";
+}
+async function cargarFecArea(){
+  const area=$("areaFec").value;
+  const s=$("opFec");
+  if(!area){ s.innerHTML=`<option value="">— Elige área primero —</option>`; return; }
+  s.innerHTML=`<option value="">Cargando…</option>`;
+  try{
+    const per = await rpc("fn_personal",{p_dni:ING.dni,p_token:ING.token,p_area:area});
+    s.innerHTML = `<option value="">— Elige operario —</option>`
+      + per.map(p=>`<option value="${esc(p.dni)}">${esc(soloApellidos(p.nombre))} · ${esc(p.dni)}</option>`).join("");
+  }catch(e){ s.innerHTML=`<option value="">Error</option>`; mostrarError(e.message); }
+}
+async function cargarReclamosFec(){
+  const dniOp=$("opFec").value, fecha=$("fechaFec").value;
+  if(!dniOp){ mostrarError("Elige un operario"); return; }
+  if(!fecha){ mostrarError("Elige la fecha actual de los tickets"); return; }
+  $("fecGate").style.display="none"; $("fecContenido").hidden=false;
+  $("tablaFec").innerHTML=cargandoHTML("Cargando tickets…");
+  FEC_SEL={};
+  try{
+    FEC_RECL = await rpc("fn_reclamos_operario",{p_dni:ING.dni,p_token:ING.token,p_dni_op:dniOp,p_fecha:fecha});
+    if(FEC_RECL && FEC_RECL.ok===false){ mostrarError(FEC_RECL.error||"Error"); FEC_RECL=[]; }
+    pintarReclamosFec();
+  }catch(e){ $("tablaFec").innerHTML=""; mostrarError(e.message); }
+}
+function pintarReclamosFec(){
+  const lista = Array.isArray(FEC_RECL) ? FEC_RECL : [];
+  $("resumenFec").textContent = `${lista.length} ticket(s) en esa fecha · ${Object.keys(FEC_SEL).length} seleccionado(s)`;
+  if(!lista.length){ $("tablaFec").innerHTML=`<div class="vacio-msg">Ese operario no tiene tickets esa fecha</div>`; return; }
+  const thead=`<thead><tr><th></th><th>OF</th><th class="izq">Operación</th><th>Artículo</th><th>Num.</th><th>Cant</th><th>Min</th><th>Estado</th></tr></thead>`;
+  $("tablaFec").innerHTML = thead + "<tbody>" + lista.map(r=>`<tr>
+    <td><input type="checkbox" class="chk-lib" ${FEC_SEL[r.id]?"checked":""} onclick="toggleFecSel(${r.id})"></td>
+    <td>${esc(r.of)}</td><td class="izq">${esc(r.op)}</td><td>${esc(r.articulo)}</td>
+    <td>${esc(r.num)}</td><td>${r.cant}</td><td>${r.minutos}</td>
+    <td><span class="pill ${esc(r.estado)}">${esc(r.estado)}</span></td></tr>`).join("") + "</tbody>";
+}
+function toggleFecSel(id){ if(FEC_SEL[id]) delete FEC_SEL[id]; else FEC_SEL[id]=true; pintarReclamosFec(); }
+function marcarTodosFec(){
+  const lista = Array.isArray(FEC_RECL) ? FEC_RECL : [];
+  const faltan = lista.some(r=>!FEC_SEL[r.id]);
+  FEC_SEL={};
+  if(faltan) lista.forEach(r=>{ FEC_SEL[r.id]=true; });
+  pintarReclamosFec();
+}
+async function aplicarCambioFec(){
+  const ids = Object.keys(FEC_SEL).map(Number);
+  if(!ids.length){ mostrarError("Marca al menos un ticket"); return; }
+  const nueva = $("fechaNuevaFec").value;
+  if(!nueva){ mostrarError("Elige la nueva fecha"); return; }
+  let motivo = $("motivoFec").value;
+  if(motivo==="__OTRO__") motivo = $("motivoOtroFec").value.trim();
+  if(!motivo){ mostrarError("Indica el motivo"); return; }
+  if(!confirm(`¿Mover ${ids.length} ticket(s) a ${nueva}?\nMotivo: ${motivo.toUpperCase()}`)) return;
+  try{
+    const r = await rpc("fn_reclamos_cambiar_fecha",{p_dni:ING.dni,p_token:ING.token,
+      p_ids:ids, p_fecha:nueva, p_motivo:motivo});
+    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+    mostrarOk(`${r.cambiados} ticket(s) movidos a ${nueva}`);
+    FEC_MOTIVOS = await rpc("fn_motivos_fecha_listar",{p_dni:ING.dni,p_token:ING.token}).catch(()=>FEC_MOTIVOS);
+    pintarMotivosFec();
+    await cargarReclamosFec();
+  }catch(e){ mostrarError(e.message); }
+}
+
+/* ================= OPERAR COMO OPERARIO ================= */
+let OP_PERSONAL=[];
+async function cargarOpArea(){
+  const area = $("areaOp") ? $("areaOp").value : "";
+  const g=$("gridOpArea");
+  if(!area){ $("opGate").style.display="block"; if(g) g.innerHTML=""; OP_PERSONAL=[]; return; }
+  $("opGate").style.display="none";
+  if(g) g.innerHTML=cargandoHTML("Cargando personal…");
+  try{
+    OP_PERSONAL = await rpc("fn_personal",{p_dni:ING.dni,p_token:ING.token,p_area:area});
+    pintarOpArea();
+  }catch(e){ if(g) g.innerHTML=""; mostrarError(e.message); }
+}
+function pintarOpArea(){
+  const g=$("gridOpArea"); if(!g) return;
+  const q=normKey($("filtroOp") ? $("filtroOp").value : "");
+  const lista = OP_PERSONAL.filter(p=>!q || normKey(p.nombre).includes(q));
+  if(!lista.length){ g.innerHTML=`<div class="vacio-msg">Sin personal para este filtro</div>`; return; }
+  g.innerHTML="";
+  lista.forEach(p=>{
+    const c=document.createElement("div");
+    c.className="card-persona";
+    c.setAttribute("role","button"); c.setAttribute("tabindex","0");
+    c.innerHTML=`<div><div class="cp-nombre">${esc(soloApellidos(p.nombre))}</div>
+      <div class="cp-dni">DNI ${esc(p.dni)}</div></div><div class="cp-disp">${p.disp} min</div>`;
+    const abrir=()=>opPinModal(p.dni, p.nombre);
+    c.onclick=abrir;
+    c.onkeydown=(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); abrir(); } };
+    g.appendChild(c);
+  });
+}
+function opPinModal(dni, nombre){
+  abrirModal(`
+    <h2>Entrar como ${esc(soloApellidos(nombre))}</h2>
+    <div class="sub" style="margin-bottom:12px;">Con permiso del operario. Verifica su DNI e ingresa su PIN.</div>
+    <div class="modal-campo"><label>DNI</label>
+      <input id="opDni" value="${esc(dni)}" inputmode="numeric" maxlength="15" autocomplete="off"></div>
+    <div class="modal-campo"><label>PIN (4 dígitos)</label>
+      <input id="opPin" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••"></div>
+    <div class="modal-msg" id="opMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="opEntrar()">ENTRAR AL FLUJO</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+  setTimeout(()=>{ const el=$("opPin"); if(el) el.focus(); }, 50);
+}
+async function opEntrar(){
+  const dni=($("opDni").value||"").trim();
+  const pin=($("opPin").value||"").trim();
+  const msg=$("opMsg");
+  if(!dni || !/^\d{4}$/.test(pin)){ msg.textContent="Ingresa DNI y PIN de 4 dígitos"; return; }
+  try{
+    const r=await rpc("fn_login",{p_dni:dni,p_pin:pin});
+    if(!r.ok){ msg.textContent=r.error||"DNI o PIN incorrectos"; return; }
+    if(r.cargo!=="OPERARIO" && r.cargo!=="ESTAJERO"){ msg.textContent="Ese usuario no es operario"; return; }
+    // Reutiliza el flujo de operario tal cual: guarda la sesión del operario y entra.
+    guardarSesion({dni:r.dni, nombre:r.nombre, cargo:r.cargo, token:r.token,
+      area:(r.cargo==="ESTAJERO"? null : (r.area_actual||null))});
+    location.href="operario.html";
+  }catch(e){ msg.textContent=e.message; }
+}
+
+/* ================= TICKETS POR MÓDULO (% de avance) =================
+   Avance del módulo = unidades que pasaron su ÚLTIMA operación (mayor N°OP
+   por artículo+módulo en BASE) / meta de la OF (hoja "OF", col CANT PROG).
+   No se muestra numeración: se muestra la CANTIDAD. */
+let MODTK=[], modArea="", MOD_META={};
 async function cargarMod(){
+  modArea = $("areaMod") ? $("areaMod").value : "";
+  if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
+  $("modGate").style.display="none";
   $("zonaModulos").innerHTML=cargandoHTML("Cargando…");
   $("resumenMod").textContent="";
   try{
-    MODTK = await rpc("fn_tickets_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:$("fechaMod").value});
-    if(modArea && !MODTK.some(t=>t.area===modArea)) modArea="";
-    pintarFabAreasMod();
+    // Acumulativo: todos los tickets del área HASTA la fecha indicada.
+    MODTK = await rpc("fn_tickets_rango",{p_dni:ING.dni,p_token:ING.token,
+      p_area:modArea, p_dni_op:"", p_desde:null, p_hasta:$("fechaMod").value});
+    if(MODTK && MODTK.ok===false){ mostrarError(MODTK.error||"Error"); MODTK=[]; }
+    if(!BASES_CACHE[modArea]){
+      try{ BASES_CACHE[modArea] = await rpc("fn_bases_listar",{p_dni:ING.dni,p_token:ING.token,p_area:modArea}); }
+      catch(e){ BASES_CACHE[modArea]=[]; }
+    }
+    try{ MOD_META = await cargarMetaOF(modArea); }catch(e){ MOD_META={}; }
     pintarMod();
   }catch(e){ $("zonaModulos").innerHTML=""; mostrarError(e.message); }
 }
-function pintarFabAreasMod(){
-  const z=$("fabAreasMod"); if(!z) return;
-  const areas=[...new Set(MODTK.map(t=>t.area).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"es"));
-  if(!areas.length){ z.innerHTML=""; return; }
-  z.innerHTML = `<div class="fab-area-titulo">ÁREA</div>`
-    + `<button class="fab-area-btn${modArea===""?" activo":""}" onclick="filtrarModArea('')">TODAS</button>`
-    + areas.map(a=>`<button class="fab-area-btn${modArea===a?" activo":""}" onclick="filtrarModArea('${esc(a)}')">${esc(a)}</button>`).join("");
+function filtrarModArea(a){
+  modArea=a;
+  if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
+  cargarMod();
 }
-function filtrarModArea(a){ modArea=a; pintarFabAreasMod(); pintarMod(); }
+/* Lee la hoja OF (meta por OF). Devuelve { OF(normalizada): cantidadMeta }. */
+async function cargarMetaOF(area){
+  const cfg = AREAS[area];
+  if(!cfg || !cfg.hojaOF || !cfg.sheetId) return {};
+  const url = `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(cfg.hojaOF)}`;
+  const r = await fetch(url);
+  if(!r.ok) return {};
+  const filas = parseCSV(await r.text());
+  if(filas.length<2) return {};
+  let iOf=-1, iCant=-1;
+  filas[0].forEach((h,i)=>{ const k=normKey(h);
+    if(k==="OF") iOf=i; if(k==="CANTPROG"||k==="META"||k==="CANTIDAD") iCant=i; });
+  if(iOf<0 || iCant<0) return {};
+  const m={};
+  for(let i=1;i<filas.length;i++){
+    const of=normKey(filas[i][iOf]); if(!of) continue;
+    m[of]=parseFloat(String(filas[i][iCant]).replace(/[^\d.]/g,""))||0;
+  }
+  return m;
+}
+/* Mayor N°OP (última operación) por artículo+módulo, desde BASE del área. */
+function ultimaOpModulo(area, articulo, modulo){
+  const ka=normKey(articulo), km=normKey(modulo); let mx=null;
+  (BASES_CACHE[area]||[]).forEach(b=>{
+    if(normKey(b.articulo)===ka && normKey(b.modulo)===km){
+      const n=Number(b.n_op); if(!isNaN(n) && (mx===null || n>mx)) mx=n;
+    }
+  });
+  return mx;
+}
 function pintarMod(){
-  const q=normKey($("filtroMod").value);
-  const activos = MODTK.filter(t=>t.estado==='ACTIVO' && (!modArea||t.area===modArea));
-  // Agrupar: área·módulo -> operación -> dni -> {nombre, tickets[], min}
-  const mods={};
+  const q=normKey($("ofMod") ? $("ofMod").value : "");   // filtro por OF
+  const activos = MODTK.filter(t=>t.estado==='ACTIVO' && t.area===modArea && (!q || normKey(t.of).includes(q)));
+  // Agrupar por OF · módulo
+  const grp={};
   activos.forEach(t=>{
     const mod = norm(t.modulo)||"(sin módulo)";
-    const key = t.area+" · "+mod;
-    if(q && !normKey(key+" "+t.nombre+" "+t.of+" "+t.op).includes(q)) return;
-    const m = mods[key] = mods[key] || {area:t.area, modulo:mod, ops:{}, total:0, min:0};
+    const of = norm(t.of)||"(sin OF)";
+    const key = of+" · "+mod;
+    const g = grp[key] = grp[key] || {of, mod, articulo:norm(t.articulo), ops:{}, ultima:0, tks:0};
     const opName = norm(t.op)||"(sin operación)";
-    const op = m.ops[opName] = m.ops[opName] || {total:0, min:0, personas:{}};
-    const p = op.personas[t.dni] = op.personas[t.dni] || {nombre:t.nombre, tickets:[], min:0};
-    p.tickets.push(t); p.min += Number(t.minutos)||0;
-    op.total++; op.min += Number(t.minutos)||0;
-    m.total++; m.min += Number(t.minutos)||0;
+    const op = g.ops[opName] = g.ops[opName] || {cant:0, personas:{}};
+    const c = Number(t.cant)||0;
+    op.cant += c; g.tks++;
+    const p = op.personas[t.dni] = op.personas[t.dni] || {nombre:t.nombre, cant:0};
+    p.cant += c;
+    const lastNop = ultimaOpModulo(modArea, t.articulo, mod);
+    if(lastNop!=null && Number(t.nop)===lastNop) g.ultima += c;
   });
-  const claves=Object.keys(mods).sort((a,b)=>a.localeCompare(b,"es"));
-  $("resumenMod").textContent = `${claves.length} módulo(s) con actividad · ${activos.length} tickets activos`
-    + (modArea?` · área: ${modArea}`:"");
-  if(!claves.length){ $("zonaModulos").innerHTML=`<div class="vacio-msg">Sin tickets activos para este filtro</div>`; return; }
+  const claves=Object.keys(grp).sort((a,b)=>a.localeCompare(b,"es"));
+  $("resumenMod").textContent = `${modArea} · ${claves.length} módulo(s) con actividad · ${activos.length} tickets`;
+  if(!claves.length){ $("zonaModulos").innerHTML=`<div class="vacio-msg">Sin tickets activos para esta área/OF</div>`; return; }
   $("zonaModulos").innerHTML = claves.map(k=>{
-    const m=mods[k];
-    const ops=Object.keys(m.ops).sort((a,b)=>a.localeCompare(b,"es"));
+    const g=grp[k];
+    const meta = MOD_META[normKey(g.of)] || 0;
+    const pct = meta>0 ? Math.min(100, Math.round(g.ultima/meta*100)) : null;
+    const ops=Object.keys(g.ops).sort((a,b)=>a.localeCompare(b,"es"));
+    const barra = pct==null
+      ? `<div class="avance-nometa">Sube el balance/OF para calcular el avance</div>`
+      : `<div class="avance-bar"><div class="avance-fill ${pct>=80?'alto':pct<40?'bajo':''}" style="width:${pct}%"></div>
+           <span class="avance-lbl">${pct}%</span></div>
+         <div class="avance-sub">${Math.round(g.ultima)} de ${Math.round(meta)} und (última operación)</div>`;
     return `<details class="mod-card" open>
       <summary class="mod-head">
-        <div class="mod-nombre">${esc(m.modulo)}</div>
-        <div class="mod-sub">${esc(m.area)} · ${ops.length} operación(es) · ${m.total} tickets · ${Math.round(m.min)} min</div>
+        <div class="mod-nombre">${esc(g.mod)}</div>
+        <div class="mod-sub">OF ${esc(g.of)} · ${esc(g.articulo)} · ${ops.length} operación(es) · ${g.tks} tickets</div>
       </summary>
-      <div class="mod-body">${ops.map(opName=>{
-        const op=m.ops[opName];
-        const personas=Object.values(op.personas).sort((a,b)=>b.min-a.min);
-        return `<div class="mod-op">
-          <div class="mod-op-head"><span class="mod-op-nom">${esc(opName)}</span>
-            <span class="mod-op-sub">${personas.length} operario(s) · ${op.total} tk · ${Math.round(op.min)} min</span></div>
-          ${personas.map(p=>`<div class="mod-persona">
-            <div class="mp-cab"><b>${esc(soloApellidos(p.nombre))}</b><span>${p.tickets.length} tk · ${Math.round(p.min)} min</span></div>
-            <div class="mp-tks">${p.tickets.map(t=>`<span class="mp-tk" title="OF ${esc(t.of)}">${esc(t.num||t.codigo)}</span>`).join("")}</div>
-          </div>`).join("")}
-        </div>`;
-      }).join("")}</div>
+      <div class="mod-body">
+        <div class="mod-avance">${barra}</div>
+        ${ops.map(opName=>{
+          const op=g.ops[opName];
+          const personas=Object.values(op.personas).sort((a,b)=>b.cant-a.cant);
+          return `<details class="mod-op">
+            <summary class="mod-op-head"><span class="mod-op-nom">${esc(opName)}</span>
+              <span class="mod-op-sub">${Math.round(op.cant)} und · ${personas.length} operario(s)</span></summary>
+            ${personas.map(p=>`<div class="mod-persona">
+              <div class="mp-cab"><b>${esc(soloApellidos(p.nombre))}</b><span>${Math.round(p.cant)} und</span></div>
+            </div>`).join("")}
+          </details>`;
+        }).join("")}
+      </div>
     </details>`;
   }).join("");
 }
@@ -224,13 +476,22 @@ function ordenarEf(col){
 }
 function pintarEf(){
   if(!EF) return;
-  $("efAreas").innerHTML = (EF.areas||[]).map(a=>`
+  const fArea = $("filtroAreaEf").value;
+  // Gating: sin área elegida no se muestran datos.
+  if(!fArea){
+    $("efGate").style.display = "block";
+    $("efContenido").hidden = true;
+    return;
+  }
+  $("efGate").style.display = "none";
+  $("efContenido").hidden = false;
+
+  $("efAreas").innerHTML = (EF.areas||[]).filter(a=>a.area===fArea).map(a=>`
     <div class="kpi"><div class="kpi-num">${censEf(a.eficiencia+"%")}</div>
     <div class="kpi-lbl">${esc(a.area)}<br>${Math.round(a.prod)} / ${Math.round(a.disp)} min</div></div>`).join("")
-    || '<div class="vacio-msg">Sin datos ese día</div>';
+    || '<div class="vacio-msg">Sin datos ese día para esta área</div>';
 
-  const fArea = $("filtroAreaEf").value;
-  let lista = (EF.personas||[]).filter(p=>!fArea || p.area===fArea);
+  let lista = (EF.personas||[]).filter(p=>p.area===fArea);
   const cmp = (a,b)=>{
     if(!efSort.col) return String(a.nombre||"").localeCompare(String(b.nombre||""),"es");
     const va=a[efSort.col], vb=b[efSort.col];
@@ -260,7 +521,6 @@ function pintarEf(){
     });
   }
   $("tablaEf").innerHTML = thead + "<tbody>" + tbody + "</tbody>";
-  pintarFabAreasEf();
 }
 
 /* ================= EFICIENCIA DÍA × DÍA POR RANGO ================= */
@@ -303,7 +563,10 @@ function pintarEfRango(){
       <td class="${efClase(p.promedio)}"><b>${censEf(p.promedio+"%")}</b></td>`;
     EFR.dias.forEach(d=>{
       const v = p.registros[d];
-      tbody += (v==null) ? `<td>\u2014</td>` : `<td class="${efClase(v)}">${censEf(v)}</td>`;
+      const est = p.estados ? p.estados[d] : null;
+      if(v!=null) tbody += `<td class="${efClase(v)}">${censEf(v)}</td>`;
+      else if(est) tbody += `<td><span class="pill ${esc(est)}" style="font-size:10px;">${esc(est)}</span></td>`;
+      else tbody += `<td>\u2014</td>`;
     });
     tbody += `</tr>`;
   });
@@ -622,19 +885,19 @@ async function guardarRango(){
 /* ================= TICKETS DEL DÍA ================= */
 let TK=[], TK_VISTA=[], BASES_CACHE={};
 let tkSort={col:null,dir:1};
-let tkArea="";                 // filtro de área activo (FAB); "" = todas
+let tkArea="";                 // filtro de área activo (select); "" = todas
 let modoLibTk=false, libSel={}; // modo liberar en lote + códigos marcados
 const TK_COLS=[
-  {k:"hora",t:"Hora"},{k:"nombre",t:"Nombre"},{k:"area",t:"Área"},{k:"of",t:"OF"},
-  {k:"articulo",t:"Artículo"},{k:"op",t:"Operación"},{k:"nop",t:"N°OP"},{k:"num",t:"Num."},
-  {k:"cant",t:"Cant"},{k:"minutos",t:"Min"},{k:"codigo",t:"Código"},{k:"estado",t:"Estado"}
+  {k:"hora",t:"Hora"},{k:"nombre",t:"Nombre"},{k:"area",t:"Área"},{k:"articulo",t:"Artículo"},
+  {k:"of",t:"OF"},{k:"op",t:"Operación"},{k:"std",t:"STD"},{k:"cant",t:"Cant"},
+  {k:"minutos",t:"Min gen."},{k:"num",t:"Numeración"},{k:"estado",t:"Estado"}
 ];
 function ordenarTk(col){ if(tkSort.col===col) tkSort.dir*=-1; else tkSort={col,dir:1}; pintarTk(); }
 function descargarTk(){
   const lista = TK_VISTA;
   if(!lista.length){ mostrarError("No hay tickets para descargar"); return; }
-  const CAB = ["Hora","Nombre","DNI","Área","OF","Artículo","Operación","N°OP","Numeración","Cant","Min","Código","Estado"];
-  const filas = lista.map(t=>[t.hora,t.nombre,t.dni,t.area,t.of,t.articulo,t.op,t.nop,t.num,t.cant,t.minutos,t.codigo,t.estado]);
+  const CAB = ["Hora","Nombre","DNI","Área","Artículo","OF","Operación","STD","Cant","Min generado","Numeración","Estado"];
+  const filas = lista.map(t=>[t.hora,t.nombre,t.dni,t.area,t.articulo,t.of,t.op,t.std,t.cant,t.minutos,t.num,t.estado]);
   const ws = XLSX.utils.aoa_to_sheet([CAB, ...filas]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "TicketsDia");
@@ -649,35 +912,46 @@ async function cargarTk(){
     TK = await rpc("fn_tickets_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:$("fechaTk").value});
     // Si el área filtrada ya no tiene tickets hoy, vuelve a "todas".
     if(tkArea && !TK.some(t=>t.area===tkArea)) tkArea="";
-    pintarFabAreasTk();
+    poblarAreaTk();
     pintarTk();
     cargarResumenUltimas();   // no bloquea la tabla
   }catch(e){ $("tablaTk").innerHTML=""; mostrarError(e.message); }
 }
 
-/* FAB de áreas: solo las áreas que registraron tickets hoy. */
-function pintarFabAreasTk(){
-  const z=$("fabAreasTk"); if(!z) return;
+/* Select de área: solo las áreas que registraron tickets hoy. */
+function poblarAreaTk(){
+  const s=$("areaTk"); if(!s) return;
   const areas=[...new Set(TK.map(t=>t.area).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"es"));
-  if(!areas.length){ z.innerHTML=""; return; }
-  z.innerHTML = `<div class="fab-area-titulo">ÁREA</div>`
-    + `<button class="fab-area-btn${tkArea===""?" activo":""}" onclick="filtrarTkArea('')">TODAS</button>`
-    + areas.map(a=>`<button class="fab-area-btn${tkArea===a?" activo":""}" onclick="filtrarTkArea('${esc(a)}')">${esc(a)}</button>`).join("");
+  s.innerHTML = `<option value="">Todas las áreas</option>`
+    + areas.map(a=>`<option ${a===tkArea?"selected":""}>${esc(a)}</option>`).join("");
+  s.value = tkArea;
 }
-function filtrarTkArea(a){ tkArea=a; pintarFabAreasTk(); pintarTk(); cargarResumenUltimas(); }
+function filtrarTkArea(a){ tkArea=a; pintarTk(); cargarResumenUltimas(); }
 
 /* Liberar en lote: alterna el modo de selección con checkboxes. */
 function toggleModoLiberar(){
   modoLibTk=!modoLibTk; libSel={};
-  const bm=$("btnModoLiberar"), bs=$("btnLiberarSel");
-  if(bm){ bm.textContent = modoLibTk ? "CANCELAR LOTE" : "LIBERAR EN LOTE"; bm.classList.toggle("gris",modoLibTk); }
-  if(bs) bs.style.display = modoLibTk ? "inline-block" : "none";
+  const bm=$("btnModoLiberar"), bs=$("btnLiberarSel"), bv=$("btnMarcarVisibles");
+  if(bm){ bm.textContent = modoLibTk ? "Cancelar lote" : "Liberar en lote"; bm.classList.toggle("gris",modoLibTk); }
+  if(bs){ bs.style.display = modoLibTk ? "inline-block" : "none"; bs.textContent="Liberar selección (0)"; }
+  if(bv) bv.style.display = modoLibTk ? "inline-block" : "none";
   pintarTk();
 }
 function toggleLibSel(codigo){
   if(libSel[codigo]) delete libSel[codigo]; else libSel[codigo]=true;
-  const n=Object.keys(libSel).length;
-  const bs=$("btnLiberarSel"); if(bs) bs.textContent=`LIBERAR SELECCIONADOS (${n})`;
+  actualizarLibSel();
+}
+function actualizarLibSel(){
+  const bs=$("btnLiberarSel"); if(bs) bs.textContent=`Liberar selección (${Object.keys(libSel).length})`;
+}
+/* Marcar todos los tickets ACTIVOS visibles (respeta filtro de área/búsqueda). */
+function marcarVisiblesLib(){
+  const todos = TK_VISTA.filter(t=>t.estado==='ACTIVO');
+  const faltan = todos.some(t=>!libSel[t.codigo]);
+  if(faltan) todos.forEach(t=>{ libSel[t.codigo]=true; });   // marca todos
+  else todos.forEach(t=>{ delete libSel[t.codigo]; });        // si ya estaban todos, desmarca
+  actualizarLibSel();
+  pintarTk();
 }
 async function liberarLote(){
   const codigos=Object.keys(libSel);
@@ -694,10 +968,14 @@ async function liberarLote(){
     await cargarTk();
   }catch(e){ mostrarError(e.message); }
 }
+let tkOcultarLib=false;
+function toggleOcultarLib(){ tkOcultarLib = !!($("chkOcultarLib") && $("chkOcultarLib").checked); pintarTk(); }
 function pintarTk(){
   const q=normKey($("filtroTk").value);
-  TK_VISTA = TK.filter(t=>(!tkArea || t.area===tkArea) && (!q ||
-    normKey(t.nombre+" "+t.of+" "+t.articulo+" "+t.op+" "+t.codigo+" "+t.area).includes(q)));
+  TK_VISTA = TK.filter(t=>
+    (!tkOcultarLib || t.estado!=='LIBERADO') &&
+    (!tkArea || t.area===tkArea) &&
+    (!q || normKey(t.nombre+" "+t.of+" "+t.articulo+" "+t.op+" "+t.codigo+" "+t.area).includes(q)));
   if(tkSort.col){
     TK_VISTA.sort((a,b)=>{
       const va=a[tkSort.col], vb=b[tkSort.col];
@@ -720,8 +998,8 @@ function pintarTk(){
     lista.map((t,i)=>`<tr>
       ${modoLibTk?`<td>${t.estado==='ACTIVO'?`<input type="checkbox" class="chk-lib" ${libSel[t.codigo]?"checked":""} onclick="toggleLibSel('${esc(t.codigo)}')">`:""}</td>`:""}
       <td>${esc(t.hora)}</td><td>${esc(t.nombre)}</td><td>${esc(t.area)}</td>
-      <td>${esc(t.of)}</td><td>${esc(t.articulo)}</td><td>${esc(t.op)}</td><td>${t.nop??""}</td>
-      <td>${esc(t.num)}</td><td>${t.cant}</td><td>${t.minutos}</td><td>${esc(t.codigo)}</td>
+      <td>${esc(t.articulo)}</td><td>${esc(t.of)}</td><td class="izq">${esc(t.op)}</td>
+      <td>${t.std!=null?t.std:""}</td><td>${t.cant}</td><td>${t.minutos}</td><td>${esc(t.num)}</td>
       <td><span class="pill ${esc(t.estado)}">${esc(t.estado)}</span></td>
       <td>${t.estado==='ACTIVO'?`<button class="btn-mini rojo" onclick="liberarTicket(${i})">LIBERAR</button>`:""}</td>
       </tr>`).join("")+"</tbody>";
@@ -891,34 +1169,60 @@ function descargarBase(){
 }
 
 /* --- CRUD de BASE por fila (editar STD / artículos / operaciones) --- */
-function abrirModalBaseOp(id){
+let BASE_VALORES={};   // cache por área de valores históricos (prendas/clientes/…/maxop)
+async function abrirModalBaseOp(id){
   const area = $("areaBase").value;
   const b = id!=null ? (BASE.find(x=>Number(x.id)===Number(id))||{}) : {};
   const esEdicion = id!=null;
   const v = k => esc(b[k]!=null?b[k]:"");
+  // Valores históricos para los desplegables (una vez por área).
+  if(!BASE_VALORES[area]){
+    try{
+      const r = await rpc("fn_base_valores",{p_dni:ING.dni,p_token:ING.token,p_area:area});
+      BASE_VALORES[area] = r && r.ok ? r : {prendas:[],clientes:[],modulos:[],articulos:[],maxop:{}};
+    }catch(e){ BASE_VALORES[area] = {prendas:[],clientes:[],modulos:[],articulos:[],maxop:{}}; }
+  }
+  const VAL = BASE_VALORES[area];
+  const dl = (arr)=> (arr||[]).map(x=>`<option value="${esc(x)}">`).join("");
   abrirModal(`
     <h2>${esEdicion?"Editar operación":"Agregar operación"}</h2>
     <div class="sub" style="margin-bottom:12px;">Área: ${esc(area)}</div>
+    <datalist id="dlPrenda">${dl(VAL.prendas)}</datalist>
+    <datalist id="dlCliente">${dl(VAL.clientes)}</datalist>
+    <datalist id="dlModulo">${dl(VAL.modulos)}</datalist>
+    <datalist id="dlArticulo">${dl(VAL.articulos)}</datalist>
     <div class="modal-2col">
-      <div class="modal-campo"><label>Prenda</label><input id="boPrenda" value="${v('prenda')}" maxlength="80"></div>
-      <div class="modal-campo"><label>Cliente</label><input id="boCliente" value="${v('cliente')}" maxlength="80"></div>
+      <div class="modal-campo"><label>Prenda</label><input id="boPrenda" list="dlPrenda" value="${v('prenda')}" maxlength="80" placeholder="Elige o escribe…"></div>
+      <div class="modal-campo"><label>Cliente</label><input id="boCliente" list="dlCliente" value="${v('cliente')}" maxlength="80" placeholder="Elige o escribe…"></div>
     </div>
     <div class="modal-2col">
-      <div class="modal-campo"><label>Módulo</label><input id="boModulo" value="${v('modulo')}" maxlength="80"></div>
-      <div class="modal-campo"><label>Artículo</label><input id="boArticulo" value="${v('articulo')}" maxlength="80"></div>
+      <div class="modal-campo"><label>Módulo</label><input id="boModulo" list="dlModulo" value="${v('modulo')}" maxlength="80" placeholder="Elige o escribe…"></div>
+      <div class="modal-campo"><label>Artículo</label><input id="boArticulo" list="dlArticulo" value="${v('articulo')}" maxlength="80" placeholder="Elige o escribe…" oninput="autoMaxOp()"></div>
     </div>
     <div class="modal-campo"><label>Operación</label><input id="boOperacion" value="${v('operacion')}" maxlength="120"></div>
     <div class="modal-2col">
       <div class="modal-campo"><label>STD (min)</label><input id="boStd" inputmode="decimal" value="${v('std')}"></div>
       <div class="modal-campo"><label>N°OP (orden)</label><input id="boNop" inputmode="numeric" value="${v('n_op')}"></div>
     </div>
-    <div class="modal-campo"><label>Max Op.</label><input id="boMaxOp" inputmode="numeric" value="${v('max_op')}"></div>
+    <div class="modal-campo"><label>Max Op. <span class="cf-detalle" style="font-weight:600;">(auto según artículo)</span></label>
+      <input id="boMaxOp" inputmode="numeric" value="${v('max_op')}"></div>
     <div class="cf-detalle" style="margin-top:-4px;">El mayor N°OP del artículo es la operación final (★ dorada); el 2º mayor, la penúltima.</div>
     <div class="modal-msg" id="boMsg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" onclick="guardarBaseOp(${esEdicion?id:"null"})">GUARDAR</button>
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
     </div>`);
+  if(!esEdicion) autoMaxOp();
+}
+/* Max Op. se calcula según el artículo (mayor N°OP histórico). */
+function autoMaxOp(){
+  const area=$("areaBase").value;
+  const art=normKey($("boArticulo").value);
+  const mapa=(BASE_VALORES[area]||{}).maxop||{};
+  // busca por coincidencia normalizada de artículo
+  let mx=null;
+  Object.keys(mapa).forEach(k=>{ if(normKey(k)===art) mx=mapa[k]; });
+  if(mx!=null && $("boMaxOp")) $("boMaxOp").value = mx;
 }
 async function guardarBaseOp(id){
   const area=$("areaBase").value;
@@ -940,7 +1244,9 @@ async function guardarBaseOp(id){
     }
     if(!r.ok){ $("boMsg").textContent=r.error||"No se pudo guardar"; return; }
     cerrarModal();
-    delete BASES_CACHE[area];
+    delete BASES_CACHE[area]; delete BASE_VALORES[area];
+    if(typeof r.reclamos_actualizados==="number" && r.reclamos_actualizados>0)
+      mostrarOk(`Guardado · ${r.reclamos_actualizados} reclamo(s) actualizados por STD`);
     await cargarBases();
   }catch(e){ $("boMsg").textContent=e.message; }
 }

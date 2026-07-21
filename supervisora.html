@@ -24,6 +24,7 @@
   <div class="tabs">
     <button id="tabPersonal" class="tab activo">PERSONAL</button>
     <button id="tabAvance" class="tab">AVANCE DEL DÍA</button>
+    <button id="tabEfPersonal" class="tab">EFICIENCIAS</button>
     <button id="tabIncidencias" class="tab">INCIDENCIAS</button>
   </div>
 
@@ -149,6 +150,22 @@
     <button type="button" class="btn-recargar" onclick="cargarAvance()">↻ RECARGAR AHORA</button>
     <div class="kpis" id="avResumen" style="margin-top:14px;"></div>
     <div class="lista-cards" id="avItems" style="margin-top:14px;"></div>
+  </section>
+
+  <!-- Eficiencias del personal -->
+  <section class="pantalla" id="pasoEfPersonal">
+    <h1>Eficiencias del personal</h1>
+    <div class="sub">Elige la fecha; toca a una persona para ver sus operaciones por OF y cantidad</div>
+    <div class="seg" style="max-width:560px;">
+      <input type="date" id="fechaEfPer" onchange="cargarEfPersonal()"
+        style="flex:1;background:var(--blanco);border:3px solid var(--azul);border-radius:13px;font-size:18px;font-weight:800;padding:10px;text-align:center;">
+      <button class="btn-recargar" onclick="cargarEfPersonal()" style="flex:0 0 auto;">↻</button>
+    </div>
+    <div class="zona-of" style="margin-bottom:14px;">
+      <input class="input-grande" id="filtroEfPer" placeholder="Buscar por nombre…" oninput="filtrarEfPersonal()"
+        autocomplete="off" style="font-size:20px;letter-spacing:normal;text-align:left;">
+    </div>
+    <div class="grid-personal" id="gridEfPer"></div>
   </section>
 
   <!-- Incidencias del personal -->
