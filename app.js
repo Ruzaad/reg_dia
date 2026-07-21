@@ -18,6 +18,7 @@ const AREAS = {
     habilitada: true,
     sheetId: "1fuqMApXsZg-0PW4ugqtnye6zysVtoSAS_o4hhN1WDlo",
     hoja: "ALMACEN",
+    hojaOF: "OF",                 // hoja con la meta por OF (cols: ARTICULO, OF, CANT PROG)
     mapa: MAPA_ESTANDAR
   },
   "ACABADO": {
@@ -106,8 +107,31 @@ function irA(id){
   ocultarError();
   if(typeof window.onCambioPaso === "function") window.onCambioPaso(id);
 }
-function mostrarError(msg){ const b=$("bannerError"); if(b){b.textContent=msg;b.classList.add("visible");} }
-function ocultarError(){ const b=$("bannerError"); if(b) b.classList.remove("visible"); }
+/* ---- Toasts (popouts abajo-derecha) ---- */
+function _toastWrap(){
+  let w=document.getElementById("toastWrap");
+  if(!w){ w=document.createElement("div"); w.id="toastWrap"; w.className="toast-wrap";
+    w.setAttribute("aria-live","polite"); document.body.appendChild(w); }
+  return w;
+}
+function toast(msg, tipo){
+  const w=_toastWrap();
+  const t=document.createElement("div");
+  t.className="toast "+(tipo||"error");
+  t.setAttribute("role","status");
+  t.innerHTML=`<span class="toast-msg">${esc(msg)}</span><button class="toast-x" aria-label="Cerrar">×</button>`;
+  t.querySelector(".toast-x").onclick=()=>cerrarToast(t);
+  w.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add("visible"));
+  const ms = tipo==="ok" ? 3000 : 5000;
+  setTimeout(()=>cerrarToast(t), ms);
+  return t;
+}
+function cerrarToast(t){ if(!t) return; t.classList.remove("visible");
+  setTimeout(()=>{ if(t.parentNode) t.parentNode.removeChild(t); }, 220); }
+function mostrarError(msg){ toast(msg, "error"); }
+function mostrarOk(msg){ toast(msg, "ok"); }
+function ocultarError(){ /* compat: los toasts se cierran solos */ }
 function cargandoHTML(txt){ return `<div class="cargando"><div class="spinner"></div>${esc(txt)}</div>`; }
 function abrirModal(html){ const o=$("modalOverlay"); if(!o) return; $("modalBox").innerHTML=html; o.classList.add("visible"); }
 function cerrarModal(){ const o=$("modalOverlay"); if(!o) return; o.classList.remove("visible"); $("modalBox").innerHTML=""; }
@@ -742,7 +766,65 @@ function bindSupervisoraUI(){
   $("tabPersonal").onclick = ()=>{ pararAvance(); marcarTab("tabPersonal"); irA("pasoPersonal"); };
   $("tabAvance").onclick  = ()=>{ marcarTab("tabAvance"); irA("pasoAvance"); cargarAvance(); timerAvance=setInterval(cargarAvance, 60000); };
   $("tabIncidencias").onclick = ()=>{ pararAvance(); marcarTab("tabIncidencias"); irA("pasoIncidencias"); cargarIncidencias(); };
+  { const te=$("tabEfPersonal"); if(te) te.onclick = ()=>{ pararAvance(); marcarTab("tabEfPersonal"); irA("pasoEfPersonal"); cargarEfPersonal(); }; }
   cargarEstadosSup();
+}
+
+/* --- Supervisión: Eficiencias del Personal (por fecha) --- */
+function cargarEfPersonal(){
+  const s=sesionActual(); if(!s) return;
+  const fd=$("fechaEfPer"); if(fd && !fd.value) fd.value = new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"});
+  const g=$("gridEfPer"); if(g) g.innerHTML=cargandoHTML("Calculando eficiencia…");
+  rpc("fn_eficiencia_personal",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),p_fecha:(fd?fd.value:null)})
+    .then(r=>{ if(!r.ok){ mostrarError(r.error||"Error"); if(g) g.innerHTML=""; return; }
+      pintarEfPersonal(r.personal||[]); })
+    .catch(e=>{ if(g) g.innerHTML=""; mostrarError(e.message); });
+}
+function pintarEfPersonal(lista){
+  const g=$("gridEfPer"); if(!g) return;
+  const q=normKey($("filtroEfPer") ? $("filtroEfPer").value : "");
+  const l = lista.filter(p=>!q || normKey(p.nombre).includes(q));
+  window.__EFPER = lista;   // cache para el filtro
+  if(!l.length){ g.innerHTML=`<div class="vacio-msg">Sin personal para este filtro</div>`; return; }
+  g.innerHTML="";
+  l.forEach(p=>{
+    const efClase = p.eficiencia>=80?"ef-alta":(p.eficiencia<50?"ef-baja":"");
+    const c=document.createElement("div");
+    c.className="card-persona";
+    c.setAttribute("role","button"); c.setAttribute("tabindex","0");
+    c.innerHTML=`<div>
+        <div class="cp-nombre">${esc(soloApellidos(p.nombre))}</div>
+        <div class="cp-dni"><span class="pill ${esc(p.estado)}">${esc(p.estado)}</span> · ${p.tickets} tk</div>
+      </div>
+      <div class="cp-disp ${efClase}" style="font-size:20px;">${p.eficiencia}%</div>`;
+    const abrir=()=>verEfPersonaOps(p.dni, p.nombre);
+    c.onclick=abrir;
+    c.onkeydown=(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); abrir(); } };
+    g.appendChild(c);
+  });
+}
+function filtrarEfPersonal(){ if(window.__EFPER) pintarEfPersonal(window.__EFPER); }
+async function verEfPersonaOps(dni, nombre){
+  const s=sesionActual(); if(!s) return;
+  const fd=$("fechaEfPer");
+  abrirModal(cargandoHTML("Cargando operaciones…"));
+  try{
+    const r=await rpc("fn_operario_ops_dia",{p_dni:s.dni,p_token:s.token,p_dni_op:dni,p_fecha:(fd?fd.value:null)});
+    if(!r.ok){ mostrarError(r.error||"Error"); cerrarModal(); return; }
+    const ops=r.ops||[];
+    const filas = ops.length
+      ? ops.map(o=>`<tr><td>${esc(o.of)}</td><td class="izq">${esc(o.op)}</td>
+          <td><b>${Math.round(o.cantidad)}</b></td></tr>`).join("")
+      : `<tr><td colspan="3"><div class="vacio-msg">Sin operaciones ese día</div></td></tr>`;
+    abrirModal(`
+      <h2>${esc(soloApellidos(nombre))}</h2>
+      <div class="sub" style="margin-bottom:12px;">Operaciones por OF · ${esc(fd?fd.value:"")}</div>
+      <div style="max-height:60vh;overflow:auto;">
+        <table class="tabla"><thead><tr><th>OF</th><th class="izq">Operación</th><th>Cantidad</th></tr></thead>
+        <tbody>${filas}</tbody></table>
+      </div>
+      <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`);
+  }catch(e){ mostrarError(e.message); cerrarModal(); }
 }
 function initSupervisora(){
   const s=sesionActual();
@@ -763,6 +845,7 @@ function recargarSupervisora(){
   const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),500); }
   if($("pasoAvance").classList.contains("activa")) cargarAvance();
   else if($("pasoIncidencias").classList.contains("activa")) cargarIncidencias();
+  else if($("pasoEfPersonal") && $("pasoEfPersonal").classList.contains("activa")) cargarEfPersonal();
   else cargarPersonal(s);
 }
 
@@ -838,7 +921,7 @@ async function guardarFaltantes(){
   }catch(e){ $("mfMsg").textContent=e.message; }
 }
 function marcarTab(id){
-  ["tabPersonal","tabAvance","tabIncidencias"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });
+  ["tabPersonal","tabAvance","tabIncidencias","tabEfPersonal"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });
 }
 function pararAvance(){ clearInterval(timerAvance); timerAvance=null; }
 
