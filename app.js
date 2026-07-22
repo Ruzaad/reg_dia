@@ -6,6 +6,11 @@
 /* ---------------- CONFIGURACIÓN (editar aquí) ---------------- */
 const SUPABASE_URL  = "https://lmlwomurgbbzolgbkwtp.supabase.co";      // https://xxxx.supabase.co
 const SUPABASE_ANON = "sb_publishable_UL22rxFy12xjwf4R9ReRNQ_igpA1hwJ";          // Settings → API → anon public
+// Nombre (slug) EXACTO de la Edge Function que escribe tickets al ALMACEN.
+// Debe coincidir con el que aparece en la URL de Supabase (Edge Functions).
+// Supabase le puso "smooth-processor" al desplegar; si la renombras a
+// "generar-tickets", cambia este valor.
+const FN_GENERAR_TICKETS = "smooth-processor";
 
 const MAPA_ESTANDAR = {                          // cabecera normalizada -> campo
   "PRENDA":"prenda","ARTICULO":"articulo","MODULO":"modulo","OP":"op",
@@ -163,6 +168,19 @@ async function rpc(fn, args){
     throw new Error("Servidor: " + (detalle || ("error " + r.status)));
   }
   return await r.json();
+}
+
+/* ---------------- EDGE FUNCTIONS (Supabase) ---------------- */
+async function edgeFn(nombre, body){
+  const r = await fetch(`${SUPABASE_URL}/functions/v1/${nombre}`, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json",
+      "apikey":SUPABASE_ANON, "Authorization":"Bearer "+SUPABASE_ANON },
+    body: JSON.stringify(body)
+  });
+  let j; try{ j = await r.json(); }catch(e){ throw new Error("Respuesta no válida de "+nombre); }
+  if(!r.ok && j && j.ok===undefined) throw new Error(j.error || ("error "+r.status));
+  return j;
 }
 
 /* ---------------- ÁREAS DESDE LA BASE DE DATOS ----------------

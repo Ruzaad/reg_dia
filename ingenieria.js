@@ -36,6 +36,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
       else if(tab==='pasoOpArea') cargarOpArea();
       else if(tab==='pasoFechas') initFechas();
       else if(tab==='pasoTkPer') initTkPer();
+      else if(tab==='pasoGen') genInit();
     };
   });
 
@@ -80,6 +81,8 @@ function poblarSelectsArea(){
   if($("areaOp"))  $("areaOp").innerHTML  = elige + AREAS_LISTA.map(op).join("");
   if($("areaFec")) $("areaFec").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("areaTkPer")) $("areaTkPer").innerHTML = elige + AREAS_LISTA.map(op).join("");
+  // Generar tickets: solo áreas con Sheet (las de AREAS de app.js).
+  if($("areaGen")) $("areaGen").innerHTML = elige + Object.keys(AREAS).map(op).join("");
 }
 
 /* Recargar la pestaña activa (botón ↻ del header). */
@@ -136,6 +139,139 @@ function ingSupElegirArea(area){
   marcarTab("tabPersonal");
   cargarPersonal(sesionActual());
   irA("pasoPersonal");
+}
+
+/* ================= GENERAR TICKETS DESDE HN ================= */
+const GEN_ENC = { prenda:"1", articulo:"" };   // PRENDA_ENC / ARTICULO_ENC (iguales para todas las áreas)
+let GEN_HN=null, GEN_FILAS=null;
+function genInit(){ $("genGate").style.display="block"; $("genPaso1").hidden=true; GEN_HN=null; GEN_FILAS=null; if($("genPreview")) $("genPreview").innerHTML=""; }
+function celTxt(v){ return v==null?"":String(v).trim(); }
+
+function genLeerHN(input){
+  const file=input.files[0]; input.value="";
+  if(!file) return;
+  if(!$("areaGen").value){ mostrarError("Elige primero el área"); return; }
+  const lector=new FileReader();
+  lector.onload=(e)=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:"array"});
+      if(!wb.SheetNames.includes("HN")) throw new Error("No se encontró la hoja HN en el archivo.");
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets["HN"],{header:1,defval:null,raw:true});
+      GEN_HN=parseHN(rows);
+      pintarGenPreview();
+    }catch(err){ mostrarError(err.message); }
+  };
+  lector.readAsArrayBuffer(file);
+}
+function parseHN(rows){
+  const get=(r,c)=> (rows[r]&&rows[r][c]!=null)?rows[r][c]:null;
+  let prenda="", articulo="", of="";
+  for(let r=0;r<Math.min(rows.length,12);r++){
+    for(let c=0;c<Math.min((rows[r]||[]).length,12);c++){
+      const t=normKey(get(r,c));
+      if(t==="ARTICULO" && !articulo) articulo=celTxt(get(r,c+2));  // etiqueta col C → valor col E (c+2)
+      if(t==="ORDEN" && !of)          of=celTxt(get(r,c+2));
+    }
+  }
+  if(!prenda)   prenda=celTxt(get(1,1));      // B2
+  if(!articulo) articulo=celTxt(get(3,4));    // E4
+  if(!of)       of=celTxt(get(4,4));          // E5
+  of=of.replace(/\D/g,"");
+  // Fila de encabezados (tiene TALLA y CANT)
+  let hr=-1;
+  for(let r=0;r<rows.length;r++){
+    const fila=(rows[r]||[]).map(normKey);
+    if(fila.includes("TALLA") && fila.includes("CANT")){ hr=r; break; }
+  }
+  if(hr<0) throw new Error("No se encontró la fila de encabezados (TALLA / CANT).");
+  const bloques=[]; (rows[hr]||[]).forEach((v,c)=>{ if(normKey(v)==="TALLA") bloques.push(c); });
+  const tallas=[];
+  bloques.forEach(cT=>{
+    for(let r=hr+1;r<rows.length;r++){
+      const talla=get(r,cT);
+      if(talla==null || String(talla).trim()==="") break;
+      tallas.push({ talla:celTxt(talla), cant:parseInt(get(r,cT+1))||0, color:celTxt(get(r,cT+3)) });
+    }
+  });
+  return { prenda, articulo, of, tallas, bloques:bloques.length };
+}
+function pintarGenPreview(){
+  $("genGate").style.display="none"; $("genPaso1").hidden=false;
+  $("genPrenda").value=GEN_HN.prenda; $("genArticulo").value=GEN_HN.articulo; $("genOf").value=GEN_HN.of;
+  const total=GEN_HN.tallas.reduce((a,t)=>a+t.cant,0);
+  $("genResumen").textContent=`${GEN_HN.bloques} bloque(s) · ${GEN_HN.tallas.length} filas · ${total} und`;
+  $("tablaGen").innerHTML="<thead><tr><th>#</th><th>Talla</th><th>Cant</th><th class=\"izq\">Color</th></tr></thead><tbody>"
+    + GEN_HN.tallas.map((t,i)=>`<tr><td>${i+1}</td><td>${esc(t.talla)}</td><td>${t.cant}</td><td class="izq">${esc(t.color)}</td></tr>`).join("")
+    + "</tbody>";
+  $("genPreview").innerHTML=""; GEN_FILAS=null;
+}
+function genCodigo(corte, of, nop){ return parseInt(String(corte)+String(of)+GEN_ENC.prenda+GEN_ENC.articulo+String(nop)); }
+
+async function genPreparar(){
+  const area=$("areaGen").value;
+  const prenda=$("genPrenda").value.trim().toUpperCase();
+  const articulo=$("genArticulo").value.trim().toUpperCase();
+  const of=$("genOf").value.replace(/\D/g,"");
+  if(!prenda||!articulo||!of){ mostrarError("Completa prenda, artículo y OF"); return; }
+  if(!GEN_HN || !GEN_HN.tallas.length){ mostrarError("Sube primero la HN"); return; }
+  $("genPreview").innerHTML=cargandoHTML("Cruzando con BASE…");
+  try{
+    const ops=await rpc("fn_bases_operaciones",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_prenda:prenda,p_articulo:articulo});
+    if(ops && ops.ok===false) throw new Error(ops.error);
+    if(!Array.isArray(ops) || !ops.length){
+      $("genPreview").innerHTML=`<div class="estado-vacio">SIN BASE cargada para este artículo — cárgala en BASES primero.</div>`; return;
+    }
+    let acum=0; const paquetes=GEN_HN.tallas.map(t=>{ const desde=acum+1, hasta=acum+t.cant; acum+=t.cant;
+      return {talla:t.talla,color:t.color,cant:t.cant,desde,hasta}; });
+    const filas=[]; const set=new Set();
+    for(const o of ops){
+      paquetes.forEach((p,idx)=>{
+        const corte=idx+1;
+        const codigo=genCodigo(corte, of, o.n_op);
+        if(set.has(codigo)) throw new Error("Código duplicado interno: "+codigo+" (paquete "+corte+", op "+o.n_op+")");
+        set.add(codigo);
+        const ef=Math.round(((Number(o.std)*p.cant)/576)*100*100)/100;
+        filas.push([prenda,articulo,o.modulo,o.op,Number(o.std),Number(of),p.talla,p.color,corte,p.cant,codigo,o.n_op,`${p.desde}-${p.hasta}`,ef]);
+      });
+    }
+    const dupes=await genDuplicados(area, set);
+    GEN_FILAS = dupes.length ? null : filas;
+    let html=`<div class="diff-box"><h3>${filas.length} tickets a generar</h3>
+      <div class="cf-detalle">${ops.length} operaciones × ${paquetes.length} paquetes · OF ${esc(of)} · ${esc(articulo)}</div></div>`;
+    if(dupes.length){
+      html+=`<div class="diff-box"><div class="diff-del">${dupes.length} código(s) YA existen en ALMACEN. ¿Esta OF ya fue procesada?</div>
+        <div class="cf-detalle">Ejemplos: ${esc(dupes.slice(0,8).join(", "))}</div></div>`;
+    } else {
+      html+=`<div class="fila-filtros"><button class="btn-mini verde" onclick="genSubir()">Confirmar y escribir en ALMACEN (${filas.length})</button></div>`;
+    }
+    $("genPreview").innerHTML=html;
+  }catch(e){ $("genPreview").innerHTML=""; mostrarError(e.message); }
+}
+async function genDuplicados(area, codigosSet){
+  const cfg=AREAS[area]; if(!cfg || !cfg.sheetId) return [];
+  const url=`https://docs.google.com/spreadsheets/d/${cfg.sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(cfg.hoja||"ALMACEN")}`;
+  try{
+    const r=await fetch(url); if(!r.ok) return [];
+    const filas=parseCSV(await r.text()); if(filas.length<2) return [];
+    let iCod=-1; filas[0].forEach((h,i)=>{ if(normKey(h)==="CODIGO") iCod=i; });
+    if(iCod<0) return [];
+    const ex=new Set(); for(let i=1;i<filas.length;i++){ const c=norm(filas[i][iCod]); if(c) ex.add(c); }
+    const dup=[]; codigosSet.forEach(c=>{ if(ex.has(String(c))) dup.push(c); });
+    return dup;
+  }catch(e){ return []; }
+}
+async function genSubir(){
+  if(!GEN_FILAS || !GEN_FILAS.length){ mostrarError("Nada que subir"); return; }
+  const area=$("areaGen").value;
+  if(!confirm(`¿Escribir ${GEN_FILAS.length} filas al ALMACEN de ${area}?`)) return;
+  $("genPreview").innerHTML=cargandoHTML("Escribiendo en ALMACEN…");
+  try{
+    const r=await edgeFn(FN_GENERAR_TICKETS,{p_dni:ING.dni,p_token:ING.token,area:area,filas:GEN_FILAS});
+    if(!r.ok){ mostrarError(r.error||"No se pudo escribir"); $("genPreview").innerHTML=""; return; }
+    mostrarOk(`${r.escritas} filas escritas en ALMACEN`);
+    $("genPreview").innerHTML=`<div class="estado-vacio">✓ ${r.escritas} filas escritas en el ALMACEN de ${esc(area)}.</div>`;
+    GEN_FILAS=null;
+  }catch(e){ $("genPreview").innerHTML=""; mostrarError(e.message); }
 }
 
 /* ================= TICKETS POR PERSONAL (rango + Excel) ================= */
