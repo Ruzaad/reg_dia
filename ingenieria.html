@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0D3B85">
 <link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
 <title>Samitex — Ingeniería</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -40,6 +41,7 @@
       <button class="nav-item" data-tab="pasoAsis">Asistencia</button>
       <button class="nav-item" data-tab="pasoIncid">Incidencias</button>
       <button class="nav-item" data-tab="pasoFechas">Corregir fechas</button>
+      <button class="nav-item" data-tab="pasoGen">Generar tickets</button>
       <div class="nav-sep">Operar como</div>
       <button class="nav-item" data-tab="pasoSupArea">Supervisora</button>
       <button class="nav-item" data-tab="pasoOpArea">Operario</button>
@@ -245,6 +247,40 @@
     <section class="pantalla" id="pasoIncid">
       <button type="button" class="btn-recargar" onclick="cargarIncidI()">↻ RECARGAR</button>
       <div class="lista-cards" id="listaIncidI" style="margin-top:14px;"></div>
+    </section>
+
+    <!-- ===================== GENERAR TICKETS (HOJA DE NUMERACIÓN) ===================== -->
+    <section class="pantalla" id="pasoGen">
+      <div class="seccion-cab">
+        <h1>Generar tickets desde HN</h1>
+        <p class="seccion-sub">Sube la Hoja de Numeración (hoja <b>HN</b>), revisa/corrige lo detectado, cruza con la BASE y escribe al ALMACEN del área. Solo ingeniería.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área (ALMACEN destino)</span>
+          <select id="areaGen"></select></label>
+        <label class="btn-mini" style="cursor:pointer;align-self:flex-end;">
+          Subir Excel HN
+          <input type="file" id="fileGen" accept=".xlsx,.xls,.xlsm" style="display:none" onchange="genLeerHN(this)">
+        </label>
+      </div>
+      <div id="genGate" class="estado-vacio">Elige el área y sube el Excel de la Hoja de Numeración.</div>
+      <div id="genPaso1" hidden>
+        <!-- Preview editable de metadata -->
+        <div class="barra-control">
+          <label class="campo"><span>Prenda</span><input type="text" id="genPrenda"></label>
+          <label class="campo"><span>Artículo</span><input type="text" id="genArticulo"></label>
+          <label class="campo"><span>OF</span><input type="text" id="genOf" inputmode="numeric"></label>
+          <span class="sub" id="genResumen" style="align-self:flex-end;"></span>
+        </div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:38vh;">
+          <table class="tabla" id="tablaGen"></table>
+        </div>
+        <div class="barra-control" style="margin-top:14px;">
+          <button class="btn-mini" onclick="genPreparar()">Cruzar con BASE y previsualizar</button>
+        </div>
+        <!-- Resultado del cruce / dup-check -->
+        <div id="genPreview"></div>
+      </div>
     </section>
 
     <!-- ===================== CORREGIR FECHAS DE RECLAMO ===================== -->

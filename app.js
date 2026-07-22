@@ -165,6 +165,19 @@ async function rpc(fn, args){
   return await r.json();
 }
 
+/* ---------------- EDGE FUNCTIONS (Supabase) ---------------- */
+async function edgeFn(nombre, body){
+  const r = await fetch(`${SUPABASE_URL}/functions/v1/${nombre}`, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json",
+      "apikey":SUPABASE_ANON, "Authorization":"Bearer "+SUPABASE_ANON },
+    body: JSON.stringify(body)
+  });
+  let j; try{ j = await r.json(); }catch(e){ throw new Error("Respuesta no válida de "+nombre); }
+  if(!r.ok && j && j.ok===undefined) throw new Error(j.error || ("error "+r.status));
+  return j;
+}
+
 /* ---------------- ÁREAS DESDE LA BASE DE DATOS ----------------
    fn_areas_listar devuelve el distinct de area_actual/area_origen de
    operarios (incluye CORTE, REPROCESOS, etc.). AREAS (arriba) solo
