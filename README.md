@@ -1,4 +1,3 @@
-[Doc_Git.md](https://github.com/user-attachments/files/30355087/Doc_Git.md)
 # SAMITEX — Tickets Virtuales
 
 > Sistema de registro de producción por tickets para líneas de costura.
