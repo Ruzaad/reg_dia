@@ -15,6 +15,7 @@
 </head>
 <body data-pagina="ingenieria">
 <header>
+  <button type="button" class="btn-hdr-icon" id="btnMenu" title="Mostrar/ocultar menú" aria-label="Mostrar/ocultar menú">☰</button>
   <div class="titulo" id="tituloArea">INGENIERÍA</div>
   <div class="badges">
     <div class="badge" id="quienBadge"></div>
@@ -30,23 +31,24 @@
   <aside class="ing-sidebar">
     <nav class="ing-nav" aria-label="Secciones de ingeniería">
       <div class="nav-sep">Tickets</div>
-      <button class="nav-item activo" data-tab="pasoTk">Actual</button>
-      <button class="nav-item" data-tab="pasoMod">Por módulo</button>
-      <button class="nav-item" data-tab="pasoTkPer">Por personal</button>
+      <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
+      <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Por módulo</a>
+      <a class="nav-item" data-tab="pasoTkPer" href="#pasoTkPer">Por personal</a>
       <div class="nav-sep">Eficiencia</div>
-      <button class="nav-item" data-tab="pasoEf">Por área</button>
-      <button class="nav-item" data-tab="pasoDia">Por día</button>
+      <a class="nav-item" data-tab="pasoEf" href="#pasoEf">Por área</a>
+      <a class="nav-item" data-tab="pasoDia" href="#pasoDia">Por día</a>
       <div class="nav-sep">Gestión</div>
-      <button class="nav-item" data-tab="pasoBases">Bases</button>
-      <button class="nav-item" data-tab="pasoAsis">Asistencia</button>
-      <button class="nav-item" data-tab="pasoIncid">Incidencias</button>
-      <button class="nav-item" data-tab="pasoFechas">Corregir fechas</button>
-      <button class="nav-item" data-tab="pasoGen">Generar tickets</button>
+      <a class="nav-item" data-tab="pasoBases" href="#pasoBases">Bases</a>
+      <a class="nav-item" data-tab="pasoAsis" href="#pasoAsis">Asistencia</a>
+      <a class="nav-item" data-tab="pasoIncid" href="#pasoIncid">Incidencias</a>
+      <a class="nav-item" data-tab="pasoFechas" href="#pasoFechas">Corregir fechas</a>
+      <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
       <div class="nav-sep">Operar como</div>
-      <button class="nav-item" data-tab="pasoSupArea">Supervisora</button>
-      <button class="nav-item" data-tab="pasoOpArea">Operario</button>
+      <a class="nav-item" data-tab="pasoSupArea" href="#pasoSupArea">Supervisora</a>
+      <a class="nav-item" data-tab="pasoOpArea" href="#pasoOpArea">Operario</a>
     </nav>
   </aside>
+  <div id="ingBackdrop" class="ing-backdrop"></div>
 
   <!-- ===== CONTENIDO ===== -->
   <div class="ing-main">
@@ -151,6 +153,9 @@
           <input type="date" id="hastaTkPer"></label>
         <button class="btn-mini" onclick="cargarTkPer()">Cargar</button>
         <button class="btn-mini verde" onclick="descargarTkPer()">Descargar XLSX</button>
+        <button class="btn-mini" id="btnModoLiberarPer" onclick="toggleModoLiberarPer()">Liberar en lote</button>
+        <button class="btn-mini" id="btnMarcarVisiblesPer" style="display:none" onclick="marcarVisiblesLibPer()">Marcar visibles</button>
+        <button class="btn-mini rojo" id="btnLiberarSelPer" style="display:none" onclick="liberarLotePer()">Liberar selección (0)</button>
       </div>
       <div id="tkPerGate" class="estado-vacio">Elige área (y opcionalmente operario) y el rango de fechas.</div>
       <div class="sub" id="resumenTkPer"></div>
@@ -168,8 +173,11 @@
       <div class="barra-control">
         <label class="campo"><span>Área</span>
           <select id="areaMod" onchange="filtrarModArea(this.value)"></select></label>
+        <label class="campo"><span>Artículo</span>
+          <input type="text" id="artMod" list="artModList" placeholder="Escribe artículo…" oninput="onArtModInput()" autocomplete="off">
+          <datalist id="artModList"></datalist></label>
         <label class="campo"><span>OF</span>
-          <input type="text" id="ofMod" placeholder="Todas las OF…" oninput="pintarMod()"></label>
+          <select id="ofModSel" onchange="pintarMod()"><option value="">Ninguna</option></select></label>
         <label class="campo"><span>Hasta la fecha</span>
           <input type="date" id="fechaMod" onchange="cargarMod()"></label>
         <button class="btn-mini" onclick="cargarMod()">Cargar</button>
@@ -220,8 +228,6 @@
       <div id="asisMatriz">
         <div class="fila-filtros">
           <span class="sub" style="margin:0;">Seleccionadas: <b id="nSelAsis">0</b></span>
-          <select id="selArea"></select>
-          <button class="btn-mini" onclick="aplicarArea()">CAMBIAR ÁREA</button>
           <button class="btn-mini verde" onclick="abrirModalRango()">ASIGNAR ESTADO POR RANGO</button>
           <button class="btn-mini gris" onclick="limpiarSelAsis()">LIMPIAR SELECCIÓN</button>
         </div>
@@ -276,8 +282,14 @@
           <table class="tabla" id="tablaGen"></table>
         </div>
         <div class="barra-control" style="margin-top:14px;">
+          <label class="campo" style="flex-direction:row;align-items:center;gap:8px;">
+            <input type="checkbox" id="genDividir" onchange="genToggleDividir()">
+            <span>Dividir las 2 últimas operaciones en paquetes de</span></label>
+          <label class="campo" id="genPaqNCampo" style="display:none;"><span>Unidades por paquete (N)</span>
+            <input type="number" id="genPaqN" min="1" inputmode="numeric" placeholder="Ej: 10" style="width:120px;"></label>
           <button class="btn-mini" onclick="genPreparar()">Cruzar con BASE y previsualizar</button>
         </div>
+        <p class="seccion-sub" style="margin:4px 0 0;">Las 2 operaciones de mayor N°OP se trocean por cantidad total (talla <b>T</b>, color <b>C</b>); el resto conserva las tallas de la HN.</p>
         <!-- Resultado del cruce / dup-check -->
         <div id="genPreview"></div>
       </div>

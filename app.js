@@ -756,11 +756,12 @@ function pintarIncidencias(items, z, pref, fn){
   items.forEach(it=>{
     const d=document.createElement("div");
     d.className="card-fila"; d.style.cursor="default"; d.style.flexWrap="wrap";
+    const tipoTxt = it.tipo ? String(it.tipo).replace(/_/g," ") : "";
     d.innerHTML=`
       <div style="flex:1;min-width:220px;">
-        <div class="cf-titulo">${esc(it.nombre)}</div>
+        <div class="cf-titulo">${esc(it.nombre)}${tipoTxt?` · <span style="font-weight:700;color:var(--azul);">${esc(tipoTxt)}</span>`:""}</div>
         <div class="cf-detalle">${esc(it.motivo)}</div>
-        <div class="cf-detalle">${esc(it.area)} · ${esc(it.fecha)} ${esc(it.hora)}</div>
+        <div class="cf-detalle">${esc(it.area)} · ${esc(it.fecha)} ${esc(it.hora)}${it.solicitante?` · Solicitó: ${esc(it.solicitante)}`:""}</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input type="number" id="${pref}_${it.id}" value="${it.minutos}"
@@ -1081,14 +1082,23 @@ async function confirmarOcurrencia(){
   }
   const motivo = ($("inputMotivo") ? $("inputMotivo").value.trim() : "");
   if(TIPOS_MOTIVO.includes(oc.tipo) && !motivo){ mostrarError("Indica el motivo (hora de salida/regreso)"); return; }
-  const btn=$("btnGuardarOc"); btn.disabled=true; btn.textContent="GUARDANDO…";
+  // La supervisora YA NO registra minutos directamente: crea una solicitud que
+  // aprueba únicamente Ingeniería. Ingeniería (operar como) sigue registrando directo.
+  const esSupervisora = s.cargo === "SUPERVISORA";
+  const btn=$("btnGuardarOc"); btn.disabled=true; btn.textContent=esSupervisora?"ENVIANDO…":"GUARDANDO…";
   try{
-    const r = await rpc("fn_ocurrencia",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),
-      p_tipo:oc.tipo,p_minutos:minutos,p_detalle:(motivo||oc.tipo),p_dnis:oc.dnis});
+    const r = esSupervisora
+      ? await rpc("fn_solicitud_ocurrencia_crear",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),
+          p_tipo:oc.tipo,p_minutos:minutos,p_detalle:motivo,p_dnis:oc.dnis})
+      : await rpc("fn_ocurrencia",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),
+          p_tipo:oc.tipo,p_minutos:minutos,p_detalle:(motivo||oc.tipo),p_dnis:oc.dnis});
     btn.disabled=false; btn.textContent="GUARDAR";
     if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); return; }
-    $("exTitulo").textContent="Registrado";
-    $("exDetalle").innerHTML=`${oc.tipo.replace("_"," ")} · <b>${minutos>0?"+":""}${minutos} min</b> · ${r.afectados} persona(s)`;
+    const afectados = esSupervisora ? r.solicitadas : r.afectados;
+    $("exTitulo").textContent = esSupervisora ? "Solicitud enviada" : "Registrado";
+    $("exDetalle").innerHTML = esSupervisora
+      ? `${oc.tipo.replace("_"," ")} · <b>${minutos>0?"+":""}${minutos} min</b> · ${afectados} persona(s)<br><small>Pendiente de aprobación de Ingeniería</small>`
+      : `${oc.tipo.replace("_"," ")} · <b>${minutos>0?"+":""}${minutos} min</b> · ${afectados} persona(s)`;
     $("exAvance").textContent="";
     const ex=$("exito"); ex.classList.add("visible");
     setTimeout(async ()=>{

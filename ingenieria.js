@@ -20,24 +20,26 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
   { const rc=$("btnRecargar"); if(rc) rc.onclick=recargarIngenieria; }
 
-  // Navegación por SIDEBAR (solo PC).
-  document.querySelectorAll(".nav-item[data-tab]").forEach(b=>{
-    b.onclick = ()=>{
-      document.querySelectorAll(".nav-item[data-tab]").forEach(x=>x.classList.remove("activo"));
-      b.classList.add("activo");
-      pararAvance();                       // corta el refresco de avance si venía de supervisión
-      $("supTabs").style.display = "none"; // sub-tabs de supervisión ocultos por defecto
-      const tab=b.dataset.tab;
-      if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
-      irA(tab);
-      if(tab==='pasoIncid') cargarIncidI();
-      else if(tab==='pasoTk') cargarTk();
-      else if(tab==='pasoMod') cargarMod();
-      else if(tab==='pasoOpArea') cargarOpArea();
-      else if(tab==='pasoFechas') initFechas();
-      else if(tab==='pasoTkPer') initTkPer();
-      else if(tab==='pasoGen') genInit();
-    };
+  // Navegación por SIDEBAR. Los ítems son enlaces reales (#pasoXxx) para permitir
+  // abrir en nueva pestaña con clic central o Ctrl/⌘+clic; el clic normal navega
+  // en la misma página (SPA) y actualiza el hash.
+  document.querySelectorAll(".nav-item[data-tab]").forEach(a=>{
+    a.addEventListener("click",(e)=>{
+      if(e.ctrlKey||e.metaKey||e.shiftKey||e.button===1) return; // deja que el navegador abra nueva pestaña
+      e.preventDefault();
+      activarTab(a.dataset.tab);
+      cerrarSidebarMovil();
+    });
+  });
+  // Botón hamburguesa: colapsa el sidebar (PC) o abre/cierra el cajón (móvil).
+  { const bm=$("btnMenu"); if(bm) bm.onclick=toggleSidebar; }
+  { const bd=$("ingBackdrop"); if(bd) bd.onclick=()=>document.body.classList.add("sidebar-cerrada"); }
+  // En pantallas chicas el sidebar arranca cerrado (cajón).
+  if(window.innerWidth<=900) document.body.classList.add("sidebar-cerrada");
+  // Deep-link / nueva pestaña: si la URL trae #pasoXxx válido, abre esa sección.
+  window.addEventListener("hashchange",()=>{
+    const t=(location.hash||"").replace(/^#/,"");
+    if(NAV_TABS.includes(t)) activarTab(t);
   });
 
   ["fechaEf","fechaTk","fechaMod"].forEach(id=>{ const el=$(id); if(el) el.value = hoyISO(); });
@@ -62,16 +64,42 @@ document.addEventListener("DOMContentLoaded", async ()=>{
       }
     }});
   $("filtroTk").addEventListener("input", pintarTk);
-  cargarTk();            // landing por defecto: Tickets · Actual
   cargarEstadosAsis();
   cargarAsisMes();
+  // Landing: sección del hash si es válida; si no, Tickets · Actual.
+  const hashTab=(location.hash||"").replace(/^#/,"");
+  activarTab(NAV_TABS.includes(hashTab) ? hashTab : "pasoTk");
 });
+
+// Lista de secciones navegables (para validar hash y deep-links).
+const NAV_TABS=["pasoTk","pasoMod","pasoTkPer","pasoEf","pasoDia","pasoBases",
+  "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea"];
+
+/* Activa una sección del sidebar (misma lógica que el clic, reutilizable por
+   el ruteo por hash). Actualiza el hash sin recargar. */
+function activarTab(tab){
+  document.querySelectorAll(".nav-item[data-tab]").forEach(x=>x.classList.toggle("activo", x.dataset.tab===tab));
+  pararAvance();
+  { const st=$("supTabs"); if(st) st.style.display="none"; }
+  try{ history.replaceState(null,"","#"+tab); }catch(e){}
+  if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
+  irA(tab);
+  if(tab==='pasoIncid') cargarIncidI();
+  else if(tab==='pasoTk') cargarTk();
+  else if(tab==='pasoMod') cargarMod();
+  else if(tab==='pasoOpArea') cargarOpArea();
+  else if(tab==='pasoFechas') initFechas();
+  else if(tab==='pasoTkPer') initTkPer();
+  else if(tab==='pasoGen') genInit();
+}
+function toggleSidebar(){ document.body.classList.toggle("sidebar-cerrada"); }
+function cerrarSidebarMovil(){ if(window.innerWidth<=900) document.body.classList.add("sidebar-cerrada"); }
 
 function poblarSelectsArea(){
   const op = a=>`<option>${esc(a)}</option>`;
   const elige = `<option value="">— Elige área —</option>`;
   const todas = `<option value="">Todas las áreas</option>`;
-  $("selArea").innerHTML = AREAS_LISTA.map(op).join("");
+  { const se=$("selArea"); if(se) se.innerHTML = AREAS_LISTA.map(op).join(""); }  // "Cambiar Área" removido de la matriz
   $("areaBase").innerHTML = AREAS_LISTA.map(op).join("");
   $("filtroAreaAsis").innerHTML = todas + AREAS_LISTA.map(op).join("");
   $("filtroAreaEf").innerHTML   = elige + AREAS_LISTA.map(op).join("");   // Efi. Área: requiere elegir
@@ -144,7 +172,8 @@ function ingSupElegirArea(area){
 /* ================= GENERAR TICKETS DESDE HN ================= */
 const GEN_ENC = { prenda:"1", articulo:"" };   // PRENDA_ENC / ARTICULO_ENC (iguales para todas las áreas)
 let GEN_HN=null, GEN_FILAS=null;
-function genInit(){ $("genGate").style.display="block"; $("genPaso1").hidden=true; GEN_HN=null; GEN_FILAS=null; if($("genPreview")) $("genPreview").innerHTML=""; }
+function genInit(){ $("genGate").style.display="block"; $("genPaso1").hidden=true; GEN_HN=null; GEN_FILAS=null; if($("genPreview")) $("genPreview").innerHTML="";
+  if($("genDividir")) $("genDividir").checked=false; if($("genPaqN")) $("genPaqN").value=""; genToggleDividir(); }
 function celTxt(v){ return v==null?"":String(v).trim(); }
 
 function genLeerHN(input){
@@ -206,6 +235,10 @@ function pintarGenPreview(){
   $("genPreview").innerHTML=""; GEN_FILAS=null;
 }
 function genCodigo(corte, of, nop){ return parseInt(String(corte)+String(of)+GEN_ENC.prenda+GEN_ENC.articulo+String(nop)); }
+function genToggleDividir(){
+  const on = $("genDividir") && $("genDividir").checked;
+  const c = $("genPaqNCampo"); if(c) c.style.display = on ? "" : "none";
+}
 
 async function genPreparar(){
   const area=$("areaGen").value;
@@ -221,10 +254,34 @@ async function genPreparar(){
     if(!Array.isArray(ops) || !ops.length){
       $("genPreview").innerHTML=`<div class="estado-vacio">SIN BASE cargada para este artículo — cárgala en BASES primero.</div>`; return;
     }
-    let acum=0; const paquetes=GEN_HN.tallas.map(t=>{ const desde=acum+1, hasta=acum+t.cant; acum+=t.cant;
+    // Paquetes por talla (comportamiento normal): un paquete por fila de la HN.
+    let acum=0; const paqTalla=GEN_HN.tallas.map(t=>{ const desde=acum+1, hasta=acum+t.cant; acum+=t.cant;
       return {talla:t.talla,color:t.color,cant:t.cant,desde,hasta}; });
+
+    // Opción (punto 8): dividir las 2 operaciones de mayor N°OP en paquetes de N
+    // unidades sobre el TOTAL (ignora talla/color → "T"/"C"); el último paquete
+    // lleva el resto para que la suma sea exactamente el total de la HN.
+    const dividir = $("genDividir") && $("genDividir").checked;
+    const nPaq = parseInt($("genPaqN") ? $("genPaqN").value : "", 10);
+    if(dividir && (!nPaq || nPaq<=0)){ mostrarError("Indica un tamaño de paquete (N) válido"); $("genPreview").innerHTML=""; return; }
+    const total = GEN_HN.tallas.reduce((a,t)=>a+(Number(t.cant)||0),0);
+    let dosUltimas = new Set();
+    let paqTotal = [];
+    if(dividir){
+      const nops = [...new Set(ops.map(o=>Number(o.n_op)))].sort((a,b)=>b-a);
+      dosUltimas = new Set(nops.slice(0,2));   // los 2 N°OP mayores
+      let ac=0;
+      while(ac < total){
+        const cant = Math.min(nPaq, total-ac);
+        paqTotal.push({talla:"T",color:"C",cant,desde:ac+1,hasta:ac+cant});
+        ac += cant;
+      }
+    }
+
     const filas=[]; const set=new Set();
     for(const o of ops){
+      const usarTotal = dividir && dosUltimas.has(Number(o.n_op));
+      const paquetes = usarTotal ? paqTotal : paqTalla;
       paquetes.forEach((p,idx)=>{
         const corte=idx+1;
         const codigo=genCodigo(corte, of, o.n_op);
@@ -236,8 +293,11 @@ async function genPreparar(){
     }
     const dupes=await genDuplicados(area, set);
     GEN_FILAS = dupes.length ? null : filas;
+    const detalleDiv = dividir
+      ? `${ops.length} operaciones · 2 últimas (N°OP ${[...dosUltimas].sort((a,b)=>a-b).join(", ")}) en paquetes de ${nPaq} (${paqTotal.length} paq · total ${total} und) · resto por talla (${paqTalla.length} paq) · OF ${esc(of)} · ${esc(articulo)}`
+      : `${ops.length} operaciones × ${paqTalla.length} paquetes · OF ${esc(of)} · ${esc(articulo)}`;
     let html=`<div class="diff-box"><h3>${filas.length} tickets a generar</h3>
-      <div class="cf-detalle">${ops.length} operaciones × ${paquetes.length} paquetes · OF ${esc(of)} · ${esc(articulo)}</div></div>`;
+      <div class="cf-detalle">${detalleDiv}</div></div>`;
     if(dupes.length){
       html+=`<div class="diff-box"><div class="diff-del">${dupes.length} código(s) YA existen en ALMACEN. ¿Esta OF ya fue procesada?</div>
         <div class="cf-detalle">Ejemplos: ${esc(dupes.slice(0,8).join(", "))}</div></div>`;
@@ -307,17 +367,65 @@ async function cargarTkPer(){
     pintarTkPer();
   }catch(e){ $("tablaTkPer").innerHTML=""; mostrarError(e.message); }
 }
+let modoLibTkPer=false, libSelPer={};
 function pintarTkPer(){
   const min=TKPER.reduce((a,t)=>a+(t.estado==='ACTIVO'?Number(t.minutos):0),0);
   $("resumenTkPer").textContent=`${TKPER.length} tickets · ${Math.round(min)} min activos`;
   if(!TKPER.length){ $("tablaTkPer").innerHTML=`<div class="vacio-msg">Sin tickets en ese rango</div>`; return; }
   const cols=["Fecha","Hora","Nombre","Área","Artículo","OF","Operación","STD","Cant","Min gen.","Numeración","Estado"];
-  const thead="<thead><tr>"+cols.map(c=>`<th>${c}</th>`).join("")+"</tr></thead>";
-  $("tablaTkPer").innerHTML = thead+"<tbody>"+TKPER.map(t=>`<tr>
+  const thead="<thead><tr>"+(modoLibTkPer?`<th></th>`:"")+cols.map(c=>`<th>${c}</th>`).join("")+"<th></th></tr></thead>";
+  $("tablaTkPer").innerHTML = thead+"<tbody>"+TKPER.map((t,i)=>`<tr>
+    ${modoLibTkPer?`<td>${t.estado==='ACTIVO'?`<input type="checkbox" class="chk-lib" ${libSelPer[t.codigo]?"checked":""} onclick="toggleLibSelPer('${esc(t.codigo)}')">`:""}</td>`:""}
     <td>${esc(t.fecha)}</td><td>${esc(t.hora)}</td><td>${esc(t.nombre)}</td><td>${esc(t.area)}</td>
     <td>${esc(t.articulo)}</td><td>${esc(t.of)}</td><td class="izq">${esc(t.op)}</td>
     <td>${t.std!=null?t.std:""}</td><td>${t.cant}</td><td>${t.minutos}</td><td>${esc(t.num)}</td>
-    <td><span class="pill ${esc(t.estado)}">${esc(t.estado)}</span></td></tr>`).join("")+"</tbody>";
+    <td><span class="pill ${esc(t.estado)}">${esc(t.estado)}</span></td>
+    <td>${t.estado==='ACTIVO'?`<button class="btn-mini rojo" onclick="liberarTicketPer(${i})">LIBERAR</button>`:""}</td></tr>`).join("")+"</tbody>";
+}
+/* Liberar tickets desde "Por personal" (mismos RPC que Tickets Actual). */
+function toggleModoLiberarPer(){
+  modoLibTkPer=!modoLibTkPer; libSelPer={};
+  const bm=$("btnModoLiberarPer"), bs=$("btnLiberarSelPer"), bv=$("btnMarcarVisiblesPer");
+  if(bm){ bm.textContent = modoLibTkPer ? "Cancelar lote" : "Liberar en lote"; bm.classList.toggle("gris",modoLibTkPer); }
+  if(bs){ bs.style.display = modoLibTkPer ? "inline-block" : "none"; bs.textContent="Liberar selección (0)"; }
+  if(bv) bv.style.display = modoLibTkPer ? "inline-block" : "none";
+  pintarTkPer();
+}
+function toggleLibSelPer(codigo){
+  if(libSelPer[codigo]) delete libSelPer[codigo]; else libSelPer[codigo]=true;
+  const bs=$("btnLiberarSelPer"); if(bs) bs.textContent=`Liberar selección (${Object.keys(libSelPer).length})`;
+}
+function marcarVisiblesLibPer(){
+  const todos=TKPER.filter(t=>t.estado==='ACTIVO');
+  const faltan=todos.some(t=>!libSelPer[t.codigo]);
+  if(faltan) todos.forEach(t=>{ libSelPer[t.codigo]=true; }); else todos.forEach(t=>{ delete libSelPer[t.codigo]; });
+  const bs=$("btnLiberarSelPer"); if(bs) bs.textContent=`Liberar selección (${Object.keys(libSelPer).length})`;
+  pintarTkPer();
+}
+async function liberarTicketPer(i){
+  const t=TKPER[i]; if(!t) return;
+  const motivo=prompt(`Liberar el ticket ${t.num||t.codigo} tomado por ${t.nombre}.\nMotivo:`);
+  if(motivo===null) return;
+  try{
+    const r=await rpc("fn_liberar_ticket",{p_dni:ING.dni,p_token:ING.token,p_codigo:t.codigo,p_motivo:motivo.trim()});
+    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
+    await cargarTkPer();
+  }catch(e){ mostrarError(e.message); }
+}
+async function liberarLotePer(){
+  const codigos=Object.keys(libSelPer);
+  if(!codigos.length){ mostrarError("No hay tickets seleccionados"); return; }
+  const motivo=prompt(`Liberar ${codigos.length} ticket(s) seleccionado(s).\nMotivo:`);
+  if(motivo===null) return;
+  try{
+    const r=await rpc("fn_liberar_lote",{p_dni:ING.dni,p_token:ING.token,p_codigos:codigos,p_motivo:motivo.trim()});
+    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
+    modoLibTkPer=false; libSelPer={};
+    const bm=$("btnModoLiberarPer"); if(bm){ bm.textContent="Liberar en lote"; bm.classList.remove("gris"); }
+    const bs=$("btnLiberarSelPer"); if(bs) bs.style.display="none";
+    const bv=$("btnMarcarVisiblesPer"); if(bv) bv.style.display="none";
+    await cargarTkPer();
+  }catch(e){ mostrarError(e.message); }
 }
 function descargarTkPer(){
   if(!TKPER.length){ mostrarError("Carga primero un rango"); return; }
@@ -497,6 +605,10 @@ async function cargarMod(){
       catch(e){ BASES_CACHE[modArea]=[]; }
     }
     try{ MOD_META = await cargarMetaOF(modArea); }catch(e){ MOD_META={}; }
+    // Reinicia la cascada (Artículo → OF) al recargar el área/fecha.
+    poblarArtMod();
+    if($("artMod")) $("artMod").value="";
+    poblarOfMod();
     pintarMod();
   }catch(e){ $("zonaModulos").innerHTML=""; mostrarError(e.message); }
 }
@@ -505,6 +617,30 @@ function filtrarModArea(a){
   if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
   cargarMod();
 }
+/* --- Cascada Artículo → OF (autocompletado desde los tickets cargados) --- */
+function modArtActual(){
+  const q=normKey($("artMod")?$("artMod").value:"");
+  if(!q) return "";
+  const arts=[...new Set(MODTK.filter(t=>t.estado==='ACTIVO').map(t=>norm(t.articulo)).filter(Boolean))];
+  return arts.find(a=>normKey(a)===q) || "";
+}
+function poblarArtMod(){
+  const dl=$("artModList"); if(!dl) return;
+  const arts=[...new Set(MODTK.filter(t=>t.estado==='ACTIVO').map(t=>norm(t.articulo)).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,"es"));
+  dl.innerHTML = arts.map(a=>`<option value="${esc(a)}">`).join("");
+}
+function poblarOfMod(){
+  const sel=$("ofModSel"); if(!sel) return;
+  const art=modArtActual();
+  const prev=sel.value;
+  if(!art){ sel.innerHTML=`<option value="">Ninguna</option>`; return; }
+  const ofs=[...new Set(MODTK.filter(t=>t.estado==='ACTIVO' && norm(t.articulo)===art).map(t=>norm(t.of)).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,"es"));
+  sel.innerHTML=`<option value="">Ninguna</option>`+ofs.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("");
+  if(prev && ofs.includes(prev)) sel.value=prev;
+}
+function onArtModInput(){ poblarOfMod(); pintarMod(); }
 /* Lee la hoja OF (meta por OF). Devuelve { OF(normalizada): cantidadMeta }. */
 async function cargarMetaOF(area){
   const cfg = AREAS[area];
@@ -536,8 +672,17 @@ function ultimaOpModulo(area, articulo, modulo){
   return mx;
 }
 function pintarMod(){
-  const q=normKey($("ofMod") ? $("ofMod").value : "");   // filtro por OF
-  const activos = MODTK.filter(t=>t.estado==='ACTIVO' && t.area===modArea && (!q || normKey(t.of).includes(q)));
+  if(!modArea) return;
+  // Cascada estricta: no se muestra nada hasta elegir Artículo y luego una OF.
+  const art = modArtActual();
+  const of  = $("ofModSel") ? $("ofModSel").value : "";
+  if(!art || !of){
+    $("resumenMod").textContent = `${modArea} · elige artículo y OF`;
+    $("zonaModulos").innerHTML = `<div class="vacio-msg">Elige un artículo y luego una OF para ver los módulos.</div>`;
+    return;
+  }
+  const activos = MODTK.filter(t=>t.estado==='ACTIVO' && t.area===modArea
+    && norm(t.articulo)===art && normKey(t.of)===normKey(of));
   // Agrupar por OF · módulo
   const grp={};
   activos.forEach(t=>{
@@ -661,6 +806,11 @@ function pintarEf(){
 
 /* ================= EFICIENCIA DÍA × DÍA POR RANGO ================= */
 let EFR={dias:[],personal:[]}, efRangoSel={desde:null,hasta:null};
+let efrSort={col:null,dir:1};
+function ordenarEfR(col){
+  if(efrSort.col===col) efrSort.dir*=-1; else efrSort={col,dir:1};
+  pintarEfRango();
+}
 
 async function cargarEfRango(){
   if(!efRangoSel.desde || !efRangoSel.hasta){ mostrarError("Selecciona un rango de fechas"); return; }
@@ -682,9 +832,27 @@ function pintarEfRango(){
   const q = normKey($("filtroNomEfR").value);
   const lista = EFR.personal.filter(p=>!q || normKey(p.nombre).includes(q));
 
-  let thead = `<thead><tr><th class="col-nombre-solo">Nombre</th><th>Prom.</th>`;
-  EFR.dias.forEach(d=>{ thead += `<th>${d.slice(8,10)}</th>`; });
-  thead += `</tr></thead>`;
+  // Ordenamiento por clic en encabezado (asc/desc). Columnas: nombre, cada día
+  // (por su fecha ISO) y promedio. Los días sin dato van siempre al final.
+  if(efrSort.col){
+    const col=efrSort.col, dir=efrSort.dir;
+    lista.sort((a,b)=>{
+      if(col==='__nombre') return String(a.nombre||"").localeCompare(String(b.nombre||""),"es")*dir;
+      let va = col==='__prom' ? a.promedio : a.registros[col];
+      let vb = col==='__prom' ? b.promedio : b.registros[col];
+      const na=(va==null||va==="")?null:parseFloat(va);
+      const nb=(vb==null||vb==="")?null:parseFloat(vb);
+      if(na==null && nb==null) return 0;
+      if(na==null) return 1;
+      if(nb==null) return -1;
+      return (na-nb)*dir;
+    });
+  }
+
+  const flecha=k=>efrSort.col===k?(efrSort.dir===1?" ▲":" ▼"):"";
+  let thead = `<thead><tr><th class="col-nombre-solo ord" onclick="ordenarEfR('__nombre')">Nombre${flecha('__nombre')}</th>`;
+  EFR.dias.forEach(d=>{ thead += `<th class="ord" onclick="ordenarEfR('${d}')">${d.slice(8,10)}-${d.slice(5,7)}${flecha(d)}</th>`; });
+  thead += `<th class="ord" onclick="ordenarEfR('__prom')">Prom.${flecha('__prom')}</th></tr></thead>`;
 
   let tbody = "<tbody>";
   if(!lista.length){
@@ -695,8 +863,7 @@ function pintarEfRango(){
       <td class="col-nombre-solo">
         <div>${esc(p.nombre)}</div>
         <div style="font-size:11px;color:#5a6270;font-weight:600">DNI ${esc(p.dni)} · ${esc(p.area)}</div>
-      </td>
-      <td class="${efClase(p.promedio)}"><b>${censEf(p.promedio+"%")}</b></td>`;
+      </td>`;
     EFR.dias.forEach(d=>{
       const v = p.registros[d];
       const est = p.estados ? p.estados[d] : null;
@@ -704,6 +871,7 @@ function pintarEfRango(){
       else if(est) tbody += `<td><span class="pill ${esc(est)}" style="font-size:10px;">${esc(est)}</span></td>`;
       else tbody += `<td>\u2014</td>`;
     });
+    tbody += `<td class="${efClase(p.promedio)}"><b>${censEf(p.promedio+"%")}</b></td>`;
     tbody += `</tr>`;
   });
   tbody += "</tbody>";
@@ -712,7 +880,7 @@ function pintarEfRango(){
 
 function descargarEfRango(){
   if(!EFR.personal.length){ mostrarError("Carga primero un rango"); return; }
-  const CAB = ["DNI","Nombre","Área","Promedio %", ...EFR.dias.map(d=>d.slice(5))]; // MM-DD
+  const CAB = ["DNI","Nombre","Área","Promedio %", ...EFR.dias.map(d=>d.slice(8,10)+"-"+d.slice(5,7))]; // DD-MM
   // Porcentajes enteros (88, 34), no decimales (87.1, 33.3).
   const filas = EFR.personal.map(p=>[
     p.dni, p.nombre, p.area, Math.round(p.promedio),
@@ -783,11 +951,18 @@ function pintarDetalleAsis(){
 
 function pintarResumenAsis(){
   const total = ASIS_MES.length;
+  // Resumen de TODO el mes en persona-días: por cada persona y cada día del mes
+  // se cuenta su estado (día sin registro = ACTIVO, igual que _estado_dia).
   const porEstado = {};
-  ASIS_MES.forEach(p=>{ porEstado[p.estado_actual] = (porEstado[p.estado_actual]||0)+1; });
+  ASIS_MES.forEach(p=>{
+    ASIS_DIAS.forEach(d=>{
+      const est = p.registros[d] || 'ACTIVO';
+      porEstado[est] = (porEstado[est]||0)+1;
+    });
+  });
   let html = `<div class="chip-estado"><div class="ce-num">${total}</div><div class="ce-lbl">TOTAL PERSONAL</div></div>`;
   Object.keys(porEstado).sort().forEach(e=>{
-    html += `<div class="chip-estado"><div class="ce-num">${porEstado[e]}</div><div class="ce-lbl">${esc(e)}</div></div>`;
+    html += `<div class="chip-estado"><div class="ce-num">${porEstado[e]}</div><div class="ce-lbl">${esc(e)} (día·pers)</div></div>`;
   });
   $("resumenEstadosAsis").innerHTML = html;
 }
@@ -1107,11 +1282,17 @@ async function liberarLote(){
 let tkOcultarLib=false;
 function toggleOcultarLib(){ tkOcultarLib = !!($("chkOcultarLib") && $("chkOcultarLib").checked); pintarTk(); }
 function pintarTk(){
-  const q=normKey($("filtroTk").value);
-  TK_VISTA = TK.filter(t=>
-    (!tkOcultarLib || t.estado!=='LIBERADO') &&
-    (!tkArea || t.area===tkArea) &&
-    (!q || normKey(t.nombre+" "+t.of+" "+t.articulo+" "+t.op+" "+t.codigo+" "+t.area).includes(q)));
+  // Búsqueda por tokens: se separa el texto por espacios y "/" y cada término
+  // debe aparecer en la fila. Antes se normalizaba toda la consulta junta, así
+  // que "juan / 1234" quedaba "JUAN1234" y no coincidía entre campos (bug del "/").
+  const tokens = String($("filtroTk").value).split(/[\s/]+/).map(normKey).filter(Boolean);
+  TK_VISTA = TK.filter(t=>{
+    if(tkOcultarLib && t.estado==='LIBERADO') return false;
+    if(tkArea && t.area!==tkArea) return false;
+    if(!tokens.length) return true;
+    const hay = normKey(t.nombre+" "+t.of+" "+t.articulo+" "+t.op+" "+t.codigo+" "+t.area);
+    return tokens.every(tok=>hay.includes(tok));
+  });
   if(tkSort.col){
     TK_VISTA.sort((a,b)=>{
       const va=a[tkSort.col], vb=b[tkSort.col];
@@ -1493,11 +1674,12 @@ async function cargarIncidI(){
     items.forEach(it=>{
       const d=document.createElement("div");
       d.className="card-fila"; d.style.cursor="default"; d.style.flexWrap="wrap";
+      const tipoTxt = it.tipo ? String(it.tipo).replace(/_/g," ") : "";
       d.innerHTML=`
         <div style="flex:1;min-width:220px;">
-          <div class="cf-titulo">${esc(it.nombre)}</div>
+          <div class="cf-titulo">${esc(it.nombre)}${tipoTxt?` · <span style="font-weight:700;color:var(--azul);">${esc(tipoTxt)}</span>`:""}</div>
           <div class="cf-detalle">${esc(it.motivo)}</div>
-          <div class="cf-detalle">${esc(it.area)} · ${esc(it.fecha)} ${esc(it.hora)}</div>
+          <div class="cf-detalle">${esc(it.area)} · ${esc(it.fecha)} ${esc(it.hora)}${it.solicitante?` · Solicitó: ${esc(it.solicitante)}`:""}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <input type="number" id="inci_${it.id}" value="${it.minutos}"
