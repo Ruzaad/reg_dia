@@ -206,9 +206,9 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 /* Columna Operación (y cualquier th/td marcada .izq): alineación a la izquierda,
    el resto de la tabla de Bases y Eficiencias va centrado. */
 .tabla td.izq, .tabla th.izq{text-align:left;}
-/* Cabeceras ordenables por clic (Bases / Eficiencias) */
-.tabla th.ord{cursor:pointer;user-select:none;white-space:nowrap;}
-.tabla th.ord:hover{background:var(--enlace);}
+/* Cabeceras ordenables por clic (Bases / Eficiencias / Eficiencia por día) */
+.tabla th.ord, .tabla-asis-mes th.ord{cursor:pointer;user-select:none;white-space:nowrap;}
+.tabla th.ord:hover, .tabla-asis-mes th.ord:hover{background:var(--enlace);}
 .fila-filtros{display:flex;gap:10px;flex-wrap:wrap;max-width:1100px;margin:0 auto 12px;width:100%;align-items:center;}
 .fila-filtros input[type=text], .fila-filtros input[type=date], .fila-filtros input[type=month], .fila-filtros select{
   background:var(--blanco);border:2px solid var(--azul);border-radius:10px;
@@ -487,9 +487,9 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .ing-shell{display:flex;flex:1;min-height:0;width:100%;}
 .ing-sidebar{flex:0 0 232px;background:#0b2f6a;overflow-y:auto;padding:14px 10px;}
 .ing-nav{display:flex;flex-direction:column;gap:6px;}
-.ing-nav .nav-item{display:flex;align-items:center;gap:10px;text-align:left;
+.ing-nav .nav-item{display:flex;align-items:center;gap:10px;text-align:left;text-decoration:none;
   background:transparent;border:none;color:#dbe6fb;font-size:15px;font-weight:700;
-  padding:12px 14px;border-radius:11px;cursor:pointer;width:100%;}
+  padding:12px 14px;border-radius:11px;cursor:pointer;width:100%;box-sizing:border-box;}
 .ing-nav .nav-item span{width:22px;text-align:center;font-size:17px;}
 .ing-nav .nav-item:hover{background:rgba(255,255,255,.08);}
 .ing-nav .nav-item.activo{background:var(--blanco);color:var(--azul);font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,.2);}
@@ -509,10 +509,22 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
   max-width:1100px;margin:0 auto 10px;width:100%;}
 .fila-acciones-der .sub{margin-right:auto;}
 
-/* Aviso PC: en escritorio no se muestra; en pantallas chicas avisa */
+/* Sidebar colapsable + cajón responsive */
+.ing-sidebar{transition:transform .2s ease;}
+.btn-hdr-icon#btnMenu{font-size:20px;line-height:1;}
+.ing-backdrop{display:none;}
+/* PC: el hamburguesa colapsa (oculta) el sidebar y el contenido ocupa todo. */
+body.sidebar-cerrada .ing-sidebar{display:none;}
+
 @media (max-width:900px){
-  .ing-sidebar{flex-basis:150px;}
-  .ing-nav .nav-item{font-size:13px;padding:10px;}
+  .ing-nav .nav-item{font-size:14px;padding:11px 12px;}
+  /* El sidebar pasa a ser un cajón superpuesto sobre el contenido. */
+  .ing-sidebar{position:fixed;top:0;left:0;bottom:0;z-index:60;flex-basis:auto;width:230px;
+    box-shadow:2px 0 18px rgba(0,0,0,.45);}
+  body.sidebar-cerrada .ing-sidebar{display:block;transform:translateX(-100%);}
+  body:not(.sidebar-cerrada) .ing-backdrop{display:block;position:fixed;inset:0;
+    background:rgba(0,0,0,.45);z-index:55;}
+  .ing-main{padding:14px;}
 }
 
 /* ---- Por módulo: módulo › operación › operarios (encapsulado) ---- */
