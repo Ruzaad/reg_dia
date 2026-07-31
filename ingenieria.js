@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
         efRangoSel.hasta = (dates[1] ? dates[1] : new Date()).toLocaleDateString("sv-SE");
       }
     }});
-  $("filtroTk").addEventListener("input", pintarTk);
+  $("filtroTk").addEventListener("input", ()=>{ tkPag=1; pintarTk(); });
   cargarEstadosAsis();
   cargarAsisMes();
   // Landing: sección del hash si es válida; si no, Tickets · Actual.
@@ -72,7 +72,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
 });
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoTk","pasoMod","pasoTkPer","pasoEf","pasoDia","pasoBases",
+const NAV_TABS=["pasoTk","pasoMod","pasoEf","pasoDia","pasoBases",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea"];
 
 /* Activa una sección del sidebar (misma lógica que el clic, reutilizable por
@@ -89,7 +89,6 @@ function activarTab(tab){
   else if(tab==='pasoMod') cargarMod();
   else if(tab==='pasoOpArea') cargarOpArea();
   else if(tab==='pasoFechas') initFechas();
-  else if(tab==='pasoTkPer') initTkPer();
   else if(tab==='pasoGen') genInit();
 }
 function toggleSidebar(){ document.body.classList.toggle("sidebar-cerrada"); }
@@ -108,7 +107,6 @@ function poblarSelectsArea(){
   if($("areaMod")) $("areaMod").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("areaOp"))  $("areaOp").innerHTML  = elige + AREAS_LISTA.map(op).join("");
   if($("areaFec")) $("areaFec").innerHTML = elige + AREAS_LISTA.map(op).join("");
-  if($("areaTkPer")) $("areaTkPer").innerHTML = elige + AREAS_LISTA.map(op).join("");
   // Generar tickets: solo áreas con Sheet (las de AREAS de app.js).
   if($("areaGen")) $("areaGen").innerHTML = elige + Object.keys(AREAS).map(op).join("");
 }
@@ -120,7 +118,6 @@ function recargarIngenieria(){
   if(act("pasoEf")) cargarEf();
   else if(act("pasoDia")){ if(EFR.personal.length) cargarEfRango(); }
   else if(act("pasoTk")) cargarTk();
-  else if(act("pasoTkPer")){ if($("areaTkPer").value) cargarTkPer(); }
   else if(act("pasoMod")) cargarMod();
   else if(act("pasoBases")) cargarBases();
   else if(act("pasoAsis")) cargarAsisMes();
@@ -171,26 +168,38 @@ function ingSupElegirArea(area){
 
 /* ================= GENERAR TICKETS DESDE HN ================= */
 const GEN_ENC = { prenda:"1", articulo:"" };   // PRENDA_ENC / ARTICULO_ENC (iguales para todas las áreas)
-let GEN_HN=null, GEN_FILAS=null;
-function genInit(){ $("genGate").style.display="block"; $("genPaso1").hidden=true; GEN_HN=null; GEN_FILAS=null; if($("genPreview")) $("genPreview").innerHTML="";
-  if($("genDividir")) $("genDividir").checked=false; if($("genPaqN")) $("genPaqN").value=""; genToggleDividir(); }
+let GEN_JOBS=[];        // un trabajo por archivo subido (multi-OF)
+let GEN_SEQ=0;
+function genEsAcabado(){ return normKey($("areaGen") ? $("areaGen").value : "").includes("ACABADO"); }
+function genInit(){
+  GEN_JOBS=[]; GEN_SEQ=0;
+  $("genGate").style.display="block";
+  if($("genJobs")) $("genJobs").innerHTML="";
+}
+/* La config de empaquetado vive EN CADA tarjeta; al cambiar de área se re-renderiza. */
+function genAreaChange(){ renderGenJobs(); }
 function celTxt(v){ return v==null?"":String(v).trim(); }
 
+/* Carga MÚLTIPLES archivos: cada uno = un trabajo independiente (su hoja HN). */
 function genLeerHN(input){
-  const file=input.files[0]; input.value="";
-  if(!file) return;
+  const files=[...input.files]; input.value="";
+  if(!files.length) return;
   if(!$("areaGen").value){ mostrarError("Elige primero el área"); return; }
-  const lector=new FileReader();
-  lector.onload=(e)=>{
-    try{
-      const wb=XLSX.read(e.target.result,{type:"array"});
-      if(!wb.SheetNames.includes("HN")) throw new Error("No se encontró la hoja HN en el archivo.");
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets["HN"],{header:1,defval:null,raw:true});
-      GEN_HN=parseHN(rows);
-      pintarGenPreview();
-    }catch(err){ mostrarError(err.message); }
-  };
-  lector.readAsArrayBuffer(file);
+  $("genGate").style.display="none";
+  files.forEach(file=>{
+    const lector=new FileReader();
+    lector.onload=(e)=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:"array"});
+        if(!wb.SheetNames.includes("HN")) throw new Error(`"${file.name}": no se encontró la hoja HN.`);
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets["HN"],{header:1,defval:null,raw:true});
+        const hn=parseHN(rows);
+        GEN_JOBS.push({id:++GEN_SEQ, name:file.name, hn, filas:null, dupes:[]});
+        renderGenJobs();
+      }catch(err){ mostrarError(err.message); }
+    };
+    lector.readAsArrayBuffer(file);
+  });
 }
 function parseHN(rows){
   const get=(r,c)=> (rows[r]&&rows[r][c]!=null)?rows[r][c]:null;
@@ -224,88 +233,162 @@ function parseHN(rows){
   });
   return { prenda, articulo, of, tallas, bloques:bloques.length };
 }
-function pintarGenPreview(){
-  $("genGate").style.display="none"; $("genPaso1").hidden=false;
-  $("genPrenda").value=GEN_HN.prenda; $("genArticulo").value=GEN_HN.articulo; $("genOf").value=GEN_HN.of;
-  const total=GEN_HN.tallas.reduce((a,t)=>a+t.cant,0);
-  $("genResumen").textContent=`${GEN_HN.bloques} bloque(s) · ${GEN_HN.tallas.length} filas · ${total} und`;
-  $("tablaGen").innerHTML="<thead><tr><th>#</th><th>Talla</th><th>Cant</th><th class=\"izq\">Color</th></tr></thead><tbody>"
-    + GEN_HN.tallas.map((t,i)=>`<tr><td>${i+1}</td><td>${esc(t.talla)}</td><td>${t.cant}</td><td class="izq">${esc(t.color)}</td></tr>`).join("")
-    + "</tbody>";
-  $("genPreview").innerHTML=""; GEN_FILAS=null;
+function jobById(id){ return GEN_JOBS.find(j=>j.id===id); }
+function genQuitarJob(id){
+  GEN_JOBS=GEN_JOBS.filter(j=>j.id!==id);
+  renderGenJobs();
+  if(!GEN_JOBS.length) $("genGate").style.display="block";
+}
+/* Render de una tarjeta independiente por archivo/OF (preview + edición + config propia). */
+function renderGenJobs(){
+  const z=$("genJobs"); if(!z) return;
+  const ac=genEsAcabado();
+  z.innerHTML = GEN_JOBS.map(j=>{
+    const total=j.hn.tallas.reduce((a,t)=>a+t.cant,0);
+    const filasTabla = j.hn.tallas.map((t,i)=>`<tr><td>${i+1}</td><td>${esc(t.talla)}</td><td>${t.cant}</td><td class="izq">${esc(t.color)}</td></tr>`).join("");
+    const cfg = ac
+      ? `<div class="barra-control gen-cfg-job">
+          <label class="campo"><span>Paquete estándar</span><input type="number" id="genEstandar_${j.id}" min="1" inputmode="numeric" placeholder="Ej: 40"></label>
+          <label class="campo"><span>Paquete pequeño</span><input type="number" id="genPequeno_${j.id}" min="1" inputmode="numeric" placeholder="Ej: 10"></label>
+          <label class="campo"><span>Cant. paq. pequeños</span><input type="number" id="genCantPeq_${j.id}" min="0" inputmode="numeric" placeholder="Ej: 5"></label>
+          <label class="campo campo-check"><input type="checkbox" id="genPorColor_${j.id}"><span>Separar por color</span></label>
+        </div>`
+      : `<div class="barra-control gen-cfg-job">
+          <label class="campo campo-check"><input type="checkbox" id="genDivU_${j.id}" onchange="genToggleDivJob(${j.id})"><span>Dividir última operación</span></label>
+          <label class="campo" id="genNUc_${j.id}" style="display:none;"><span>N (última)</span><input type="number" id="genNU_${j.id}" min="1" inputmode="numeric" placeholder="Ej: 10"></label>
+          <label class="campo campo-check"><input type="checkbox" id="genDivP_${j.id}" onchange="genToggleDivJob(${j.id})"><span>Dividir penúltima operación</span></label>
+          <label class="campo" id="genNPc_${j.id}" style="display:none;"><span>N (penúltima)</span><input type="number" id="genNP_${j.id}" min="1" inputmode="numeric" placeholder="Ej: 10"></label>
+        </div>`;
+    return `<div class="gen-job" id="genJob_${j.id}">
+      <div class="gen-job-head">
+        <div class="gen-job-name">${esc(j.name)}</div>
+        <button class="btn-mini gris" onclick="genQuitarJob(${j.id})">Quitar</button>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Prenda</span><input type="text" id="genPrenda_${j.id}" value="${esc(j.hn.prenda)}"></label>
+        <label class="campo"><span>Artículo</span><input type="text" id="genArticulo_${j.id}" value="${esc(j.hn.articulo)}"></label>
+        <label class="campo"><span>OF</span><input type="text" id="genOf_${j.id}" inputmode="numeric" value="${esc(j.hn.of)}"></label>
+        <span class="sub" style="align-self:flex-end;">${j.hn.bloques} bloque(s) · ${j.hn.tallas.length} filas · ${total} und</span>
+      </div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:34vh;">
+        <table class="tabla"><thead><tr><th>#</th><th>Talla</th><th>Cant</th><th class="izq">Color</th></tr></thead>
+        <tbody>${filasTabla}</tbody></table>
+      </div>
+      ${cfg}
+      <div class="fila-filtros" style="margin-top:6px;">
+        <button class="btn-mini" onclick="genPrepararJob(${j.id})">Cruzar con BASE y previsualizar</button>
+      </div>
+      <div id="genPreview_${j.id}"></div>
+    </div>`;
+  }).join("");
+}
+function genToggleDivJob(id){
+  { const c=$("genNUc_"+id), k=$("genDivU_"+id); if(c&&k) c.style.display=k.checked?"":"none"; }
+  { const c=$("genNPc_"+id), k=$("genDivP_"+id); if(c&&k) c.style.display=k.checked?"":"none"; }
+}
+/* Paquetes de Acabado: pequeños primero, luego estándar, resto final.
+   La suma es siempre exactamente el total. */
+function genPaquetesAcabado(total, estandar, pequeno, cantPeq){
+  const paq=[]; let restante=total;
+  for(let i=0;i<cantPeq && restante>0;i++){ const c=Math.min(pequeno, restante); paq.push(c); restante-=c; }
+  while(restante>=estandar){ paq.push(estandar); restante-=estandar; }
+  if(restante>0) paq.push(restante);
+  return paq;
 }
 function genCodigo(corte, of, nop){ return parseInt(String(corte)+String(of)+GEN_ENC.prenda+GEN_ENC.articulo+String(nop)); }
-function genToggleDividir(){
-  const on = $("genDividir") && $("genDividir").checked;
-  const c = $("genPaqNCampo"); if(c) c.style.display = on ? "" : "none";
-}
 
-async function genPreparar(){
+async function genPrepararJob(id){
+  const j=jobById(id); if(!j) return;
   const area=$("areaGen").value;
-  const prenda=$("genPrenda").value.trim().toUpperCase();
-  const articulo=$("genArticulo").value.trim().toUpperCase();
-  const of=$("genOf").value.replace(/\D/g,"");
+  const prenda=$("genPrenda_"+id).value.trim().toUpperCase();
+  const articulo=$("genArticulo_"+id).value.trim().toUpperCase();
+  const of=$("genOf_"+id).value.replace(/\D/g,"");
+  const pv=$("genPreview_"+id);
   if(!prenda||!articulo||!of){ mostrarError("Completa prenda, artículo y OF"); return; }
-  if(!GEN_HN || !GEN_HN.tallas.length){ mostrarError("Sube primero la HN"); return; }
-  $("genPreview").innerHTML=cargandoHTML("Cruzando con BASE…");
+  if(!j.hn.tallas.length){ mostrarError("La HN no tiene filas"); return; }
+  j.hn.prenda=prenda; j.hn.articulo=articulo; j.hn.of=of;   // conserva lo editado
+  pv.innerHTML=cargandoHTML("Cruzando con BASE…");
   try{
     const ops=await rpc("fn_bases_operaciones",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_prenda:prenda,p_articulo:articulo});
     if(ops && ops.ok===false) throw new Error(ops.error);
     if(!Array.isArray(ops) || !ops.length){
-      $("genPreview").innerHTML=`<div class="estado-vacio">SIN BASE cargada para este artículo — cárgala en BASES primero.</div>`; return;
+      pv.innerHTML=`<div class="estado-vacio">SIN BASE cargada para este artículo — cárgala en BASES primero.</div>`; j.filas=null; return;
     }
-    // Paquetes por talla (comportamiento normal): un paquete por fila de la HN.
-    let acum=0; const paqTalla=GEN_HN.tallas.map(t=>{ const desde=acum+1, hasta=acum+t.cant; acum+=t.cant;
-      return {talla:t.talla,color:t.color,cant:t.cant,desde,hasta}; });
+    const total = j.hn.tallas.reduce((a,t)=>a+(Number(t.cant)||0),0);
+    const cliente = norm(ops[0].cliente||"");
+    const filas=[]; const set=new Set(); let detalle="";
+    const pushFila=(o,p,corte)=>{
+      const codigo=genCodigo(corte, of, o.n_op);
+      if(set.has(codigo)) throw new Error("Código duplicado interno: "+codigo+" (paquete "+corte+", op "+o.n_op+")");
+      set.add(codigo);
+      const ef=Math.round(((Number(o.std)*p.cant)/576)*100*100)/100;
+      // Col 13: costura = numeración (desde-hasta); acabado = CLIENTE.
+      const col13 = p.col13!=null ? p.col13 : `${p.desde}-${p.hasta}`;
+      filas.push([prenda,articulo,o.modulo,o.op,Number(o.std),Number(of),p.talla,p.color,corte,p.cant,codigo,o.n_op,col13,ef]);
+    };
 
-    // Opción (punto 8): dividir las 2 operaciones de mayor N°OP en paquetes de N
-    // unidades sobre el TOTAL (ignora talla/color → "T"/"C"); el último paquete
-    // lleva el resto para que la suma sea exactamente el total de la HN.
-    const dividir = $("genDividir") && $("genDividir").checked;
-    const nPaq = parseInt($("genPaqN") ? $("genPaqN").value : "", 10);
-    if(dividir && (!nPaq || nPaq<=0)){ mostrarError("Indica un tamaño de paquete (N) válido"); $("genPreview").innerHTML=""; return; }
-    const total = GEN_HN.tallas.reduce((a,t)=>a+(Number(t.cant)||0),0);
-    let dosUltimas = new Set();
-    let paqTotal = [];
-    if(dividir){
-      const nops = [...new Set(ops.map(o=>Number(o.n_op)))].sort((a,b)=>b-a);
-      dosUltimas = new Set(nops.slice(0,2));   // los 2 N°OP mayores
-      let ac=0;
-      while(ac < total){
-        const cant = Math.min(nPaq, total-ac);
-        paqTotal.push({talla:"T",color:"C",cant,desde:ac+1,hasta:ac+cant});
-        ac += cant;
+    if(genEsAcabado()){
+      // Empaquetado estándar/pequeño sobre un único total (por color o global).
+      const estandar=parseInt($("genEstandar_"+id).value,10);
+      const pequeno=parseInt($("genPequeno_"+id).value,10);
+      const cantPeq=parseInt($("genCantPeq_"+id).value,10);
+      if(!estandar||estandar<=0||!pequeno||pequeno<=0||isNaN(cantPeq)||cantPeq<0){
+        mostrarError("Configura paquete estándar, pequeño y cantidad de pequeños"); pv.innerHTML=""; return;
       }
+      const porColor = $("genPorColor_"+id) && $("genPorColor_"+id).checked;   // Opción 1 (separar) vs 2 (ignorar)
+      let grupos;
+      if(porColor){
+        const by={}; j.hn.tallas.forEach(t=>{ const c=norm(t.color)||"SIN COLOR"; by[c]=(by[c]||0)+(Number(t.cant)||0); });
+        grupos=Object.entries(by).map(([color,tot])=>({color, total:tot}));
+      } else {
+        grupos=[{color:"C", total}];
+      }
+      // Lista plana de paquetes (índice global = N° corte).
+      const paquetes=[];
+      grupos.forEach(g=>{ genPaquetesAcabado(g.total, estandar, pequeno, cantPeq).forEach(cant=>paquetes.push({color:g.color, cant, talla:"T", col13:cliente})); });
+      for(const o of ops){ paquetes.forEach((p,idx)=>pushFila(o,p,idx+1)); }
+      detalle=`${ops.length} operaciones × ${paquetes.length} paquetes${porColor?` · ${grupos.length} color(es)`:" · sin separar color"} · total ${total} und · cliente ${esc(cliente||"—")}`;
+    } else {
+      // Costura: un paquete por talla; opción de dividir la última y/o la penúltima
+      // operación, cada una con su propia cantidad N (siempre suma el total exacto).
+      let acum=0; const paqTalla=j.hn.tallas.map(t=>{ const desde=acum+1, hasta=acum+t.cant; acum+=t.cant;
+        return {talla:t.talla,color:t.color,cant:t.cant,desde,hasta}; });
+      const divU = $("genDivU_"+id) && $("genDivU_"+id).checked;
+      const divP = $("genDivP_"+id) && $("genDivP_"+id).checked;
+      const nU = parseInt($("genNU_"+id)?$("genNU_"+id).value:"", 10);
+      const nP = parseInt($("genNP_"+id)?$("genNP_"+id).value:"", 10);
+      if(divU && (!nU||nU<=0)){ mostrarError("Indica la cantidad (N) para la última operación"); pv.innerHTML=""; return; }
+      if(divP && (!nP||nP<=0)){ mostrarError("Indica la cantidad (N) para la penúltima operación"); pv.innerHTML=""; return; }
+      const nops=[...new Set(ops.map(o=>Number(o.n_op)))].sort((a,b)=>b-a);
+      const nopU = nops.length ? nops[0] : null;         // última = mayor N°OP
+      const nopP = nops.length>1 ? nops[1] : null;        // penúltima = 2º mayor
+      const trocear=(nn)=>{ const arr=[]; let ac=0; while(ac<total){ const c=Math.min(nn,total-ac); arr.push({talla:"T",color:"C",cant:c,desde:ac+1,hasta:ac+c}); ac+=c; } return arr; };
+      const paqU = divU ? trocear(nU) : null;
+      const paqP = divP ? trocear(nP) : null;
+      for(const o of ops){
+        let paquetes = paqTalla;
+        if(divU && nopU!=null && Number(o.n_op)===nopU) paquetes = paqU;
+        else if(divP && nopP!=null && Number(o.n_op)===nopP) paquetes = paqP;
+        paquetes.forEach((p,idx)=>pushFila(o,p,idx+1));
+      }
+      const partes=[];
+      if(divU && nopU!=null) partes.push(`última (N°OP ${nopU}) en paq. de ${nU}`);
+      if(divP && nopP!=null) partes.push(`penúltima (N°OP ${nopP}) en paq. de ${nP}`);
+      detalle = (partes.length ? partes.join(" · ")+" · resto por talla" : `${paqTalla.length} paquetes por talla`)
+        + ` · OF ${esc(of)} · ${esc(articulo)}`;
     }
 
-    const filas=[]; const set=new Set();
-    for(const o of ops){
-      const usarTotal = dividir && dosUltimas.has(Number(o.n_op));
-      const paquetes = usarTotal ? paqTotal : paqTalla;
-      paquetes.forEach((p,idx)=>{
-        const corte=idx+1;
-        const codigo=genCodigo(corte, of, o.n_op);
-        if(set.has(codigo)) throw new Error("Código duplicado interno: "+codigo+" (paquete "+corte+", op "+o.n_op+")");
-        set.add(codigo);
-        const ef=Math.round(((Number(o.std)*p.cant)/576)*100*100)/100;
-        filas.push([prenda,articulo,o.modulo,o.op,Number(o.std),Number(of),p.talla,p.color,corte,p.cant,codigo,o.n_op,`${p.desde}-${p.hasta}`,ef]);
-      });
-    }
     const dupes=await genDuplicados(area, set);
-    GEN_FILAS = dupes.length ? null : filas;
-    const detalleDiv = dividir
-      ? `${ops.length} operaciones · 2 últimas (N°OP ${[...dosUltimas].sort((a,b)=>a-b).join(", ")}) en paquetes de ${nPaq} (${paqTotal.length} paq · total ${total} und) · resto por talla (${paqTalla.length} paq) · OF ${esc(of)} · ${esc(articulo)}`
-      : `${ops.length} operaciones × ${paqTalla.length} paquetes · OF ${esc(of)} · ${esc(articulo)}`;
-    let html=`<div class="diff-box"><h3>${filas.length} tickets a generar</h3>
-      <div class="cf-detalle">${detalleDiv}</div></div>`;
+    j.filas = dupes.length ? null : filas;
+    let html=`<div class="diff-box"><h3>${filas.length} tickets a generar</h3><div class="cf-detalle">${detalle}</div></div>`;
     if(dupes.length){
       html+=`<div class="diff-box"><div class="diff-del">${dupes.length} código(s) YA existen en ALMACEN. ¿Esta OF ya fue procesada?</div>
         <div class="cf-detalle">Ejemplos: ${esc(dupes.slice(0,8).join(", "))}</div></div>`;
     } else {
-      html+=`<div class="fila-filtros"><button class="btn-mini verde" onclick="genSubir()">Confirmar y escribir en ALMACEN (${filas.length})</button></div>`;
+      html+=`<div class="fila-filtros"><button class="btn-mini verde" onclick="genSubirJob(${id})">Confirmar y escribir en ALMACEN (${filas.length})</button></div>`;
     }
-    $("genPreview").innerHTML=html;
-  }catch(e){ $("genPreview").innerHTML=""; mostrarError(e.message); }
+    pv.innerHTML=html;
+  }catch(e){ pv.innerHTML=""; mostrarError(e.message); }
 }
 async function genDuplicados(area, codigosSet){
   const cfg=AREAS[area]; if(!cfg || !cfg.sheetId) return [];
@@ -320,123 +403,22 @@ async function genDuplicados(area, codigosSet){
     return dup;
   }catch(e){ return []; }
 }
-async function genSubir(){
-  if(!GEN_FILAS || !GEN_FILAS.length){ mostrarError("Nada que subir"); return; }
+async function genSubirJob(id){
+  const j=jobById(id); if(!j) return;
+  if(!j.filas || !j.filas.length){ mostrarError("Nada que subir (previsualiza primero)"); return; }
   const area=$("areaGen").value;
-  if(!confirm(`¿Escribir ${GEN_FILAS.length} filas al ALMACEN de ${area}?`)) return;
-  $("genPreview").innerHTML=cargandoHTML("Escribiendo en ALMACEN…");
+  if(!confirm(`¿Escribir ${j.filas.length} filas al ALMACEN de ${area}? (OF ${j.hn.of})`)) return;
+  const pv=$("genPreview_"+id); pv.innerHTML=cargandoHTML("Escribiendo en ALMACEN…");
   try{
-    const r=await edgeFn(FN_GENERAR_TICKETS,{p_dni:ING.dni,p_token:ING.token,area:area,filas:GEN_FILAS});
-    if(!r.ok){ mostrarError(r.error||"No se pudo escribir"); $("genPreview").innerHTML=""; return; }
-    mostrarOk(`${r.escritas} filas escritas en ALMACEN`);
-    $("genPreview").innerHTML=`<div class="estado-vacio">✓ ${r.escritas} filas escritas en el ALMACEN de ${esc(area)}.</div>`;
-    GEN_FILAS=null;
-  }catch(e){ $("genPreview").innerHTML=""; mostrarError(e.message); }
+    const r=await edgeFn(FN_GENERAR_TICKETS,{p_dni:ING.dni,p_token:ING.token,area:area,filas:j.filas});
+    if(!r.ok){ mostrarError(r.error||"No se pudo escribir"); pv.innerHTML=""; return; }
+    mostrarOk(`${r.escritas} filas escritas en ALMACEN (OF ${j.hn.of})`);
+    pv.innerHTML=`<div class="estado-vacio">✓ ${r.escritas} filas escritas en el ALMACEN de ${esc(area)} (OF ${esc(j.hn.of)}).</div>`;
+    j.filas=null;
+  }catch(e){ pv.innerHTML=""; mostrarError(e.message); }
 }
 
-/* ================= TICKETS POR PERSONAL (rango + Excel) ================= */
-let TKPER=[];
-function initTkPer(){
-  { const d=$("desdeTkPer"); if(d && !d.value) d.value=hoyISO(); }
-  { const h=$("hastaTkPer"); if(h && !h.value) h.value=hoyISO(); }
-  $("opTkPer").innerHTML = `<option value="">— Toda el área —</option>`;
-}
-async function cargarTkPerArea(){
-  const area=$("areaTkPer").value; const s=$("opTkPer");
-  if(!area){ s.innerHTML=`<option value="">— Elige área —</option>`; return; }
-  s.innerHTML=`<option value="">Cargando…</option>`;
-  try{
-    const per=await rpc("fn_personal",{p_dni:ING.dni,p_token:ING.token,p_area:area});
-    s.innerHTML=`<option value="">— Toda el área —</option>`
-      + per.map(p=>`<option value="${esc(p.dni)}">${esc(soloApellidos(p.nombre))} · ${esc(p.dni)}</option>`).join("");
-  }catch(e){ s.innerHTML=`<option value="">Error</option>`; mostrarError(e.message); }
-}
-async function cargarTkPer(){
-  const area=$("areaTkPer").value;
-  if(!area){ mostrarError("Elige un área"); return; }
-  const desde=$("desdeTkPer").value, hasta=$("hastaTkPer").value;
-  if(!desde || !hasta){ mostrarError("Elige el rango de fechas"); return; }
-  if(hasta<desde){ mostrarError("La fecha final no puede ser menor a la inicial"); return; }
-  $("tkPerGate").style.display="none";
-  $("tablaTkPer").innerHTML=cargandoHTML("Cargando…");
-  try{
-    const r=await rpc("fn_tickets_rango",{p_dni:ING.dni,p_token:ING.token,
-      p_area:area,p_dni_op:$("opTkPer").value,p_desde:desde,p_hasta:hasta});
-    TKPER = Array.isArray(r) ? r : [];
-    if(r && r.ok===false){ mostrarError(r.error||"Error"); TKPER=[]; }
-    pintarTkPer();
-  }catch(e){ $("tablaTkPer").innerHTML=""; mostrarError(e.message); }
-}
-let modoLibTkPer=false, libSelPer={};
-function pintarTkPer(){
-  const min=TKPER.reduce((a,t)=>a+(t.estado==='ACTIVO'?Number(t.minutos):0),0);
-  $("resumenTkPer").textContent=`${TKPER.length} tickets · ${Math.round(min)} min activos`;
-  if(!TKPER.length){ $("tablaTkPer").innerHTML=`<div class="vacio-msg">Sin tickets en ese rango</div>`; return; }
-  const cols=["Fecha","Hora","Nombre","Área","Artículo","OF","Operación","STD","Cant","Min gen.","Numeración","Estado"];
-  const thead="<thead><tr>"+(modoLibTkPer?`<th></th>`:"")+cols.map(c=>`<th>${c}</th>`).join("")+"<th></th></tr></thead>";
-  $("tablaTkPer").innerHTML = thead+"<tbody>"+TKPER.map((t,i)=>`<tr>
-    ${modoLibTkPer?`<td>${t.estado==='ACTIVO'?`<input type="checkbox" class="chk-lib" ${libSelPer[t.codigo]?"checked":""} onclick="toggleLibSelPer('${esc(t.codigo)}')">`:""}</td>`:""}
-    <td>${esc(t.fecha)}</td><td>${esc(t.hora)}</td><td>${esc(t.nombre)}</td><td>${esc(t.area)}</td>
-    <td>${esc(t.articulo)}</td><td>${esc(t.of)}</td><td class="izq">${esc(t.op)}</td>
-    <td>${t.std!=null?t.std:""}</td><td>${t.cant}</td><td>${t.minutos}</td><td>${esc(t.num)}</td>
-    <td><span class="pill ${esc(t.estado)}">${esc(t.estado)}</span></td>
-    <td>${t.estado==='ACTIVO'?`<button class="btn-mini rojo" onclick="liberarTicketPer(${i})">LIBERAR</button>`:""}</td></tr>`).join("")+"</tbody>";
-}
-/* Liberar tickets desde "Por personal" (mismos RPC que Tickets Actual). */
-function toggleModoLiberarPer(){
-  modoLibTkPer=!modoLibTkPer; libSelPer={};
-  const bm=$("btnModoLiberarPer"), bs=$("btnLiberarSelPer"), bv=$("btnMarcarVisiblesPer");
-  if(bm){ bm.textContent = modoLibTkPer ? "Cancelar lote" : "Liberar en lote"; bm.classList.toggle("gris",modoLibTkPer); }
-  if(bs){ bs.style.display = modoLibTkPer ? "inline-block" : "none"; bs.textContent="Liberar selección (0)"; }
-  if(bv) bv.style.display = modoLibTkPer ? "inline-block" : "none";
-  pintarTkPer();
-}
-function toggleLibSelPer(codigo){
-  if(libSelPer[codigo]) delete libSelPer[codigo]; else libSelPer[codigo]=true;
-  const bs=$("btnLiberarSelPer"); if(bs) bs.textContent=`Liberar selección (${Object.keys(libSelPer).length})`;
-}
-function marcarVisiblesLibPer(){
-  const todos=TKPER.filter(t=>t.estado==='ACTIVO');
-  const faltan=todos.some(t=>!libSelPer[t.codigo]);
-  if(faltan) todos.forEach(t=>{ libSelPer[t.codigo]=true; }); else todos.forEach(t=>{ delete libSelPer[t.codigo]; });
-  const bs=$("btnLiberarSelPer"); if(bs) bs.textContent=`Liberar selección (${Object.keys(libSelPer).length})`;
-  pintarTkPer();
-}
-async function liberarTicketPer(i){
-  const t=TKPER[i]; if(!t) return;
-  const motivo=prompt(`Liberar el ticket ${t.num||t.codigo} tomado por ${t.nombre}.\nMotivo:`);
-  if(motivo===null) return;
-  try{
-    const r=await rpc("fn_liberar_ticket",{p_dni:ING.dni,p_token:ING.token,p_codigo:t.codigo,p_motivo:motivo.trim()});
-    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
-    await cargarTkPer();
-  }catch(e){ mostrarError(e.message); }
-}
-async function liberarLotePer(){
-  const codigos=Object.keys(libSelPer);
-  if(!codigos.length){ mostrarError("No hay tickets seleccionados"); return; }
-  const motivo=prompt(`Liberar ${codigos.length} ticket(s) seleccionado(s).\nMotivo:`);
-  if(motivo===null) return;
-  try{
-    const r=await rpc("fn_liberar_lote",{p_dni:ING.dni,p_token:ING.token,p_codigos:codigos,p_motivo:motivo.trim()});
-    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
-    modoLibTkPer=false; libSelPer={};
-    const bm=$("btnModoLiberarPer"); if(bm){ bm.textContent="Liberar en lote"; bm.classList.remove("gris"); }
-    const bs=$("btnLiberarSelPer"); if(bs) bs.style.display="none";
-    const bv=$("btnMarcarVisiblesPer"); if(bv) bv.style.display="none";
-    await cargarTkPer();
-  }catch(e){ mostrarError(e.message); }
-}
-function descargarTkPer(){
-  if(!TKPER.length){ mostrarError("Carga primero un rango"); return; }
-  const CAB=["Fecha","Hora","DNI","Nombre","Área","Artículo","OF","Operación","STD","Cant","Min generado","Numeración","Código","Estado"];
-  const filas=TKPER.map(t=>[t.fecha,t.hora,t.dni,t.nombre,t.area,t.articulo,t.of,t.op,t.std,t.cant,t.minutos,t.num,t.codigo,t.estado]);
-  const ws=XLSX.utils.aoa_to_sheet([CAB,...filas]);
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "TicketsPersonal");
-  const suf=$("opTkPer").value || $("areaTkPer").value.replace(/ /g,"_");
-  XLSX.writeFile(wb, `TICKETS_${suf}_${$("desdeTkPer").value}_a_${$("hastaTkPer").value}.xlsx`);
-}
+/* (Tickets por personal fue eliminado — Parche 12) */
 
 /* ================= CORREGIR FECHAS DE RECLAMO ================= */
 let FEC_RECL=[], FEC_SEL={}, FEC_MOTIVOS=[];
@@ -605,9 +587,10 @@ async function cargarMod(){
       catch(e){ BASES_CACHE[modArea]=[]; }
     }
     try{ MOD_META = await cargarMetaOF(modArea); }catch(e){ MOD_META={}; }
+    await cargarModCerrados();
     // Reinicia la cascada (Artículo → OF) al recargar el área/fecha.
-    poblarArtMod();
     if($("artMod")) $("artMod").value="";
+    cerrarArtDrop();
     poblarOfMod();
     pintarMod();
   }catch(e){ $("zonaModulos").innerHTML=""; mostrarError(e.message); }
@@ -624,12 +607,20 @@ function modArtActual(){
   const arts=[...new Set(MODTK.filter(t=>t.estado==='ACTIVO').map(t=>norm(t.articulo)).filter(Boolean))];
   return arts.find(a=>normKey(a)===q) || "";
 }
-function poblarArtMod(){
-  const dl=$("artModList"); if(!dl) return;
+let ART_MATCH=[];
+/* Autocompletado por coincidencia (contains) con dropdown propio y estilizado. */
+function renderArtDrop(){
+  const inp=$("artMod"), drop=$("artModDrop"); if(!inp||!drop) return;
+  const q=normKey(inp.value);
   const arts=[...new Set(MODTK.filter(t=>t.estado==='ACTIVO').map(t=>norm(t.articulo)).filter(Boolean))]
     .sort((a,b)=>a.localeCompare(b,"es"));
-  dl.innerHTML = arts.map(a=>`<option value="${esc(a)}">`).join("");
+  ART_MATCH = (q ? arts.filter(a=>normKey(a).includes(q)) : arts).slice(0,60);
+  if(!ART_MATCH.length){ drop.style.display="none"; drop.innerHTML=""; return; }
+  drop.innerHTML = ART_MATCH.map((a,i)=>`<div class="ac-item" onmousedown="elegirArtMod(${i})">${esc(a)}</div>`).join("");
+  drop.style.display="block";
 }
+function elegirArtMod(i){ const a=ART_MATCH[i]; if(a==null) return; $("artMod").value=a; cerrarArtDrop(); poblarOfMod(); pintarMod(); }
+function cerrarArtDrop(){ const d=$("artModDrop"); if(d) d.style.display="none"; }
 function poblarOfMod(){
   const sel=$("ofModSel"); if(!sel) return;
   const art=modArtActual();
@@ -640,7 +631,7 @@ function poblarOfMod(){
   sel.innerHTML=`<option value="">Ninguna</option>`+ofs.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("");
   if(prev && ofs.includes(prev)) sel.value=prev;
 }
-function onArtModInput(){ poblarOfMod(); pintarMod(); }
+function onArtModInput(){ renderArtDrop(); poblarOfMod(); pintarMod(); }
 /* Lee la hoja OF (meta por OF). Devuelve { OF(normalizada): cantidadMeta }. */
 async function cargarMetaOF(area){
   const cfg = AREAS[area];
@@ -671,6 +662,36 @@ function ultimaOpModulo(area, articulo, modulo){
   });
   return mx;
 }
+/* Nombre exacto de la última operación (mayor N°OP) del módulo, desde BASE. */
+function ultimaOpNombreModulo(area, articulo, modulo){
+  const ka=normKey(articulo), km=normKey(modulo); let mx=null, nom="";
+  (BASES_CACHE[area]||[]).forEach(b=>{
+    if(normKey(b.articulo)===ka && normKey(b.modulo)===km){
+      const n=Number(b.n_op); if(!isNaN(n) && (mx===null || n>mx)){ mx=n; nom=norm(b.operacion); }
+    }
+  });
+  return nom;
+}
+/* Módulos cerrados: ingeniería bloquea el reclamo de tickets de un módulo. */
+let MOD_CERRADOS=new Set(), MOD_GRUPOS=[];
+async function cargarModCerrados(){
+  try{
+    const r=await rpc("fn_modulos_cerrados_listar",{p_dni:ING.dni,p_token:ING.token,p_area:modArea});
+    MOD_CERRADOS = new Set((Array.isArray(r)?r:[]).map(x=>normKey(x.of)+"||"+normKey(x.modulo)));
+  }catch(e){ MOD_CERRADOS=new Set(); }
+}
+function modEstaCerrado(of, mod){ return MOD_CERRADOS.has(normKey(of)+"||"+normKey(mod)); }
+async function toggleModulo(idx, cerrar){
+  const g=MOD_GRUPOS[idx]; if(!g) return;
+  const accion = cerrar ? "cerrar" : "liberar";
+  if(!confirm(`¿Deseas ${accion} el módulo "${g.mod}" de la OF ${g.of}?\n`
+    + (cerrar ? "Nadie podrá reclamar sus tickets hasta que lo liberes." : "Se podrán volver a reclamar sus tickets."))) return;
+  try{
+    const r=await rpc("fn_modulo_cerrar",{p_dni:ING.dni,p_token:ING.token,p_area:modArea,p_of:g.of,p_modulo:g.mod,p_cerrar:cerrar});
+    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+    await cargarModCerrados(); pintarMod();
+  }catch(e){ mostrarError(e.message); }
+}
 function pintarMod(){
   if(!modArea) return;
   // Cascada estricta: no se muestra nada hasta elegir Artículo y luego una OF.
@@ -700,25 +721,34 @@ function pintarMod(){
     if(lastNop!=null && Number(t.nop)===lastNop) g.ultima += c;
   });
   const claves=Object.keys(grp).sort((a,b)=>a.localeCompare(b,"es"));
+  MOD_GRUPOS = claves.map(k=>grp[k]);   // referencia por índice para cerrar/abrir
   $("resumenMod").textContent = `${modArea} · ${claves.length} módulo(s) con actividad · ${activos.length} tickets`;
   if(!claves.length){ $("zonaModulos").innerHTML=`<div class="vacio-msg">Sin tickets activos para esta área/OF</div>`; return; }
-  $("zonaModulos").innerHTML = claves.map(k=>{
+  $("zonaModulos").innerHTML = claves.map((k,idx)=>{
     const g=grp[k];
     const meta = MOD_META[normKey(g.of)] || 0;
     const pct = meta>0 ? Math.min(100, Math.round(g.ultima/meta*100)) : null;
     const ops=Object.keys(g.ops).sort((a,b)=>a.localeCompare(b,"es"));
+    const lastOp = ultimaOpNombreModulo(modArea, g.articulo, g.mod);
+    const cerrado = modEstaCerrado(g.of, g.mod);
     const barra = pct==null
       ? `<div class="avance-nometa">Sube el balance/OF para calcular el avance</div>`
       : `<div class="avance-bar"><div class="avance-fill ${pct>=80?'alto':pct<40?'bajo':''}" style="width:${pct}%"></div>
-           <span class="avance-lbl">${pct}%</span></div>
-         <div class="avance-sub">${Math.round(g.ultima)} de ${Math.round(meta)} und (última operación)</div>`;
-    return `<details class="mod-card" open>
-      <summary class="mod-head">
-        <div class="mod-nombre">${esc(g.mod)}</div>
+           <span class="avance-lbl">${pct}%</span></div>`;
+    const metaTxt = pct==null ? ""
+      : `<div class="avance-sub">${Math.round(g.ultima)} de ${Math.round(meta)} und · última op.: <b>${esc(lastOp||"—")}</b></div>`;
+    return `<div class="mod-card${cerrado?' mod-cerrado':''}">
+      <div class="mod-head-fija">
+        <div class="mod-head-top">
+          <div class="mod-nombre">${esc(g.mod)}${cerrado?' <span class="mod-badge-cerrado">CERRADO</span>':''}</div>
+          <button class="btn-mini ${cerrado?'verde':'rojo'}" onclick="toggleModulo(${idx}, ${cerrado?'false':'true'})">${cerrado?'Liberar módulo':'Cerrar módulo'}</button>
+        </div>
         <div class="mod-sub">OF ${esc(g.of)} · ${esc(g.articulo)} · ${ops.length} operación(es) · ${g.tks} tickets</div>
-      </summary>
-      <div class="mod-body">
-        <div class="mod-avance">${barra}</div>
+        <div class="mod-avance">${barra}${metaTxt}</div>
+      </div>
+      <details class="mod-ops">
+        <summary>Ver operaciones (${ops.length})</summary>
+        <div class="mod-ops-body">
         ${ops.map(opName=>{
           const op=g.ops[opName];
           const personas=Object.values(op.personas).sort((a,b)=>b.cant-a.cant);
@@ -730,8 +760,9 @@ function pintarMod(){
             </div>`).join("")}
           </details>`;
         }).join("")}
-      </div>
-    </details>`;
+        </div>
+      </details>
+    </div>`;
   }).join("");
 }
 
@@ -1198,6 +1229,7 @@ let TK=[], TK_VISTA=[], BASES_CACHE={};
 let tkSort={col:null,dir:1};
 let tkArea="";                 // filtro de área activo (select); "" = todas
 let modoLibTk=false, libSel={}; // modo liberar en lote + códigos marcados
+let tkPag=1; const TK_PAGE=100; // paginación de la tabla (100 por página)
 const TK_COLS=[
   {k:"hora",t:"Hora"},{k:"nombre",t:"Nombre"},{k:"area",t:"Área"},{k:"articulo",t:"Artículo"},
   {k:"of",t:"OF"},{k:"op",t:"Operación"},{k:"std",t:"STD"},{k:"cant",t:"Cant"},
@@ -1218,7 +1250,7 @@ function descargarTk(){
 async function cargarTk(){
   $("tablaTk").innerHTML=cargandoHTML("Cargando…");
   $("resumenUltimas").innerHTML="";
-  libSel={};
+  libSel={}; tkPag=1;
   try{
     TK = await rpc("fn_tickets_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:$("fechaTk").value});
     // Si el área filtrada ya no tiene tickets hoy, vuelve a "todas".
@@ -1237,7 +1269,7 @@ function poblarAreaTk(){
     + areas.map(a=>`<option ${a===tkArea?"selected":""}>${esc(a)}</option>`).join("");
   s.value = tkArea;
 }
-function filtrarTkArea(a){ tkArea=a; pintarTk(); cargarResumenUltimas(); }
+function filtrarTkArea(a){ tkArea=a; tkPag=1; pintarTk(); cargarResumenUltimas(); }
 
 /* Liberar en lote: alterna el modo de selección con checkboxes. */
 function toggleModoLiberar(){
@@ -1305,6 +1337,13 @@ function pintarTk(){
   const min=lista.reduce((a,t)=>a+(t.estado==='ACTIVO'?Number(t.minutos):0),0);
   $("resumenTk").textContent=`${lista.length} tickets · ${Math.round(min)} min activos`
     + (tkArea?` · área: ${tkArea}`:"");
+  // Panel lateral (solo al buscar): operaciones por OF con cantidad total realizada.
+  renderTkOpsPanel(tokens.length>0);
+  // Paginación (100 por página).
+  const totalP=Math.max(1, Math.ceil(lista.length/TK_PAGE));
+  if(tkPag>totalP) tkPag=totalP; if(tkPag<1) tkPag=1;
+  const ini=(tkPag-1)*TK_PAGE;
+  const pagina=lista.slice(ini, ini+TK_PAGE);
   // Cualquier cargo INGENIERIA puede liberar (el servidor revalida).
   const flecha=k=>tkSort.col===k?(tkSort.dir===1?" \u25B2":" \u25BC"):"";
   const thead="<thead><tr>"
@@ -1312,14 +1351,44 @@ function pintarTk(){
     +TK_COLS.map(c=>`<th class="ord" onclick="ordenarTk('${c.k}')">${c.t}${flecha(c.k)}</th>`).join("")
     +"<th></th></tr></thead>";
   $("tablaTk").innerHTML = thead+"<tbody>"+
-    lista.map((t,i)=>`<tr>
+    pagina.map((t,idx)=>{ const i=ini+idx; return `<tr>
       ${modoLibTk?`<td>${t.estado==='ACTIVO'?`<input type="checkbox" class="chk-lib" ${libSel[t.codigo]?"checked":""} onclick="toggleLibSel('${esc(t.codigo)}')">`:""}</td>`:""}
       <td>${esc(t.hora)}</td><td>${esc(t.nombre)}</td><td>${esc(t.area)}</td>
       <td>${esc(t.articulo)}</td><td>${esc(t.of)}</td><td class="izq">${esc(t.op)}</td>
       <td>${t.std!=null?t.std:""}</td><td>${t.cant}</td><td>${t.minutos}</td><td>${esc(t.num)}</td>
       <td><span class="pill ${esc(t.estado)}">${esc(t.estado)}</span></td>
       <td>${t.estado==='ACTIVO'?`<button class="btn-mini rojo" onclick="liberarTicket(${i})">LIBERAR</button>`:""}</td>
-      </tr>`).join("")+"</tbody>";
+      </tr>`; }).join("")+"</tbody>";
+  const pg=$("tkPager");
+  if(pg){
+    if(totalP<=1){ pg.innerHTML=""; }
+    else pg.innerHTML = `<button class="btn-mini" ${tkPag<=1?"disabled":""} onclick="tkIrPagina(-1)">‹ Anterior</button>`
+      + `<span class="pg-info">Página ${tkPag} de ${totalP} · ${lista.length} filas</span>`
+      + `<button class="btn-mini" ${tkPag>=totalP?"disabled":""} onclick="tkIrPagina(1)">Siguiente ›</button>`;
+  }
+}
+function tkIrPagina(d){ tkPag=Math.max(1, tkPag+d); pintarTk(); }
+/* Panel de operaciones por OF (cantidad total realizada de tickets reclamados) — solo al buscar. */
+function renderTkOpsPanel(activo){
+  const panel=$("tkOpsPanel"); if(!panel) return;
+  if(!activo){ panel.style.display="none"; panel.innerHTML=""; return; }
+  const byOf={};
+  TK_VISTA.forEach(t=>{
+    if(t.estado!=='ACTIVO') return;
+    const of=norm(t.of)||"(sin OF)"; const op=norm(t.op)||"(sin operación)";
+    (byOf[of]=byOf[of]||{}); byOf[of][op]=(byOf[of][op]||0)+(Number(t.cant)||0);
+  });
+  const ofs=Object.keys(byOf).sort((a,b)=>a.localeCompare(b,"es"));
+  if(!ofs.length){ panel.style.display="none"; panel.innerHTML=""; return; }
+  panel.style.display="";
+  panel.innerHTML = `<div class="tk-ops-title">Operaciones por OF</div>` + ofs.map(of=>{
+    const ops=byOf[of]; const opNames=Object.keys(ops).sort((a,b)=>a.localeCompare(b,"es"));
+    const totOf=opNames.reduce((a,o)=>a+ops[o],0);
+    return `<details class="tk-ops-of">
+      <summary>${esc(of)} · ${Math.round(totOf)} und</summary>
+      ${opNames.map(o=>`<div class="tk-ops-row"><span>${esc(o)}</span><span>${Math.round(ops[o])}</span></div>`).join("")}
+    </details>`;
+  }).join("");
 }
 
 /* Retiro de tickets desde la app: SOLO el usuario ALOPEZ.
@@ -1485,6 +1554,36 @@ function descargarBase(){
   XLSX.writeFile(wb, `BASE_${$("areaBase").value.replace(/ /g,"_")}_${hoyISO()}.xlsx`);
 }
 
+/* --- Borrar ARTÍCULO completo (con modal de confirmación) --- */
+function abrirModalBorrarArt(){
+  const arts=[...new Set((BASE||[]).map(b=>norm(b.articulo)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+  if(!arts.length){ mostrarError("Carga una base primero"); return; }
+  const opts=arts.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join("");
+  abrirModal(`
+    <h2 style="margin:0 0 12px;color:var(--azul);font-size:20px;">Borrar artículo</h2>
+    <label class="campo" style="margin-bottom:12px;"><span>Artículo</span>
+      <select id="delArtSel" style="border:2px solid #cfd8e6;border-radius:10px;padding:9px 12px;font-size:15px;font-weight:600;"
+        onchange="$('delArtMsg').textContent='SEGURO QUE DESEAS BORRAR: ART '+this.value+' ?'">${opts}</select></label>
+    <div id="delArtMsg" style="background:#fdeceb;border:1.5px solid var(--alerta);color:var(--alerta);font-weight:800;border-radius:12px;padding:12px 14px;margin-bottom:12px;">SEGURO QUE DESEAS BORRAR: ART ${esc(arts[0])} ?</div>
+    <p class="seccion-sub" style="margin:0 0 16px;">Se eliminarán TODAS las operaciones de ese artículo. No se puede deshacer.</p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+      <button class="btn-mini gris" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn-mini rojo" onclick="confirmarBorrarArt()">Confirmar borrado</button>
+    </div>`);
+}
+async function confirmarBorrarArt(){
+  const sel=$("delArtSel"); if(!sel) return;
+  const art=sel.value; if(!art) return;
+  const area=$("areaBase").value;
+  try{
+    const r=await rpc("fn_base_articulo_eliminar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:art});
+    if(!r.ok){ mostrarError(r.error||"No se pudo borrar"); return; }
+    cerrarModal();
+    mostrarOk(`Artículo ${art} eliminado (${r.eliminadas} operación(es))`);
+    await cargarBases();
+  }catch(e){ mostrarError(e.message); }
+}
+
 /* --- CRUD de BASE por fila (editar STD / artículos / operaciones) --- */
 let BASE_VALORES={};   // cache por área de valores históricos (prendas/clientes/…/maxop)
 async function abrirModalBaseOp(id){
@@ -1521,9 +1620,9 @@ async function abrirModalBaseOp(id){
       <div class="modal-campo"><label>STD (min)</label><input id="boStd" inputmode="decimal" value="${v('std')}"></div>
       <div class="modal-campo"><label>N°OP (orden)</label><input id="boNop" inputmode="numeric" value="${v('n_op')}"></div>
     </div>
-    <div class="modal-campo"><label>Max Op. <span class="cf-detalle" style="font-weight:600;">(auto según artículo)</span></label>
-      <input id="boMaxOp" inputmode="numeric" value="${v('max_op')}"></div>
-    <div class="cf-detalle" style="margin-top:-4px;">El mayor N°OP del artículo es la operación final (★ dorada); el 2º mayor, la penúltima.</div>
+    <div class="modal-campo"><label>Max Op. <span class="cf-detalle" style="font-weight:600;">(automático)</span></label>
+      <input id="boMaxOp" inputmode="numeric" value="${v('max_op')}" readonly style="background:var(--gris-fondo);color:#5a6270;"></div>
+    <div class="cf-detalle" style="margin-top:-4px;">El N°OP es la posición; al guardar se reordena automáticamente el resto y Max Op. = total de operaciones del artículo. El mayor N°OP es la operación final (★ dorada); el 2º mayor, la penúltima.</div>
     <div class="modal-msg" id="boMsg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" onclick="guardarBaseOp(${esEdicion?id:"null"})">GUARDAR</button>

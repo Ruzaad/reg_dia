@@ -3,6 +3,7 @@
   --azul:#0D3B85; --ocre:#D49D53; --enlace:#1A56B4;
   --blanco:#FAFAFA; --gris-fondo:#F0F2F5; --texto:#212529;
   --exito:#1E7B3C; --alerta:#B3261E; --tomado:#9aa4b1;
+  --dorado:#C9A227;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
@@ -115,6 +116,12 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .tk-tomado-por{margin-top:7px;font-size:14px;font-weight:700;color:var(--alerta);
   background:#fdecea;padding:4px 9px;border-radius:8px;display:inline-block;}
 .tk-min{position:absolute;top:11px;right:11px;font-size:14px;font-weight:800;color:var(--ocre);}
+/* cabecera de ticket en 2 columnas: Numeración + PPH (dorado) */
+.tk-head{display:flex;gap:22px;align-items:flex-start;padding-right:56px;}
+.tk-col{display:flex;flex-direction:column;}
+.tk-oro{color:var(--dorado);}
+.tk-col.tk-pph .tk-numeracion{font-size:26px;}
+.tk-fila .tk-cant{font-size:20px;color:var(--azul);}   /* Cantidad más notoria */
 
 /* ---- confirmación ---- */
 .zona-conf{max-width:540px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:13px;}
@@ -433,7 +440,27 @@ body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",mono
   background:var(--gris-fondo);border:2px solid #cfd8e6;border-radius:10px;
   font-size:15px;font-weight:600;padding:9px 12px;color:var(--texto);outline:none;min-height:42px;}
 .barra-control select:hover,.barra-control input:hover{border-color:var(--enlace);}
+.barra-control input[type=number]{background:var(--gris-fondo);border:2px solid #cfd8e6;
+  border-radius:10px;font-size:15px;font-weight:600;padding:9px 12px;color:var(--texto);
+  outline:none;min-height:42px;max-width:150px;}
 .barra-control .btn-mini{align-self:flex-end;min-height:42px;}
+/* Checkbox integrado en la barra: mismo contenedor que un .campo pero en fila. */
+.barra-control .campo-check{flex-direction:row;align-items:center;gap:10px;cursor:pointer;
+  background:var(--gris-fondo);border:2px solid #cfd8e6;border-radius:10px;
+  padding:9px 12px;min-height:42px;}
+.barra-control .campo-check:hover{border-color:var(--enlace);}
+.barra-control .campo-check input[type=checkbox]{width:18px;height:18px;accent-color:var(--azul);
+  cursor:pointer;margin:0;flex:0 0 auto;}
+.barra-control .campo-check span{font-size:14px;font-weight:700;text-transform:none;
+  letter-spacing:0;color:var(--texto);}
+/* Config de empaquetado por tarjeta (Generar tickets) */
+.gen-cfg-job{background:#eef2f8;border-color:#d6e0ef;margin:10px 0 0;}
+/* Tarjeta de trabajo por archivo/OF en Generar tickets */
+.gen-job{background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;
+  padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(13,59,133,.06);}
+.gen-job-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
+.gen-job-name{font-weight:800;color:var(--azul);font-size:15px;word-break:break-word;}
+.gen-job .barra-control{margin-bottom:12px;}
 
 /* Estado vacío / gating (elige área) */
 .estado-vacio{background:var(--blanco);border:1.5px dashed #c3ccdb;border-radius:16px;
@@ -482,7 +509,9 @@ body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",mono
    ============================================================ */
 
 /* La vista de ingeniería usa scroll interno (header + sidebar fijos). */
-body[data-pagina="ingenieria"]{overflow:hidden;}
+body[data-pagina="ingenieria"]{overflow:hidden;user-select:text;-webkit-user-select:text;}
+/* PC: permitir copiar datos de tablas/celdas (el resto de la app es no-seleccionable). */
+body[data-pagina="ingenieria"] .ing-main{user-select:text;-webkit-user-select:text;}
 body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .ing-shell{display:flex;flex:1;min-height:0;width:100%;}
 .ing-sidebar{flex:0 0 232px;background:#0b2f6a;overflow-y:auto;padding:14px 10px;}
@@ -567,6 +596,56 @@ body.sidebar-cerrada .ing-sidebar{display:none;}
 details.mod-op>summary.mod-op-head{cursor:pointer;list-style:none;}
 details.mod-op>summary.mod-op-head::-webkit-details-marker{display:none;}
 details.mod-op>summary.mod-op-head::before{content:"▸ ";font-size:11px;color:#5a6270;}
+
+/* Tarjeta de módulo (Parche 12): encabezado FIJO + operaciones colapsables */
+.mod-head-fija{padding:12px 14px 8px;}
+.mod-head-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.mod-head-fija .mod-nombre{color:var(--azul);font-size:18px;font-weight:800;}
+.mod-head-fija .mod-sub{color:#5a6270;font-weight:700;font-size:12px;margin-top:2px;}
+.mod-head-fija .mod-avance{padding:8px 0 0;}
+.mod-badge-cerrado{display:inline-block;background:var(--alerta);color:#fff;font-size:11px;font-weight:800;
+  padding:2px 8px;border-radius:8px;margin-left:6px;vertical-align:middle;}
+.mod-card.mod-cerrado{border-top-color:var(--alerta);}
+.mod-ops{border-top:1px solid var(--gris-fondo);}
+.mod-ops>summary{cursor:pointer;list-style:none;padding:10px 14px;font-size:13px;font-weight:800;
+  color:var(--azul);user-select:none;}
+.mod-ops>summary::-webkit-details-marker{display:none;}
+.mod-ops>summary::before{content:"▸ ";}
+.mod-ops[open]>summary::before{content:"▾ ";}
+.mod-ops-body{padding:0 12px 12px;display:flex;flex-direction:column;gap:10px;}
+
+/* Autocompletado (campo Artículo en Por módulo) */
+.campo.autocomplete{position:relative;}
+.autocomplete-drop{position:absolute;top:100%;left:0;right:0;z-index:40;margin-top:2px;
+  background:var(--blanco);border:2px solid var(--enlace);border-radius:10px;max-height:260px;
+  overflow-y:auto;box-shadow:0 6px 20px rgba(13,59,133,.18);}
+.autocomplete-drop .ac-item{padding:9px 12px;font-size:14px;font-weight:600;color:var(--texto);cursor:pointer;}
+.autocomplete-drop .ac-item:hover{background:var(--gris-fondo);color:var(--azul);}
+
+/* Tickets Actual: tabla + panel de operaciones por OF + paginación (Parche 12) */
+.tk-layout{display:flex;gap:16px;align-items:flex-start;}
+.tk-tabla-wrap{flex:1;min-width:0;}
+.tk-ops-panel{flex:0 0 300px;max-width:300px;max-height:66vh;overflow-y:auto;
+  background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;padding:12px;
+  box-shadow:0 1px 3px rgba(13,59,133,.06);}
+.tk-ops-title{font-size:13px;font-weight:800;color:var(--azul);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px;}
+.tk-ops-of{border:1px solid var(--gris-fondo);border-radius:10px;margin-bottom:8px;overflow:hidden;}
+.tk-ops-of>summary{cursor:pointer;list-style:none;padding:9px 12px;font-weight:800;color:var(--azul);
+  background:var(--gris-fondo);user-select:none;font-size:13px;}
+.tk-ops-of>summary::-webkit-details-marker{display:none;}
+.tk-ops-of>summary::before{content:"▸ ";}
+.tk-ops-of[open]>summary::before{content:"▾ ";}
+.tk-ops-row{display:flex;justify-content:space-between;gap:8px;padding:7px 12px;font-size:13px;
+  border-top:1px solid var(--gris-fondo);}
+.tk-ops-row span:first-child{color:var(--texto);}
+.tk-ops-row span:last-child{font-weight:800;color:var(--azul);font-family:"Fira Code",monospace;white-space:nowrap;}
+.pager{display:flex;gap:12px;align-items:center;justify-content:center;padding:12px 0;flex-wrap:wrap;}
+.pager .pg-info{font-size:13px;font-weight:700;color:#5a6270;}
+.pager .btn-mini[disabled]{opacity:.45;cursor:not-allowed;}
+@media (max-width:1100px){
+  .tk-layout{flex-direction:column;}
+  .tk-ops-panel{flex-basis:auto;max-width:none;width:100%;max-height:none;}
+}
 details.mod-op[open]>summary.mod-op-head::before{content:"▾ ";}
 
 /* ---- Asistencia: separar chips de estado del resto + sub-tabs + detallado ---- */
