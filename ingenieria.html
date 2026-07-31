@@ -33,7 +33,6 @@
       <div class="nav-sep">Tickets</div>
       <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
       <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Por módulo</a>
-      <a class="nav-item" data-tab="pasoTkPer" href="#pasoTkPer">Por personal</a>
       <div class="nav-sep">Eficiencia</div>
       <a class="nav-item" data-tab="pasoEf" href="#pasoEf">Por área</a>
       <a class="nav-item" data-tab="pasoDia" href="#pasoDia">Por día</a>
@@ -131,36 +130,14 @@
       </div>
       <div class="sub" id="resumenTk"></div>
       <div class="kpis" id="resumenUltimas" style="margin-bottom:14px;"></div>
-      <div class="contenedor-ancho tabla-scroll" style="max-height:66vh;">
-        <table class="tabla" id="tablaTk"></table>
-      </div>
-    </section>
-
-    <!-- ===================== TICKETS · POR PERSONAL ===================== -->
-    <section class="pantalla" id="pasoTkPer">
-      <div class="seccion-cab">
-        <h1>Tickets por personal</h1>
-        <p class="seccion-sub">Rango de fechas por operario (o toda el área). Descarga el Excel con todos los datos, incluido el STD.</p>
-      </div>
-      <div class="barra-control">
-        <label class="campo"><span>Área</span>
-          <select id="areaTkPer" onchange="cargarTkPerArea()"></select></label>
-        <label class="campo"><span>Operario</span>
-          <select id="opTkPer"></select></label>
-        <label class="campo"><span>Desde</span>
-          <input type="date" id="desdeTkPer"></label>
-        <label class="campo"><span>Hasta</span>
-          <input type="date" id="hastaTkPer"></label>
-        <button class="btn-mini" onclick="cargarTkPer()">Cargar</button>
-        <button class="btn-mini verde" onclick="descargarTkPer()">Descargar XLSX</button>
-        <button class="btn-mini" id="btnModoLiberarPer" onclick="toggleModoLiberarPer()">Liberar en lote</button>
-        <button class="btn-mini" id="btnMarcarVisiblesPer" style="display:none" onclick="marcarVisiblesLibPer()">Marcar visibles</button>
-        <button class="btn-mini rojo" id="btnLiberarSelPer" style="display:none" onclick="liberarLotePer()">Liberar selección (0)</button>
-      </div>
-      <div id="tkPerGate" class="estado-vacio">Elige área (y opcionalmente operario) y el rango de fechas.</div>
-      <div class="sub" id="resumenTkPer"></div>
-      <div class="contenedor-ancho tabla-scroll" style="max-height:66vh;">
-        <table class="tabla" id="tablaTkPer"></table>
+      <div class="tk-layout">
+        <div class="tk-tabla-wrap">
+          <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;">
+            <table class="tabla" id="tablaTk"></table>
+          </div>
+          <div class="pager" id="tkPager"></div>
+        </div>
+        <aside id="tkOpsPanel" class="tk-ops-panel" style="display:none;"></aside>
       </div>
     </section>
 
@@ -173,9 +150,10 @@
       <div class="barra-control">
         <label class="campo"><span>Área</span>
           <select id="areaMod" onchange="filtrarModArea(this.value)"></select></label>
-        <label class="campo"><span>Artículo</span>
-          <input type="text" id="artMod" list="artModList" placeholder="Escribe artículo…" oninput="onArtModInput()" autocomplete="off">
-          <datalist id="artModList"></datalist></label>
+        <label class="campo autocomplete"><span>Artículo</span>
+          <input type="text" id="artMod" placeholder="Escribe artículo…" autocomplete="off"
+            oninput="onArtModInput()" onfocus="renderArtDrop()" onblur="setTimeout(cerrarArtDrop,150)">
+          <div id="artModDrop" class="autocomplete-drop" style="display:none;"></div></label>
         <label class="campo"><span>OF</span>
           <select id="ofModSel" onchange="pintarMod()"><option value="">Ninguna</option></select></label>
         <label class="campo"><span>Hasta la fecha</span>
@@ -197,6 +175,7 @@
         <button class="btn-mini" onclick="cargarBases()">↻ CARGAR</button>
         <button class="btn-mini verde" onclick="descargarBase()">DESCARGAR XLSX</button>
         <button class="btn-mini" onclick="abrirModalBaseOp(null)">+ AGREGAR OPERACIÓN</button>
+        <button class="btn-mini rojo" onclick="abrirModalBorrarArt()">BORRAR ARTÍCULO</button>
         <label class="btn-mini" style="cursor:pointer;">
           SUBIR EXCEL
           <input type="file" accept=".xlsx,.xls" style="display:none" onchange="leerExcelBase(this)">
@@ -259,40 +238,19 @@
     <section class="pantalla" id="pasoGen">
       <div class="seccion-cab">
         <h1>Generar tickets desde HN</h1>
-        <p class="seccion-sub">Sube la Hoja de Numeración (hoja <b>HN</b>), revisa/corrige lo detectado, cruza con la BASE y escribe al ALMACEN del área. Solo ingeniería.</p>
+        <p class="seccion-sub">Sube uno o varios Excel (hoja <b>HN</b>). Cada archivo/OF se procesa por separado: revisa, corrige, cruza con la BASE y escribe al ALMACÉN del área. Solo ingeniería.</p>
       </div>
       <div class="barra-control">
         <label class="campo"><span>Área (ALMACEN destino)</span>
-          <select id="areaGen"></select></label>
+          <select id="areaGen" onchange="genAreaChange()"></select></label>
         <label class="btn-mini" style="cursor:pointer;align-self:flex-end;">
-          Subir Excel HN
-          <input type="file" id="fileGen" accept=".xlsx,.xls,.xlsm" style="display:none" onchange="genLeerHN(this)">
+          Subir Excel HN (uno o varios)
+          <input type="file" id="fileGen" accept=".xlsx,.xls,.xlsm" multiple style="display:none" onchange="genLeerHN(this)">
         </label>
       </div>
-      <div id="genGate" class="estado-vacio">Elige el área y sube el Excel de la Hoja de Numeración.</div>
-      <div id="genPaso1" hidden>
-        <!-- Preview editable de metadata -->
-        <div class="barra-control">
-          <label class="campo"><span>Prenda</span><input type="text" id="genPrenda"></label>
-          <label class="campo"><span>Artículo</span><input type="text" id="genArticulo"></label>
-          <label class="campo"><span>OF</span><input type="text" id="genOf" inputmode="numeric"></label>
-          <span class="sub" id="genResumen" style="align-self:flex-end;"></span>
-        </div>
-        <div class="contenedor-ancho tabla-scroll" style="max-height:38vh;">
-          <table class="tabla" id="tablaGen"></table>
-        </div>
-        <div class="barra-control" style="margin-top:14px;">
-          <label class="campo" style="flex-direction:row;align-items:center;gap:8px;">
-            <input type="checkbox" id="genDividir" onchange="genToggleDividir()">
-            <span>Dividir las 2 últimas operaciones en paquetes de</span></label>
-          <label class="campo" id="genPaqNCampo" style="display:none;"><span>Unidades por paquete (N)</span>
-            <input type="number" id="genPaqN" min="1" inputmode="numeric" placeholder="Ej: 10" style="width:120px;"></label>
-          <button class="btn-mini" onclick="genPreparar()">Cruzar con BASE y previsualizar</button>
-        </div>
-        <p class="seccion-sub" style="margin:4px 0 0;">Las 2 operaciones de mayor N°OP se trocean por cantidad total (talla <b>T</b>, color <b>C</b>); el resto conserva las tallas de la HN.</p>
-        <!-- Resultado del cruce / dup-check -->
-        <div id="genPreview"></div>
-      </div>
+      <p class="seccion-sub" style="margin:0 0 12px;">Cada archivo/OF configura su propio empaquetado. Costura: dividir última y/o penúltima operación con su cantidad. Acabado: paquetes estándar/pequeño sobre el total (por color o global).</p>
+      <div id="genGate" class="estado-vacio">Elige el área y sube uno o más Excel (hoja HN).</div>
+      <div id="genJobs"></div>
     </section>
 
     <!-- ===================== CORREGIR FECHAS DE RECLAMO ===================== -->

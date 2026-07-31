@@ -18,6 +18,11 @@ const MAPA_ESTANDAR = {                          // cabecera normalizada -> camp
   "CANT":"cant","CODIGO":"codigo","NOP":"nop","NUMERACION":"num"
 };
 
+const MAPA_ACABADO = {                          // cabecera normalizada -> campo
+  "PRENDA":"prenda","ARTICULO":"articulo","MODULO":"modulo","OP":"op",
+  "STD":"std","OF":"of","TALLA":"talla","COLOR":"color","NCORTE":"corte",
+  "CANT":"cant","CODIGO":"codigo","NOP":"nop","NOMBRE":"nombre"
+};
 const AREAS = {
   "CAMISA COSTURA": {
     habilitada: true,
@@ -27,10 +32,10 @@ const AREAS = {
     mapa: MAPA_ESTANDAR
   },
   "ACABADO": {
-    habilitada: false,               // PENDIENTE: compartir libro como lector + confirmar cabeceras
+    habilitada: true,               // PENDIENTE: compartir libro como lector + confirmar cabeceras
     sheetId: "1R2FqLRZpFjdA7rzUk6dsTyj898yUYO0aKU_OYG4e0Xc",
     hoja: "ALMACEN",
-    mapa: MAPA_ESTANDAR              // ajustar cuando se vean sus columnas reales
+    mapa: MAPA_ACABADO              // ajustar cuando se vean sus columnas reales
   },
   "PANTALON COSTURA": {
     habilitada: true,
@@ -419,6 +424,20 @@ function pintarCrumb(id){
   el.style.display="block";
 }
 let EF_CENSURADA = false;   // operario: ojo para censurar su propia eficiencia
+/* ACABADO: se cuenta CANTIDAD (sin numeración, sin minutaje, sin eficiencia).
+   META_ACABADO[op] = {hoy, meta, ref}; meta = último día que trabajó esa op. */
+let ES_ACABADO = false, META_ACABADO = {}, CANT_HOY_ACABADO = 0;
+const qty = v => (Math.round((+v||0)*100)/100);   // cantidad legible (2 dec máx)
+/* Oculta en la cabecera lo que no aplica a Acabado (ojo de eficiencia, ajuste
+   de minutos) y ajusta el subtítulo del paso Tickets. */
+function aplicarModoAcabado(){
+  const oj=$("btnOjoEf"), rl=$("btnReloj");
+  if(oj) oj.style.display = ES_ACABADO ? "none" : "";
+  if(rl) rl.style.display = ES_ACABADO ? "none" : "";
+  const subTk = document.querySelector('#pasoTickets .sub');
+  if(subTk) subTk.textContent = ES_ACABADO ? "Registra la cantidad de tu paquete" : "Busca la numeración de tu paquete";
+  const lblConf=$("confLabel"); if(lblConf) lblConf.textContent = ES_ACABADO ? "Cantidad" : "Numeración";
+}
 function initOperario(){
   const s = sesionActual();
   if(!s || !s.area){ location.href="index.html"; return; }
@@ -478,16 +497,20 @@ function pintarAreasEstajero(s){
 async function cargarTodo(s){
   irA("pasoCarga");
   const area = AREA_ESTAJERO || s.area;
+  ES_ACABADO = (area === "ACABADO");
+  aplicarModoAcabado();
   $("zonaCarga").innerHTML = cargandoHTML("Cargando almacén de "+area+"…");
   try{
     const [alm, recl, dia] = await Promise.all([
       cargarAlmacen(area),
       rpc("fn_reclamados", {p_dni:s.dni, p_token:s.token, p_area:area}),
-      rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token})
+      ES_ACABADO
+        ? rpc("fn_acabado_metas", {p_dni:s.dni, p_token:s.token, p_area:area})
+        : rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token})
     ]);
     ALM = alm;
     RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
-    setAvance(dia);
+    if(ES_ACABADO) setMetasAcabado(dia); else setAvance(dia);
     if(alm.duplicados.length) console.warn("Códigos duplicados en almacén:", alm.duplicados);
     irA("pasoOF");
   }catch(e){
@@ -503,12 +526,25 @@ function setAvance(d){
   b.textContent = `Hoy: ${ef} · ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
   b.classList.add("visible");
 }
+/* ACABADO: badge = cantidad de hoy (sin eficiencia ni minutaje). */
+function setMetasAcabado(d){
+  META_ACABADO = (d && d.ops) || {};
+  CANT_HOY_ACABADO = (d && +d.cant_hoy) || 0;
+  const b=$("badgeAvance");
+  b.textContent = `Hoy: ${qty(CANT_HOY_ACABADO)} und`;
+  b.classList.add("visible");
+}
+async function refrescarMetasAcabado(){
+  const s=sesionActual(); if(!s) return;
+  const area = AREA_ESTAJERO || s.area;
+  try{ setMetasAcabado(await rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area})); }catch(e){}
+}
 async function recargarMiEficiencia(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   const b=$("btnRecargar"); if(b) b.classList.add("girando");
   try{
-    const d=await rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token});
-    setAvance(d);
+    if(ES_ACABADO) await refrescarMetasAcabado();
+    else setAvance(await rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token}));
   }catch(e){ mostrarError(e.message); }
   finally{ if(b) setTimeout(()=>b.classList.remove("girando"),500); }
 }
@@ -564,18 +600,31 @@ function pintarOperaciones(){
   const ops={};
   ALM.tickets.forEach(t=>{
     if(t.of!==sel.of || t.modulo!==sel.modulo) return;
-    if(!ops[t.op]) ops[t.op]={std:t.std,total:0,libres:0};
-    ops[t.op].total++; if(libre(t)) ops[t.op].libres++;
+    if(!ops[t.op]) ops[t.op]={std:t.std,total:0,libres:0,cantLibre:0};
+    ops[t.op].total++; if(libre(t)){ ops[t.op].libres++; ops[t.op].cantLibre+=(+t.cant||0); }
   });
   Object.keys(ops).sort().forEach(op=>{
     const o=ops[op];
     const c=document.createElement("div");
     c.className="card-fila";
-    c.innerHTML=`<div>
-        <div class="cf-titulo">${esc(op)}</div>
-        <div class="cf-detalle">STD <b>${o.std.toFixed(2)}</b> min</div>
-      </div>
-      <div class="badge-disp ${o.libres===0?'vacio':''}">${o.libres} de ${o.total} libres</div>`;
+    if(ES_ACABADO){
+      const m=META_ACABADO[op]||{}; const hoy=+m.hoy||0, meta=+m.meta||0;
+      const cumplida = meta>0 && hoy>=meta;
+      const detMeta = meta>0
+        ? `Hoy <b>${qty(hoy)}</b> · Meta <b>${qty(meta)}</b> und ${cumplida?'✓':''}`
+        : (hoy>0 ? `Hoy <b>${qty(hoy)}</b> und · sin meta previa` : `Sin meta previa`);
+      c.innerHTML=`<div>
+          <div class="cf-titulo">${esc(op)}</div>
+          <div class="cf-detalle"${cumplida?' style="color:var(--verde,#2e7d32);font-weight:700;"':''}>${detMeta}</div>
+        </div>
+        <div class="badge-disp ${o.libres===0?'vacio':''}">${qty(o.cantLibre)} und libres</div>`;
+    } else {
+      c.innerHTML=`<div>
+          <div class="cf-titulo">${esc(op)}</div>
+          <div class="cf-detalle">STD <b>${o.std.toFixed(2)}</b> min</div>
+        </div>
+        <div class="badge-disp ${o.libres===0?'vacio':''}">${o.libres} de ${o.total} libres</div>`;
+    }
     c.onclick=()=>{ sel.op=op; modoSel=false; marcados={}; pintarTickets(); irA("pasoTickets"); };
     l.appendChild(c);
   });
@@ -596,16 +645,31 @@ function pintarTickets(){
     const marcado = modoSel && marcados[t.codigo];
     const c=document.createElement("div");
     c.className="card-ticket"+(r?" tomado":"")+(marcado?" marcada":"");
+    const pph = t.std>0 ? Math.round(60/t.std) : "—";
+    const cab = ES_ACABADO
+      ? `<div class="tk-label">Cantidad</div>
+         <div class="tk-numeracion">${qty(t.cant)} und</div>`
+      : `<div class="tk-min">${t.minutos} min</div>
+         <div class="tk-head">
+           <div class="tk-col"><div class="tk-label">Numeración</div>
+             <div class="tk-numeracion">${esc(t.num)}</div></div>
+           <div class="tk-col tk-pph"><div class="tk-label tk-oro">PPH</div>
+             <div class="tk-numeracion tk-oro">${pph}</div></div>
+         </div>`;
+    const fila = ES_ACABADO
+      ? `<div>Talla <b>${esc(t.talla)}</b></div>
+         <div>Corte <b>${esc(t.corte)}</b></div>
+         <div>N°OP <b>${t.nop ?? "—"}</b></div>`
+      : `<div>Talla <b>${esc(t.talla)}</b></div>
+         <div class="tk-cant"><b>${t.cant}</b> und</div>
+         <div>STD <b>${t.std.toFixed(2)}</b> min</div>
+         <div>Corte <b>${esc(t.corte)}</b></div>
+         <div>N°OP <b>${t.nop ?? "—"}</b></div>`;
     c.innerHTML=`
-      <div class="tk-min">${t.minutos} min</div>
-      <div class="tk-label">Numeración</div>
-      <div class="tk-numeracion">${esc(t.num)}</div>
+      ${cab}
       <div class="tk-fila">
         <div><span class="chip-color" style="background:${colorDe(t.color)}"></span>${esc(t.color)}</div>
-        <div>Talla <b>${esc(t.talla)}</b></div>
-        <div><b>${t.cant}</b> und</div>
-        <div>Corte <b>${esc(t.corte)}</b></div>
-        <div>N°OP <b>${t.nop ?? "—"}</b></div>
+        ${fila}
       </div>
       ${r?`<div class="tk-tomado-por">Tomado por ${esc(soloApellidos(r.nombre))} · ${esc(r.hora)}</div>`:""}`;
     if(!r){
@@ -615,10 +679,16 @@ function pintarTickets(){
           pintarTickets();
         } else {
           sel.ticket=t;
-          $("confNum").textContent=t.num;
-          $("confDet").innerHTML=
-            `${esc(sel.op)}<br>OF ${esc(t.of)} · ${esc(t.color)} · Talla ${esc(t.talla)} · <b>${t.cant} und</b><br>`+
-            `<span style="color:#5a6270">STD ${t.std.toFixed(2)} min · vale <b>${t.minutos} min</b></span>`;
+          if(ES_ACABADO){
+            $("confNum").textContent=qty(t.cant)+" und";
+            $("confDet").innerHTML=
+              `${esc(sel.op)}<br>OF ${esc(t.of)} · ${esc(t.color)} · Talla ${esc(t.talla)}`;
+          } else {
+            $("confNum").textContent=t.num;
+            $("confDet").innerHTML=
+              `${esc(sel.op)}<br>OF ${esc(t.of)} · ${esc(t.color)} · Talla ${esc(t.talla)} · <b>${t.cant} und</b><br>`+
+              `<span style="color:#5a6270">STD ${t.std.toFixed(2)} min · vale <b>${t.minutos} min</b></span>`;
+          }
           $("btnRegistrar").disabled=false;
           irA("pasoConf");
         }
@@ -637,9 +707,11 @@ function pintarBarraSel(){
       ? `<button class="btn-sel" onclick="activarSel()">MARCAR VARIOS</button>`
       : "";
   } else {
+    const cantSel = Object.values(marcados).reduce((a,t)=>a+(+t.cant||0),0);
+    const resumen = ES_ACABADO ? `${qty(cantSel)} und` : `${nSel} · ${Math.round(minSel*10)/10} min`;
     b.innerHTML = `
       <button class="btn-sel" onclick="marcarTodos()">MARCAR TODOS (${libres.length})</button>
-      <button class="btn-sel primario" ${nSel?"":"disabled"} onclick="confirmarLote()">REGISTRAR ${nSel} · ${Math.round(minSel*10)/10} min</button>
+      <button class="btn-sel primario" ${nSel?"":"disabled"} onclick="confirmarLote()">REGISTRAR ${resumen}</button>
       <button class="btn-sel cancelar" onclick="cancelarSel()">CANCELAR</button>`;
   }
 }
@@ -653,13 +725,22 @@ function marcarTodos(){
 function confirmarLote(){
   const lista=Object.values(marcados);
   if(!lista.length) return;
-  const min = Math.round(lista.reduce((a,t)=>a+t.minutos,0)*10)/10;
-  const nums = lista.slice(0,6).map(t=>t.num).join(", ") + (lista.length>6?"…":"");
-  $("confNum").textContent = lista.length + " paquetes";
-  $("confDet").innerHTML =
-    `${esc(sel.op)} · OF ${esc(sel.of)}<br>`+
-    `<span style="color:#5a6270">${esc(nums)}</span><br>`+
-    `Total: <b>${min} min</b> a tu nombre`;
+  if(ES_ACABADO){
+    const cant = lista.reduce((a,t)=>a+(+t.cant||0),0);
+    $("confNum").textContent = qty(cant) + " und";
+    $("confDet").innerHTML =
+      `${esc(sel.op)} · OF ${esc(sel.of)}<br>`+
+      `<span style="color:#5a6270">${lista.length} paquete(s)</span><br>`+
+      `Total: <b>${qty(cant)} und</b> a tu nombre`;
+  } else {
+    const min = Math.round(lista.reduce((a,t)=>a+t.minutos,0)*10)/10;
+    const nums = lista.slice(0,6).map(t=>t.num).join(", ") + (lista.length>6?"…":"");
+    $("confNum").textContent = lista.length + " paquetes";
+    $("confDet").innerHTML =
+      `${esc(sel.op)} · OF ${esc(sel.of)}<br>`+
+      `<span style="color:#5a6270">${esc(nums)}</span><br>`+
+      `Total: <b>${min} min</b> a tu nombre`;
+  }
   $("btnRegistrar").disabled=false;
   irA("pasoConf");
 }
@@ -690,13 +771,14 @@ async function registrar(){
       if(r.conflicto){ await refrescarReclamos(s); pintarTickets(); irA("pasoTickets"); }
       btn.disabled=false; return;
     }
-    setAvance(r);
+    const cantLote = esLote ? Object.values(marcados).reduce((a,t)=>a+(+t.cant||0),0) : 0;
+    if(ES_ACABADO) await refrescarMetasAcabado(); else setAvance(r);
     if(esLote){
       Object.values(marcados).forEach(t=>{ RECL[t.codigo]={nombre:s.nombre,hora:"ahora"}; });
       const conf = (r.conflictos||[]);
       $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
       $("exDetalle").innerHTML =
-        `<b>${r.reclamados}</b> paquete(s) registrados · ${esc(sel.op)}`+
+        `<b>${r.reclamados}</b> paquete(s) registrados${ES_ACABADO?` · <b>${qty(cantLote)} und</b>`:""} · ${esc(sel.op)}`+
         (conf.length?`<br><span style="opacity:.85">No se pudieron (ya tomados): ${esc(conf.join(", "))}</span>`:"");
       modoSel=false; marcados={};
       if(conf.length) await refrescarReclamos(s);
@@ -704,9 +786,11 @@ async function registrar(){
       const t=sel.ticket;
       RECL[t.codigo]={nombre:s.nombre,hora:"ahora"};
       $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
-      $("exDetalle").innerHTML=`${esc(sel.op)}<br>Numeración <b>${esc(t.num)}</b> · ${t.cant} und · +${t.minutos} min`;
+      $("exDetalle").innerHTML=ES_ACABADO
+        ? `${esc(sel.op)}<br>Cantidad <b>${qty(t.cant)} und</b>`
+        : `${esc(sel.op)}<br>Numeración <b>${esc(t.num)}</b> · ${t.cant} und · +${t.minutos} min`;
     }
-    $("exAvance").textContent=`Tu día: ${r.eficiencia}%`;
+    $("exAvance").textContent = ES_ACABADO ? `Hoy: ${qty(CANT_HOY_ACABADO)} und` : `Tu día: ${r.eficiencia}%`;
     mostrarExito();
   }catch(e){
     btn.textContent="SÍ, REGISTRAR"; btn.disabled=false;
@@ -838,15 +922,22 @@ async function verEfPersonaOps(dni, nombre){
     const r=await rpc("fn_operario_ops_dia",{p_dni:s.dni,p_token:s.token,p_dni_op:dni,p_fecha:(fd?fd.value:null)});
     if(!r.ok){ mostrarError(r.error||"Error"); cerrarModal(); return; }
     const ops=r.ops||[];
+    const acabado = areaSup()==="ACABADO";
+    const nCols = acabado?4:3;
     const filas = ops.length
-      ? ops.map(o=>`<tr><td>${esc(o.of)}</td><td class="izq">${esc(o.op)}</td>
-          <td><b>${Math.round(o.cantidad)}</b></td></tr>`).join("")
-      : `<tr><td colspan="3"><div class="vacio-msg">Sin operaciones ese día</div></td></tr>`;
+      ? ops.map(o=>{
+          const meta=+o.meta||0, cant=+o.cantidad||0, ok=meta>0&&cant>=meta;
+          return `<tr><td>${esc(o.of)}</td><td class="izq">${esc(o.op)}</td>
+            <td><b>${Math.round(cant)}</b></td>`+
+            (acabado?`<td${ok?' style="color:#2e7d32;font-weight:700;"':''}>${meta>0?Math.round(meta):"—"}${ok?" ✓":""}</td>`:"")+
+            `</tr>`;
+        }).join("")
+      : `<tr><td colspan="${nCols}"><div class="vacio-msg">Sin operaciones ese día</div></td></tr>`;
     abrirModal(`
       <h2>${esc(soloApellidos(nombre))}</h2>
-      <div class="sub" style="margin-bottom:12px;">Operaciones por OF · ${esc(fd?fd.value:"")}</div>
+      <div class="sub" style="margin-bottom:12px;">Operaciones por OF · ${esc(fd?fd.value:"")}${acabado?" · Meta = último día trabajado":""}</div>
       <div style="max-height:60vh;overflow:auto;">
-        <table class="tabla"><thead><tr><th>OF</th><th class="izq">Operación</th><th>Cantidad</th></tr></thead>
+        <table class="tabla"><thead><tr><th>OF</th><th class="izq">Operación</th><th>Cantidad</th>${acabado?"<th>Meta</th>":""}</tr></thead>
         <tbody>${filas}</tbody></table>
       </div>
       <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`);
