@@ -6,10 +6,13 @@
   --dorado:#C9A227;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;}
+/* Evita que la "escala de fuente" del sistema (Android/iOS) infle el texto y
+   descuadre el diseño en algunos celulares: el tamaño lo fija la app. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+html,body{height:100%;max-width:100%;}
 body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
   background:var(--gris-fondo);color:var(--texto);
-  display:flex;flex-direction:column;user-select:none;overflow:hidden;}
+  display:flex;flex-direction:column;user-select:none;overflow-x:hidden;overflow-y:hidden;}
 
 header{background:var(--azul);color:var(--blanco);padding:12px 18px;
   display:flex;justify-content:space-between;align-items:center;flex-shrink:0;gap:8px;flex-wrap:wrap;}
@@ -424,15 +427,20 @@ body[data-pagina="ingenieria"] .mod-op-sub,
 body[data-pagina="ingenieria"] .mp-cab span,
 body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",monospace;font-variant-numeric:tabular-nums;}
 
-/* Encabezados de sección alineados a la izquierda (dashboard, no centrado) */
-.ing-main h1{text-align:left;font-size:22px;margin:0;}
-.seccion-cab{margin-bottom:16px;}
-.seccion-sub{font-size:13px;color:#5a6270;margin-top:3px;max-width:70ch;}
+/* Encabezados de sección alineados a la izquierda (dashboard, no centrado).
+   Ritmo de espaciado (solo Ingeniería): título↔subtítulo apretados; encabezado
+   separado del contenido con más aire + hairline divisor. */
+.ing-main h1{text-align:left;font-size:24px;line-height:1.15;margin:0;letter-spacing:-.2px;}
+.seccion-cab{margin-bottom:26px;padding-bottom:14px;border-bottom:1px solid rgba(13,59,133,.12);}
+.seccion-sub{font-size:13px;color:#5a6270;margin-top:4px;max-width:70ch;}
 
 /* Barra de control: contenedor claro de filtros/acciones por sección */
 .barra-control{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;
   background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;padding:14px 16px;
   box-shadow:0 1px 3px rgba(13,59,133,.06);}
+/* Ingeniería: más aire entre la barra de filtros y el contenido (ritmo de zonas).
+   Sin selector de tipo `body` para no ganarle al override compacto de .gen-job. */
+[data-pagina="ingenieria"] .barra-control{margin-bottom:26px;}
 .barra-control .campo{display:flex;flex-direction:column;gap:5px;}
 .barra-control .campo>span{font-size:11px;font-weight:800;text-transform:uppercase;
   letter-spacing:.5px;color:#5a6270;}
@@ -559,7 +567,7 @@ body.sidebar-cerrada .ing-sidebar{display:none;}
 /* ---- Por módulo: módulo › operación › operarios (encapsulado) ---- */
 .mod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;align-items:start;}
 .mod-card{background:var(--blanco);border-radius:14px;box-shadow:0 2px 8px rgba(13,59,133,.12);
-  overflow:hidden;border-top:6px solid var(--ocre);}
+  overflow:hidden;}
 .mod-head{background:var(--azul);color:#fff;padding:12px 14px;cursor:pointer;list-style:none;}
 .mod-head::-webkit-details-marker{display:none;}
 .mod-head::before{content:"▸ ";font-size:13px;}
@@ -581,7 +589,7 @@ body.sidebar-cerrada .ing-sidebar{display:none;}
 /* Gráfico de avance por módulo (% de la última operación vs meta OF) */
 .mod-avance{padding:10px 12px 4px;}
 .avance-bar{position:relative;height:26px;background:var(--gris-fondo);border-radius:8px;overflow:hidden;}
-.avance-fill{height:100%;background:var(--enlace);border-radius:8px 0 0 8px;transition:width .5s ease;}
+.avance-fill{height:100%;background:var(--enlace);border-radius:8px 0 0 8px;}
 .avance-fill.alto{background:var(--exito);}
 .avance-fill.bajo{background:var(--alerta);}
 .avance-lbl{position:absolute;top:0;right:10px;line-height:26px;font-size:13px;font-weight:800;
@@ -656,7 +664,7 @@ details.mod-op[open]>summary.mod-op-head::before{content:"▾ ";}
 .seg-sub button.activo{background:var(--enlace);color:#fff;}
 .det-asis-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;align-items:start;}
 .det-card{background:var(--blanco);border-radius:14px;box-shadow:0 2px 8px rgba(13,59,133,.12);
-  overflow:hidden;border-top:6px solid var(--ocre);}
+  overflow:hidden;}
 .det-head{display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--gris-fondo);font-size:14px;}
 .det-list{max-height:320px;overflow-y:auto;}
 .det-persona{display:flex;justify-content:space-between;gap:10px;padding:8px 14px;

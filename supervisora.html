@@ -32,17 +32,17 @@
   <section class="pantalla activa" id="pasoPersonal">
     <h1>Tu personal</h1>
     <div class="sub">Toca a la persona, o registra una ocurrencia grupal</div>
+    <!-- Acciones al inicio de las cartas -->
+    <div class="acc-toolbar">
+      <button class="btn-accion enlace" onclick="ocurrenciaGrupal()">Ocurrencia grupal</button>
+      <button class="btn-accion azul" onclick="moverAreaInicio()">Cambiar área</button>
+      <button class="btn-accion alerta" onclick="marcarFaltantesInicio()">Marcar faltantes</button>
+    </div>
     <div class="zona-of" style="margin-bottom:14px;">
       <input class="input-grande" id="filtroNombre" placeholder="Buscar por nombre…"
              autocomplete="off" style="font-size:22px;letter-spacing:normal;text-align:left;">
     </div>
     <div class="grid-personal" id="gridPersonal"></div>
-    <!-- Acciones POST flotantes a la derecha -->
-    <div class="fab-acciones">
-      <button class="fab-btn enlace" onclick="ocurrenciaGrupal()">OCURRENCIA GRUPAL</button>
-      <button class="fab-btn azul" onclick="moverAreaInicio()">CAMBIAR ÁREA</button>
-      <button class="fab-btn alerta" onclick="marcarFaltantesInicio()">MARCAR FALTANTES</button>
-    </div>
   </section>
 
   <!-- Marcar faltantes: selección de personal -->
@@ -147,7 +147,16 @@
   <section class="pantalla" id="pasoAvance">
     <h1>Avance del área</h1>
     <div class="sub" id="avHora">Se actualiza cada 60 segundos</div>
-    <button type="button" class="btn-recargar" onclick="cargarAvance()">↻ RECARGAR AHORA</button>
+    <div class="barra-control" style="justify-content:center;">
+      <label class="campo"><span>Ver</span>
+        <select id="avNivel" onchange="cargarAvance()">
+          <option value="ultima">Última operación</option>
+          <option value="penultima">Penúltima operación</option>
+        </select></label>
+      <label class="campo"><span>Módulo</span>
+        <select id="avModulo" onchange="cargarAvance()"><option value="">Todos los módulos</option></select></label>
+      <button type="button" class="btn-mini" onclick="cargarAvance()">↻ Recargar</button>
+    </div>
     <div class="kpis" id="avResumen" style="margin-top:14px;"></div>
     <div class="lista-cards" id="avItems" style="margin-top:14px;"></div>
   </section>

@@ -117,6 +117,26 @@ function irA(id){
   ocultarError();
   if(typeof window.onCambioPaso === "function") window.onCambioPaso(id);
 }
+
+/* ---- Botón "atrás" del celular = botón Volver (evita cierres inesperados) ----
+   window.VOLVER_MAP (paso -> paso de retorno) lo define cada página (operario /
+   supervisora). Al retroceder con el hardware se ejecuta la MISMA lógica que el
+   botón Volver; solo en un paso raíz se permite salir de la app. */
+function pasoActivo(){ const el=document.querySelector(".pantalla.activa"); return el?el.id:null; }
+function volverAtras(){
+  const o=$("modalOverlay");
+  if(o && o.classList.contains("visible")){ cerrarModal(); return true; }   // 1º cierra modal
+  const t=(window.VOLVER_MAP||{})[pasoActivo()];
+  if(t){ irA(t); return true; }
+  return false;
+}
+function _armarAtras(){ try{ history.pushState({stx:1}, ""); }catch(e){} }
+let _backTrapListo=false;
+function initBackTrap(){
+  if(_backTrapListo) return; _backTrapListo=true;
+  _armarAtras();
+  window.addEventListener("popstate", ()=>{ if(volverAtras()) _armarAtras(); });
+}
 /* ---- Toasts (popouts abajo-derecha) ---- */
 function _toastWrap(){
   let w=document.getElementById("toastWrap");
@@ -472,6 +492,8 @@ function initOperario(){
     $("tituloArea").textContent = s.area;
     cargarTodo(s);
   }
+  window.VOLVER_MAP = VOLVER_OPERARIO;
+  initBackTrap();
 }
 
 function pintarAreasEstajero(s){
@@ -955,6 +977,12 @@ function initSupervisora(){
   { const rc=$("btnRecargar"); if(rc) rc.onclick=()=>{ recargarSupervisora(); }; }
   bindSupervisoraUI();
   cargarPersonal(s);
+  window.VOLVER_MAP = {
+    pasoFaltantes:"pasoPersonal", pasoAlcance:"pasoPersonal", pasoSeleccion:"pasoAlcance",
+    pasoTipo:"pasoPersonal", pasoMinutos:"pasoTipo",
+    pasoMoverSel:"pasoPersonal", pasoMoverArea:"pasoMoverSel"
+  };
+  initBackTrap();
 }
 /* Recargar según la pestaña activa (botón ↻ del header). */
 function recargarSupervisora(){
@@ -1004,15 +1032,14 @@ function pintarPersonalFalta(){
 }
 function marcarFaltantesEstado(){
   if(!mf_sup.dnis.length) return;
-  const opts = ESTADOS_SUP.map(e=>`<option>${esc(e)}</option>`).join("") || '<option value="">Sin estados</option>';
+  // La supervisora solo puede marcar FALTA (regla de negocio).
   abrirModal(`
-    <h2>Marcar estado</h2>
-    <div class="sub" style="margin-bottom:12px;">${mf_sup.dnis.length} persona(s) · hoy</div>
-    <div class="modal-campo"><label>Estado</label>
-      <select id="mfEstado">${opts}</select></div>
+    <h2>Marcar FALTA</h2>
+    <div class="sub" style="margin-bottom:12px;">${mf_sup.dnis.length} persona(s) · hoy · estado <b>FALTA</b></div>
+    <input type="hidden" id="mfEstado" value="FALTA">
     <div class="modal-msg" id="mfMsg"></div>
     <div class="modal-acciones">
-      <button class="btn-principal btn-modal-guardar" onclick="guardarFaltantes()">APLICAR A ${mf_sup.dnis.length}</button>
+      <button class="btn-principal btn-modal-guardar" onclick="guardarFaltantes()">APLICAR FALTA A ${mf_sup.dnis.length}</button>
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
     </div>`);
 }
@@ -1045,8 +1072,18 @@ function pararAvance(){ clearInterval(timerAvance); timerAvance=null; }
 async function cargarAvance(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   try{
-    const r = await rpc("fn_avance_area",{p_dni:s.dni,p_token:s.token,p_area:areaSup()});
+    const nivel = $("avNivel") ? $("avNivel").value : "ultima";
+    const modulo = $("avModulo") ? $("avModulo").value : "";
+    const r = await rpc("fn_avance_area",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),p_nivel:nivel,p_modulo:modulo});
     if(!r.ok){ mostrarError(r.error||"Error"); return; }
+    // Poblar el selector de módulos preservando la selección.
+    const selMod=$("avModulo");
+    if(selMod){
+      const actual=selMod.value; const mods=r.modulos||[];
+      selMod.innerHTML=`<option value="">Todos los módulos</option>`+mods.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join("");
+      selMod.value = mods.includes(actual)?actual:"";
+    }
+    const nivelTxt = (r.nivel==="penultima") ? "penúltima" : "última";
     $("avResumen").innerHTML = `
       <div class="kpi"><div class="kpi-num">${r.eficiencia}%</div><div class="kpi-lbl">Eficiencia del área</div></div>
       <div class="kpi"><div class="kpi-num">${r.personas}</div><div class="kpi-lbl">Presentes</div></div>
@@ -1060,14 +1097,14 @@ async function cargarAvance(){
       l.appendChild(w);
     }
     if(!r.items.length){
-      l.insertAdjacentHTML("beforeend",'<div class="vacio-msg">Aún no hay notificaciones en la última operación hoy</div>');
+      l.insertAdjacentHTML("beforeend",`<div class="vacio-msg">Aún no hay avance en la ${nivelTxt} operación${modulo?` del módulo ${esc(modulo)}`:""} hoy</div>`);
     }
     r.items.forEach(it=>{
       l.insertAdjacentHTML("beforeend", `
         <div class="card-fila" style="cursor:default;">
           <div>
             <div class="cf-titulo">${esc(it.articulo)} · OF ${esc(it.of)}</div>
-            <div class="cf-detalle">Prenda completa: ${it.t_total} min</div>
+            <div class="cf-detalle">${it.modulo?`Módulo ${esc(it.modulo)} · `:""}Prenda completa: ${it.t_total} min</div>
           </div>
           <div style="text-align:right;">
             <div class="cf-titulo" style="color:var(--azul);">${it.unidades} und</div>
@@ -1075,7 +1112,7 @@ async function cargarAvance(){
           </div>
         </div>`);
     });
-    $("avHora").textContent = "Actualizado " + new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    $("avHora").textContent = `Avance por ${nivelTxt} operación · actualizado ` + new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
   }catch(e){ mostrarError(e.message); }
 }
 async function cargarPersonal(s){
@@ -1207,7 +1244,7 @@ function ocurrenciaGrupal(){ oc={tipo:null,minutos:0,dnis:[],multiple:false}; ir
 function alcanceTodos(){
   oc.dnis = PERSONAL.map(p=>p.dni); oc.multiple=false;
   $("nombreAfectado").textContent = "Todo el personal del área ("+oc.dnis.length+")";
-  elegirTipo("OTROS");
+  irA("pasoTipo");   // primero elegir el tipo (incidencias predefinidas), luego minutos
 }
 function alcanceAlgunos(){
   oc.dnis=[]; oc.multiple=true;

@@ -72,7 +72,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
 });
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoTk","pasoMod","pasoEf","pasoDia","pasoBases",
+const NAV_TABS=["pasoTk","pasoMod","pasoEf","pasoDia","pasoModEf","pasoBases",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea"];
 
 /* Activa una sección del sidebar (misma lógica que el clic, reutilizable por
@@ -87,6 +87,7 @@ function activarTab(tab){
   if(tab==='pasoIncid') cargarIncidI();
   else if(tab==='pasoTk') cargarTk();
   else if(tab==='pasoMod') cargarMod();
+  else if(tab==='pasoModEf'){ const f=$("fechaModEf"); if(f&&!f.value) f.value=hoyLima(); if($("areaModEf")&&$("areaModEf").value) cargarModEf(); }
   else if(tab==='pasoOpArea') cargarOpArea();
   else if(tab==='pasoFechas') initFechas();
   else if(tab==='pasoGen') genInit();
@@ -107,6 +108,8 @@ function poblarSelectsArea(){
   if($("areaMod")) $("areaMod").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("areaOp"))  $("areaOp").innerHTML  = elige + AREAS_LISTA.map(op).join("");
   if($("areaFec")) $("areaFec").innerHTML = elige + AREAS_LISTA.map(op).join("");
+  if($("areaInci")) $("areaInci").innerHTML = todas + AREAS_LISTA.map(op).join("");
+  if($("areaModEf")) $("areaModEf").innerHTML = elige + AREAS_LISTA.map(op).join("");
   // Generar tickets: solo áreas con Sheet (las de AREAS de app.js).
   if($("areaGen")) $("areaGen").innerHTML = elige + Object.keys(AREAS).map(op).join("");
 }
@@ -117,6 +120,7 @@ function recargarIngenieria(){
   const act = id => $(id) && $(id).classList.contains("activa");
   if(act("pasoEf")) cargarEf();
   else if(act("pasoDia")){ if(EFR.personal.length) cargarEfRango(); }
+  else if(act("pasoModEf")){ if($("areaModEf")&&$("areaModEf").value) cargarModEf(); }
   else if(act("pasoTk")) cargarTk();
   else if(act("pasoMod")) cargarMod();
   else if(act("pasoBases")) cargarBases();
@@ -911,16 +915,64 @@ function pintarEfRango(){
 
 function descargarEfRango(){
   if(!EFR.personal.length){ mostrarError("Carga primero un rango"); return; }
-  const CAB = ["DNI","Nombre","Área","Promedio %", ...EFR.dias.map(d=>d.slice(8,10)+"-"+d.slice(5,7))]; // DD-MM
-  // Porcentajes enteros (88, 34), no decimales (87.1, 33.3).
+  // Igual que la tabla: cada celda es "XX%" (texto), o el estado (FALTA, VACACIONES…)
+  // como texto, o "—" si no hay dato. El promedio va al FINAL de la fila.
+  const celda=(v,est)=> v!=null ? `${Math.round(v)}%` : (est ? est : "—");
+  const CAB = ["DNI","Nombre","Área", ...EFR.dias.map(d=>d.slice(8,10)+"-"+d.slice(5,7)), "Promedio"]; // DD-MM
   const filas = EFR.personal.map(p=>[
-    p.dni, p.nombre, p.area, Math.round(p.promedio),
-    ...EFR.dias.map(d=>{ const v=p.registros[d]; return v==null ? "" : Math.round(v); })
+    p.dni, p.nombre, p.area,
+    ...EFR.dias.map(d=>celda(p.registros[d], p.estados ? p.estados[d] : null)),
+    `${Math.round(p.promedio)}%`
   ]);
   const ws = XLSX.utils.aoa_to_sheet([CAB, ...filas]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "EficienciaRango");
   XLSX.writeFile(wb, `EFICIENCIA_${efRangoSel.desde}_a_${efRangoSel.hasta}.xlsx`);
+}
+
+/* ================= EFICIENCIA · MÓDULOS DEL DÍA (visión) ================= */
+let MODEF={items:[],personas:0,total:0,ef:0}, modEfSort={col:"minutos",dir:-1};
+function ordenarModEf(col){ if(modEfSort.col===col) modEfSort.dir*=-1; else modEfSort={col,dir:1}; pintarModEf(); }
+async function cargarModEf(){
+  const area=$("areaModEf")?$("areaModEf").value:"";
+  const gate=$("modEfGate"), cont=$("modEfContenido");
+  if(!area){ if(gate) gate.style.display="block"; if(cont) cont.hidden=true; return; }
+  if(gate) gate.style.display="none"; if(cont) cont.hidden=false;
+  const f=$("fechaModEf"); if(f&&!f.value) f.value=hoyLima();
+  $("tablaModEf").innerHTML=cargandoHTML("Calculando módulos…");
+  try{
+    const r=await rpc("fn_avance_modulos",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_fecha:(f?f.value:null)});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("tablaModEf").innerHTML=""; return; }
+    MODEF={items:r.items||[],personas:r.personas||0,total:r.total_min||0,ef:r.eficiencia||0};
+    pintarModEf();
+  }catch(e){ $("tablaModEf").innerHTML=""; mostrarError(e.message); }
+}
+function pintarModEf(){
+  const kpi=(t,v)=>`<div class="kpi"><div class="kpi-num">${v}</div><div class="kpi-lbl">${t}</div></div>`;
+  $("modEfResumen").innerHTML =
+    kpi("Personas del área", MODEF.personas)+
+    kpi("Minutaje total", Math.round(MODEF.total))+
+    kpi("Eficiencia del área", censEf(MODEF.ef+"%"))+
+    kpi("Módulos", MODEF.items.length);
+  let lista=[...MODEF.items];
+  if(modEfSort.col){
+    lista.sort((a,b)=>{
+      const va=a[modEfSort.col], vb=b[modEfSort.col];
+      const na=parseFloat(va), nb=parseFloat(vb);
+      const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es");
+      return c*modEfSort.dir;
+    });
+  }
+  const flecha=k=>modEfSort.col===k?(modEfSort.dir===1?" ▲":" ▼"):"";
+  const thead=`<thead><tr>
+    <th class="ord izq" onclick="ordenarModEf('modulo')">Módulo${flecha('modulo')}</th>
+    <th class="ord" onclick="ordenarModEf('minutos')">Minutaje total${flecha('minutos')}</th>
+    <th class="ord" onclick="ordenarModEf('eficiencia')">Eficiencia${flecha('eficiencia')}</th></tr></thead>`;
+  const body = lista.length
+    ? lista.map(o=>`<tr><td class="izq">${esc(o.modulo)}</td><td><b>${Math.round(o.minutos)}</b></td>
+        <td class="${efClase(o.eficiencia)}">${censEf(o.eficiencia+"%")}</td></tr>`).join("")
+    : `<tr><td colspan="3"><div class="vacio-msg">Sin módulos trabajados ese día</div></td></tr>`;
+  $("tablaModEf").innerHTML=thead+"<tbody>"+body+"</tbody>";
 }
 
 /* ================= ASISTENCIA (mes completo) ================= */
@@ -1761,9 +1813,22 @@ async function confirmarSubida(){
     await cargarBases();
   }catch(e){ mostrarError(e.message); }
 }
-/* ================= INCIDENCIAS (solicitudes de ajuste de tiempo) ================= */
-async function cargarIncidI(){
-  const z=$("listaIncidI"); z.innerHTML=cargandoHTML("Cargando incidencias…");
+/* ================= INCIDENCIAS ================= */
+const TIPOS_OC = ["MAQUINA","HORA_EXTRA","TARDANZA","SEGURO","PERMISO","OTROS"];
+const hoyLima = ()=> new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"});
+let OCURR=[], inciSort={col:"fecha",dir:-1}, INCI_PERSONAL=[];
+
+async function cargarIncidI(){        // pendientes + tabla aplicada
+  if($("fechaInciH") && !$("fechaInciH").value){
+    $("fechaInciH").value = hoyLima();
+    const d=new Date(); d.setDate(d.getDate()-30);
+    $("fechaInciD").value = d.toLocaleDateString("sv-SE",{timeZone:"America/Lima"});
+  }
+  await Promise.all([cargarPendientesInci(), cargarOcurrencias()]);
+}
+
+async function cargarPendientesInci(){
+  const z=$("listaIncidI"); z.innerHTML=cargandoHTML("Cargando pendientes…");
   try{
     const r=await rpc("fn_solicitudes_listar",{p_dni:ING.dni,p_token:ING.token,p_area:""});
     if(!r.ok){ mostrarError(r.error||"Error"); z.innerHTML=""; return; }
@@ -1778,7 +1843,7 @@ async function cargarIncidI(){
         <div style="flex:1;min-width:220px;">
           <div class="cf-titulo">${esc(it.nombre)}${tipoTxt?` · <span style="font-weight:700;color:var(--azul);">${esc(tipoTxt)}</span>`:""}</div>
           <div class="cf-detalle">${esc(it.motivo)}</div>
-          <div class="cf-detalle">${esc(it.area)} · ${esc(it.fecha)} ${esc(it.hora)}${it.solicitante?` · Solicitó: ${esc(it.solicitante)}`:""}</div>
+          <div class="cf-detalle">${esc(it.area)} · aplica el <b>${esc(it.fecha)}</b> ${esc(it.hora)}${it.solicitante?` · Solicitó: ${esc(it.solicitante)}`:""}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <input type="number" id="inci_${it.id}" value="${it.minutos}"
@@ -1798,5 +1863,135 @@ async function resolverIncidI(id, aprobar){
     const r=await rpc("fn_solicitud_resolver",{p_dni:ING.dni,p_token:ING.token,p_id:id,p_aprobar:aprobar,p_minutos_final:mf});
     if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
     await cargarIncidI();
+  }catch(e){ mostrarError(e.message); }
+}
+
+/* ---- Ocurrencias aplicadas (tabla + resumen + CRUD) ---- */
+async function cargarOcurrencias(){
+  const t=$("tablaInci"); if(t) t.innerHTML=`<tbody><tr><td>${cargandoHTML("Cargando…")}</td></tr></tbody>`;
+  try{
+    const r=await rpc("fn_ocurrencias_listar",{p_dni:ING.dni,p_token:ING.token,
+      p_area:($("areaInci")?$("areaInci").value:"")||"",
+      p_desde:$("fechaInciD")?$("fechaInciD").value:null,
+      p_hasta:$("fechaInciH")?$("fechaInciH").value:null});
+    if(!r.ok){ mostrarError(r.error||"Error"); OCURR=[]; }
+    else OCURR=r.items||[];
+    pintarOcurrencias();
+  }catch(e){ mostrarError(e.message); }
+}
+function ordenarInci(col){ if(inciSort.col===col) inciSort.dir*=-1; else inciSort={col,dir:1}; pintarOcurrencias(); }
+function pintarOcurrencias(){
+  const q=normKey($("filtroInci")?$("filtroInci").value:"");
+  let lista=OCURR.filter(o=>!q || normKey(`${o.nombre} ${o.tipo} ${o.detalle||""}`).includes(q));
+  // resumen: cuánto suma (+) y cuánto descuenta (-)
+  const suma=lista.filter(o=>+o.minutos>0).reduce((a,o)=>a+ +o.minutos,0);
+  const resta=lista.filter(o=>+o.minutos<0).reduce((a,o)=>a+ +o.minutos,0);
+  const porTipo={}; lista.forEach(o=>{ porTipo[o.tipo]=(porTipo[o.tipo]||0)+ +o.minutos; });
+  const topDesc=Object.entries(porTipo).sort((a,b)=>a[1]-b[1])[0];
+  const topSum=Object.entries(porTipo).sort((a,b)=>b[1]-a[1])[0];
+  const kpi=(t,v,c)=>`<div class="kpi"><div class="kpi-num" style="color:${c}">${v}</div><div class="sub">${t}</div></div>`;
+  $("resumenInci").innerHTML =
+    kpi("Incidencias", lista.length, "var(--azul)")+
+    kpi("Suman (min)", "+"+suma, "var(--exito)")+
+    kpi("Descuentan (min)", resta, "var(--alerta)")+
+    kpi("Neto (min)", (suma+resta>0?"+":"")+(suma+resta), "var(--azul)")+
+    (topDesc?kpi("Más descuenta", topDesc[1]<0?`${topDesc[0].replace(/_/g," ")} (${topDesc[1]})`:"—", "var(--alerta)"):"")+
+    (topSum && topSum[1]>0?kpi("Más suma", `${topSum[0].replace(/_/g," ")} (+${topSum[1]})`, "var(--exito)"):"");
+  // orden
+  lista=[...lista].sort((a,b)=>{
+    const va=a[inciSort.col], vb=b[inciSort.col];
+    const na=parseFloat(va), nb=parseFloat(vb);
+    const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es");
+    return c*inciSort.dir;
+  });
+  const flecha=k=>inciSort.col===k?(inciSort.dir===1?" ▲":" ▼"):"";
+  const COLS=[["fecha","Fecha"],["nombre","Persona"],["area","Área"],["tipo","Tipo"],["minutos","Min"],["detalle","Motivo"],["registrado_por","Registró"]];
+  const thead="<thead><tr>"+COLS.map(c=>`<th class="ord" onclick="ordenarInci('${c[0]}')">${c[1]}${flecha(c[0])}</th>`).join("")+"<th></th></tr></thead>";
+  const body=lista.length? lista.map(o=>{
+    const m=+o.minutos, col=m<0?"var(--alerta)":"var(--exito)";
+    return `<tr>
+      <td>${esc(o.fecha)}</td><td class="izq">${esc(soloApellidos(o.nombre))}</td>
+      <td>${esc(o.area)}</td><td>${esc(String(o.tipo).replace(/_/g," "))}</td>
+      <td style="color:${col};font-weight:800;">${m>0?"+":""}${m}</td>
+      <td class="izq">${esc(o.detalle||"")}</td><td>${esc(soloApellidos(o.registrado_por||""))}</td>
+      <td><div class="acc-base">
+        <button class="acc-editar" onclick="editarIncidencia(${o.id})">Editar</button>
+        <button class="acc-borrar" onclick="eliminarIncidencia(${o.id})">Borrar</button>
+      </div></td></tr>`;
+  }).join("") : `<tr><td colspan="${COLS.length+1}"><div class="vacio-msg">Sin incidencias en el rango</div></td></tr>`;
+  $("tablaInci").innerHTML=thead+"<tbody>"+body+"</tbody>";
+  $("resumenInciTxt").textContent=`${lista.length} incidencia(s) en el rango`;
+}
+
+/* ---- Modal crear/editar incidencia ---- */
+function nuevaIncidencia(){ abrirModalInci(null); }
+function editarIncidencia(id){ abrirModalInci(OCURR.find(o=>o.id===id)||null); }
+async function abrirModalInci(oc){
+  const editar=!!oc;
+  const areaSel=(oc&&oc.area)|| ($("areaInci")&&$("areaInci").value)||AREAS_LISTA[0]||"";
+  const opTipo=t=>`<option value="${t}"${oc&&oc.tipo===t?" selected":""}>${t.replace(/_/g," ")}</option>`;
+  abrirModal(`
+    <h2>${editar?"Editar":"Nueva"} incidencia</h2>
+    <div class="modal-campo"><label>Área</label>
+      <select id="mi_area">${AREAS_LISTA.map(a=>`<option${a===areaSel?" selected":""}>${esc(a)}</option>`).join("")}</select></div>
+    <div class="modal-campo"><label>Persona</label>
+      <select id="mi_dni"><option value="">Cargando…</option></select></div>
+    <div class="modal-campo"><label>Tipo</label>
+      <select id="mi_tipo">${TIPOS_OC.map(opTipo).join("")}</select></div>
+    <div class="modal-campo"><label>Minutos (negativo = descuenta)</label>
+      <input id="mi_min" type="number" value="${oc?oc.minutos:""}" placeholder="Ej: -30 o 60"></div>
+    <div class="modal-campo"><label>Fecha en que aplica</label>
+      <input id="mi_fecha" type="date" value="${oc?oc.fecha:hoyLima()}"></div>
+    <div class="modal-campo"><label>Motivo</label>
+      <input id="mi_detalle" maxlength="140" value="${oc?esc(oc.detalle||""):""}" placeholder="Motivo del ajuste"></div>
+    <div class="modal-msg" id="mi_msg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="guardarIncidencia(${editar?oc.id:"null"})">GUARDAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+  $("mi_area").onchange=()=>cargarPersonalInci(oc?oc.dni:null);
+  await cargarPersonalInci(oc?oc.dni:null);
+}
+async function cargarPersonalInci(dniSel){
+  const sel=$("mi_dni"); if(!sel) return;
+  const area=$("mi_area").value;
+  sel.innerHTML=`<option value="">Cargando…</option>`;
+  try{
+    INCI_PERSONAL=await rpc("fn_personal",{p_dni:ING.dni,p_token:ING.token,p_area:area});
+    if(!Array.isArray(INCI_PERSONAL)||!INCI_PERSONAL.length){ sel.innerHTML=`<option value="">Sin personal en el área</option>`; return; }
+    sel.innerHTML=INCI_PERSONAL.map(p=>`<option value="${esc(p.dni)}"${p.dni===dniSel?" selected":""}>${esc(soloApellidos(p.nombre))} · ${esc(p.dni)}</option>`).join("");
+  }catch(e){ sel.innerHTML=`<option value="">Error al cargar</option>`; }
+}
+async function guardarIncidencia(id){
+  const dni=$("mi_dni").value, area=$("mi_area").value, tipo=$("mi_tipo").value;
+  const min=parseInt($("mi_min").value,10), fecha=$("mi_fecha").value, detalle=$("mi_detalle").value.trim();
+  const msg=$("mi_msg");
+  if(!dni){ msg.textContent="Elige la persona"; return; }
+  if(!min){ msg.textContent="Minutos no puede ser 0"; return; }
+  if(!fecha){ msg.textContent="Indica la fecha"; return; }
+  if(!detalle){ msg.textContent="Indica el motivo"; return; }
+  try{
+    const r=id
+      ? await rpc("fn_ocurrencia_editar",{p_dni:ING.dni,p_token:ING.token,p_id:id,p_dni_op:dni,p_tipo:tipo,p_minutos:min,p_fecha:fecha,p_detalle:detalle})
+      : await rpc("fn_ocurrencia",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_tipo:tipo,p_minutos:min,p_detalle:detalle,p_dnis:[dni],p_fecha:fecha});
+    if(!r.ok){ msg.textContent=r.error||"No se pudo guardar"; return; }
+    cerrarModal(); await cargarOcurrencias();
+  }catch(e){ msg.textContent=e.message; }
+}
+function eliminarIncidencia(id){
+  const o=OCURR.find(x=>x.id===id)||{};
+  abrirModal(`
+    <h2>Borrar incidencia</h2>
+    <div class="sub" style="margin-bottom:14px;">¿Eliminar la incidencia de <b>${esc(soloApellidos(o.nombre||""))}</b> del <b>${esc(o.fecha||"")}</b> (${o.minutos} min)? Se recalculará su eficiencia de ese día.</div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" style="background:var(--alerta)" onclick="confirmarEliminarInci(${id})">SÍ, BORRAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+}
+async function confirmarEliminarInci(id){
+  try{
+    const r=await rpc("fn_ocurrencia_eliminar",{p_dni:ING.dni,p_token:ING.token,p_id:id});
+    if(!r.ok){ mostrarError(r.error||"No se pudo borrar"); return; }
+    cerrarModal(); await cargarOcurrencias();
   }catch(e){ mostrarError(e.message); }
 }

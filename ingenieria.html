@@ -36,6 +36,7 @@
       <div class="nav-sep">Eficiencia</div>
       <a class="nav-item" data-tab="pasoEf" href="#pasoEf">Por área</a>
       <a class="nav-item" data-tab="pasoDia" href="#pasoDia">Por día</a>
+      <a class="nav-item" data-tab="pasoModEf" href="#pasoModEf">Módulos (día)</a>
       <div class="nav-sep">Gestión</div>
       <a class="nav-item" data-tab="pasoBases" href="#pasoBases">Bases</a>
       <a class="nav-item" data-tab="pasoAsis" href="#pasoAsis">Asistencia</a>
@@ -105,6 +106,29 @@
       <div class="sub" id="resumenEfR"></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:70vh;">
         <table class="tabla-asis-mes" id="tablaEfR"></table>
+      </div>
+    </section>
+
+    <!-- ===================== EFICIENCIA · MÓDULOS DEL DÍA (visión) ===================== -->
+    <section class="pantalla" id="pasoModEf">
+      <div class="seccion-cab">
+        <h1>Módulos del día</h1>
+        <p class="seccion-sub">Solo visión. Módulos trabajados ese día con su minutaje total y su eficiencia = minutaje / (personas actuales del área × 575).</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span>
+          <select id="areaModEf" onchange="cargarModEf()"></select></label>
+        <label class="campo"><span>Fecha</span>
+          <input type="date" id="fechaModEf" onchange="cargarModEf()"></label>
+        <button class="btn-mini" onclick="cargarModEf()">Cargar</button>
+        <button class="btn-mini gris" id="btnCensModEf" onclick="toggleCensuraEf()" aria-pressed="false">Censurar %</button>
+      </div>
+      <div id="modEfGate" class="estado-vacio">Selecciona un área para ver sus módulos del día.</div>
+      <div id="modEfContenido" hidden>
+        <div class="kpis" id="modEfResumen"></div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;margin-top:14px;">
+          <table class="tabla" id="tablaModEf"></table>
+        </div>
       </div>
     </section>
 
@@ -230,8 +254,28 @@
 
     <!-- ===================== INCIDENCIAS (ajustes) ===================== -->
     <section class="pantalla" id="pasoIncid">
-      <button type="button" class="btn-recargar" onclick="cargarIncidI()">↻ RECARGAR</button>
-      <div class="lista-cards" id="listaIncidI" style="margin-top:14px;"></div>
+      
+
+      <h2 class="tk-ops-title">Incidencias aplicadas</h2>
+      <div class="barra-control">
+        <label class="campo"><span>Desde</span><input type="date" id="fechaInciD" onchange="cargarOcurrencias()"></label>
+        <label class="campo"><span>Hasta</span><input type="date" id="fechaInciH" onchange="cargarOcurrencias()"></label>
+        <label class="campo"><span>Área</span><select id="areaInci" onchange="cargarOcurrencias()"></select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="filtroInci" placeholder="Nombre / tipo / motivo…" oninput="pintarOcurrencias()"></label>
+        <button class="btn-mini" onclick="cargarOcurrencias()">Cargar</button>
+        <button class="btn-mini verde" onclick="nuevaIncidencia()">+ Nueva incidencia</button>
+      </div>
+      <div class="kpis" id="resumenInci" style="margin-bottom:14px;"></div>
+      <div class="sub" id="resumenInciTxt"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;">
+        <table class="tabla" id="tablaInci"></table>
+      </div>
+      <div class="seccion-cab">
+        <h1>Incidencias</h1>
+        <p class="seccion-sub">Pendientes por aprobar.</p>
+      </div>
+      <h2 class="tk-ops-title">Pendientes por resolver</h2>
+      <div class="lista-cards" id="listaIncidI" style="margin-bottom:22px;"></div>
     </section>
 
     <!-- ===================== GENERAR TICKETS (HOJA DE NUMERACIÓN) ===================== -->
@@ -408,7 +452,16 @@
     <section class="pantalla" id="pasoAvance">
       <h1>Avance del área</h1>
       <div class="sub" id="avHora">Se actualiza cada 60 segundos</div>
-      <button type="button" class="btn-recargar" onclick="cargarAvance()">↻ RECARGAR AHORA</button>
+      <div class="barra-control">
+        <label class="campo"><span>Ver</span>
+          <select id="avNivel" onchange="cargarAvance()">
+            <option value="ultima">Última operación</option>
+            <option value="penultima">Penúltima operación</option>
+          </select></label>
+        <label class="campo"><span>Módulo</span>
+          <select id="avModulo" onchange="cargarAvance()"><option value="">Todos los módulos</option></select></label>
+        <button type="button" class="btn-mini" onclick="cargarAvance()">↻ Recargar</button>
+      </div>
       <div class="kpis" id="avResumen" style="margin-top:14px;"></div>
       <div class="lista-cards" id="avItems" style="margin-top:14px;"></div>
     </section>
