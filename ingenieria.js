@@ -43,16 +43,12 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   });
 
   ["fechaEf","fechaTk","fechaMod"].forEach(id=>{ const el=$(id); if(el) el.value = hoyISO(); });
-  { const fd=$("fechaDetAsis"); if(fd) fd.value = hoyISO(); }
-  $("mesAsis").value = mesActualISO();
 
   // Áreas desde la base de datos (incluye CORTE, REPROCESOS, etc.)
   AREAS_LISTA = await cargarAreasDB();
   poblarSelectsArea();
   pintarSupAreas();
 
-  $("filtroNomAsis").addEventListener("input", pintarAsisMes);
-  $("filtroAreaAsis").addEventListener("change", cargarAsisMes);
   $("filtroAreaEf").addEventListener("change", ()=>{ if(EF) pintarEf(); else cargarEf(); });
   $("filtroNomEfR").addEventListener("input", ()=>{ if(EFR.personal.length) pintarEfRango(); });
   flatpickr("#rangoEf", {mode:"range", dateFormat:"Y-m-d", locale:{rangeSeparator:" a "},
@@ -65,20 +61,20 @@ document.addEventListener("DOMContentLoaded", async ()=>{
     }});
   $("filtroTk").addEventListener("input", ()=>{ tkPag=1; pintarTk(); });
   cargarEstadosAsis();
-  cargarAsisMes();
   // Landing: sección del hash si es válida; si no, Tickets · Actual.
   const hashTab=(location.hash||"").replace(/^#/,"");
   activarTab(NAV_TABS.includes(hashTab) ? hashTab : "pasoTk");
 });
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoTk","pasoMod","pasoEf","pasoDia","pasoModEf","pasoBases",
+const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoModEf","pasoBases",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea"];
 
 /* Activa una sección del sidebar (misma lógica que el clic, reutilizable por
    el ruteo por hash). Actualiza el hash sin recargar. */
 function activarTab(tab){
   document.querySelectorAll(".nav-item[data-tab]").forEach(x=>x.classList.toggle("activo", x.dataset.tab===tab));
+  { const it=document.querySelector('.nav-item[data-tab="'+tab+'"]'); const d=it&&it.closest("details.nav-group"); if(d) d.open=true; }
   pararAvance();
   { const st=$("supTabs"); if(st) st.style.display="none"; }
   try{ history.replaceState(null,"","#"+tab); }catch(e){}
@@ -87,6 +83,8 @@ function activarTab(tab){
   if(tab==='pasoIncid') cargarIncidI();
   else if(tab==='pasoTk') cargarTk();
   else if(tab==='pasoMod') cargarMod();
+  else if(tab==='pasoOpsOF') opfInit();
+  else if(tab==='pasoAsis') perInit();
   else if(tab==='pasoModEf'){ const f=$("fechaModEf"); if(f&&!f.value) f.value=hoyLima(); if($("areaModEf")&&$("areaModEf").value) cargarModEf(); }
   else if(tab==='pasoOpArea') cargarOpArea();
   else if(tab==='pasoFechas') initFechas();
@@ -101,7 +99,12 @@ function poblarSelectsArea(){
   const todas = `<option value="">Todas las áreas</option>`;
   { const se=$("selArea"); if(se) se.innerHTML = AREAS_LISTA.map(op).join(""); }  // "Cambiar Área" removido de la matriz
   $("areaBase").innerHTML = AREAS_LISTA.map(op).join("");
-  $("filtroAreaAsis").innerHTML = todas + AREAS_LISTA.map(op).join("");
+  if($("filtroAreaAsis")) $("filtroAreaAsis").innerHTML = todas + AREAS_LISTA.map(op).join("");
+  if($("perArea")) $("perArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
+  if($("perMoverArea")) $("perMoverArea").innerHTML = AREAS_LISTA.map(op).join("");
+  if($("perRangoArea")) $("perRangoArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
+  if($("perDashArea")) $("perDashArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
+  if($("perMatArea")) $("perMatArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
   $("filtroAreaEf").innerHTML   = elige + AREAS_LISTA.map(op).join("");   // Efi. Área: requiere elegir
   $("filtroAreaEfR").innerHTML  = todas + AREAS_LISTA.map(op).join("");
   if($("areaTk"))  $("areaTk").innerHTML  = todas + AREAS_LISTA.map(op).join("");
@@ -110,6 +113,8 @@ function poblarSelectsArea(){
   if($("areaFec")) $("areaFec").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("areaInci")) $("areaInci").innerHTML = todas + AREAS_LISTA.map(op).join("");
   if($("areaModEf")) $("areaModEf").innerHTML = elige + AREAS_LISTA.map(op).join("");
+  // Operaciones por OF: solo áreas con Sheet configurado (las de AREAS de app.js).
+  if($("opfArea")) $("opfArea").innerHTML = elige + Object.keys(AREAS).map(op).join("");
   // Generar tickets: solo áreas con Sheet (las de AREAS de app.js).
   if($("areaGen")) $("areaGen").innerHTML = elige + Object.keys(AREAS).map(op).join("");
 }
@@ -124,7 +129,7 @@ function recargarIngenieria(){
   else if(act("pasoTk")) cargarTk();
   else if(act("pasoMod")) cargarMod();
   else if(act("pasoBases")) cargarBases();
-  else if(act("pasoAsis")) cargarAsisMes();
+  else if(act("pasoAsis")) perReload();
   else if(act("pasoIncid")) cargarIncidI();
   else if(act("pasoPersonal")||act("pasoAvance")||act("pasoIncidencias")||act("pasoEfPersonal")) recargarSupervisora();
 }
@@ -420,6 +425,160 @@ async function genSubirJob(id){
     pv.innerHTML=`<div class="estado-vacio">✓ ${r.escritas} filas escritas en el ALMACEN de ${esc(area)} (OF ${esc(j.hn.of)}).</div>`;
     j.filas=null;
   }catch(e){ pv.innerHTML=""; mostrarError(e.message); }
+}
+
+/* ================= OPERACIONES POR OF (agregar / quitar en ALMACÉN) =================
+   Escribe/borra en el ALMACÉN vía la Edge Function, a nivel de una OF. No renumera:
+   la nueva operación entra con su N°OP y las filas existentes NO se tocan. Código de
+   los tickets nuevos = OF + DDMM + N°OP(2) + corte(3) → único aunque se agreguen
+   varias operaciones el mismo día. Quitar: borra solo los NO reclamados (muestra la
+   lista y protege los reclamados). */
+let OPF={area:"",of:"",prenda:"",articulo:"",H:{},rowsByOp:{},ops:[],baseOps:[],modo:"add",pendAdd:null,pendDel:null};
+function opfInit(){ /* selects poblados por poblarSelectsArea; nada más al entrar */ }
+function opfModo(m){
+  OPF.modo=m;
+  $("opfTabAdd").classList.toggle("activo",m==="add");
+  $("opfTabDel").classList.toggle("activo",m==="del");
+  $("opfAdd").hidden=m!=="add"; $("opfDel").hidden=m!=="del";
+}
+function opfReset(){
+  OPF.of=""; OPF.pendAdd=null; OPF.pendDel=null;
+  $("opfContenido").hidden=true; $("opfGate").style.display="block";
+  $("opfAddPv").innerHTML=""; $("opfDelPv").innerHTML=""; $("opfDelList").innerHTML="";
+}
+function opfDDMM(){ const p=hoyLima().split("-"); return p[2]+p[1]; }   // YYYY-MM-DD -> DDMM
+function opfCodigo(of,nop,corte){ return parseInt(`${of}${opfDDMM()}${String(nop).padStart(2,"0")}${String(corte).padStart(3,"0")}`); }
+function opfTemplate(){ let best=null; for(const op in OPF.rowsByOp){ if(!best||OPF.rowsByOp[op].length>OPF.rowsByOp[best].length) best=op; } return best?OPF.rowsByOp[best]:[]; }
+
+async function opfCargarOF(){
+  const area=$("opfArea").value, of=$("opfOf").value.trim();
+  if(!area){ mostrarError("Elige el área"); return; }
+  if(!of){ mostrarError("Escribe la OF"); return; }
+  const cfg=AREAS[area]; if(!cfg||!cfg.sheetId){ mostrarError("Área sin Sheet configurado"); return; }
+  $("opfGate").style.display="none"; $("opfContenido").hidden=false;
+  $("opfDelList").innerHTML=cargandoHTML("Leyendo ALMACÉN…"); $("opfAddPv").innerHTML=""; $("opfDelPv").innerHTML="";
+  try{
+    const url=`https://docs.google.com/spreadsheets/d/${cfg.sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(cfg.hoja||"ALMACEN")}`;
+    const filas=parseCSV(await (await fetch(url)).text());
+    if(filas.length<2) throw new Error("El ALMACÉN está vacío");
+    const H={}; filas[0].forEach((h,i)=>{ const k=normKey(h); if(k && H[k]===undefined) H[k]=i; });
+    for(const req of ["OP","OF","CODIGO","NOP","CANT"]) if(H[req]===undefined) throw new Error("Falta la columna "+req+" en el ALMACÉN");
+    const rowsByOp={}; let prenda="",articulo="";
+    for(let i=1;i<filas.length;i++){
+      const r=filas[i]; if(normKey(r[H.OF]||"")!==normKey(of)) continue;
+      const op=norm(r[H.OP]); if(!op) continue;
+      (rowsByOp[op]=rowsByOp[op]||[]).push(r);
+      if(!prenda && H.PRENDA!==undefined) prenda=norm(r[H.PRENDA]);
+      if(!articulo && H.ARTICULO!==undefined) articulo=norm(r[H.ARTICULO]);
+    }
+    const ops=Object.keys(rowsByOp).map(op=>({op, nop:norm(rowsByOp[op][0][H.NOP]), count:rowsByOp[op].length,
+      codes:rowsByOp[op].map(r=>String(norm(r[H.CODIGO]))).filter(Boolean)}))
+      .sort((a,b)=>(Number(a.nop)||0)-(Number(b.nop)||0));
+    if(!ops.length) throw new Error("La OF "+of+" no tiene tickets en el ALMACÉN");
+    OPF={area,of,prenda,articulo,H,rowsByOp,ops,baseOps:[],modo:OPF.modo,pendAdd:null,pendDel:null};
+    try{ OPF.baseOps=await rpc("fn_bases_operaciones",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_prenda:prenda,p_articulo:articulo}); }catch(e){}
+    if(!Array.isArray(OPF.baseOps)) OPF.baseOps=[];
+    opfModo(OPF.modo); opfRenderAdd(); opfRenderDel();
+  }catch(e){ $("opfDelList").innerHTML=""; mostrarError(e.message); }
+}
+
+function opfRenderAdd(){
+  const sel=$("opfOp"); if(!sel) return;
+  const existentes=new Set(OPF.ops.map(o=>normKey(o.op)));
+  sel.innerHTML = OPF.baseOps.length
+    ? OPF.baseOps.map(o=>`<option value="${esc(o.op)}">${esc(o.op)}${existentes.has(normKey(o.op))?" (ya en la OF)":""}</option>`).join("")
+    : `<option value="">Sin operaciones en la BASE de ${esc(OPF.articulo||"—")}</option>`;
+  $("opfAddPv").innerHTML=`<div class="cf-detalle" style="margin-top:8px;">OF ${esc(OPF.of)} · ${esc(OPF.prenda)} / ${esc(OPF.articulo)} · ${OPF.ops.length} operación(es) actuales · paquetes de referencia: ${opfTemplate().length}.</div>`;
+}
+function opfPreviewAdd(){
+  const opNom=$("opfOp").value.trim(); const nop=parseInt($("opfNop").value,10);
+  if(!opNom){ mostrarError("Elige la operación"); return; }
+  if(!nop||nop<=0){ mostrarError("Indica el N°OP (posición)"); return; }
+  const base=OPF.baseOps.find(o=>normKey(o.op)===normKey(opNom));
+  const std=base?Number(base.std)||0:0, modulo=base?norm(base.modulo):"";
+  const H=OPF.H, tpl=opfTemplate();
+  if(!tpl.length){ mostrarError("No hay paquetes de referencia en la OF"); return; }
+  const filas=[], set=new Set();
+  for(const r of tpl){
+    const corteRaw = H.NCORTE!==undefined ? norm(r[H.NCORTE]) : "";
+    const corteNum = parseInt(corteRaw) || (filas.length+1);
+    const corte = corteRaw || String(corteNum);
+    const talla = H.TALLA!==undefined?norm(r[H.TALLA]):"";
+    const color = H.COLOR!==undefined?norm(r[H.COLOR]):"";
+    const cant  = Number(norm(r[H.CANT]))||0;
+    const col13 = H.NUMERACION!==undefined?norm(r[H.NUMERACION]):"";
+    const codigo = opfCodigo(OPF.of, nop, corteNum);
+    if(set.has(codigo)){ mostrarError("Código duplicado interno: "+codigo); return; }
+    set.add(codigo);
+    const ef=Math.round(((std*cant)/576)*100*100)/100;
+    filas.push([OPF.prenda,OPF.articulo,modulo,opNom,std,Number(OPF.of),talla,color,corte,cant,codigo,nop,col13,ef]);
+  }
+  const yaExisten=new Set(); Object.values(OPF.rowsByOp).forEach(rows=>rows.forEach(r=>yaExisten.add(String(norm(r[H.CODIGO])))));
+  const dup=filas.filter(f=>yaExisten.has(String(f[10])));
+  OPF.pendAdd = dup.length?null:filas;
+  let html=`<div class="diff-box"><h3>${filas.length} tickets a generar</h3>
+    <div class="cf-detalle">Operación <b>${esc(opNom)}</b> · N°OP ${nop} · STD ${std} · módulo ${esc(modulo||"—")}<br>código = OF+DDMM+N°OP+corte (ej. ${filas[0]?filas[0][10]:"—"})</div></div>`;
+  if(dup.length){
+    html+=`<div class="diff-box"><div class="diff-del">${dup.length} código(s) YA existen (¿ya agregaste esta operación hoy con ese N°OP?).</div></div>`;
+  } else {
+    html+=`<div class="fila-filtros"><button class="btn-mini verde" onclick="opfConfirmAdd()">Confirmar y escribir en ALMACÉN (${filas.length})</button></div>`;
+  }
+  $("opfAddPv").innerHTML=html;
+}
+async function opfConfirmAdd(){
+  if(!OPF.pendAdd||!OPF.pendAdd.length){ mostrarError("Previsualiza primero"); return; }
+  if(!confirm(`¿Escribir ${OPF.pendAdd.length} filas al ALMACÉN de ${OPF.area}? (OF ${OPF.of})`)) return;
+  $("opfAddPv").innerHTML=cargandoHTML("Escribiendo en ALMACÉN…");
+  try{
+    const r=await edgeFn(FN_GENERAR_TICKETS,{p_dni:ING.dni,p_token:ING.token,area:OPF.area,accion:"append",filas:OPF.pendAdd});
+    if(!r.ok) throw new Error(r.error||"No se pudo escribir");
+    mostrarOk(`${r.escritas} filas escritas en el ALMACÉN (OF ${OPF.of}).`);
+    OPF.pendAdd=null; await opfCargarOF();
+  }catch(e){ mostrarError(e.message); }
+}
+
+function opfRenderDel(){
+  $("opfDelSub").textContent=`OF ${OPF.of} · ${OPF.prenda}/${OPF.articulo} · toca "Quitar" en una operación.`;
+  $("opfDelList").innerHTML=OPF.ops.map(o=>`<div class="mod-card"><div class="mod-head" style="cursor:default;">
+      <div class="mod-nombre">${esc(o.op)}</div><div class="mod-sub">N°OP ${esc(o.nop)} · ${o.count} paquete(s)</div>
+    </div>
+    <div class="mod-body"><button class="btn-mini rojo" onclick="opfPrepDel('${esc(o.op).replace(/'/g,"\\'")}')">Quitar operación</button></div>
+  </div>`).join("");
+}
+async function opfPrepDel(op){
+  const o=OPF.ops.find(x=>x.op===op)||OPF.ops.find(x=>normKey(x.op)===normKey(op)); if(!o) return;
+  $("opfDelPv").innerHTML=cargandoHTML("Verificando reclamos…");
+  const claimed=new Set();
+  try{ const recl=await rpc("fn_reclamados",{p_dni:ING.dni,p_token:ING.token,p_area:OPF.area}); (recl||[]).forEach(x=>claimed.add(String(x.codigo))); }catch(e){}
+  const H=OPF.H, rows=OPF.rowsByOp[o.op]||[];
+  const info=c=>{ const r=rows.find(rr=>String(norm(rr[H.CODIGO]))===String(c)); if(!r) return esc(String(c));
+    const t=H.TALLA!==undefined?norm(r[H.TALLA]):"", col=H.COLOR!==undefined?norm(r[H.COLOR]):"", ca=H.CANT!==undefined?norm(r[H.CANT]):"";
+    return `${esc(String(c))} · ${esc(t)}/${esc(col)} · ${esc(ca)}u`; };
+  const toDel=o.codes.filter(c=>!claimed.has(String(c)));
+  const prot=o.codes.filter(c=>claimed.has(String(c)));
+  OPF.pendDel={op:o.op, codigos:toDel};
+  let html=`<div class="diff-box"><h3>Quitar "${esc(o.op)}" (N°OP ${esc(o.nop)})</h3>
+    <div class="cf-detalle"><b>${toDel.length}</b> ticket(s) se borrarán del ALMACÉN:</div>
+    <div class="cf-detalle" style="max-height:220px;overflow:auto;">${toDel.length?toDel.map(info).join("<br>"):"— ninguno —"}</div></div>`;
+  if(prot.length){
+    html+=`<div class="diff-box"><div class="diff-del">${prot.length} ticket(s) están RECLAMADOS y NO se borrarán:</div>
+      <div class="cf-detalle" style="max-height:150px;overflow:auto;">${prot.map(info).join("<br>")}</div></div>`;
+  }
+  html+=`<div class="fila-filtros">
+    ${toDel.length?`<button class="btn-mini rojo" onclick="opfBorrar()">BORRAR ${toDel.length} del ALMACÉN</button>`:""}
+    <button class="btn-mini gris" onclick="document.getElementById('opfDelPv').innerHTML=''">Cancelar</button></div>`;
+  $("opfDelPv").innerHTML=html;
+}
+async function opfBorrar(){
+  const p=OPF.pendDel; if(!p||!p.codigos.length){ mostrarError("Nada que borrar"); return; }
+  if(!confirm(`¿Borrar ${p.codigos.length} ticket(s) de "${p.op}" del ALMACÉN de ${OPF.area}? (OF ${OPF.of})`)) return;
+  $("opfDelPv").innerHTML=cargandoHTML("Borrando del ALMACÉN…");
+  try{
+    const r=await edgeFn(FN_GENERAR_TICKETS,{p_dni:ING.dni,p_token:ING.token,area:OPF.area,accion:"borrar",codigos:p.codigos});
+    if(!r.ok) throw new Error(r.error||"No se pudo borrar");
+    mostrarOk(`${r.borradas} ticket(s) borrados del ALMACÉN (OF ${OPF.of}).`);
+    OPF.pendDel=null; await opfCargarOF();
+  }catch(e){ mostrarError(e.message); }
 }
 
 /* (Tickets por personal fue eliminado — Parche 12) */
@@ -975,127 +1134,10 @@ function pintarModEf(){
   $("tablaModEf").innerHTML=thead+"<tbody>"+body+"</tbody>";
 }
 
-/* ================= ASISTENCIA (mes completo) ================= */
-let ASIS_MES=[], ASIS_DIAS=[], selAsis={};
-
 async function cargarEstadosAsis(){
   try{
     ESTADOS_ASIS = await rpc("fn_estados_asistencia_listar",{p_dni:ING.dni,p_token:ING.token});
   }catch(e){ ESTADOS_ASIS = []; }
-}
-
-async function cargarAsisMes(){
-  const [anio, mes] = $("mesAsis").value.split("-").map(Number);
-  $("tablaAsisMes").innerHTML = cargandoHTML("Cargando asistencia del mes…");
-  selAsis={}; actualizarNSel();
-  try{
-    const r = await rpc("fn_asistencia_mes",{p_dni:ING.dni,p_token:ING.token,
-      p_area:$("filtroAreaAsis").value, p_anio:anio, p_mes:mes});
-    if(!r.ok){ mostrarError(r.error||"Error"); $("tablaAsisMes").innerHTML=""; return; }
-    ASIS_DIAS = r.dias; ASIS_MES = r.personal;
-    pintarResumenAsis();
-    pintarAsisMes();
-    pintarDetalleAsis();
-  }catch(e){ $("tablaAsisMes").innerHTML=""; mostrarError(e.message); }
-}
-
-/* --- Sub-vistas de asistencia: matriz mensual / detallado por día y estado --- */
-function asisVista(v){
-  const det = v==='detalle';
-  $("asisMatriz").style.display = det ? "none" : "block";
-  $("asisDetalle").style.display = det ? "block" : "none";
-  $("asisTabMatriz").classList.toggle("activo", !det);
-  $("asisTabDetalle").classList.toggle("activo", det);
-  if(det) pintarDetalleAsis();
-}
-function pintarDetalleAsis(){
-  const z=$("detalleAsis"); if(!z) return;
-  const fecha=$("fechaDetAsis") ? $("fechaDetAsis").value : "";
-  if(!fecha){ z.innerHTML=`<div class="vacio-msg">Elige un día</div>`; $("resumenDetAsis").textContent=""; return; }
-  if(!ASIS_DIAS.includes(fecha)){
-    z.innerHTML=`<div class="vacio-msg">Ese día no pertenece al mes cargado. Cambia el mes arriba y recarga.</div>`;
-    $("resumenDetAsis").textContent=""; return;
-  }
-  const porEstado={};
-  ASIS_MES.forEach(p=>{
-    const est = p.registros[fecha] || 'ACTIVO';   // sin registro ese día = ACTIVO (igual que _estado_dia)
-    (porEstado[est]=porEstado[est]||[]).push(p);
-  });
-  const estados=Object.keys(porEstado).sort((a,b)=>a.localeCompare(b,"es"));
-  $("resumenDetAsis").textContent = `${ASIS_MES.length} persona(s) · ${estados.length} estado(s) · ${fecha}`;
-  z.innerHTML = estados.map(est=>{
-    const gente=[...porEstado[est]].sort((a,b)=>String(a.nombres_apellidos).localeCompare(String(b.nombres_apellidos),"es"));
-    return `<div class="det-card">
-      <div class="det-head"><span class="pill ${esc(est)}">${esc(est)}</span> <b>${gente.length}</b> persona(s)</div>
-      <div class="det-list">${gente.map(p=>`<div class="det-persona">${esc(p.nombres_apellidos)} <span>${esc(p.area_actual)}</span></div>`).join("")}</div>
-    </div>`;
-  }).join("");
-}
-
-function pintarResumenAsis(){
-  const total = ASIS_MES.length;
-  // Resumen de TODO el mes en persona-días: por cada persona y cada día del mes
-  // se cuenta su estado (día sin registro = ACTIVO, igual que _estado_dia).
-  const porEstado = {};
-  ASIS_MES.forEach(p=>{
-    ASIS_DIAS.forEach(d=>{
-      const est = p.registros[d] || 'ACTIVO';
-      porEstado[est] = (porEstado[est]||0)+1;
-    });
-  });
-  let html = `<div class="chip-estado"><div class="ce-num">${total}</div><div class="ce-lbl">TOTAL PERSONAL</div></div>`;
-  Object.keys(porEstado).sort().forEach(e=>{
-    html += `<div class="chip-estado"><div class="ce-num">${porEstado[e]}</div><div class="ce-lbl">${esc(e)} (día·pers)</div></div>`;
-  });
-  $("resumenEstadosAsis").innerHTML = html;
-}
-
-function pintarAsisMes(){
-  const q = normKey($("filtroNomAsis").value);
-  const lista = ASIS_MES.filter(p=>!q || normKey(p.nombres_apellidos).includes(q));
-
-  let thead = `<thead><tr><th class="col-check"></th><th class="col-nombre">Nombre</th>`;
-  ASIS_DIAS.forEach(d=>{
-    const dia = d.slice(8,10);
-    thead += `<th>${dia}</th>`;
-  });
-  thead += `</tr></thead>`;
-
-  let tbody = "<tbody>";
-  if(!lista.length){
-    tbody += `<tr><td colspan="${ASIS_DIAS.length+2}"><div class="vacio-msg">Sin personal para este filtro</div></td></tr>`;
-  }
-  lista.forEach(p=>{
-    const marcado = !!selAsis[p.dni];
-    tbody += `<tr>
-      <td class="col-check"><input type="checkbox" ${marcado?"checked":""} onclick="toggleSelAsis('${esc(p.dni)}')"></td>
-      <td class="col-nombre" onclick="abrirModalPersonal('${esc(p.dni)}')">${esc(p.nombres_apellidos)}</td>`;
-    ASIS_DIAS.forEach(d=>{
-      const est = p.registros[d];
-      tbody += `<td class="celda-asis" onclick="abrirCeldaAsis('${esc(p.dni)}','${d}','${esc(est||"")}')">${est ? `<span class="pill ${esc(est)}">${esc(est)}</span>` : "\u2014"}</td>`;
-    });
-    tbody += `</tr>`;
-  });
-  tbody += "</tbody>";
-  $("tablaAsisMes").innerHTML = thead + tbody;
-}
-
-function toggleSelAsis(dni){
-  if(selAsis[dni]) delete selAsis[dni]; else selAsis[dni]=true;
-  actualizarNSel();
-}
-function actualizarNSel(){ $("nSelAsis").textContent = Object.keys(selAsis).length; }
-function limpiarSelAsis(){ selAsis={}; actualizarNSel(); pintarAsisMes(); }
-
-async function aplicarArea(){
-  const dnis = Object.keys(selAsis);
-  if(!dnis.length){ mostrarError("No hay personas seleccionadas"); return; }
-  try{
-    const r = await rpc("fn_cambiar_area",{p_dni:ING.dni,p_token:ING.token,
-      p_dnis:dnis,p_area:$("selArea").value});
-    if(!r.ok){ mostrarError(r.error); return; }
-    await cargarAsisMes();
-  }catch(e){ mostrarError(e.message); }
 }
 
 /* ================= MODAL genérico ================= */
@@ -1185,7 +1227,7 @@ async function guardarPersonal(dniOriginal){
     if(!r.ok){ $("mpMsg").textContent = r.error||"No se pudo guardar"; return; }
     cerrarModal();
     AREAS_DB=null; AREAS_LISTA = await cargarAreasDB(); poblarSelectsArea();  // por si se creó un área nueva
-    await cargarAsisMes();
+    await perReload();
   }catch(e){ $("mpMsg").textContent = e.message; }
 }
 
@@ -1199,81 +1241,309 @@ async function resetearPin(dni){
   }catch(e){ $("mpMsg").textContent = e.message; }
 }
 
-/* ---- Modal: asistencia de un solo día (clic en celda) ---- */
-function abrirCeldaAsis(dni, fecha, actual){
-  const persona = ASIS_MES.find(p=>p.dni===dni);
-  const nombre = persona ? persona.nombres_apellidos : dni;
-  const opts = ESTADOS_ASIS.map(e=>`<option ${e===actual?"selected":""}>${esc(e)}</option>`).join("");
-  abrirModal(`
-    <h2>Asistencia · ${esc(nombre)}</h2>
-    <div class="sub" style="margin-bottom:14px;">${esc(fecha)}</div>
-    <div class="modal-campo">
-      <label>Estado</label>
-      <select id="caEstado">${opts || '<option value="">Sin estados configurados</option>'}</select>
-    </div>
-    <div class="modal-msg" id="caMsg"></div>
-    <div class="modal-acciones">
-      <button class="btn-principal btn-modal-guardar" onclick="guardarCeldaAsis('${esc(dni)}','${fecha}')">GUARDAR</button>
-      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
-    </div>`);
+/* ================= PERSONAL (CRUD · estados · dashboard · marcar) ================= */
+let PER={tab:"crud",crud:[],crudSel:{},rango:[],rangoSel:{},matriz:{dias:[],personal:[]},matSel:{desde:null,hasta:null},
+  dash:null,dashSel:{desde:null,hasta:null},alPage:1,
+  marcarArea:"",marcarList:[],marcarIdx:0,marcarDec:{},chartLine:null,chartPie:null,fpReady:false};
+function perInit(){
+  { const d=$("perRangoDesde"),h=$("perRangoHasta"); if(d&&!d.value)d.value=hoyISO(); if(h&&!h.value)h.value=hoyISO(); }
+  { const f=$("perMarcarFecha"); if(f&&!f.value) f.value=hoyISO(); }
+  if(!PER.fpReady && window.flatpickr){
+    if($("perDashRango")) flatpickr("#perDashRango",{mode:"range",dateFormat:"Y-m-d",locale:{rangeSeparator:" a "},
+      onChange:ds=>{ if(ds.length>=1){ PER.dashSel.desde=ds[0].toLocaleDateString("sv-SE"); PER.dashSel.hasta=(ds[1]||new Date()).toLocaleDateString("sv-SE"); } }});
+    if($("perMatRango")){
+      const hoy=new Date(), ini=new Date(); ini.setDate(ini.getDate()-13);
+      PER.matSel.desde=ini.toLocaleDateString("sv-SE"); PER.matSel.hasta=hoy.toLocaleDateString("sv-SE");
+      flatpickr("#perMatRango",{mode:"range",dateFormat:"Y-m-d",defaultDate:[PER.matSel.desde,PER.matSel.hasta],locale:{rangeSeparator:" a "},
+        onChange:ds=>{ if(ds.length>=1){ PER.matSel.desde=ds[0].toLocaleDateString("sv-SE"); PER.matSel.hasta=(ds[1]||new Date()).toLocaleDateString("sv-SE"); } }});
+    }
+    PER.fpReady=true;
+  }
+  perTab(PER.tab||"crud");
 }
-async function guardarCeldaAsis(dni, fecha){
-  const estado = $("caEstado").value;
-  if(!estado){ $("caMsg").textContent="Elige un estado"; return; }
-  try{
-    const r = await rpc("fn_asignar_estado_rango",{p_dni:ING.dni,p_token:ING.token,
-      p_dnis:[dni],p_estado:estado,p_fecha_desde:fecha,p_fecha_hasta:fecha});
-    if(!r.ok){ $("caMsg").textContent=r.error||"No se pudo guardar"; return; }
-    cerrarModal();
-    await cargarAsisMes();
-  }catch(e){ $("caMsg").textContent=e.message; }
+function perReload(){
+  if(PER.tab==="crud") perCargarCrud();
+  else if(PER.tab==="rango") perCargarRango();
+  else if(PER.tab==="matriz") perCargarMatriz();
+  else if(PER.tab==="dash") perCargarDash();
+  else if(PER.tab==="marcar") perMarcarInit();
 }
-
-/* ---- Modal: asignar estado por rango de fechas ---- */
-function abrirModalRango(){
-  const dnis = Object.keys(selAsis);
-  if(!dnis.length){ mostrarError("Selecciona al menos una persona en la tabla"); return; }
-  const html = `
-    <h2>Asignar estado por rango</h2>
-    <div class="sub" style="margin-bottom:14px;">${dnis.length} persona(s) seleccionada(s)</div>
-    <div class="modal-campo">
-      <label>Estado</label>
-      <select id="mrEstado">${ESTADOS_ASIS.map(e=>`<option>${esc(e)}</option>`).join("") || '<option value="">Sin estados configurados</option>'}</select>
-    </div>
-    <div class="modal-2col">
-      <div class="modal-campo">
-        <label>Desde</label>
-        <input type="date" id="mrDesde" value="${hoyISO()}">
-      </div>
-      <div class="modal-campo">
-        <label>Hasta</label>
-        <input type="date" id="mrHasta" value="${hoyISO()}">
-      </div>
-    </div>
-    <div class="modal-msg" id="mrMsg"></div>
-    <div class="modal-acciones">
-      <button class="btn-principal btn-modal-guardar" onclick="guardarRango()">APLICAR A ${dnis.length}</button>
-      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
-    </div>`;
-  abrirModal(html);
+function perTab(t){
+  PER.tab=t;
+  [["crud","perCrud","perTabCrud"],["rango","perRango","perTabRango"],["matriz","perMatriz","perTabMatriz"],["dash","perDash","perTabDash"],["marcar","perMarcar","perTabMarcar"]]
+    .forEach(x=>{ $(x[1]).hidden=x[0]!==t; $(x[2]).classList.toggle("activo",x[0]===t); });
+  perReload();
 }
 
-async function guardarRango(){
-  const dnis = Object.keys(selAsis);
-  const estado = $("mrEstado").value;
-  const desde = $("mrDesde").value;
-  const hasta = $("mrHasta").value;
-  if(!estado){ $("mrMsg").textContent = "Elige un estado"; return; }
-  if(!desde || !hasta){ $("mrMsg").textContent = "Elige ambas fechas"; return; }
-  if(hasta < desde){ $("mrMsg").textContent = "La fecha final no puede ser menor a la inicial"; return; }
+/* --- CRUD --- */
+async function perCargarCrud(){
+  $("perTablaCrud").innerHTML=cargandoHTML("Cargando personal…");
   try{
-    const r = await rpc("fn_asignar_estado_rango",{p_dni:ING.dni,p_token:ING.token,
-      p_dnis:dnis,p_estado:estado,p_fecha_desde:desde,p_fecha_hasta:hasta});
-    if(!r.ok){ $("mrMsg").textContent = r.error||"No se pudo guardar"; return; }
+    const r=await rpc("fn_personal_listar",{p_dni_ing:ING.dni,p_token:ING.token,p_area:$("perArea").value,p_incluir_inactivos:$("perInactivos").checked});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("perTablaCrud").innerHTML=""; return; }
+    PER.crud=r.personal||[]; PER.crudSel={}; perNSelUpd(); perPintarCrud();
+  }catch(e){ $("perTablaCrud").innerHTML=""; mostrarError(e.message); }
+}
+function perNSelUpd(){ $("perNSel").textContent=Object.keys(PER.crudSel).length; }
+function perLimpiarSel(){ PER.crudSel={}; perNSelUpd(); perPintarCrud(); }
+function perToggleSel(dni){ if(PER.crudSel[dni]) delete PER.crudSel[dni]; else PER.crudSel[dni]=true; perNSelUpd(); }
+function perPintarCrud(){
+  const q=normKey($("perBuscar").value);
+  const lista=PER.crud.filter(p=>!q||normKey(p.nombre+" "+p.dni).includes(q));
+  $("perResumenCrud").textContent=`${lista.length} persona(s)`;
+  const thead=`<thead><tr><th class="col-check"></th><th class="izq">Nombre</th><th>DNI</th><th>Área actual</th><th>Área origen</th><th>Cargo</th><th>Estado</th><th></th></tr></thead>`;
+  const body=lista.length? lista.map(p=>`<tr${p.estado!=="ACTIVO"?' style="opacity:.6;"':''}>
+      <td class="col-check"><input type="checkbox" ${PER.crudSel[p.dni]?"checked":""} onclick="perToggleSel('${esc(p.dni)}')"></td>
+      <td class="izq"><b>${esc(p.nombre)}</b></td><td>${esc(p.dni)}</td>
+      <td>${esc(p.area_actual)}</td><td>${esc(p.area_origen||"—")}</td><td>${esc(p.cargo)}</td>
+      <td><span class="pill ${esc(p.estado)}">${esc(p.estado)}</span></td>
+      <td><button class="acc-editar" onclick="abrirModalPersonal('${esc(p.dni)}')">Editar</button></td></tr>`).join("")
+    : `<tr><td colspan="8"><div class="vacio-msg">Sin personal</div></td></tr>`;
+  $("perTablaCrud").innerHTML=thead+"<tbody>"+body+"</tbody>";
+}
+async function perMoverArea(){
+  const dnis=Object.keys(PER.crudSel);
+  if(!dnis.length){ mostrarError("Selecciona al menos una persona"); return; }
+  const destino=$("perMoverArea").value; if(!destino){ mostrarError("Elige el área destino"); return; }
+  if(!confirm(`¿Mover ${dnis.length} persona(s) a ${destino}?`)) return;
+  try{
+    const r=await rpc("fn_cambiar_area",{p_dni:ING.dni,p_token:ING.token,p_dnis:dnis,p_area:destino});
+    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+    mostrarOk(`${dnis.length} movida(s) a ${destino}`); await perCargarCrud();
+  }catch(e){ mostrarError(e.message); }
+}
+
+/* --- Estados por rango --- */
+async function perCargarRango(){
+  $("perRangoEstado").innerHTML=(ESTADOS_ASIS||[]).map(e=>`<option>${esc(e)}</option>`).join("")||'<option value="">Sin estados</option>';
+  $("perRangoList").innerHTML=cargandoHTML("Cargando personal…");
+  try{
+    const r=await rpc("fn_personal_listar",{p_dni_ing:ING.dni,p_token:ING.token,p_area:$("perRangoArea").value,p_incluir_inactivos:false});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("perRangoList").innerHTML=""; return; }
+    PER.rango=r.personal||[]; PER.rangoSel={}; perRangoNSelUpd(); perPintarRango();
+  }catch(e){ $("perRangoList").innerHTML=""; mostrarError(e.message); }
+}
+function perRangoNSelUpd(){ $("perRangoNSel").textContent=Object.keys(PER.rangoSel).length; }
+function perRangoToggle(dni){ if(PER.rangoSel[dni]) delete PER.rangoSel[dni]; else PER.rangoSel[dni]=true; perRangoNSelUpd(); perPintarRango(); }
+function perRangoMarcarTodos(){ PER.rango.forEach(p=>PER.rangoSel[p.dni]=true); perRangoNSelUpd(); perPintarRango(); }
+function perRangoLimpiar(){ PER.rangoSel={}; perRangoNSelUpd(); perPintarRango(); }
+function perPintarRango(){
+  $("perRangoList").innerHTML=PER.rango.length? PER.rango.map(p=>`<div class="card-persona${PER.rangoSel[p.dni]?" marcada":""}" onclick="perRangoToggle('${esc(p.dni)}')">
+    <div><div class="cp-nombre">${esc(p.nombre)}</div><div class="cp-dni">DNI ${esc(p.dni)} · ${esc(p.area_actual)}</div></div></div>`).join("")
+    : `<div class="vacio-msg">Sin personal</div>`;
+}
+async function perAplicarRango(){
+  const dnis=Object.keys(PER.rangoSel);
+  if(!dnis.length){ mostrarError("Selecciona al menos una persona"); return; }
+  const estado=$("perRangoEstado").value, desde=$("perRangoDesde").value, hasta=$("perRangoHasta").value;
+  if(!estado){ mostrarError("Elige un estado"); return; }
+  if(!desde||!hasta){ mostrarError("Elige ambas fechas"); return; }
+  if(hasta<desde){ mostrarError("La fecha final no puede ser menor"); return; }
+  if(!confirm(`¿Aplicar ${estado} a ${dnis.length} persona(s) del ${desde} al ${hasta}?`)) return;
+  try{
+    const r=await rpc("fn_asignar_estado_rango",{p_dni:ING.dni,p_token:ING.token,p_dnis:dnis,p_estado:estado,p_fecha_desde:desde,p_fecha_hasta:hasta});
+    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+    mostrarOk(`Estado aplicado a ${dnis.length} persona(s)`); PER.rangoSel={}; perRangoNSelUpd(); perPintarRango();
+  }catch(e){ mostrarError(e.message); }
+}
+
+/* --- Matriz (personal × días editable) --- */
+async function perCargarMatriz(){
+  if(!PER.matSel.desde||!PER.matSel.hasta){ mostrarError("Elige el rango de fechas"); return; }
+  $("perTablaMatriz").innerHTML=cargandoHTML("Cargando matriz…");
+  try{
+    const r=await rpc("fn_asistencia_matriz",{p_dni:ING.dni,p_token:ING.token,p_area:$("perMatArea").value,p_desde:PER.matSel.desde,p_hasta:PER.matSel.hasta});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("perTablaMatriz").innerHTML=""; return; }
+    PER.matriz={dias:r.dias||[],personal:r.personal||[]}; perPintarMatriz();
+  }catch(e){ $("perTablaMatriz").innerHTML=""; mostrarError(e.message); }
+}
+function perPintarMatriz(){
+  const q=normKey($("perMatBuscar").value), dias=PER.matriz.dias;
+  const lista=PER.matriz.personal.filter(p=>!q||normKey(p.nombre).includes(q));
+  $("perMatResumen").textContent=`${lista.length} persona(s) · ${dias.length} día(s)`;
+  let thead=`<thead><tr><th class="col-nombre">Nombre</th>`+dias.map(d=>`<th>${d.slice(8,10)}-${d.slice(5,7)}</th>`).join("")+`</tr></thead>`;
+  let tbody="<tbody>";
+  if(!lista.length) tbody+=`<tr><td colspan="${dias.length+1}"><div class="vacio-msg">Sin personal</div></td></tr>`;
+  lista.forEach(p=>{
+    tbody+=`<tr><td class="col-nombre"><div>${esc(p.nombre)}</div><div style="font-size:11px;color:#5a6270;font-weight:600">${esc(p.area)}</div></td>`;
+    dias.forEach(d=>{ const est=p.registros[d];
+      tbody+=`<td class="celda-asis" onclick="perEditarCelda('${esc(p.dni)}','${esc(p.nombre).replace(/'/g,"\\'")}','${d}','${esc(est||"")}')">${est?`<span class="pill ${esc(est)}">${esc(est)}</span>`:"—"}</td>`;
+    });
+    tbody+=`</tr>`;
+  });
+  $("perTablaMatriz").innerHTML=thead+tbody+"</tbody>";
+}
+function perEditarCelda(dni,nombre,fecha,actual){
+  const opts=(ESTADOS_ASIS||[]).map(e=>`<option ${e===actual?"selected":""}>${esc(e)}</option>`).join("")||'<option value="">Sin estados</option>';
+  abrirModal(`<h2>${esc(nombre)}</h2><div class="sub" style="margin-bottom:12px;">${esc(fecha)}</div>
+    <div class="modal-campo"><label>Estado</label><select id="pmcEstado">${opts}</select></div>
+    <div class="modal-msg" id="pmcMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="perGuardarCelda('${esc(dni)}','${fecha}')">GUARDAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
+}
+async function perGuardarCelda(dni,fecha){
+  const estado=$("pmcEstado").value; if(!estado){ $("pmcMsg").textContent="Elige un estado"; return; }
+  try{
+    const r=await rpc("fn_asignar_estado_rango",{p_dni:ING.dni,p_token:ING.token,p_dnis:[dni],p_estado:estado,p_fecha_desde:fecha,p_fecha_hasta:fecha});
+    if(!r.ok){ $("pmcMsg").textContent=r.error||"No se pudo"; return; }
     cerrarModal();
-    selAsis={}; actualizarNSel();
-    await cargarAsisMes();
-  }catch(e){ $("mrMsg").textContent = e.message; }
+    const p=PER.matriz.personal.find(x=>x.dni===dni); if(p) p.registros[fecha]=estado; perPintarMatriz();
+  }catch(e){ $("pmcMsg").textContent=e.message; }
+}
+
+/* --- Dashboard --- */
+function perDashGranoChange(){ $("perDashRangoWrap").style.display=$("perDashGrano").value==="rango"?"":"none"; }
+function perDashRange(){
+  const g=$("perDashGrano").value, hoy=new Date(), iso=d=>d.toLocaleDateString("sv-SE");
+  if(g==="dia") return {desde:iso(hoy),hasta:iso(hoy)};
+  if(g==="semana"){ const d=new Date(hoy); d.setDate(d.getDate()-((d.getDay()+6)%7)); return {desde:iso(d),hasta:iso(hoy)}; }
+  if(g==="mes"){ return {desde:iso(new Date(hoy.getFullYear(),hoy.getMonth(),1)),hasta:iso(hoy)}; }
+  if(g==="anio"){ return {desde:iso(new Date(hoy.getFullYear(),0,1)),hasta:iso(hoy)}; }
+  return {desde:PER.dashSel.desde,hasta:PER.dashSel.hasta};
+}
+async function perCargarDash(){
+  const rango=perDashRange();
+  if(!rango.desde||!rango.hasta){ mostrarError("Elige el rango de fechas"); return; }
+  $("perDashKpis").innerHTML=cargandoHTML("Calculando…");
+  try{
+    const r=await rpc("fn_asistencia_dashboard",{p_dni:ING.dni,p_token:ING.token,p_area:$("perDashArea").value,p_desde:rango.desde,p_hasta:rango.hasta});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("perDashKpis").innerHTML=""; return; }
+    PER.dash=r; perPintarDash(r);
+  }catch(e){ $("perDashKpis").innerHTML=""; mostrarError(e.message); }
+}
+function perPintarDash(r){
+  const dias=r.por_dia||[];
+  const prom=dias.length? Math.round(dias.reduce((a,d)=>a+(r.personal>0?d.presentes/r.personal*100:0),0)/dias.length):0;
+  const kpi=(t,v,c)=>`<div class="kpi"><div class="kpi-num"${c?` style="color:${c}"`:""}>${v}</div><div class="kpi-lbl">${t}</div></div>`;
+  $("perDashKpis").innerHTML=
+    kpi("Presentes hoy",`${r.hoy_presentes}/${r.hoy_total}`,"var(--exito)")+
+    kpi("Asistencia prom.",prom+"%","var(--azul)")+
+    kpi("Personal",r.personal)+
+    kpi("Días laborales",r.dias_laborales);
+  const labels=dias.map(d=>d.fecha.slice(8,10)+"-"+d.fecha.slice(5,7));
+  const pct=dias.map(d=>r.personal>0?Math.round(d.presentes/r.personal*100):0);
+  perChart("line",{labels,datasets:[{label:"% Presentes",data:pct,borderColor:"#0D3B85",backgroundColor:"rgba(13,59,133,.12)",fill:true,tension:.3,pointRadius:2}]});
+  const est=r.por_estado||{}, keys=Object.keys(est);
+  const col={ACTIVO:"#1E7B3C",FALTA:"#B3261E",DM:"#D49D53",VACACIONES:"#1A56B4",PERMISO:"#8e6bb5"};
+  perChart("pie",{labels:keys,datasets:[{data:keys.map(k=>est[k]),backgroundColor:keys.map(k=>col[k]||"#9aa4b1")}]});
+  $("perDashDetalleWrap").style.display="none";
+  perRenderAlertas(1);
+}
+function perChart(which,data){
+  if(typeof Chart==="undefined") return;
+  const id=which==="line"?"perChartLine":"perChartPie", ctx=$(id); if(!ctx) return;
+  const prev=which==="line"?PER.chartLine:PER.chartPie; if(prev) prev.destroy();
+  const opts={responsive:true,maintainAspectRatio:true,aspectRatio:which==="pie"?1.6:2.4,plugins:{legend:{display:which==="pie"}}};
+  if(which==="pie") opts.onClick=(e,els)=>{ if(els&&els.length) perDashDetalle(data.labels[els[0].index]); };
+  const ch=new Chart(ctx,{type:which,data,options:opts});
+  if(which==="line") PER.chartLine=ch; else PER.chartPie=ch;
+}
+function perDashDetalle(estado){
+  const arr=((PER.dash&&PER.dash.detalle)||{})[estado]||[];
+  $("perDashDetalleWrap").style.display="";
+  $("perDashDetalleTit").innerHTML=`Personal en estado <span class="pill ${esc(estado)}">${esc(estado)}</span> (${arr.length})`;
+  $("perDashDetalle").innerHTML=arr.length? arr.map(x=>`<div class="det-persona">${esc(x.nombre)} <span>${x.veces} día(s)</span></div>`).join("")
+    : `<div class="vacio-msg">Sin registros</div>`;
+  $("perDashDetalleWrap").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function perRenderAlertas(page){
+  const al=(PER.dash&&PER.dash.alertas)||[], PP=10, tot=Math.ceil(al.length/PP)||1;
+  PER.alPage=Math.min(Math.max(1,page),tot);
+  const slice=al.slice((PER.alPage-1)*PP, PER.alPage*PP);
+  $("perDashAlertas").innerHTML=slice.length? slice.map(a=>`<div class="det-persona">${esc(a.fecha)} · ${esc(a.nombre)} <span class="pill ${esc(a.estado)}">${esc(a.estado)}</span></div>`).join("")
+    : `<div class="vacio-msg">Sin alertas en el periodo</div>`;
+  $("perDashAlPager").innerHTML= al.length>PP
+    ? `<button class="btn-mini" ${PER.alPage<=1?"disabled":""} onclick="perAlPage(-1)">‹ Anterior</button>
+       <span class="sub" style="margin:0 8px;">${PER.alPage}/${tot}</span>
+       <button class="btn-mini" ${PER.alPage>=tot?"disabled":""} onclick="perAlPage(1)">Siguiente ›</button>` : "";
+}
+function perAlPage(d){ perRenderAlertas(PER.alPage+d); }
+
+/* --- Marcar asistencia (tarjetas deslizables) --- */
+function perMarcarInit(){
+  $("perMarcarSwipe").hidden=true; $("perMarcarArea").hidden=false;
+  $("perMarcarAreas").innerHTML=(AREAS_LISTA||[]).map(a=>`<div class="card-area" onclick="perMarcarArea('${esc(a).replace(/'/g,"\\'")}')"><div class="ca-nombre">${esc(a)}</div><div class="ca-sub">Marcar hoy</div></div>`).join("");
+}
+async function perMarcarArea(area){
+  PER.marcarArea=area; PER.marcarDec={}; PER.marcarIdx=0;
+  $("perMarcarArea").hidden=true; $("perMarcarSwipe").hidden=false;
+  $("perSwipeStack").innerHTML=cargandoHTML("Cargando personal…");
+  try{
+    const r=await rpc("fn_personal_listar",{p_dni_ing:ING.dni,p_token:ING.token,p_area:area,p_incluir_inactivos:false});
+    if(!r.ok){ mostrarError(r.error||"Error"); return; }
+    PER.marcarList=(r.personal||[]).filter(p=>p.cargo==="OPERARIO");
+    perMarcarRender();
+  }catch(e){ mostrarError(e.message); }
+}
+function perMarcarVolver(){ perMarcarInit(); }
+function perMarcarRender(){
+  const stack=$("perSwipeStack"); stack.innerHTML="";
+  perMarcarProgresoUpd();
+  const pend=PER.marcarList.slice(PER.marcarIdx);
+  if(!pend.length){ stack.innerHTML=`<div class="vacio-msg">✓ Personal marcado. Pulsa <b>Guardar</b> para registrar.</div>`; return; }
+  pend.slice(0,3).reverse().forEach((p,i,arr)=>{
+    const top=i===arr.length-1;
+    const card=document.createElement("div");
+    card.className="swipe-card"+(top?" top":"");
+    card.innerHTML=`<div class="sc-nombre">${esc(p.nombre)}</div><div class="sc-dni">DNI ${esc(p.dni)}</div>
+      <div class="sc-hint"><span class="sc-l">◀ FALTA</span><span class="sc-d">▼ OTRO</span><span class="sc-r">PRESENTE ▶</span></div>`;
+    if(top) perSwipeBind(card,p);
+    stack.appendChild(card);
+  });
+}
+function perMarcarProgresoUpd(){
+  const done=Object.keys(PER.marcarDec).length, tot=PER.marcarList.length;
+  $("perMarcarProgreso").textContent=`${done}/${tot} · ${PER.marcarArea}`;
+  const g=$("perMarcarGuardar"); g.disabled=done===0; g.textContent=`Guardar (${done})`;
+}
+function perDecidir(p,estado){ PER.marcarDec[p.dni]=estado; PER.marcarIdx++; perMarcarRender(); }
+function perSwipeBind(card,p){
+  let sx=0,sy=0,dx=0,dy=0,drag=false; const TH=90;
+  card.style.touchAction="none";
+  card.addEventListener("pointerdown",e=>{ drag=true; sx=e.clientX; sy=e.clientY; if(card.setPointerCapture) card.setPointerCapture(e.pointerId); });
+  card.addEventListener("pointermove",e=>{ if(!drag) return; dx=e.clientX-sx; dy=e.clientY-sy;
+    card.style.transform=`translate(${dx}px,${dy}px) rotate(${dx/22}deg)`;
+    const v=Math.abs(dx)<TH/2;
+    card.classList.toggle("hint-r",dx>TH/2); card.classList.toggle("hint-l",dx<-TH/2);
+    card.classList.toggle("hint-d",dy>TH/2&&v); card.classList.toggle("hint-u",dy<-TH/2&&v); });
+  const end=()=>{ if(!drag) return; drag=false; const v=Math.abs(dx)<TH;
+    if(dy<-TH&&v){ perFlyV(card,-1); perDecidir(p,"__MANTENER__"); return; }
+    if(dy>TH&&v){ perSnap(card); perOtroEstado(p); return; }
+    if(dx>TH){ perFly(card,1); perDecidir(p,"ACTIVO"); return; }
+    if(dx<-TH){ perFly(card,-1); perDecidir(p,"FALTA"); return; }
+    perSnap(card); };
+  card.addEventListener("pointerup",end); card.addEventListener("pointercancel",end);
+}
+function perSnap(card){ card.classList.remove("hint-r","hint-l","hint-d","hint-u"); card.style.transition="transform .15s"; card.style.transform=""; setTimeout(()=>card.style.transition="",160); }
+function perFly(card,dir){ card.style.transition="transform .2s"; card.style.transform=`translate(${dir*600}px,-30px) rotate(${dir*18}deg)`; }
+function perFlyV(card,dir){ card.style.transition="transform .2s"; card.style.transform=`translate(0,${dir*600}px)`; }
+function perOtroEstado(p){
+  const opts=(ESTADOS_ASIS||[]).filter(e=>e!=="ACTIVO"&&e!=="FALTA").map(e=>`<option>${esc(e)}</option>`).join("")||'<option value="">Sin estados</option>';
+  abrirModal(`<h2>Estado de ${esc(p.nombre)}</h2>
+    <div class="modal-campo"><label>Estado</label><select id="peEstado">${opts}</select></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="perOtroConfirm('${esc(p.dni)}')">APLICAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
+}
+function perOtroConfirm(dni){
+  const est=$("peEstado").value; if(!est) return;
+  const p=PER.marcarList.find(x=>x.dni===dni); cerrarModal(); if(p) perDecidir(p,est);
+}
+async function perMarcarGuardar(){
+  const decs=PER.marcarDec;
+  const fecha=($("perMarcarFecha")&&$("perMarcarFecha").value)||hoyISO();
+  const dnis=Object.keys(decs).filter(d=>decs[d]!=="__MANTENER__");   // ▲ sin cambio = no se escribe
+  if(!dnis.length){ mostrarError("No hay cambios que guardar (todo quedó 'sin cambio')"); return; }
+  if(!confirm(`¿Guardar la asistencia del ${fecha} de ${dnis.length} persona(s)?`)) return;
+  const byEstado={}; dnis.forEach(d=>{ (byEstado[decs[d]]=byEstado[decs[d]]||[]).push(d); });
+  try{
+    for(const est of Object.keys(byEstado)){
+      const r=await rpc("fn_asignar_estado_rango",{p_dni:ING.dni,p_token:ING.token,p_dnis:byEstado[est],p_estado:est,p_fecha_desde:fecha,p_fecha_hasta:fecha});
+      if(!r.ok) throw new Error(r.error||("No se pudo guardar "+est));
+    }
+    mostrarOk(`Asistencia guardada (${dnis.length}) para ${fecha}.`); perMarcarInit();
+  }catch(e){ mostrarError(e.message); }
 }
 
 /* ================= TICKETS DEL DÍA ================= */

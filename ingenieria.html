@@ -30,22 +30,31 @@
   <!-- ===== SIDEBAR (solo PC) ===== -->
   <aside class="ing-sidebar">
     <nav class="ing-nav" aria-label="Secciones de ingeniería">
-      <div class="nav-sep">Tickets</div>
-      <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
-      <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Por módulo</a>
-      <div class="nav-sep">Eficiencia</div>
-      <a class="nav-item" data-tab="pasoEf" href="#pasoEf">Por área</a>
-      <a class="nav-item" data-tab="pasoDia" href="#pasoDia">Por día</a>
-      <a class="nav-item" data-tab="pasoModEf" href="#pasoModEf">Módulos (día)</a>
-      <div class="nav-sep">Gestión</div>
-      <a class="nav-item" data-tab="pasoBases" href="#pasoBases">Bases</a>
-      <a class="nav-item" data-tab="pasoAsis" href="#pasoAsis">Asistencia</a>
-      <a class="nav-item" data-tab="pasoIncid" href="#pasoIncid">Incidencias</a>
-      <a class="nav-item" data-tab="pasoFechas" href="#pasoFechas">Corregir fechas</a>
-      <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
-      <div class="nav-sep">Operar como</div>
-      <a class="nav-item" data-tab="pasoSupArea" href="#pasoSupArea">Supervisora</a>
-      <a class="nav-item" data-tab="pasoOpArea" href="#pasoOpArea">Operario</a>
+      <details class="nav-group" open>
+        <summary class="nav-sep">Tickets</summary>
+        <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
+        <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Por módulo</a>
+        <a class="nav-item" data-tab="pasoOpsOF" href="#pasoOpsOF">Operaciones (OF)</a>
+      </details>
+      <details class="nav-group" open>
+        <summary class="nav-sep">Eficiencia</summary>
+        <a class="nav-item" data-tab="pasoEf" href="#pasoEf">Por área</a>
+        <a class="nav-item" data-tab="pasoDia" href="#pasoDia">Por día</a>
+        <a class="nav-item" data-tab="pasoModEf" href="#pasoModEf">Módulos (día)</a>
+      </details>
+      <details class="nav-group" open>
+        <summary class="nav-sep">Gestión</summary>
+        <a class="nav-item" data-tab="pasoAsis" href="#pasoAsis">Personal</a>
+        <a class="nav-item" data-tab="pasoBases" href="#pasoBases">Bases</a>
+        <a class="nav-item" data-tab="pasoIncid" href="#pasoIncid">Incidencias</a>
+        <a class="nav-item" data-tab="pasoFechas" href="#pasoFechas">Corregir fechas</a>
+        <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
+      </details>
+      <details class="nav-group" open>
+        <summary class="nav-sep">Operar como</summary>
+        <a class="nav-item" data-tab="pasoSupArea" href="#pasoSupArea">Supervisora</a>
+        <a class="nav-item" data-tab="pasoOpArea" href="#pasoOpArea">Operario</a>
+      </details>
     </nav>
   </aside>
   <div id="ingBackdrop" class="ing-backdrop"></div>
@@ -132,6 +141,41 @@
       </div>
     </section>
 
+    <!-- ===================== OPERACIONES POR OF (agregar / quitar en ALMACÉN) ===================== -->
+    <section class="pantalla" id="pasoOpsOF">
+      <div class="seccion-cab">
+        <h1>Operaciones por OF</h1>
+        <p class="seccion-sub">Agrega o quita operaciones de una OF ya generada, escribiendo/borrando en el ALMACÉN — sin renumerar ni tocar los tickets ya reclamados.</p>
+      </div>
+      <div class="tabs sup-subtabs">
+        <button id="opfTabAdd" class="tab activo" onclick="opfModo('add')">AGREGAR OPERACIÓN</button>
+        <button id="opfTabDel" class="tab" onclick="opfModo('del')">QUITAR OPERACIÓN</button>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="opfArea" onchange="opfReset()"></select></label>
+        <label class="campo"><span>OF</span><input type="text" id="opfOf" inputmode="numeric" placeholder="Ej: 9999" oninput="this.value=this.value.replace(/\D/g,'')"></label>
+        <button class="btn-mini" onclick="opfCargarOF()">Cargar OF</button>
+      </div>
+      <div id="opfGate" class="estado-vacio">Elige área y OF, luego "Cargar OF".</div>
+      <div id="opfContenido" hidden>
+        <!-- AGREGAR -->
+        <div id="opfAdd">
+          <div class="barra-control">
+            <label class="campo"><span>Operación (de la BASE)</span><select id="opfOp"></select></label>
+            <label class="campo"><span>N°OP (posición)</span><input type="number" id="opfNop" min="1" placeholder="Ej: 10"></label>
+            <button class="btn-mini verde" onclick="opfPreviewAdd()">Previsualizar</button>
+          </div>
+          <div id="opfAddPv"></div>
+        </div>
+        <!-- QUITAR -->
+        <div id="opfDel" hidden>
+          <div class="sub" id="opfDelSub"></div>
+          <div class="mod-grid" id="opfDelList" style="margin-top:12px;"></div>
+          <div id="opfDelPv"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ===================== TICKETS · ACTUAL ===================== -->
     <section class="pantalla activa" id="pasoTk">
       <div class="seccion-cab">
@@ -212,43 +256,118 @@
       </div>
     </section>
 
-    <!-- ===================== ASISTENCIA ===================== -->
+    <!-- ===================== PERSONAL ===================== -->
     <section class="pantalla" id="pasoAsis">
-      <div class="fila-filtros">
-        <input type="month" id="mesAsis" onchange="cargarAsisMes()">
-        <select id="filtroAreaAsis"></select>
-        <input type="text" id="filtroNomAsis" placeholder="Buscar por nombre…">
-        <button class="btn-mini" onclick="abrirModalPersonal(null)">+ AGREGAR PERSONAL</button>
+      <div class="seccion-cab">
+        <h1>Personal</h1>
+        <p class="seccion-sub">Gestión de personal, estados por rango, dashboard de asistencia y marcado diario.</p>
       </div>
-      <div class="resumen-estados" id="resumenEstadosAsis"></div>
-
-      <div class="seg-sub" id="asisSubtabs">
-        <button class="activo" id="asisTabMatriz" onclick="asisVista('matriz')">Matriz mensual</button>
-        <button id="asisTabDetalle" onclick="asisVista('detalle')">Detallado día × estado</button>
+      <div class="tabs sup-subtabs">
+        <button id="perTabCrud" class="tab activo" onclick="perTab('crud')">PERSONAL (CRUD)</button>
+        <button id="perTabRango" class="tab" onclick="perTab('rango')">ESTADOS POR RANGO</button>
+        <button id="perTabMatriz" class="tab" onclick="perTab('matriz')">MATRIZ</button>
+        <button id="perTabDash" class="tab" onclick="perTab('dash')">DASHBOARD</button>
+        <button id="perTabMarcar" class="tab" onclick="perTab('marcar')">MARCAR ASISTENCIA</button>
       </div>
 
-      <!-- Vista: matriz mensual -->
-      <div id="asisMatriz">
-        <div class="fila-filtros">
-          <span class="sub" style="margin:0;">Seleccionadas: <b id="nSelAsis">0</b></span>
-          <button class="btn-mini verde" onclick="abrirModalRango()">ASIGNAR ESTADO POR RANGO</button>
-          <button class="btn-mini gris" onclick="limpiarSelAsis()">LIMPIAR SELECCIÓN</button>
+      <!-- CRUD -->
+      <div id="perCrud">
+        <div class="barra-control">
+          <label class="campo"><span>Área</span><select id="perArea" onchange="perCargarCrud()"></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="perBuscar" placeholder="Nombre / DNI…" oninput="perPintarCrud()"></label>
+          <label class="campo-check"><input type="checkbox" id="perInactivos" onchange="perCargarCrud()"> Ver inactivos</label>
+          <button class="btn-mini verde" onclick="abrirModalPersonal(null)">+ Agregar personal</button>
         </div>
-        <div class="contenedor-ancho">
-          <div style="overflow:auto;max-height:62vh;">
-            <table class="tabla-asis-mes" id="tablaAsisMes"></table>
+        <div class="barra-control">
+          <span class="sub" style="margin:0;">Seleccionados: <b id="perNSel">0</b></span>
+          <label class="campo"><span>Mover a área</span><select id="perMoverArea"></select></label>
+          <button class="btn-mini azul" onclick="perMoverArea()">Mover de área</button>
+          <button class="btn-mini gris" onclick="perLimpiarSel()">Limpiar</button>
+        </div>
+        <div class="sub" id="perResumenCrud"></div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;">
+          <table class="tabla" id="perTablaCrud"></table>
+        </div>
+      </div>
+
+      <!-- Estados por rango -->
+      <div id="perRango" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Área</span><select id="perRangoArea" onchange="perCargarRango()"></select></label>
+          <label class="campo"><span>Estado</span><select id="perRangoEstado"></select></label>
+          <label class="campo"><span>Desde</span><input type="date" id="perRangoDesde"></label>
+          <label class="campo"><span>Hasta</span><input type="date" id="perRangoHasta"></label>
+          <button class="btn-mini verde" onclick="perAplicarRango()">Aplicar a seleccionados</button>
+        </div>
+        <div class="barra-control">
+          <span class="sub" style="margin:0;">Seleccionados: <b id="perRangoNSel">0</b></span>
+          <button class="btn-mini gris" onclick="perRangoMarcarTodos()">Marcar todos</button>
+          <button class="btn-mini gris" onclick="perRangoLimpiar()">Limpiar</button>
+        </div>
+        <div class="grid-personal" id="perRangoList"></div>
+      </div>
+
+      <!-- Matriz (personal × días, editable) -->
+      <div id="perMatriz" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Área</span><select id="perMatArea" onchange="perCargarMatriz()"></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="perMatBuscar" placeholder="Nombre…" oninput="perPintarMatriz()"></label>
+          <label class="campo"><span>Rango</span><input type="text" id="perMatRango" placeholder="Selecciona fechas" readonly style="min-width:220px;cursor:pointer;"></label>
+          <button class="btn-mini" onclick="perCargarMatriz()">Cargar</button>
+        </div>
+        <div class="sub" id="perMatResumen"></div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;">
+          <table class="tabla-asis-mes" id="perTablaMatriz"></table>
+        </div>
+      </div>
+
+      <!-- Dashboard -->
+      <div id="perDash" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Área</span><select id="perDashArea" onchange="perCargarDash()"></select></label>
+          <label class="campo"><span>Periodo</span>
+            <select id="perDashGrano" onchange="perDashGranoChange()">
+              <option value="dia">Hoy</option>
+              <option value="semana" selected>Esta semana</option>
+              <option value="mes">Este mes</option>
+              <option value="anio">Este año</option>
+              <option value="rango">Rango…</option>
+            </select></label>
+          <label class="campo" id="perDashRangoWrap" style="display:none;"><span>Rango</span>
+            <input type="text" id="perDashRango" placeholder="Selecciona fechas" readonly style="min-width:200px;cursor:pointer;"></label>
+          <button class="btn-mini" onclick="perCargarDash()">Cargar</button>
+        </div>
+        <div class="kpis" id="perDashKpis"></div>
+        <div class="per-dash-charts">
+          <div class="kpi per-chart"><div class="tk-ops-title">Tendencia de asistencia (% presentes)</div><canvas id="perChartLine" height="160"></canvas></div>
+          <div class="kpi per-chart"><div class="tk-ops-title">Distribución por estado <small style="font-weight:600;color:#8a93a0;">(toca un sector)</small></div><canvas id="perChartPie" height="160"></canvas></div>
+        </div>
+        <div class="kpi per-chart" id="perDashDetalleWrap" style="margin-top:14px;display:none;">
+          <div class="tk-ops-title" id="perDashDetalleTit"></div><div id="perDashDetalle"></div>
+        </div>
+        <div class="kpi per-chart" style="margin-top:14px;">
+          <div class="tk-ops-title">Alertas recientes (última semana)</div>
+          <div id="perDashAlertas"></div>
+          <div class="pager" id="perDashAlPager" style="margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <!-- Marcar asistencia (tarjetas deslizables) -->
+      <div id="perMarcar" hidden>
+        <div id="perMarcarArea">
+          <div class="sub" style="margin-bottom:10px;">Elige el área para marcar la asistencia de hoy:</div>
+          <div class="grid-areas" id="perMarcarAreas"></div>
+        </div>
+        <div id="perMarcarSwipe" hidden>
+          <div class="fila-filtros">
+            <button class="btn-mini gris" onclick="perMarcarVolver()">◀ Áreas</button>
+            <label class="sub" style="margin:0;">Día: <input type="date" id="perMarcarFecha" style="margin-left:4px;"></label>
+            <span class="sub" id="perMarcarProgreso" style="margin:0;"></span>
+            <button class="btn-mini verde" id="perMarcarGuardar" onclick="perMarcarGuardar()" disabled>Guardar (0)</button>
           </div>
+          <div class="swipe-stack" id="perSwipeStack"></div>
+          <div class="swipe-ayuda">Desliza <b>▶ Presente</b> · <b>◀ Falta</b> · <b>▼ Otro estado</b> · <b>▲ Sin cambio</b></div>
         </div>
-      </div>
-
-      <!-- Vista: detallado por día y estado -->
-      <div id="asisDetalle" style="display:none;">
-        <div class="fila-filtros">
-          <label class="sub" style="margin:0;">Día:</label>
-          <input type="date" id="fechaDetAsis" onchange="pintarDetalleAsis()">
-        </div>
-        <div class="sub" id="resumenDetAsis"></div>
-        <div id="detalleAsis" class="det-asis-grid"></div>
       </div>
     </section>
 
@@ -522,6 +641,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="app.js"></script>
 <script src="ingenieria.js"></script>
 </body>

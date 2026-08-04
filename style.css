@@ -335,15 +335,6 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .btn-hdr-icon.girando{animation:gira .6s linear;}
 .btn-recargar.girando{animation:gira .6s linear;}
 
-/* Botones POST flotantes a la derecha (supervisora · pantalla de personal) */
-.fab-acciones{position:fixed;right:16px;bottom:64px;z-index:40;
-  display:flex;flex-direction:column;gap:10px;align-items:flex-end;}
-.fab-btn{border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:800;
-  padding:13px 18px;cursor:pointer;box-shadow:0 4px 14px rgba(13,59,133,.28);
-  min-width:180px;text-align:center;}
-.fab-btn:active{transform:scale(.97);}
-.fab-btn.enlace{background:var(--enlace);}
-.fab-btn.azul{background:var(--azul);}
 .fab-btn.alerta{background:var(--alerta);}
 
 /* FAB de áreas (tickets del día · ingeniería): filtra la vista a un área */
@@ -532,6 +523,35 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .ing-nav .nav-item.activo{background:var(--blanco);color:var(--azul);font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,.2);}
 .ing-nav .nav-sep{color:#8fb0e8;font-size:11px;font-weight:800;text-transform:uppercase;
   letter-spacing:.6px;margin:14px 6px 4px;border-top:1px solid rgba(255,255,255,.15);padding-top:10px;}
+/* Grupos colapsables del sidebar (details/summary nativos) */
+.ing-nav .nav-group{display:flex;flex-direction:column;gap:6px;}
+.ing-nav summary.nav-sep{cursor:pointer;list-style:none;display:flex;align-items:center;
+  justify-content:space-between;gap:8px;user-select:none;}
+.ing-nav summary.nav-sep::-webkit-details-marker{display:none;}
+.ing-nav summary.nav-sep::after{content:"\25BE";font-size:12px;color:#8fb0e8;transition:transform .15s ease;}
+.ing-nav .nav-group:not([open]) summary.nav-sep::after{transform:rotate(-90deg);}
+.ing-nav summary.nav-sep:hover{color:#cfe0fb;}
+/* Personal · dashboard */
+.per-dash-charts{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;margin-top:14px;}
+.per-chart{padding:16px;}
+@media(max-width:900px){ .per-dash-charts{grid-template-columns:1fr;} }
+/* Personal · marcar asistencia (tarjetas deslizables) */
+.swipe-stack{position:relative;height:340px;max-width:420px;margin:14px auto 6px;}
+.swipe-card{position:absolute;inset:0;background:var(--blanco);border-radius:18px;
+  box-shadow:0 6px 20px rgba(13,59,133,.16);padding:26px 22px;display:flex;flex-direction:column;
+  justify-content:center;align-items:center;text-align:center;border:2px solid transparent;}
+.swipe-card.top{cursor:grab;touch-action:none;z-index:3;}
+.swipe-card:not(.top){transform:scale(.95) translateY(10px);z-index:2;opacity:.85;}
+.swipe-card .sc-nombre{font-size:24px;font-weight:800;color:var(--azul);}
+.swipe-card .sc-dni{font-size:14px;color:#5a6270;font-weight:700;margin-top:6px;}
+.swipe-card .sc-hint{position:absolute;bottom:14px;left:14px;right:14px;display:flex;
+  justify-content:space-between;font-size:11px;font-weight:800;color:#9aa4b1;}
+.swipe-card.hint-r{border-color:var(--exito);}
+.swipe-card.hint-l{border-color:var(--alerta);}
+.swipe-card.hint-d{border-color:var(--ocre);}
+.swipe-card.hint-u{border-color:var(--enlace);}
+.swipe-card .sc-r{color:var(--exito);} .swipe-card .sc-l{color:var(--alerta);} .swipe-card .sc-d{color:var(--ocre);}
+.swipe-ayuda{text-align:center;font-size:13px;color:#5a6270;font-weight:700;}
 .ing-main{flex:1;min-width:0;overflow-y:auto;padding:18px;position:relative;}
 .ing-main .pantalla{padding:0;overflow:visible;}
 
