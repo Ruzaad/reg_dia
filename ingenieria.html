@@ -34,7 +34,9 @@
         <summary class="nav-sep">Tickets</summary>
         <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
         <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Por módulo</a>
+        <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
         <a class="nav-item" data-tab="pasoOpsOF" href="#pasoOpsOF">Operaciones (OF)</a>
+        <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Avance por OF</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Eficiencia</summary>
@@ -43,12 +45,15 @@
         <a class="nav-item" data-tab="pasoModEf" href="#pasoModEf">Módulos (día)</a>
       </details>
       <details class="nav-group" open>
+        <summary class="nav-sep">Dashboards</summary>
+        <a class="nav-item" data-tab="pasoDash" href="#pasoDash">Tableros</a>
+      </details>
+      <details class="nav-group" open>
         <summary class="nav-sep">Gestión</summary>
         <a class="nav-item" data-tab="pasoAsis" href="#pasoAsis">Personal</a>
         <a class="nav-item" data-tab="pasoBases" href="#pasoBases">Bases</a>
         <a class="nav-item" data-tab="pasoIncid" href="#pasoIncid">Incidencias</a>
         <a class="nav-item" data-tab="pasoFechas" href="#pasoFechas">Corregir fechas</a>
-        <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Operar como</summary>
@@ -85,6 +90,7 @@
         <label class="campo"><span>Fecha</span>
           <input type="date" id="fechaEf" onchange="cargarEf()"></label>
         <button class="btn-mini" onclick="cargarEf()">Cargar</button>
+        <button class="btn-mini verde" onclick="descargarEf()">Descargar XLSX</button>
         <button class="btn-mini gris" id="btnCensEf" onclick="toggleCensuraEf()" aria-pressed="false">Censurar %</button>
       </div>
       <div id="efGate" class="estado-vacio">Selecciona un área para mostrar su eficiencia.</div>
@@ -179,9 +185,15 @@
     <!-- ===================== TICKETS · ACTUAL ===================== -->
     <section class="pantalla activa" id="pasoTk">
       <div class="seccion-cab">
-        <h1>Tickets reclamados hoy</h1>
-        <p class="seccion-sub">Registro del día por persona, con última y penúltima operación.</p>
+        <h1>Tickets</h1>
+        <p class="seccion-sub">Registro del día por persona; y tickets reclamados por OF/operación.</p>
       </div>
+      <div class="tabs sup-subtabs">
+        <button id="tkTabActual" class="tab activo" onclick="tkVista('actual')">ACTUAL</button>
+        <button id="tkTabOp" class="tab" onclick="tkVista('op')">RECLAMADOS X OPERACIÓN</button>
+      </div>
+
+      <div id="tkActualView">
       <div class="barra-control">
         <label class="campo"><span>Fecha</span>
           <input type="date" id="fechaTk" onchange="cargarTk()"></label>
@@ -206,6 +218,22 @@
           <div class="pager" id="tkPager"></div>
         </div>
         <aside id="tkOpsPanel" class="tk-ops-panel" style="display:none;"></aside>
+      </div>
+      </div><!-- /tkActualView -->
+
+      <div id="tkOpView" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Área</span><select id="tkOpArea"></select></label>
+          <label class="campo"><span>OF</span><input type="text" id="tkOpOf" placeholder="Nº OF…"></label>
+          <button class="btn-mini" onclick="cargarTkOp()">Cargar</button>
+          <label class="campo"><span>Operación</span><select id="tkOpSel" onchange="pintarTkOp()"><option value="">Todas</option></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="tkOpBuscar" placeholder="Nombre / DNI / numeración…" oninput="pintarTkOp()"></label>
+          <label class="chk-inline"><input type="checkbox" id="tkOpOcultarLib" onchange="pintarTkOp()"> Ocultar liberados</label>
+        </div>
+        <div class="sub" id="tkOpResumen"></div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;">
+          <table class="tabla" id="tablaTkOp"></table>
+        </div>
       </div>
     </section>
 
@@ -237,9 +265,9 @@
     <section class="pantalla" id="pasoBases">
       <div class="fila-filtros">
         <select id="areaBase" onchange="cargarBases()"></select>
-        <input type="text" id="fArt" placeholder="Filtrar artículo…" oninput="pintarBases()">
-        <input type="text" id="fOp" placeholder="Filtrar operación…" oninput="pintarBases()">
-        <input type="text" id="fCli" placeholder="Filtrar cliente…" oninput="pintarBases()">
+        <input type="text" id="fArt" placeholder="Filtrar artículo…" oninput="filtrarBases()">
+        <input type="text" id="fOp" placeholder="Filtrar operación…" oninput="filtrarBases()">
+        <input type="text" id="fCli" placeholder="Filtrar cliente…" oninput="filtrarBases()">
         <button class="btn-mini" onclick="cargarBases()">↻ CARGAR</button>
         <button class="btn-mini verde" onclick="descargarBase()">DESCARGAR XLSX</button>
         <button class="btn-mini" onclick="abrirModalBaseOp(null)">+ AGREGAR OPERACIÓN</button>
@@ -254,6 +282,7 @@
       <div class="contenedor-ancho" style="overflow:auto;max-height:70vh;">
         <table class="tabla" id="tablaBases"></table>
       </div>
+      <div class="pager" id="basesPager" style="margin-top:8px;"></div>
     </section>
 
     <!-- ===================== PERSONAL ===================== -->
@@ -266,7 +295,6 @@
         <button id="perTabCrud" class="tab activo" onclick="perTab('crud')">PERSONAL (CRUD)</button>
         <button id="perTabRango" class="tab" onclick="perTab('rango')">ESTADOS POR RANGO</button>
         <button id="perTabMatriz" class="tab" onclick="perTab('matriz')">MATRIZ</button>
-        <button id="perTabDash" class="tab" onclick="perTab('dash')">DASHBOARD</button>
         <button id="perTabMarcar" class="tab" onclick="perTab('marcar')">MARCAR ASISTENCIA</button>
       </div>
 
@@ -321,8 +349,39 @@
         </div>
       </div>
 
-      <!-- Dashboard -->
-      <div id="perDash" hidden>
+      <!-- Marcar asistencia (tarjetas deslizables) -->
+      <div id="perMarcar" hidden>
+        <div id="perMarcarArea">
+          <div class="sub" style="margin-bottom:10px;">Elige el área para marcar la asistencia de hoy:</div>
+          <div class="grid-areas" id="perMarcarAreas"></div>
+        </div>
+        <div id="perMarcarSwipe" hidden>
+          <div class="fila-filtros">
+            <button class="btn-mini gris" onclick="perMarcarVolver()">◀ Áreas</button>
+            <label class="sub" style="margin:0;">Día: <input type="date" id="perMarcarFecha" style="margin-left:4px;"></label>
+            <span class="sub" id="perMarcarProgreso" style="margin:0;"></span>
+            <button class="btn-mini verde" id="perMarcarGuardar" onclick="aswVerResumen()" disabled>Revisar (0)</button>
+          </div>
+          <div class="swipe-stack" id="perSwipeStack"></div>
+          <div class="swipe-ayuda" id="perSwipeAyuda">Desliza <b>▶ Activo</b> · <b>◀ Falta</b> · <b>▼ Otro estado</b> · <b>▲ Confirmar estado actual</b></div>
+          <div id="perMarcarResumen" hidden></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== DASHBOARDS ===================== -->
+    <section class="pantalla" id="pasoDash">
+      <div class="seccion-cab"><h1>Dashboards</h1>
+        <p class="seccion-sub">Asistencia, eficiencia/minutaje, cantidad y minutos por módulo.</p></div>
+      <div class="tabs sup-subtabs">
+        <button id="dashTabAsis" class="tab activo" onclick="dashTab('asis')">ASISTENCIA</button>
+        <button id="dashTabEf" class="tab" onclick="dashTab('ef')">EFICIENCIA / MINUTAJE</button>
+        <button id="dashTabCant" class="tab" onclick="dashTab('cant')">CANTIDAD POR ÁREA</button>
+        <button id="dashTabMod" class="tab" onclick="dashTab('mod')">MINUTOS POR MÓDULO</button>
+      </div>
+
+      <!-- Asistencia -->
+      <div id="dbPanelAsis">
         <div class="barra-control">
           <label class="campo"><span>Área</span><select id="perDashArea" onchange="perCargarDash()"></select></label>
           <label class="campo"><span>Periodo</span>
@@ -339,8 +398,12 @@
         </div>
         <div class="kpis" id="perDashKpis"></div>
         <div class="per-dash-charts">
-          <div class="kpi per-chart"><div class="tk-ops-title">Tendencia de asistencia (% presentes)</div><canvas id="perChartLine" height="160"></canvas></div>
-          <div class="kpi per-chart"><div class="tk-ops-title">Distribución por estado <small style="font-weight:600;color:#8a93a0;">(toca un sector)</small></div><canvas id="perChartPie" height="160"></canvas></div>
+          <div class="kpi per-chart" id="perDashTrendCard"><div class="tk-ops-title">Tendencia de asistencia (% presentes)</div><div class="grafico-box"><canvas id="perChartLine"></canvas></div></div>
+          <div class="kpi per-chart"><div class="tk-ops-title">Distribución por estado <small style="font-weight:600;color:#8a93a0;">(toca un sector)</small></div><div class="grafico-box grafico-box-sm"><canvas id="perChartPie"></canvas></div></div>
+        </div>
+        <div class="kpi per-chart" id="perDashAreasCard" style="margin-top:14px;display:none;">
+          <div class="tk-ops-title">Asistencia promedio por área <small style="font-weight:600;color:#8a93a0;">(activos ÷ estructura − vacaciones/otros)</small></div>
+          <div class="grafico-box"><canvas id="perChartAreas"></canvas></div>
         </div>
         <div class="kpi per-chart" id="perDashDetalleWrap" style="margin-top:14px;display:none;">
           <div class="tk-ops-title" id="perDashDetalleTit"></div><div id="perDashDetalle"></div>
@@ -352,49 +415,94 @@
         </div>
       </div>
 
-      <!-- Marcar asistencia (tarjetas deslizables) -->
-      <div id="perMarcar" hidden>
-        <div id="perMarcarArea">
-          <div class="sub" style="margin-bottom:10px;">Elige el área para marcar la asistencia de hoy:</div>
-          <div class="grid-areas" id="perMarcarAreas"></div>
-        </div>
-        <div id="perMarcarSwipe" hidden>
-          <div class="fila-filtros">
-            <button class="btn-mini gris" onclick="perMarcarVolver()">◀ Áreas</button>
-            <label class="sub" style="margin:0;">Día: <input type="date" id="perMarcarFecha" style="margin-left:4px;"></label>
-            <span class="sub" id="perMarcarProgreso" style="margin:0;"></span>
-            <button class="btn-mini verde" id="perMarcarGuardar" onclick="perMarcarGuardar()" disabled>Guardar (0)</button>
+      <!-- Eficiencia / minutaje por área -->
+      <div id="dbPanelEf" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Rango</span><input type="text" id="dbEfRango" placeholder="Selecciona fechas" readonly style="min-width:200px;cursor:pointer;"></label>
+          <div class="seg" style="max-width:320px;">
+            <button id="dbEfBtnEf" class="activo" onclick="dbEfModo('ef')">Eficiencia %</button>
+            <button id="dbEfBtnMin" onclick="dbEfModo('min')">Minutaje</button>
           </div>
-          <div class="swipe-stack" id="perSwipeStack"></div>
-          <div class="swipe-ayuda">Desliza <b>▶ Presente</b> · <b>◀ Falta</b> · <b>▼ Otro estado</b> · <b>▲ Sin cambio</b></div>
+          <button class="btn-mini" onclick="cargarDbEf()">Cargar</button>
+        </div>
+        <div class="kpi per-chart"><div class="tk-ops-title" id="dbEfTit">Comparativo por área</div><div class="grafico-box"><canvas id="dbEfChart"></canvas></div></div>
+        <div class="kpi per-chart" style="margin-top:14px;">
+          <div class="tk-ops-title">Detalle por fecha (áreas en filas · fechas en columnas)</div>
+          <div class="contenedor-ancho tabla-scroll" style="max-height:50vh;"><table class="tabla" id="dbEfTabla"></table></div>
         </div>
       </div>
+
+      <!-- Cantidad por área -->
+      <div id="dbPanelCant" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Rango</span><input type="text" id="dbCantRango" placeholder="Selecciona fechas" readonly style="min-width:200px;cursor:pointer;"></label>
+          <button class="btn-mini" onclick="cargarDbCant()">Cargar</button>
+        </div>
+        <div class="kpi per-chart"><div class="tk-ops-title">Cantidad producida por área</div><div class="grafico-box"><canvas id="dbCantChart"></canvas></div></div>
+      </div>
+
+      <!-- Minutos por módulo -->
+      <div id="dbPanelMod" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Área</span><select id="dbModArea" onchange="cargarDbMod()"></select></label>
+          <label class="campo"><span>Rango</span><input type="text" id="dbModRango" placeholder="Selecciona fechas" readonly style="min-width:200px;cursor:pointer;"></label>
+          <button class="btn-mini" onclick="cargarDbMod()">Cargar</button>
+        </div>
+        <div class="kpi per-chart"><div class="tk-ops-title" id="dbModTit">Minutos generados por módulo</div><div class="grafico-box"><canvas id="dbModChart"></canvas></div></div>
+      </div>
+    </section>
+
+    <!-- ===================== AVANCE POR OF ===================== -->
+    <section class="pantalla" id="pasoAvOF">
+      <div class="seccion-cab"><h1>Avance por OF</h1>
+        <p class="seccion-sub">Cantidad programada (ALMACÉN) vs. realizada, último módulo y estado por OF.</p></div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="avofArea"></select></label>
+        <label class="campo"><span>Rango</span><input type="text" id="avofRango" placeholder="Selecciona fechas" readonly style="min-width:200px;cursor:pointer;"></label>
+        <label class="campo"><span>Operación</span>
+          <select id="avofNivel" onchange="avofPintar()">
+            <option value="ultima">Última operación</option>
+            <option value="penultima">Penúltima operación</option>
+          </select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="avofBuscar" placeholder="Artículo / OF…" oninput="avofPintar()"></label>
+        <button class="btn-mini" onclick="cargarAvof()">Cargar</button>
+        <button class="btn-mini verde" onclick="descargarAvof()">⬇ Descargar</button>
+      </div>
+      <div class="sub" id="avofResumen"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="avofTabla"></table></div>
     </section>
 
     <!-- ===================== INCIDENCIAS (ajustes) ===================== -->
     <section class="pantalla" id="pasoIncid">
-      
-
-      <h2 class="tk-ops-title">Incidencias aplicadas</h2>
-      <div class="barra-control">
-        <label class="campo"><span>Desde</span><input type="date" id="fechaInciD" onchange="cargarOcurrencias()"></label>
-        <label class="campo"><span>Hasta</span><input type="date" id="fechaInciH" onchange="cargarOcurrencias()"></label>
-        <label class="campo"><span>Área</span><select id="areaInci" onchange="cargarOcurrencias()"></select></label>
-        <label class="campo"><span>Buscar</span><input type="text" id="filtroInci" placeholder="Nombre / tipo / motivo…" oninput="pintarOcurrencias()"></label>
-        <button class="btn-mini" onclick="cargarOcurrencias()">Cargar</button>
-        <button class="btn-mini verde" onclick="nuevaIncidencia()">+ Nueva incidencia</button>
-      </div>
-      <div class="kpis" id="resumenInci" style="margin-bottom:14px;"></div>
-      <div class="sub" id="resumenInciTxt"></div>
-      <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;">
-        <table class="tabla" id="tablaInci"></table>
-      </div>
       <div class="seccion-cab">
         <h1>Incidencias</h1>
-        <p class="seccion-sub">Pendientes por aprobar.</p>
+        <p class="seccion-sub">Ajustes de tiempo del personal: aplicadas (editar/borrar) y pendientes por resolver.</p>
       </div>
-      <h2 class="tk-ops-title">Pendientes por resolver</h2>
-      <div class="lista-cards" id="listaIncidI" style="margin-bottom:22px;"></div>
+      <div class="tabs sup-subtabs">
+        <button id="inciTabApl" class="tab activo" onclick="inciVista('apl')">APLICADAS</button>
+        <button id="inciTabPend" class="tab" onclick="inciVista('pend')">PENDIENTES</button>
+      </div>
+
+      <div id="inciAplicadas">
+        <div class="barra-control">
+          <label class="campo"><span>Desde</span><input type="date" id="fechaInciD" onchange="cargarOcurrencias()"></label>
+          <label class="campo"><span>Hasta</span><input type="date" id="fechaInciH" onchange="cargarOcurrencias()"></label>
+          <label class="campo"><span>Área</span><select id="areaInci" onchange="cargarOcurrencias()"></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="filtroInci" placeholder="Nombre / tipo / motivo…" oninput="pintarOcurrencias()"></label>
+          <button class="btn-mini" onclick="cargarOcurrencias()">Cargar</button>
+          <button class="btn-mini verde" onclick="nuevaIncidencia()">+ Nueva incidencia</button>
+        </div>
+        <div class="kpis" id="resumenInci" style="margin-bottom:14px;"></div>
+        <div class="sub" id="resumenInciTxt"></div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;">
+          <table class="tabla" id="tablaInci"></table>
+        </div>
+      </div>
+
+      <div id="inciPendientes" hidden>
+        <h2 class="tk-ops-title">Pendientes por resolver (aprobar / rechazar)</h2>
+        <div class="lista-cards" id="listaIncidI" style="margin-bottom:22px;"></div>
+      </div>
     </section>
 
     <!-- ===================== GENERAR TICKETS (HOJA DE NUMERACIÓN) ===================== -->
@@ -486,7 +594,6 @@
       <div class="acc-toolbar">
         <button class="btn-accion enlace" onclick="ocurrenciaGrupal()">Ocurrencia grupal</button>
         <button class="btn-accion azul" onclick="moverAreaInicio()">Cambiar área</button>
-        <button class="btn-accion alerta" onclick="marcarFaltantesInicio()">Marcar faltantes</button>
       </div>
       <div class="grid-personal" id="gridPersonal"></div>
     </section>
@@ -603,16 +710,6 @@
         <button class="btn-mini" onclick="cargarEfPersonal()">Cargar</button>
       </div>
       <div class="grid-personal" id="gridEfPer"></div>
-    </section>
-
-    <section class="pantalla" id="pasoFaltantes">
-      <button class="btn-volver" onclick="irA('pasoPersonal')">← Volver</button>
-      <h1>Marcar faltantes / estado</h1>
-      <div class="sub">Toca a quienes no están en el área hoy — no suma minutos al área</div>
-      <div class="grid-personal" id="gridPersonalFalta"></div>
-      <div style="max-width:560px;margin:14px auto 0;width:100%;">
-        <button class="btn-principal" id="btnContinuarFalta" disabled onclick="marcarFaltantesEstado()">ELEGIR ESTADO</button>
-      </div>
     </section>
 
   </div><!-- /ing-main -->

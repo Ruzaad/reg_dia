@@ -89,6 +89,8 @@ function activarTab(tab){
   else if(tab==='pasoOpArea') cargarOpArea();
   else if(tab==='pasoFechas') initFechas();
   else if(tab==='pasoGen') genInit();
+  else if(tab==='pasoDash'){ dbEnsureFp(); dashTab(DASH_TAB||'asis'); }
+  else if(tab==='pasoAvOF'){ dbEnsureFp(); }
 }
 function toggleSidebar(){ document.body.classList.toggle("sidebar-cerrada"); }
 function cerrarSidebarMovil(){ if(window.innerWidth<=900) document.body.classList.add("sidebar-cerrada"); }
@@ -105,6 +107,8 @@ function poblarSelectsArea(){
   if($("perRangoArea")) $("perRangoArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
   if($("perDashArea")) $("perDashArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
   if($("perMatArea")) $("perMatArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
+  if($("dbModArea")) $("dbModArea").innerHTML = elige + AREAS_LISTA.map(op).join("");
+  if($("avofArea"))  $("avofArea").innerHTML  = elige + Object.keys(AREAS).map(op).join(""); // requiere Sheet (ALMACÉN)
   $("filtroAreaEf").innerHTML   = elige + AREAS_LISTA.map(op).join("");   // Efi. Área: requiere elegir
   $("filtroAreaEfR").innerHTML  = todas + AREAS_LISTA.map(op).join("");
   if($("areaTk"))  $("areaTk").innerHTML  = todas + AREAS_LISTA.map(op).join("");
@@ -130,6 +134,8 @@ function recargarIngenieria(){
   else if(act("pasoMod")) cargarMod();
   else if(act("pasoBases")) cargarBases();
   else if(act("pasoAsis")) perReload();
+  else if(act("pasoDash")) dashTab(DASH_TAB||'asis');
+  else if(act("pasoAvOF")){ if($("avofArea")&&$("avofArea").value) cargarAvof(); }
   else if(act("pasoIncid")) cargarIncidI();
   else if(act("pasoPersonal")||act("pasoAvance")||act("pasoIncidencias")||act("pasoEfPersonal")) recargarSupervisora();
 }
@@ -962,7 +968,7 @@ function pintarEf(){
   $("efContenido").hidden = false;
 
   $("efAreas").innerHTML = (EF.areas||[]).filter(a=>a.area===fArea).map(a=>`
-    <div class="kpi"><div class="kpi-num">${censEf(a.eficiencia+"%")}</div>
+    <div class="kpi"><div class="kpi-num">${censEf(Math.round(a.eficiencia)+"%")}</div>
     <div class="kpi-lbl">${esc(a.area)}<br>${Math.round(a.prod)} / ${Math.round(a.disp)} min</div></div>`).join("")
     || '<div class="vacio-msg">Sin datos ese día para esta área</div>';
 
@@ -992,10 +998,20 @@ function pintarEf(){
         <tr><td>${esc(p.nombre)}</td><td>${esc(p.dni)}</td><td>${esc(p.area)}</td>
         <td><span class="pill ${esc(p.estado)}">${esc(p.estado)}</span></td>
         <td>${p.tickets}</td><td>${p.prod}</td><td>${p.disp}</td>
-        <td class="${p.eficiencia>=80?'ef-alta':p.eficiencia<50?'ef-baja':''}">${censEf(p.eficiencia+"%")}</td></tr>`).join("");
+        <td class="${p.eficiencia>=80?'ef-alta':p.eficiencia<50?'ef-baja':''}">${censEf(Math.round(p.eficiencia)+"%")}</td></tr>`).join("");
     });
   }
   $("tablaEf").innerHTML = thead + "<tbody>" + tbody + "</tbody>";
+}
+function descargarEf(){
+  if(!EF){ mostrarError("Carga la eficiencia primero"); return; }
+  const fArea=$("filtroAreaEf").value; if(!fArea){ mostrarError("Elige un área"); return; }
+  const lista=(EF.personas||[]).filter(p=>p.area===fArea);
+  if(!lista.length){ mostrarError("No hay datos para descargar"); return; }
+  const CAB=["Nombre","DNI","Área","Estado","Tickets","Min prod","Min disp","Eficiencia %"];
+  const filas=lista.map(p=>[p.nombre,p.dni,p.area,p.estado,p.tickets,p.prod,p.disp,Math.round(p.eficiencia)]);
+  const ws=XLSX.utils.aoa_to_sheet([CAB,...filas]); const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Eficiencia"); XLSX.writeFile(wb,`EFICIENCIA_${fArea}_${$("fechaEf").value}.xlsx`);
 }
 
 /* ================= EFICIENCIA DÍA × DÍA POR RANGO ================= */
@@ -1244,16 +1260,15 @@ async function resetearPin(dni){
 /* ================= PERSONAL (CRUD · estados · dashboard · marcar) ================= */
 let PER={tab:"crud",crud:[],crudSel:{},rango:[],rangoSel:{},matriz:{dias:[],personal:[]},matSel:{desde:null,hasta:null},
   dash:null,dashSel:{desde:null,hasta:null},alPage:1,
-  marcarArea:"",marcarList:[],marcarIdx:0,marcarDec:{},chartLine:null,chartPie:null,fpReady:false};
+  marcarArea:"",chartLine:null,chartPie:null,fpReady:false};
 function perInit(){
   { const d=$("perRangoDesde"),h=$("perRangoHasta"); if(d&&!d.value)d.value=hoyISO(); if(h&&!h.value)h.value=hoyISO(); }
   { const f=$("perMarcarFecha"); if(f&&!f.value) f.value=hoyISO(); }
   if(!PER.fpReady && window.flatpickr){
-    if($("perDashRango")) flatpickr("#perDashRango",{mode:"range",dateFormat:"Y-m-d",locale:{rangeSeparator:" a "},
-      onChange:ds=>{ if(ds.length>=1){ PER.dashSel.desde=ds[0].toLocaleDateString("sv-SE"); PER.dashSel.hasta=(ds[1]||new Date()).toLocaleDateString("sv-SE"); } }});
     if($("perMatRango")){
-      const hoy=new Date(), ini=new Date(); ini.setDate(ini.getDate()-13);
-      PER.matSel.desde=ini.toLocaleDateString("sv-SE"); PER.matSel.hasta=hoy.toLocaleDateString("sv-SE");
+      const hoy=new Date(), lun=new Date(hoy); lun.setDate(hoy.getDate()-((hoy.getDay()+6)%7)); // lunes de la semana actual
+      const vie=new Date(lun); vie.setDate(lun.getDate()+4);                                     // viernes
+      PER.matSel.desde=lun.toLocaleDateString("sv-SE"); PER.matSel.hasta=vie.toLocaleDateString("sv-SE");
       flatpickr("#perMatRango",{mode:"range",dateFormat:"Y-m-d",defaultDate:[PER.matSel.desde,PER.matSel.hasta],locale:{rangeSeparator:" a "},
         onChange:ds=>{ if(ds.length>=1){ PER.matSel.desde=ds[0].toLocaleDateString("sv-SE"); PER.matSel.hasta=(ds[1]||new Date()).toLocaleDateString("sv-SE"); } }});
     }
@@ -1265,12 +1280,11 @@ function perReload(){
   if(PER.tab==="crud") perCargarCrud();
   else if(PER.tab==="rango") perCargarRango();
   else if(PER.tab==="matriz") perCargarMatriz();
-  else if(PER.tab==="dash") perCargarDash();
   else if(PER.tab==="marcar") perMarcarInit();
 }
 function perTab(t){
   PER.tab=t;
-  [["crud","perCrud","perTabCrud"],["rango","perRango","perTabRango"],["matriz","perMatriz","perTabMatriz"],["dash","perDash","perTabDash"],["marcar","perMarcar","perTabMarcar"]]
+  [["crud","perCrud","perTabCrud"],["rango","perRango","perTabRango"],["matriz","perMatriz","perTabMatriz"],["marcar","perMarcar","perTabMarcar"]]
     .forEach(x=>{ $(x[1]).hidden=x[0]!==t; $(x[2]).classList.toggle("activo",x[0]===t); });
   perReload();
 }
@@ -1428,13 +1442,27 @@ function perPintarDash(r){
   const col={ACTIVO:"#1E7B3C",FALTA:"#B3261E",DM:"#D49D53",VACACIONES:"#1A56B4",PERMISO:"#8e6bb5"};
   perChart("pie",{labels:keys,datasets:[{data:keys.map(k=>est[k]),backgroundColor:keys.map(k=>col[k]||"#9aa4b1")}]});
   $("perDashDetalleWrap").style.display="none";
+  // Con "Todas las áreas": tendencia → comparativa por área (activos ÷ estructura − vacaciones/otros).
+  const todas = ($("perDashArea")?$("perDashArea").value:"")==="";
+  if($("perDashTrendCard")) $("perDashTrendCard").style.display = todas?"none":"";
+  if($("perDashAreasCard")) $("perDashAreasCard").style.display = todas?"":"none";
+  if(todas) perDashAreas();
   perRenderAlertas(1);
+}
+async function perDashAreas(){
+  const rango=perDashRange(); if(!rango.desde||!rango.hasta) return;
+  try{
+    const r=await rpc("fn_asistencia_areas",{p_dni:ING.dni,p_token:ING.token,p_desde:rango.desde,p_hasta:rango.hasta});
+    if(!r.ok){ mostrarError(r.error||"Error"); return; }
+    const a=r.areas||[];
+    dbBar("perChartAreas", a.map(x=>x.area), a.map(x=>x.pct), "% asistencia", a.map((_,i)=>DBCOL(i)), false);
+  }catch(e){ mostrarError(e.message); }
 }
 function perChart(which,data){
   if(typeof Chart==="undefined") return;
   const id=which==="line"?"perChartLine":"perChartPie", ctx=$(id); if(!ctx) return;
   const prev=which==="line"?PER.chartLine:PER.chartPie; if(prev) prev.destroy();
-  const opts={responsive:true,maintainAspectRatio:true,aspectRatio:which==="pie"?1.6:2.4,plugins:{legend:{display:which==="pie"}}};
+  const opts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:which==="pie"}}};
   if(which==="pie") opts.onClick=(e,els)=>{ if(els&&els.length) perDashDetalle(data.labels[els[0].index]); };
   const ch=new Chart(ctx,{type:which,data,options:opts});
   if(which==="line") PER.chartLine=ch; else PER.chartPie=ch;
@@ -1460,90 +1488,179 @@ function perRenderAlertas(page){
 }
 function perAlPage(d){ perRenderAlertas(PER.alPage+d); }
 
-/* --- Marcar asistencia (tarjetas deslizables) --- */
+/* --- Marcar asistencia (usa el motor compartido aswStart de app.js) --- */
 function perMarcarInit(){
   $("perMarcarSwipe").hidden=true; $("perMarcarArea").hidden=false;
-  $("perMarcarAreas").innerHTML=(AREAS_LISTA||[]).map(a=>`<div class="card-area" onclick="perMarcarArea('${esc(a).replace(/'/g,"\\'")}')"><div class="ca-nombre">${esc(a)}</div><div class="ca-sub">Marcar hoy</div></div>`).join("");
+  $("perMarcarAreas").innerHTML=(AREAS_LISTA||[]).map(a=>`<div class="card-area" onclick="perMarcarArea('${esc(a).replace(/'/g,"\\'")}')"><div class="ca-nombre">${esc(a)}</div><div class="ca-sub">Marcar asistencia</div></div>`).join("");
 }
-async function perMarcarArea(area){
-  PER.marcarArea=area; PER.marcarDec={}; PER.marcarIdx=0;
+function perMarcarArea(area){
+  PER.marcarArea=area;
   $("perMarcarArea").hidden=true; $("perMarcarSwipe").hidden=false;
-  $("perSwipeStack").innerHTML=cargandoHTML("Cargando personal…");
-  try{
-    const r=await rpc("fn_personal_listar",{p_dni_ing:ING.dni,p_token:ING.token,p_area:area,p_incluir_inactivos:false});
-    if(!r.ok){ mostrarError(r.error||"Error"); return; }
-    PER.marcarList=(r.personal||[]).filter(p=>p.cargo==="OPERARIO");
-    perMarcarRender();
-  }catch(e){ mostrarError(e.message); }
+  const fecha=($("perMarcarFecha")&&$("perMarcarFecha").value)||hoyISO();
+  aswStart({
+    stackId:"perSwipeStack", progId:"perMarcarProgreso", saveBtnId:"perMarcarGuardar",
+    resumenId:"perMarcarResumen", ayudaId:"perSwipeAyuda",
+    estados:()=>ESTADOS_ASIS,
+    listar:(f)=>rpc("fn_asistencia_marcar_lista",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_fecha:f}),
+    guardar:(m,f)=>rpc("fn_asistencia_marcar_guardar",{p_dni:ING.dni,p_token:ING.token,p_fecha:f,p_marcas:m}),
+    onSaved:()=>perMarcarInit()
+  }, fecha);
 }
 function perMarcarVolver(){ perMarcarInit(); }
-function perMarcarRender(){
-  const stack=$("perSwipeStack"); stack.innerHTML="";
-  perMarcarProgresoUpd();
-  const pend=PER.marcarList.slice(PER.marcarIdx);
-  if(!pend.length){ stack.innerHTML=`<div class="vacio-msg">✓ Personal marcado. Pulsa <b>Guardar</b> para registrar.</div>`; return; }
-  pend.slice(0,3).reverse().forEach((p,i,arr)=>{
-    const top=i===arr.length-1;
-    const card=document.createElement("div");
-    card.className="swipe-card"+(top?" top":"");
-    card.innerHTML=`<div class="sc-nombre">${esc(p.nombre)}</div><div class="sc-dni">DNI ${esc(p.dni)}</div>
-      <div class="sc-hint"><span class="sc-l">◀ FALTA</span><span class="sc-d">▼ OTRO</span><span class="sc-r">PRESENTE ▶</span></div>`;
-    if(top) perSwipeBind(card,p);
-    stack.appendChild(card);
-  });
+
+/* ================= DASHBOARDS (por área / módulo) + AVANCE POR OF ================= */
+let DASH_TAB="asis";
+function dashTab(t){
+  DASH_TAB=t;
+  [["asis","dbPanelAsis","dashTabAsis"],["ef","dbPanelEf","dashTabEf"],["cant","dbPanelCant","dashTabCant"],["mod","dbPanelMod","dashTabMod"]]
+    .forEach(x=>{ if($(x[1])) $(x[1]).hidden=x[0]!==t; if($(x[2])) $(x[2]).classList.toggle("activo",x[0]===t); });
+  dbEnsureFp();
+  if(t==="asis") perCargarDash();
+  else if(t==="ef") cargarDbEf();
+  else if(t==="cant") cargarDbCant();
+  else if(t==="mod"){ if($("dbModArea")&&$("dbModArea").value) cargarDbMod(); }
 }
-function perMarcarProgresoUpd(){
-  const done=Object.keys(PER.marcarDec).length, tot=PER.marcarList.length;
-  $("perMarcarProgreso").textContent=`${done}/${tot} · ${PER.marcarArea}`;
-  const g=$("perMarcarGuardar"); g.disabled=done===0; g.textContent=`Guardar (${done})`;
+let DBCH={};                 // instancias Chart por id de canvas
+let DB={fpReady:false, efSel:{}, cantSel:{}, modSel:{}, avofSel:{}, efModo:"ef", efData:null};
+let AVOF={items:[], prog:{}, area:"", _rows:[]};
+let avofSort={col:null,dir:1};
+function ordenarAvof(col){ if(avofSort.col===col) avofSort.dir*=-1; else avofSort={col,dir:1}; avofPintar(); }
+function DBCOL(i){ const c=["#0D3B85","#D49D53","#1E7B3C","#1A56B4","#8e6bb5","#B3261E","#5e548e","#3a6ea5","#b0722a","#2e8b8b"]; return c[i%c.length]; }
+function dbSemana(){ const hoy=new Date(), lun=new Date(hoy); lun.setDate(hoy.getDate()-((hoy.getDay()+6)%7));
+  return {desde:lun.toLocaleDateString("sv-SE"), hasta:hoy.toLocaleDateString("sv-SE")}; }
+function dbFp(id,obj){ if(!window.flatpickr||!$(id)) return; const d=dbSemana(); obj.desde=d.desde; obj.hasta=d.hasta;
+  flatpickr("#"+id,{mode:"range",dateFormat:"Y-m-d",defaultDate:[obj.desde,obj.hasta],locale:{rangeSeparator:" a "},
+    onChange:ds=>{ if(ds.length>=1){ obj.desde=ds[0].toLocaleDateString("sv-SE"); obj.hasta=(ds[1]||new Date()).toLocaleDateString("sv-SE"); } }}); }
+function dbEnsureFp(){
+  if(DB.fpReady) return;
+  if($("perDashRango")&&window.flatpickr) flatpickr("#perDashRango",{mode:"range",dateFormat:"Y-m-d",locale:{rangeSeparator:" a "},
+    onChange:ds=>{ if(ds.length>=1){ PER.dashSel.desde=ds[0].toLocaleDateString("sv-SE"); PER.dashSel.hasta=(ds[1]||new Date()).toLocaleDateString("sv-SE"); } }});
+  dbFp("dbEfRango",DB.efSel); dbFp("dbCantRango",DB.cantSel); dbFp("dbModRango",DB.modSel); dbFp("avofRango",DB.avofSel);
+  DB.fpReady=true;
 }
-function perDecidir(p,estado){ PER.marcarDec[p.dni]=estado; PER.marcarIdx++; perMarcarRender(); }
-function perSwipeBind(card,p){
-  let sx=0,sy=0,dx=0,dy=0,drag=false; const TH=90;
-  card.style.touchAction="none";
-  card.addEventListener("pointerdown",e=>{ drag=true; sx=e.clientX; sy=e.clientY; if(card.setPointerCapture) card.setPointerCapture(e.pointerId); });
-  card.addEventListener("pointermove",e=>{ if(!drag) return; dx=e.clientX-sx; dy=e.clientY-sy;
-    card.style.transform=`translate(${dx}px,${dy}px) rotate(${dx/22}deg)`;
-    const v=Math.abs(dx)<TH/2;
-    card.classList.toggle("hint-r",dx>TH/2); card.classList.toggle("hint-l",dx<-TH/2);
-    card.classList.toggle("hint-d",dy>TH/2&&v); card.classList.toggle("hint-u",dy<-TH/2&&v); });
-  const end=()=>{ if(!drag) return; drag=false; const v=Math.abs(dx)<TH;
-    if(dy<-TH&&v){ perFlyV(card,-1); perDecidir(p,"__MANTENER__"); return; }
-    if(dy>TH&&v){ perSnap(card); perOtroEstado(p); return; }
-    if(dx>TH){ perFly(card,1); perDecidir(p,"ACTIVO"); return; }
-    if(dx<-TH){ perFly(card,-1); perDecidir(p,"FALTA"); return; }
-    perSnap(card); };
-  card.addEventListener("pointerup",end); card.addEventListener("pointercancel",end);
+function dbBar(cid,labels,data,label,colors,horizontal){
+  if(typeof Chart==="undefined") return; const ctx=$(cid); if(!ctx) return;
+  if(DBCH[cid]) DBCH[cid].destroy();
+  DBCH[cid]=new Chart(ctx,{type:"bar",
+    data:{labels,datasets:[{label,data,backgroundColor:colors,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      indexAxis:horizontal?"y":"x",plugins:{legend:{display:false}}}});
 }
-function perSnap(card){ card.classList.remove("hint-r","hint-l","hint-d","hint-u"); card.style.transition="transform .15s"; card.style.transform=""; setTimeout(()=>card.style.transition="",160); }
-function perFly(card,dir){ card.style.transition="transform .2s"; card.style.transform=`translate(${dir*600}px,-30px) rotate(${dir*18}deg)`; }
-function perFlyV(card,dir){ card.style.transition="transform .2s"; card.style.transform=`translate(0,${dir*600}px)`; }
-function perOtroEstado(p){
-  const opts=(ESTADOS_ASIS||[]).filter(e=>e!=="ACTIVO"&&e!=="FALTA").map(e=>`<option>${esc(e)}</option>`).join("")||'<option value="">Sin estados</option>';
-  abrirModal(`<h2>Estado de ${esc(p.nombre)}</h2>
-    <div class="modal-campo"><label>Estado</label><select id="peEstado">${opts}</select></div>
-    <div class="modal-acciones">
-      <button class="btn-principal btn-modal-guardar" onclick="perOtroConfirm('${esc(p.dni)}')">APLICAR</button>
-      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
-}
-function perOtroConfirm(dni){
-  const est=$("peEstado").value; if(!est) return;
-  const p=PER.marcarList.find(x=>x.dni===dni); cerrarModal(); if(p) perDecidir(p,est);
-}
-async function perMarcarGuardar(){
-  const decs=PER.marcarDec;
-  const fecha=($("perMarcarFecha")&&$("perMarcarFecha").value)||hoyISO();
-  const dnis=Object.keys(decs).filter(d=>decs[d]!=="__MANTENER__");   // ▲ sin cambio = no se escribe
-  if(!dnis.length){ mostrarError("No hay cambios que guardar (todo quedó 'sin cambio')"); return; }
-  if(!confirm(`¿Guardar la asistencia del ${fecha} de ${dnis.length} persona(s)?`)) return;
-  const byEstado={}; dnis.forEach(d=>{ (byEstado[decs[d]]=byEstado[decs[d]]||[]).push(d); });
+
+/* --- Eficiencia / minutaje por área --- */
+async function cargarDbEf(){
+  dbEnsureFp(); const o=DB.efSel; if(!o.desde||!o.hasta){ mostrarError("Elige el rango"); return; }
+  $("dbEfTabla").innerHTML=cargandoHTML("Calculando…");
   try{
-    for(const est of Object.keys(byEstado)){
-      const r=await rpc("fn_asignar_estado_rango",{p_dni:ING.dni,p_token:ING.token,p_dnis:byEstado[est],p_estado:est,p_fecha_desde:fecha,p_fecha_hasta:fecha});
-      if(!r.ok) throw new Error(r.error||("No se pudo guardar "+est));
-    }
-    mostrarOk(`Asistencia guardada (${dnis.length}) para ${fecha}.`); perMarcarInit();
+    const r=await rpc("fn_eficiencia_areas",{p_dni:ING.dni,p_token:ING.token,p_desde:o.desde,p_hasta:o.hasta});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("dbEfTabla").innerHTML=""; return; }
+    DB.efData=r; dbEfPintar();
+  }catch(e){ $("dbEfTabla").innerHTML=""; mostrarError(e.message); }
+}
+function dbEfModo(m){ DB.efModo=m; $("dbEfBtnEf").classList.toggle("activo",m==="ef"); $("dbEfBtnMin").classList.toggle("activo",m==="min"); if(DB.efData) dbEfPintar(); }
+function dbEfPintar(){
+  const r=DB.efData; if(!r) return; const ef=DB.efModo==="ef"; const areas=r.areas||[];
+  $("dbEfTit").textContent = ef?"Eficiencia % por área":"Minutaje por área";
+  dbBar("dbEfChart", areas.map(a=>a.area), areas.map(a=>ef?a.eficiencia:a.minutos), ef?"Eficiencia %":"Minutos", areas.map((_,i)=>DBCOL(i)), false);
+  const fechas=(r.por_fecha||[]).map(x=>x.fecha), anom=areas.map(a=>a.area);
+  let thead=`<thead><tr><th class="izq">Área</th>`+fechas.map(f=>`<th>${f.slice(8,10)}-${f.slice(5,7)}</th>`).join("")+`</tr></thead>`;
+  let tb="<tbody>";
+  if(!anom.length) tb+=`<tr><td colspan="${fechas.length+1}"><div class="vacio-msg">Sin datos</div></td></tr>`;
+  anom.forEach(a=>{
+    tb+=`<tr><td class="izq"><b>${esc(a)}</b></td>`+fechas.map(f=>{
+      const row=(r.por_fecha||[]).find(x=>x.fecha===f), v=row&&row.valores&&row.valores[a];
+      const val=v?(ef?v.ef:v.min):0; return `<td>${val?(ef?val+"%":Math.round(val)):"—"}</td>`;
+    }).join("")+`</tr>`;
+  });
+  $("dbEfTabla").innerHTML=thead+tb+"</tbody>";
+}
+
+/* --- Cantidad por área --- */
+async function cargarDbCant(){
+  dbEnsureFp(); const o=DB.cantSel; if(!o.desde||!o.hasta){ mostrarError("Elige el rango"); return; }
+  try{
+    const r=await rpc("fn_cantidad_areas",{p_dni:ING.dni,p_token:ING.token,p_desde:o.desde,p_hasta:o.hasta});
+    if(!r.ok){ mostrarError(r.error||"Error"); return; }
+    const a=r.areas||[]; dbBar("dbCantChart", a.map(x=>x.area), a.map(x=>x.cantidad), "Cantidad", a.map((_,i)=>DBCOL(i)), false);
   }catch(e){ mostrarError(e.message); }
+}
+
+/* --- Minutos por módulo --- */
+async function cargarDbMod(){
+  dbEnsureFp(); const area=$("dbModArea")?$("dbModArea").value:""; if(!area){ mostrarError("Elige un área"); return; }
+  const o=DB.modSel; if(!o.desde||!o.hasta){ mostrarError("Elige el rango"); return; }
+  try{
+    const r=await rpc("fn_minutos_modulos",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_desde:o.desde,p_hasta:o.hasta});
+    if(!r.ok){ mostrarError(r.error||"Error"); return; }
+    const it=r.items||[]; $("dbModTit").textContent=`Minutos por módulo · ${area} · ${Math.round(r.total_min)} min`;
+    dbBar("dbModChart", it.map(x=>x.modulo), it.map(x=>x.minutos), "Minutos", it.map((_,i)=>DBCOL(i)), true);
+  }catch(e){ mostrarError(e.message); }
+}
+
+/* --- Avance por OF (realizado = reclamos; programado = ALMACÉN en Sheets) --- */
+async function cargarAvof(){
+  dbEnsureFp();
+  const area=$("avofArea")?$("avofArea").value:""; if(!area){ mostrarError("Elige un área"); return; }
+  const o=DB.avofSel; if(!o.desde||!o.hasta){ mostrarError("Elige el rango"); return; }
+  const cfg=AREAS[area]; if(!cfg||!cfg.sheetId){ mostrarError("Área sin Sheet configurado (ALMACÉN)"); return; }
+  $("avofTabla").innerHTML=cargandoHTML("Cargando avance…"); $("avofResumen").textContent="";
+  try{
+    const r=await rpc("fn_avance_of",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_desde:o.desde,p_hasta:o.hasta});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("avofTabla").innerHTML=""; return; }
+    const prog=await avofLeerProg(cfg);
+    AVOF={items:r.items||[], prog, area, _rows:[]};
+    avofPintar();
+  }catch(e){ $("avofTabla").innerHTML=""; mostrarError(e.message); }
+}
+async function avofLeerProg(cfg){
+  const url=`https://docs.google.com/spreadsheets/d/${cfg.sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(cfg.hoja||"ALMACEN")}`;
+  const prog={};
+  const filas=parseCSV(await (await fetch(url)).text());
+  if(filas.length<2) return prog;
+  const H={}; filas[0].forEach((h,i)=>{ const k=normKey(h); if(k&&H[k]===undefined) H[k]=i; });
+  if(H.OF===undefined||H.NOP===undefined||H.CANT===undefined) return prog;
+  const minNop={};
+  for(let i=1;i<filas.length;i++){ const r=filas[i]; const of=norm(r[H.OF]); if(!of) continue; const nop=Number(norm(r[H.NOP]))||0; if(minNop[of]===undefined||nop<minNop[of]) minNop[of]=nop; }
+  for(let i=1;i<filas.length;i++){ const r=filas[i]; const of=norm(r[H.OF]); if(!of) continue; const nop=Number(norm(r[H.NOP]))||0; if(nop!==minNop[of]) continue; prog[of]=(prog[of]||0)+(Number(norm(r[H.CANT]))||0); }
+  return prog;
+}
+function avofPintar(){
+  const nivel=$("avofNivel")?$("avofNivel").value:"ultima";
+  const q=normKey($("avofBuscar")?$("avofBuscar").value:"");
+  const rows=(AVOF.items||[]).map(it=>{
+    const prog=AVOF.prog[String(it.of)]!==undefined?AVOF.prog[String(it.of)]:null;
+    const real=nivel==="penultima"?it.cant_penultima:it.cant_ultima;
+    const completo = it.op_final && prog!=null && real>=prog;
+    return Object.assign({}, it, {prog, real, estado: completo?"COMPLETADO":"PROCESO"});
+  }).filter(it=>!q||normKey((it.articulo||"")+" "+(it.of||"")).includes(q));
+  if(avofSort.col){
+    const col=avofSort.col;
+    rows.sort((a,b)=>{
+      const va=a[col], vb=b[col], na=parseFloat(va), nb=parseFloat(vb);
+      const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es");
+      return c*avofSort.dir;
+    });
+  }
+  AVOF._rows=rows;
+  $("avofResumen").textContent=`${rows.length} OF · ${rows.filter(r=>r.estado==="COMPLETADO").length} completada(s) · operación ${nivel==="penultima"?"penúltima":"última"}`;
+  const fl = k => avofSort.col===k ? (avofSort.dir===1?" ▲":" ▼") : "";
+  const AVC=[["articulo","Artículo"],["of","OF"],["prog","Cant. prog."],["estado","Estado"],["ultimo_modulo","Último módulo"],["fecha_ultima","Fecha últ. op."],["real","Cant. realizada"]];
+  const thead=`<thead><tr>${AVC.map(c=>`<th class="ord${c[0]==="articulo"?" izq":""}" onclick="ordenarAvof('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}</tr></thead>`;
+  const body=rows.length? rows.map(it=>`<tr>
+      <td class="izq"><b>${esc(it.articulo||"—")}</b></td><td>${esc(it.of)}</td>
+      <td>${it.prog!=null?Math.round(it.prog):"—"}</td>
+      <td><span class="pill ${it.estado==="COMPLETADO"?"ACTIVO":"DM"}">${it.estado}</span></td>
+      <td>${esc(it.ultimo_modulo||"—")}</td><td>${esc(it.fecha_ultima||"—")}</td>
+      <td><b>${Math.round(it.real||0)}</b></td></tr>`).join("")
+    : `<tr><td colspan="7"><div class="vacio-msg">Sin OF con reclamos en el rango</div></td></tr>`;
+  $("avofTabla").innerHTML=thead+"<tbody>"+body+"</tbody>";
+}
+function descargarAvof(){
+  const rows=AVOF._rows||[]; if(!rows.length){ mostrarError("No hay datos para descargar"); return; }
+  const CAB=["Artículo","OF","Cant programada","Estado","Último módulo","Fecha última op","Cant realizada"];
+  const filas=rows.map(it=>[it.articulo,it.of,it.prog,it.estado,it.ultimo_modulo,it.fecha_ultima,it.real]);
+  const ws=XLSX.utils.aoa_to_sheet([CAB,...filas]); const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"AvanceOF"); XLSX.writeFile(wb,`AVANCE_OF_${AVOF.area}.xlsx`);
 }
 
 /* ================= TICKETS DEL DÍA ================= */
@@ -1727,6 +1844,64 @@ async function liberarTicket(i){
   }catch(e){ mostrarError(e.message); }
 }
 
+/* ---- Tickets · Reclamados x Operación (por OF, sin filtro de fecha) ---- */
+let TKOP={items:[],of:"",area:"",_rows:[]}, tkOpSort={col:null,dir:1};
+function tkVista(v){
+  const op=v==="op";
+  $("tkActualView").hidden=op; $("tkOpView").hidden=!op;
+  $("tkTabActual").classList.toggle("activo",!op); $("tkTabOp").classList.toggle("activo",op);
+  if(op){ const s=$("tkOpArea"); if(s && !s.value && s.options.length<=1)
+    s.innerHTML=`<option value="">— Elige área —</option>`+(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join(""); }
+}
+async function cargarTkOp(){
+  const area=$("tkOpArea").value, of=$("tkOpOf").value.trim();
+  if(!area){ mostrarError("Elige el área"); return; }
+  if(!of){ mostrarError("Escribe la OF"); return; }
+  $("tablaTkOp").innerHTML=cargandoHTML("Cargando…"); $("tkOpResumen").textContent="";
+  try{
+    const r=await rpc("fn_reclamos_por_of",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_of:of});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("tablaTkOp").innerHTML=""; return; }
+    TKOP={items:r.items||[], of, area, _rows:[]};
+    const ops=[...new Set(TKOP.items.map(x=>x.op).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"es"));
+    $("tkOpSel").innerHTML=`<option value="">Todas</option>`+ops.map(o=>`<option>${esc(o)}</option>`).join("");
+    pintarTkOp();
+  }catch(e){ $("tablaTkOp").innerHTML=""; mostrarError(e.message); }
+}
+function ordenarTkOp(col){ if(tkOpSort.col===col) tkOpSort.dir*=-1; else tkOpSort={col,dir:1}; pintarTkOp(); }
+function pintarTkOp(){
+  const opSel=$("tkOpSel").value, q=normKey($("tkOpBuscar").value), ocultarLib=$("tkOpOcultarLib").checked;
+  let rows=(TKOP.items||[]).filter(t=>{
+    if(opSel && t.op!==opSel) return false;
+    if(ocultarLib && t.estado==='LIBERADO') return false;
+    if(!q) return true;
+    return normKey((t.nombre||"")+" "+(t.dni||"")+" "+(t.numeracion||"")+" "+(t.codigo||"")).includes(q);
+  });
+  if(tkOpSort.col){ const c=tkOpSort.col; rows.sort((a,b)=>{ const va=a[c],vb=b[c],na=parseFloat(va),nb=parseFloat(vb);
+    const cc=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es"); return cc*tkOpSort.dir; }); }
+  TKOP._rows=rows;
+  $("tkOpResumen").textContent=`OF ${esc(TKOP.of)} · ${rows.length} ticket(s)`;
+  const fl=k=>tkOpSort.col===k?(tkOpSort.dir===1?" ▲":" ▼"):"";
+  const COLS=[["nombre","Nombre"],["dni","DNI"],["op","Operación"],["hora","Fecha/hora reclamado"],["numeracion","Numeración"],["estado","Estado"]];
+  const thead=`<thead><tr>${COLS.map(c=>`<th class="ord${c[0]==="nombre"?" izq":""}" onclick="ordenarTkOp('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}<th></th></tr></thead>`;
+  const body=rows.length? rows.map(t=>`<tr${t.estado==='LIBERADO'?' style="opacity:.55;"':''}>
+      <td class="izq">${esc(t.nombre)}</td><td>${esc(t.dni)}</td><td>${esc(t.op)}</td>
+      <td>${esc(t.hora)}</td><td>${esc(t.numeracion||"—")}</td>
+      <td><span class="pill ${t.estado==='ACTIVO'?'ACTIVO':'FALTA'}">${esc(t.estado)}</span></td>
+      <td>${t.estado==='ACTIVO'?`<button class="acc-borrar" onclick="liberarTkOp('${esc(t.codigo)}')">Liberar</button>`:""}</td></tr>`).join("")
+    : `<tr><td colspan="7"><div class="vacio-msg">Sin tickets reclamados para esta OF</div></td></tr>`;
+  $("tablaTkOp").innerHTML=thead+"<tbody>"+body+"</tbody>";
+}
+async function liberarTkOp(codigo){
+  const t=(TKOP.items||[]).find(x=>x.codigo===codigo);
+  const motivo=prompt(`Liberar el ticket ${t?(t.numeracion||codigo):codigo} tomado por ${t?t.nombre:""}.\nMotivo:`);
+  if(motivo===null) return;
+  try{
+    const r=await rpc("fn_liberar_ticket",{p_dni:ING.dni,p_token:ING.token,p_codigo:codigo,p_motivo:(motivo||"").trim()});
+    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
+    await cargarTkOp();
+  }catch(e){ mostrarError(e.message); }
+}
+
 /* Tarjetas: suma de cantidades de las 2 últimas operaciones (mayor N°OP
    por artículo según la BASE), sobre los tickets ACTIVOS del día.
    Son 2 tarjetas globales (última y penúltima operación), sumando
@@ -1789,6 +1964,9 @@ const BASE_COLS=[
   {k:"max_op",t:"Max Op."},{k:"n_op",t:"N_OP"}
 ];
 let BASE=[], baseSort={col:null,dir:1};
+let basePag=1; const BASE_PAGE=100;
+function filtrarBases(){ basePag=1; pintarBases(); }
+function basePagina(d){ basePag+=d; pintarBases(); }
 
 async function cargarBases(){
   $("zonaDiff").style.display="none";
@@ -1821,14 +1999,13 @@ function pintarBases(){
     });
   }
   const arts = new Set(lista.map(b=>b.articulo));
-  // Cap de render: la base puede tener miles de filas; pintarlas todas cuelga la
-  // pestaña. Mostramos hasta LIMITE_BASE y pedimos filtrar para ver más.
-  const LIMITE_BASE = 400;
+  const stdTotal = lista.reduce((a,b)=>a+(Number(b.std)||0),0);
   const totalFilas = lista.length;
-  const recortado = totalFilas > LIMITE_BASE;
-  if(recortado) lista = lista.slice(0, LIMITE_BASE);
-  $("resumenBases").textContent = `${arts.size} artículo(s) · ${totalFilas} operaciones`
-    + (recortado ? ` · mostrando ${LIMITE_BASE} (usa los filtros para acotar)` : "");
+  // Paginación (la base puede tener miles de filas).
+  const totPag = Math.max(1, Math.ceil(totalFilas/BASE_PAGE));
+  if(basePag>totPag) basePag=totPag; if(basePag<1) basePag=1;
+  lista = lista.slice((basePag-1)*BASE_PAGE, basePag*BASE_PAGE);
+  $("resumenBases").textContent = `${arts.size} artículo(s) · ${totalFilas} operaciones · STD total: ${Math.round(stdTotal*100)/100}`;
   const flecha = k => baseSort.col===k ? (baseSort.dir===1?" \u25B2":" \u25BC") : "";
   // Final = mayor N°OP del artículo (⭐ dorada); penúltima = 2º mayor (estrella plateada).
   const finalPorArt = calcularFinalesBase(BASE);
@@ -1852,6 +2029,11 @@ function pintarBases(){
         <button class="acc-borrar" onclick="eliminarBaseOp(${b.id},'${esc((b.operacion||"").replace(/'/g,""))}')">Borrar</button>
       </div></td></tr>`;
     }).join("")+"</tbody>";
+  const pg=$("basesPager");
+  if(pg) pg.innerHTML = totPag>1
+    ? `<button class="btn-mini" ${basePag<=1?"disabled":""} onclick="basePagina(-1)">‹ Anterior</button>
+       <span class="sub" style="margin:0 8px;">${basePag}/${totPag}</span>
+       <button class="btn-mini" ${basePag>=totPag?"disabled":""} onclick="basePagina(1)">Siguiente ›</button>` : "";
 }
 
 /* Mapa articulo(normKey) -> {n1: mayor N°OP, n2: 2º mayor} sobre TODA la base. */
@@ -2088,6 +2270,12 @@ const TIPOS_OC = ["MAQUINA","HORA_EXTRA","TARDANZA","SEGURO","PERMISO","OTROS"];
 const hoyLima = ()=> new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"});
 let OCURR=[], inciSort={col:"fecha",dir:-1}, INCI_PERSONAL=[];
 
+function inciVista(v){
+  const apl=v!=="pend";
+  $("inciAplicadas").hidden=!apl; $("inciPendientes").hidden=apl;
+  $("inciTabApl").classList.toggle("activo",apl); $("inciTabPend").classList.toggle("activo",!apl);
+  if(apl) cargarOcurrencias(); else cargarPendientesInci();
+}
 async function cargarIncidI(){        // pendientes + tabla aplicada
   if($("fechaInciH") && !$("fechaInciH").value){
     $("fechaInciH").value = hoyLima();

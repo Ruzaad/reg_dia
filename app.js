@@ -453,7 +453,7 @@ const qty = v => (Math.round((+v||0)*100)/100);   // cantidad legible (2 dec má
 function aplicarModoAcabado(){
   const oj=$("btnOjoEf"), rl=$("btnReloj");
   if(oj) oj.style.display = ES_ACABADO ? "none" : "";
-  if(rl) rl.style.display = ES_ACABADO ? "none" : "";
+  if(rl) rl.style.display = "";   // ajuste de tiempo disponible también en ACABADO
   const subTk = document.querySelector('#pasoTickets .sub');
   if(subTk) subTk.textContent = ES_ACABADO ? "Registra la cantidad de tu paquete" : "Busca la numeración de tu paquete";
   const lblConf=$("confLabel"); if(lblConf) lblConf.textContent = ES_ACABADO ? "Cantidad" : "Numeración";
@@ -895,6 +895,8 @@ let timerAvance=null;
    y por ingeniería operando "como supervisora"). */
 function bindSupervisoraUI(){
   $("filtroNombre").addEventListener("input", pintarPersonal);
+  { const ta=$("tabAsistencia"); if(ta) ta.onclick = ()=>{ pararAvance(); marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisInit(); }; }
+  { const af=$("asisFecha"); if(af) af.onchange = asisInit; }
   $("tabPersonal").onclick = ()=>{ pararAvance(); marcarTab("tabPersonal"); irA("pasoPersonal"); };
   $("tabAvance").onclick  = ()=>{ marcarTab("tabAvance"); irA("pasoAvance"); cargarAvance(); timerAvance=setInterval(cargarAvance, 60000); };
   $("tabIncidencias").onclick = ()=>{ pararAvance(); marcarTab("tabIncidencias"); irA("pasoIncidencias"); cargarIncidencias(); };
@@ -977,8 +979,9 @@ function initSupervisora(){
   { const rc=$("btnRecargar"); if(rc) rc.onclick=()=>{ recargarSupervisora(); }; }
   bindSupervisoraUI();
   cargarPersonal(s);
+  marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisInit();   // vista principal
   window.VOLVER_MAP = {
-    pasoFaltantes:"pasoPersonal", pasoAlcance:"pasoPersonal", pasoSeleccion:"pasoAlcance",
+    pasoAlcance:"pasoPersonal", pasoSeleccion:"pasoAlcance",
     pasoTipo:"pasoPersonal", pasoMinutos:"pasoTipo",
     pasoMoverSel:"pasoPersonal", pasoMoverArea:"pasoMoverSel"
   };
@@ -988,84 +991,167 @@ function initSupervisora(){
 function recargarSupervisora(){
   const s=sesionActual(); if(!s) return;
   const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),500); }
-  if($("pasoAvance").classList.contains("activa")) cargarAvance();
+  if($("pasoAsistencia") && $("pasoAsistencia").classList.contains("activa")) asisInit();
+  else if($("pasoAvance").classList.contains("activa")) cargarAvance();
   else if($("pasoIncidencias").classList.contains("activa")) cargarIncidencias();
   else if($("pasoEfPersonal") && $("pasoEfPersonal").classList.contains("activa")) cargarEfPersonal();
   else cargarPersonal(s);
 }
 
-/* --- Marcar faltantes (estados de asistencia, misma lógica que ingeniería) ---
-   NO suma minutos al área: un estado ausente deja disp = 0 ese día. */
-let ESTADOS_SUP = [], mf_sup = {dnis:[]};
+/* --- Estados de asistencia (para el swipe de la vista Asistencia) --- */
+let ESTADOS_SUP = [];
 async function cargarEstadosSup(){
   const s=sesionActual(); if(!s) return;
   try{ ESTADOS_SUP = await rpc("fn_estados_asistencia_listar",{p_dni:s.dni,p_token:s.token}); }
-  catch(e){ ESTADOS_SUP = ["FALTA","DM","VACACIONES","ACTIVO"]; }
+  catch(e){ ESTADOS_SUP = ["ACTIVO","FALTA","DM","VACACIONES"]; }
 }
-function marcarFaltantesInicio(){
-  mf_sup={dnis:[]};
-  pintarPersonalFalta();
-  irA("pasoFaltantes");
-}
-function pintarPersonalFalta(){
-  const g=$("gridPersonalFalta"); if(!g) return;
-  g.innerHTML="";
-  if(!PERSONAL.length){ g.innerHTML=`<div class="vacio-msg">Sin personal en el área</div>`; return; }
-  PERSONAL.forEach(p=>{
-    const c=document.createElement("div");
-    c.className="card-persona"+(mf_sup.dnis.includes(p.dni)?" marcada":"");
-    c.innerHTML=`<div>
-        <div class="cp-nombre">${esc(p.nombre)}</div>
-        <div class="cp-dni">DNI ${esc(p.dni)}</div>
-      </div>
-      <div class="cp-disp">${p.disp} min</div>`;
-    c.onclick=()=>{
-      const i=mf_sup.dnis.indexOf(p.dni);
-      if(i>=0) mf_sup.dnis.splice(i,1); else mf_sup.dnis.push(p.dni);
-      pintarPersonalFalta();
-    };
-    g.appendChild(c);
-  });
-  const b=$("btnContinuarFalta");
-  if(b){ b.disabled = mf_sup.dnis.length===0;
-    b.textContent = mf_sup.dnis.length ? `ELEGIR ESTADO (${mf_sup.dnis.length})` : "ELEGIR ESTADO"; }
-}
-function marcarFaltantesEstado(){
-  if(!mf_sup.dnis.length) return;
-  // La supervisora solo puede marcar FALTA (regla de negocio).
-  abrirModal(`
-    <h2>Marcar FALTA</h2>
-    <div class="sub" style="margin-bottom:12px;">${mf_sup.dnis.length} persona(s) · hoy · estado <b>FALTA</b></div>
-    <input type="hidden" id="mfEstado" value="FALTA">
-    <div class="modal-msg" id="mfMsg"></div>
-    <div class="modal-acciones">
-      <button class="btn-principal btn-modal-guardar" onclick="guardarFaltantes()">APLICAR FALTA A ${mf_sup.dnis.length}</button>
-      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
-    </div>`);
-}
-async function guardarFaltantes(){
-  const s=sesionActual(); if(!s){ location.href="index.html"; return; }
-  const estado=$("mfEstado").value;
-  if(!estado){ $("mfMsg").textContent="Elige un estado"; return; }
+
+/* ============================================================
+   MOTOR DE ASISTENCIA POR TARJETAS DESLIZABLES (compartido)
+   Usado por Ingeniería (ingenieria.js) y Supervisora (esta vista).
+   ▶ ACTIVO · ◀ FALTA · ▼ OTRO estado · ▲ confirmar estado actual.
+   Al terminar: cuadro resumen (ACTIVO = solo cantidad; faltas/otros =
+   lista editable) antes de guardar.
+   cfg = {stackId, progId, saveBtnId, resumenId, ayudaId,
+          estados():[...], listar(fecha):Promise, guardar(marcas,fecha):Promise, onSaved()}
+   ============================================================ */
+const ASW = {cfg:null, list:[], idx:0, dec:{}, cur:{}, fecha:null};
+function aswHoy(){ return new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"}); }
+async function aswStart(cfg, fecha){
+  ASW.cfg=cfg; ASW.dec={}; ASW.idx=0; ASW.cur={}; ASW.fecha=fecha||aswHoy();
+  const st=$(cfg.stackId); if(!st) return;
+  st.innerHTML=cargandoHTML("Cargando personal…");
+  if($(cfg.resumenId)){ $(cfg.resumenId).hidden=true; $(cfg.resumenId).innerHTML=""; }
   try{
-    const r=await rpc("fn_marcar_asistencia",{p_dni:s.dni,p_token:s.token,
-      p_dnis:mf_sup.dnis,p_estado:estado,p_fecha:null});
-    if(!r.ok){ $("mfMsg").textContent=r.error||"No se pudo"; return; }
-    cerrarModal();
-    $("exTitulo").textContent="Estado registrado";
-    $("exDetalle").innerHTML=`${esc(estado)} · <b>${r.afectados}</b> persona(s)`;
-    $("exAvance").textContent=""; $("exTimer").textContent="";
-    const ex=$("exito"); ex.classList.add("visible");
-    setTimeout(async ()=>{
-      ex.classList.remove("visible");
-      mf_sup={dnis:[]};
-      await cargarPersonal(s);
-      irA("pasoPersonal");
-    }, 2200);
-  }catch(e){ $("mfMsg").textContent=e.message; }
+    const r=await cfg.listar(ASW.fecha);
+    if(r&&r.ok===false){ mostrarError(r.error||"Error"); st.innerHTML=""; return; }
+    ASW.list=(r&&r.personal)||(Array.isArray(r)?r:[]);
+    ASW.list.forEach(p=>{ if(p.estado) ASW.cur[p.dni]=p.estado; });
+    aswRender();
+  }catch(e){ st.innerHTML=""; mostrarError(e.message); }
+}
+function aswRender(){
+  const cfg=ASW.cfg, st=$(cfg.stackId); st.innerHTML="";
+  aswProg();
+  if($(cfg.resumenId)) $(cfg.resumenId).hidden=true;
+  if(cfg.ayudaId&&$(cfg.ayudaId)) $(cfg.ayudaId).style.display="";
+  const pend=ASW.list.slice(ASW.idx);
+  if(!pend.length){ aswResumen(); return; }
+  pend.slice(0,3).reverse().forEach((p,i,arr)=>{
+    const top=i===arr.length-1;
+    const card=document.createElement("div");
+    card.className="swipe-card"+(top?" top":"");
+    const act=ASW.cur[p.dni]?`<span class="pill ${esc(ASW.cur[p.dni])}">${esc(ASW.cur[p.dni])}</span>`:"—";
+    card.innerHTML=`<div class="sc-nombre">${esc(p.nombre)}</div><div class="sc-dni">DNI ${esc(p.dni)}</div>
+      <div class="sc-actual">Hoy: ${act}</div>
+      <div class="sc-hint"><span class="sc-l">◀ FALTA</span><span class="sc-d">▼ OTRO</span><span class="sc-r">ACTIVO ▶</span></div>`;
+    if(top) aswBind(card,p);
+    st.appendChild(card);
+  });
+}
+function aswProg(){
+  const cfg=ASW.cfg, done=Object.keys(ASW.dec).length, tot=ASW.list.length;
+  if($(cfg.progId)) $(cfg.progId).textContent=`${done}/${tot}`;
+  const g=$(cfg.saveBtnId); if(g){ g.disabled=done===0; g.textContent=`Revisar (${done})`; }
+}
+function aswBind(card,p){
+  let sx=0,sy=0,dx=0,dy=0,drag=false; const TH=90;
+  card.style.touchAction="none";
+  card.addEventListener("pointerdown",e=>{ drag=true; sx=e.clientX; sy=e.clientY; if(card.setPointerCapture) card.setPointerCapture(e.pointerId); });
+  card.addEventListener("pointermove",e=>{ if(!drag) return; dx=e.clientX-sx; dy=e.clientY-sy;
+    card.style.transform=`translate(${dx}px,${dy}px) rotate(${dx/22}deg)`;
+    const v=Math.abs(dx)<TH/2;
+    card.classList.toggle("hint-r",dx>TH/2); card.classList.toggle("hint-l",dx<-TH/2);
+    card.classList.toggle("hint-d",dy>TH/2&&v); card.classList.toggle("hint-u",dy<-TH/2&&v); });
+  const end=()=>{ if(!drag) return; drag=false; const v=Math.abs(dx)<TH;
+    if(dy<-TH&&v){ aswSnap(card); aswArriba(p); return; }        // ▲ estado actual + confirmar
+    if(dy>TH&&v){ aswSnap(card); aswOtro(p); return; }            // ▼ otro estado
+    if(dx>TH){ aswFly(card,1); aswDecidir(p.dni,"ACTIVO"); return; }
+    if(dx<-TH){ aswFly(card,-1); aswDecidir(p.dni,"FALTA"); return; }
+    aswSnap(card); };
+  card.addEventListener("pointerup",end); card.addEventListener("pointercancel",end);
+}
+function aswSnap(card){ card.classList.remove("hint-r","hint-l","hint-d","hint-u"); card.style.transition="transform .15s"; card.style.transform=""; setTimeout(()=>card.style.transition="",160); }
+function aswFly(card,dir){ card.style.transition="transform .2s"; card.style.transform=`translate(${dir*600}px,-30px) rotate(${dir*18}deg)`; }
+function aswDecidir(dni,estado){ ASW.dec[dni]=estado; ASW.idx++; aswRender(); }
+function aswArriba(p){
+  const act=ASW.cur[p.dni]||"ACTIVO";
+  abrirModal(`<h2>${esc(p.nombre)}</h2>
+    <div class="sub" style="margin-bottom:12px;">Estado actual del día: <span class="pill ${esc(act)}">${esc(act)}</span></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="aswArribaOk('${esc(p.dni)}')">CONFIRMAR ${esc(act)}</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
+}
+function aswArribaOk(dni){ const act=ASW.cur[dni]||"ACTIVO"; cerrarModal(); aswDecidir(dni,act); }
+function aswOtro(p){
+  const opts=(ASW.cfg.estados()||[]).filter(e=>e!=="ACTIVO"&&e!=="FALTA").map(e=>`<option>${esc(e)}</option>`).join("")||'<option value="">Sin estados</option>';
+  abrirModal(`<h2>${esc(p.nombre)}</h2>
+    <div class="modal-campo"><label>Estado</label><select id="aswEst">${opts}</select></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="aswOtroOk('${esc(p.dni)}')">APLICAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
+}
+function aswOtroOk(dni){ const est=$("aswEst").value; if(!est) return; cerrarModal(); aswDecidir(dni,est); }
+function aswVerResumen(){ if(!Object.keys(ASW.dec).length){ mostrarError("Marca al menos una persona"); return; } aswResumen(); }
+function aswResumen(){
+  const cfg=ASW.cfg, dec=ASW.dec, box=$(cfg.resumenId); if(!box) return;
+  const dnis=Object.keys(dec), otros=dnis.filter(d=>dec[d]!=="ACTIVO"), activos=dnis.length-otros.length;
+  const nom=d=>{ const p=ASW.list.find(x=>x.dni===d); return p?p.nombre:d; };
+  box.hidden=false;
+  box.innerHTML=`<div class="asis-res">
+      <div class="asis-res-cab">Resumen · ${ASW.fecha}</div>
+      <div class="asis-res-activo">✓ ACTIVOS: <b>${activos}</b></div>
+      <div class="tk-ops-title" style="margin-top:10px;">Faltas / otros estados (${otros.length})</div>
+      ${otros.length? `<div class="asis-res-lista">`+otros.map(d=>`<div class="asis-res-fila" onclick="aswEditar('${esc(d)}')">
+          <span>${esc(nom(d))}</span><span class="pill ${esc(dec[d])}">${esc(dec[d])}</span></div>`).join("")+`</div>`
+        : `<div class="vacio-msg">Sin faltas ni otros estados</div>`}
+      <div class="asis-res-acc">
+        <button class="btn-mini gris" onclick="aswReiniciar()">← Volver a marcar</button>
+        <button class="btn-mini verde" onclick="aswGuardar()">GUARDAR (${dnis.length})</button>
+      </div>
+    </div>`;
+  $(cfg.stackId).innerHTML=`<div class="vacio-msg">✓ Personal marcado. Revisa el resumen y guarda. Toca una fila para editar.</div>`;
+  if(cfg.ayudaId&&$(cfg.ayudaId)) $(cfg.ayudaId).style.display="none";
+}
+function aswEditar(dni){
+  const cfg=ASW.cfg, cur=ASW.dec[dni]||ASW.cur[dni]||"ACTIVO";
+  const opts=(cfg.estados()||[]).map(e=>`<option ${e===cur?"selected":""}>${esc(e)}</option>`).join("")||'<option value="">Sin estados</option>';
+  const p=ASW.list.find(x=>x.dni===dni);
+  abrirModal(`<h2>${esc(p?p.nombre:dni)}</h2>
+    <div class="modal-campo"><label>Estado</label><select id="aswEd">${opts}</select></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="aswEditarOk('${esc(dni)}')">APLICAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
+}
+function aswEditarOk(dni){ const est=$("aswEd").value; if(!est) return; ASW.dec[dni]=est; cerrarModal(); aswResumen(); }
+function aswReiniciar(){ ASW.dec={}; ASW.idx=0; aswRender(); }
+async function aswGuardar(){
+  const cfg=ASW.cfg, dec=ASW.dec, dnis=Object.keys(dec);
+  if(!dnis.length){ mostrarError("No hay personal marcado"); return; }
+  if(!confirm(`¿Guardar la asistencia del ${ASW.fecha} de ${dnis.length} persona(s)?`)) return;
+  const marcas=dnis.map(d=>({dni:d,estado:dec[d]}));
+  try{
+    const r=await cfg.guardar(marcas,ASW.fecha);
+    if(r&&r.ok===false){ mostrarError(r.error||"No se pudo guardar"); return; }
+    mostrarOk(`Asistencia guardada (${(r&&r.afectados)||dnis.length}) para ${ASW.fecha}.`);
+    if(cfg.onSaved) cfg.onSaved();
+  }catch(e){ mostrarError(e.message); }
+}
+
+/* --- Supervisora · vista ASISTENCIA (swipe, área de la supervisora) --- */
+function asisInit(){
+  const s=sesionActual(); if(!s) return;
+  const f=$("asisFecha"); if(f && !f.value) f.value=aswHoy();
+  aswStart({
+    stackId:"asisStack", progId:"asisProg", saveBtnId:"asisRevisar", resumenId:"asisResumen", ayudaId:"asisAyuda",
+    estados:()=>ESTADOS_SUP,
+    listar:(fecha)=>rpc("fn_asistencia_marcar_lista",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),p_fecha:fecha}),
+    guardar:(marcas,fecha)=>rpc("fn_asistencia_marcar_guardar",{p_dni:s.dni,p_token:s.token,p_fecha:fecha,p_marcas:marcas}),
+    onSaved:()=>asisInit()
+  }, (f&&f.value)||null);
 }
 function marcarTab(id){
-  ["tabPersonal","tabAvance","tabIncidencias","tabEfPersonal"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });
+  ["tabAsistencia","tabPersonal","tabAvance","tabIncidencias","tabEfPersonal"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });
 }
 function pararAvance(){ clearInterval(timerAvance); timerAvance=null; }
 
