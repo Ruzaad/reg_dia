@@ -1630,7 +1630,8 @@ function avofPintar(){
   const rows=(AVOF.items||[]).map(it=>{
     const prog=AVOF.prog[String(it.of)]!==undefined?AVOF.prog[String(it.of)]:null;
     const real=nivel==="penultima"?it.cant_penultima:it.cant_ultima;
-    const completo = it.op_final && prog!=null && real>=prog;
+    // COMPLETADO = la operación registrada (última/penúltima) alcanzó la cant. programada.
+    const completo = prog!=null && real>=prog;
     return Object.assign({}, it, {prog, real, estado: completo?"COMPLETADO":"PROCESO"});
   }).filter(it=>!q||normKey((it.articulo||"")+" "+(it.of||"")).includes(q));
   if(avofSort.col){
