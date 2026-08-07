@@ -8,7 +8,6 @@ const ESTADOS_OPERARIO = ["ACTIVO","INACTIVO"];
 let ESTADOS_ASIS = [];
 let EF_CENS_ING = false;                     // censura de eficiencia (****) en toda la pestaña
 function hoyISO(){ return new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"}); }
-function mesActualISO(){ const d=hoyISO(); return d.slice(0,7); } // YYYY-MM
 
 document.addEventListener("DOMContentLoaded", async ()=>{
   if(document.body.dataset.pagina!=="ingenieria") return;
@@ -36,6 +35,12 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   { const bd=$("ingBackdrop"); if(bd) bd.onclick=()=>document.body.classList.add("sidebar-cerrada"); }
   // En pantallas chicas el sidebar arranca cerrado (cajón).
   if(window.innerWidth<=900) document.body.classList.add("sidebar-cerrada");
+  // Dinámico: al cruzar el breakpoint (redimensionar/rotar) ajusta el sidebar.
+  let _wasNarrow = window.innerWidth<=900;
+  window.addEventListener("resize", ()=>{
+    const narrow = window.innerWidth<=900;
+    if(narrow!==_wasNarrow){ _wasNarrow=narrow; document.body.classList.toggle("sidebar-cerrada", narrow); }
+  });
   // Deep-link / nueva pestaña: si la URL trae #pasoXxx válido, abre esa sección.
   window.addEventListener("hashchange",()=>{
     const t=(location.hash||"").replace(/^#/,"");
@@ -728,6 +733,8 @@ async function opEntrar(){
     const r=await rpc("fn_login",{p_dni:dni,p_pin:pin});
     if(!r.ok){ msg.textContent=r.error||"DNI o PIN incorrectos"; return; }
     if(r.cargo!=="OPERARIO" && r.cargo!=="ESTAJERO"){ msg.textContent="Ese usuario no es operario"; return; }
+    // Guarda la sesión de INGENIERÍA para poder volver desde operario.html.
+    try{ sessionStorage.setItem("stx_volver_ing", localStorage.getItem("stx_sesion")||""); }catch(e){}
     // Reutiliza el flujo de operario tal cual: guarda la sesión del operario y entra.
     guardarSesion({dni:r.dni, nombre:r.nombre, cargo:r.cargo, token:r.token,
       area:(r.cargo==="ESTAJERO"? null : (r.area_actual||null))});
@@ -1375,11 +1382,11 @@ function perPintarMatriz(){
   const q=normKey($("perMatBuscar").value), dias=PER.matriz.dias;
   const lista=PER.matriz.personal.filter(p=>!q||normKey(p.nombre).includes(q));
   $("perMatResumen").textContent=`${lista.length} persona(s) · ${dias.length} día(s)`;
-  let thead=`<thead><tr><th class="col-nombre">Nombre</th>`+dias.map(d=>`<th>${d.slice(8,10)}-${d.slice(5,7)}</th>`).join("")+`</tr></thead>`;
+  let thead=`<thead><tr><th class="col-nombre-solo">Nombre</th>`+dias.map(d=>`<th>${d.slice(8,10)}-${d.slice(5,7)}</th>`).join("")+`</tr></thead>`;
   let tbody="<tbody>";
   if(!lista.length) tbody+=`<tr><td colspan="${dias.length+1}"><div class="vacio-msg">Sin personal</div></td></tr>`;
   lista.forEach(p=>{
-    tbody+=`<tr><td class="col-nombre"><div>${esc(p.nombre)}</div><div style="font-size:11px;color:#5a6270;font-weight:600">${esc(p.area)}</div></td>`;
+    tbody+=`<tr><td class="col-nombre-solo"><div>${esc(p.nombre)}</div><div style="font-size:11px;color:#5a6270;font-weight:600">${esc(p.area)}</div></td>`;
     dias.forEach(d=>{ const est=p.registros[d];
       tbody+=`<td class="celda-asis" onclick="perEditarCelda('${esc(p.dni)}','${esc(p.nombre).replace(/'/g,"\\'")}','${d}','${esc(est||"")}')">${est?`<span class="pill ${esc(est)}">${esc(est)}</span>`:"—"}</td>`;
     });
@@ -1820,6 +1827,14 @@ function renderTkOpsPanel(activo){
   });
   const ofs=Object.keys(byOf).sort((a,b)=>a.localeCompare(b,"es"));
   if(!ofs.length){ panel.style.display="none"; panel.innerHTML=""; return; }
+  // Resumen por nombre de operación (op → total realizado, sumando todas las OFs).
+  const byOpTot={};
+  TK_VISTA.forEach(t=>{
+    if(t.estado!=='ACTIVO') return;
+    const op=norm(t.op)||"(sin operación)";
+    byOpTot[op]=(byOpTot[op]||0)+(Number(t.cant)||0);
+  });
+  const ops2=Object.keys(byOpTot).sort((a,b)=>a.localeCompare(b,"es"));
   panel.style.display="";
   panel.innerHTML = `<div class="tk-ops-title">Operaciones por OF</div>` + ofs.map(of=>{
     const ops=byOf[of]; const opNames=Object.keys(ops).sort((a,b)=>a.localeCompare(b,"es"));
@@ -1828,7 +1843,9 @@ function renderTkOpsPanel(activo){
       <summary>${esc(of)} · ${Math.round(totOf)} und</summary>
       ${opNames.map(o=>`<div class="tk-ops-row"><span>${esc(o)}</span><span>${Math.round(ops[o])}</span></div>`).join("")}
     </details>`;
-  }).join("");
+  }).join("")
+  + `<div class="tk-ops-title" style="margin-top:14px;">Resumen por operación</div>`
+  + ops2.map(op=>`<div class="tk-ops-row"><span>${esc(op)}</span><span>${Math.round(byOpTot[op])}</span></div>`).join("");
 }
 
 /* Retiro de tickets desde la app: SOLO el usuario ALOPEZ.
@@ -1888,7 +1905,7 @@ function pintarTkOp(){
       <td class="izq">${esc(t.nombre)}</td><td>${esc(t.dni)}</td><td>${esc(t.op)}</td>
       <td>${esc(t.hora)}</td><td>${esc(t.numeracion||"—")}</td>
       <td><span class="pill ${t.estado==='ACTIVO'?'ACTIVO':'FALTA'}">${esc(t.estado)}</span></td>
-      <td>${t.estado==='ACTIVO'?`<button class="acc-borrar" onclick="liberarTkOp('${esc(t.codigo)}')">Liberar</button>`:""}</td></tr>`).join("")
+      <td>${t.estado==='ACTIVO'?`<button class="btn-mini rojo" onclick="liberarTkOp('${esc(t.codigo)}')">LIBERAR</button>`:""}</td></tr>`).join("")
     : `<tr><td colspan="7"><div class="vacio-msg">Sin tickets reclamados para esta OF</div></td></tr>`;
   $("tablaTkOp").innerHTML=thead+"<tbody>"+body+"</tbody>";
 }
@@ -2027,7 +2044,7 @@ function pintarBases(){
       <td>${b.max_op}</td><td>${b.n_op}</td>
       <td><div class="acc-base">
         <button class="acc-editar" onclick="abrirModalBaseOp(${b.id})">Editar</button>
-        <button class="acc-borrar" onclick="eliminarBaseOp(${b.id},'${esc((b.operacion||"").replace(/'/g,""))}')">Borrar</button>
+        <button class="acc-borrar" onclick="eliminarBaseOp(${b.id},'${esc((b.operacion||"").replace(/'/g,""))}','${esc((b.articulo||"").replace(/'/g,""))}')">Borrar</button>
       </div></td></tr>`;
     }).join("")+"</tbody>";
   const pg=$("basesPager");
@@ -2145,6 +2162,22 @@ function autoMaxOp(){
   Object.keys(mapa).forEach(k=>{ if(normKey(k)===art) mx=mapa[k]; });
   if(mx!=null && $("boMaxOp")) $("boMaxOp").value = mx;
 }
+/* Reescribe el ALMACÉN (Sheet) de un artículo según la BASE, conservando los
+   códigos. Sincroniza también reclamos (fn_base_sync). Silencioso si el área
+   no tiene Sheet configurado. */
+async function sincronizarAlmacen(area, articulo){
+  if(!articulo) return;
+  const cfg=AREAS[area];
+  try{
+    const p=await rpc("fn_base_sync",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:articulo});
+    if(!p||!p.ok) { if(p&&p.error) mostrarError("Sync BASE: "+p.error); return; }
+    if(!cfg||!cfg.sheetId) return;                 // sin Sheet: solo se sincronizó Supabase
+    if(!Array.isArray(p.mapa)||!p.mapa.length) return;
+    const r=await edgeFn(FN_GENERAR_TICKETS,{p_dni:ING.dni,p_token:ING.token,area,accion:"actualizar",articulo,mapa:p.mapa});
+    if(r&&r.ok){ if(r.actualizadas) mostrarOk(`ALMACÉN sincronizado (${r.actualizadas} fila(s)).`); }
+    else mostrarError("ALMACÉN no sincronizado: "+((r&&r.error)||"error"));
+  }catch(e){ mostrarError("Sync ALMACÉN: "+e.message); }
+}
 async function guardarBaseOp(id){
   const area=$("areaBase").value;
   const datos={
@@ -2156,27 +2189,35 @@ async function guardarBaseOp(id){
     p_n_op:parseInt($("boNop").value,10)||0
   };
   if(!datos.p_articulo || !datos.p_operacion){ $("boMsg").textContent="Artículo y operación son obligatorios"; return; }
+  // Aviso: cuántos tickets se reescribirán en ALMACÉN/Supabase.
   try{
-    let r;
-    if(id!=null){
-      r=await rpc("fn_base_op_editar",{p_dni:ING.dni,p_token:ING.token,p_id:id,...datos});
-    } else {
-      r=await rpc("fn_base_op_crear",{p_dni:ING.dni,p_token:ING.token,p_area:area,...datos});
-    }
+    const pv=await rpc("fn_base_almacen_map",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:datos.p_articulo});
+    const tot=(pv&&pv.ok)?(pv.reclamos_total||0):0;
+    if(tot>0 && !confirm(`Este cambio reescribirá ${tot} ticket(s) del artículo ${datos.p_articulo} en ALMACÉN y Supabase (se conservan los códigos; ${pv.reclamos_activos||0} reclamado(s)). ¿Continuar?`)) return;
+  }catch(e){}
+  try{
+    const r = id!=null
+      ? await rpc("fn_base_op_editar",{p_dni:ING.dni,p_token:ING.token,p_id:id,...datos})
+      : await rpc("fn_base_op_crear",{p_dni:ING.dni,p_token:ING.token,p_area:area,...datos});
     if(!r.ok){ $("boMsg").textContent=r.error||"No se pudo guardar"; return; }
     cerrarModal();
     delete BASES_CACHE[area]; delete BASE_VALORES[area];
     if(typeof r.reclamos_actualizados==="number" && r.reclamos_actualizados>0)
-      mostrarOk(`Guardado · ${r.reclamos_actualizados} reclamo(s) actualizados por STD`);
+      mostrarOk(`Guardado · ${r.reclamos_actualizados} reclamo(s) sincronizados`);
+    await sincronizarAlmacen(area, datos.p_articulo);
     await cargarBases();
   }catch(e){ $("boMsg").textContent=e.message; }
 }
-async function eliminarBaseOp(id, nombre){
-  if(!confirm(`¿Eliminar la operación "${nombre}"?`)) return;
+async function eliminarBaseOp(id, nombre, articulo){
+  const area=$("areaBase").value;
+  let tot=0;
+  try{ const pv=await rpc("fn_base_almacen_map",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:articulo}); if(pv&&pv.ok) tot=pv.reclamos_total||0; }catch(e){}
+  if(!confirm(`¿Eliminar la operación "${nombre}"?`+(tot>0?`\nReescribirá ${tot} ticket(s) del artículo ${articulo} en ALMACÉN y Supabase.`:""))) return;
   try{
     const r=await rpc("fn_base_op_eliminar",{p_dni:ING.dni,p_token:ING.token,p_id:id});
     if(!r.ok){ mostrarError(r.error||"No se pudo eliminar"); return; }
-    delete BASES_CACHE[$("areaBase").value];
+    delete BASES_CACHE[area];
+    await sincronizarAlmacen(area, articulo);
     await cargarBases();
   }catch(e){ mostrarError(e.message); }
 }
@@ -2259,10 +2300,14 @@ function cancelarSubida(){ PENDIENTE=null; $("zonaDiff").style.display="none"; }
 async function confirmarSubida(){
   if(!PENDIENTE) return;
   try{
+    const area=$("areaBase").value;
+    const arts=[...new Set((PENDIENTE||[]).map(f=>f.articulo).filter(Boolean))];
     const r = await rpc("fn_bases_subir",{p_dni:ING.dni,p_token:ING.token,
-      p_area:$("areaBase").value,p_filas:PENDIENTE});
+      p_area:area,p_filas:PENDIENTE});
     if(!r.ok){ mostrarError(r.error); return; }
     cancelarSubida();
+    // Sincroniza ALMACÉN (Sheet) + reclamos por cada artículo subido; los códigos NO cambian.
+    for(const a of arts){ await sincronizarAlmacen(area, a); }
     await cargarBases();
   }catch(e){ mostrarError(e.message); }
 }

@@ -175,7 +175,7 @@ function sesionActual(){
     return s;
   }catch(e){ return null; }
 }
-function cerrarSesion(){ localStorage.removeItem("stx_sesion"); location.href = "index.html"; }
+function cerrarSesion(){ localStorage.removeItem("stx_sesion"); try{ sessionStorage.removeItem("stx_volver_ing"); }catch(e){} location.href = "index.html"; }
 
 /* ---------------- SUPABASE (RPC) ---------------- */
 async function rpc(fn, args){
@@ -467,6 +467,17 @@ function initOperario(){
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
   { const rc=$("btnRecargar"); if(rc) rc.onclick=recargarMiEficiencia; }
   { const oj=$("btnOjoEf"); if(oj) oj.onclick=()=>{ EF_CENSURADA=!EF_CENSURADA; setAvance(ULTIMO_DIA); }; }
+  // Si se entró como operario DESDE ingeniería, botón para volver a Ingeniería.
+  try{
+    const prevIng = sessionStorage.getItem("stx_volver_ing");
+    const badges = document.querySelector("header .badges");
+    if(prevIng && badges && !$("btnVolverIng")){
+      const b=document.createElement("button");
+      b.type="button"; b.className="btn-hdr-icon"; b.id="btnVolverIng"; b.title="Volver a Ingeniería"; b.textContent="🏭";
+      b.onclick=()=>{ localStorage.setItem("stx_sesion", prevIng); sessionStorage.removeItem("stx_volver_ing"); location.href="ingenieria.html"; };
+      badges.insertBefore(b, badges.firstChild);
+    }
+  }catch(e){}
   window.onCambioPaso = (id)=>{
     // Al retroceder, limpiar la selección más profunda para que el
     // breadcrumb del encabezado no deje pasos viejos colgados.
@@ -567,6 +578,11 @@ async function recargarMiEficiencia(){
   try{
     if(ES_ACABADO) await refrescarMetasAcabado();
     else setAvance(await rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token}));
+    // Refresca estados de tickets (p.ej. liberaciones de ingeniería) sin recargar la app.
+    await refrescarReclamos(s);
+    const act=pasoActivo();
+    if(act==="pasoTickets") pintarTickets();
+    else if(act==="pasoModulos") pintarModulos();
   }catch(e){ mostrarError(e.message); }
   finally{ if(b) setTimeout(()=>b.classList.remove("girando"),500); }
 }

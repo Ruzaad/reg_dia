@@ -356,8 +356,9 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 /* Fila de acciones CRUD en BASE */
 .btn-mini.azul{background:var(--azul);color:#fff;}
 .tabla .acc-base{display:flex;gap:6px;justify-content:center;}
-.tabla .acc-base button{border:none;border-radius:7px;font-size:12px;font-weight:800;
-  padding:5px 9px;cursor:pointer;color:#fff;}
+/* Estilo autónomo (también fuera de .acc-base, p.ej. columna Editar del CRUD). */
+.acc-editar,.acc-borrar,.tabla .acc-base button{border:none;border-radius:7px;font-size:12px;
+  font-weight:800;padding:5px 9px;cursor:pointer;color:#fff;white-space:nowrap;}
 .acc-editar{background:var(--enlace);}
 .acc-borrar{background:var(--alerta);}
 
@@ -467,6 +468,14 @@ body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",mono
 
 /* Contenedor de tabla con scroll (reemplaza overflow inline) */
 .tabla-scroll{overflow:auto;}
+/* Tablas de datos anchas (CRUD, matriz, eficiencia): usan todo el ancho disponible
+   en ingeniería y hacen scroll horizontal si aún no caben (evita columnas cortadas). */
+body[data-pagina="ingenieria"] .tabla-scroll{max-width:100%;}
+/* KPIs de Incidencias más compactos (evita el bloque enorme/desbalanceado). */
+#resumenInci{grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;}
+#resumenInci .kpi{padding:10px 8px;}
+#resumenInci .kpi-num{font-size:21px;}
+#resumenInci .kpi-lbl{font-size:11px;}
 
 /* Toolbar de acciones (supervisión: reemplaza el FAB flotante por barra estática) */
 .acc-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
@@ -532,8 +541,10 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .ing-nav .nav-group:not([open]) summary.nav-sep::after{transform:rotate(-90deg);}
 .ing-nav summary.nav-sep:hover{color:#cfe0fb;}
 /* Personal · dashboard */
-.per-dash-charts{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;margin-top:14px;}
-.per-chart{padding:16px;}
+/* auto-fit: si una tarjeta (p.ej. la tendencia) se oculta, la otra no deja
+   columna vacía → evita el "desplazamiento de cuadros" en Dashboards. */
+.per-dash-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:14px;}
+.per-chart{padding:16px;min-width:0;}
 /* Contenedor que acota el tamaño de los gráficos (evita canvas gigantes). */
 .grafico-box{position:relative;width:100%;max-width:720px;height:280px;margin:8px auto 0;}
 .grafico-box-sm{max-width:360px;height:240px;}
