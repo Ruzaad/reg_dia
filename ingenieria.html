@@ -36,7 +36,7 @@
         <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Por módulo</a>
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
         <a class="nav-item" data-tab="pasoOpsOF" href="#pasoOpsOF">Operaciones (OF)</a>
-        <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Avance por OF</a>
+        <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Resumen de OF</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Eficiencia</summary>
@@ -206,7 +206,7 @@
         <button class="btn-mini" id="btnModoLiberar" onclick="toggleModoLiberar()">Liberar en lote</button>
         <button class="btn-mini gris" id="btnMarcarVisibles" style="display:none;" onclick="marcarVisiblesLib()">Marcar visibles</button>
         <button class="btn-mini rojo" id="btnLiberarSel" style="display:none;" onclick="liberarLote()">Liberar selección (0)</button>
-        <label class="chk-inline"><input type="checkbox" id="chkOcultarLib" onchange="toggleOcultarLib()"> Ocultar liberados</label>
+        <label class="chk-inline"><input type="checkbox" class="sw" id="chkOcultarLib" onchange="toggleOcultarLib()"> Ocultar liberados</label>
       </div>
       <div class="sub" id="resumenTk"></div>
       <div class="kpis" id="resumenUltimas" style="margin-bottom:14px;"></div>
@@ -226,14 +226,19 @@
           <label class="campo"><span>Área</span><select id="tkOpArea"></select></label>
           <label class="campo"><span>OF</span><input type="text" id="tkOpOf" placeholder="Nº OF…"></label>
           <button class="btn-mini" onclick="cargarTkOp()">Cargar</button>
-          <label class="campo"><span>Operación</span><select id="tkOpSel" onchange="pintarTkOp()"><option value="">Todas</option></select></label>
-          <label class="campo"><span>Buscar</span><input type="text" id="tkOpBuscar" placeholder="Nombre / DNI / numeración…" oninput="pintarTkOp()"></label>
-          <label class="chk-inline"><input type="checkbox" id="tkOpOcultarLib" onchange="pintarTkOp()"> Ocultar liberados</label>
+          <label class="campo"><span>Operación</span><select id="tkOpSel" onchange="tkOpFiltrar()"><option value="">Todas</option></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="tkOpBuscar" placeholder="Nombre / DNI / numeración…" oninput="tkOpFiltrar()"></label>
+          <label class="chk-inline"><input type="checkbox" class="sw" id="tkOpOcultarLib" onchange="tkOpFiltrar()"> Ocultar liberados</label>
+        </div>
+        <div class="barra-control">
+          <button class="btn-mini gris" onclick="tkOpMarcarVisibles()">Marcar visibles</button>
+          <button class="btn-mini rojo" id="tkOpLiberarSel" onclick="liberarTkOpLote()">Liberar selección (0)</button>
         </div>
         <div class="sub" id="tkOpResumen"></div>
         <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;">
           <table class="tabla" id="tablaTkOp"></table>
         </div>
+        <div class="pager" id="tkOpPager" style="margin-top:8px;"></div>
       </div>
     </section>
 
@@ -303,7 +308,7 @@
         <div class="barra-control">
           <label class="campo"><span>Área</span><select id="perArea" onchange="perCargarCrud()"></select></label>
           <label class="campo"><span>Buscar</span><input type="text" id="perBuscar" placeholder="Nombre / DNI…" oninput="perPintarCrud()"></label>
-          <label class="campo-check"><input type="checkbox" id="perInactivos" onchange="perCargarCrud()"> Ver inactivos</label>
+          <label class="campo-check"><input type="checkbox" class="sw" id="perInactivos" onchange="perCargarCrud()"> Ver inactivos</label>
           <button class="btn-mini verde" onclick="abrirModalPersonal(null)">+ Agregar personal</button>
         </div>
         <div class="barra-control">
@@ -452,17 +457,16 @@
       </div>
     </section>
 
-    <!-- ===================== AVANCE POR OF ===================== -->
+    <!-- ===================== RESUMEN DE OF ===================== -->
     <section class="pantalla" id="pasoAvOF">
-      <div class="seccion-cab"><h1>Avance por OF</h1>
-        <p class="seccion-sub">Cantidad programada (ALMACÉN) vs. realizada, último módulo y estado por OF.</p></div>
+      <div class="seccion-cab"><h1>Resumen de OF</h1>
+        <p class="seccion-sub">OFs en proceso: área/módulo actual, cantidades (programada vs reportada) y trazabilidad. Toca ▾ para el detalle por módulo y área.</p></div>
       <div class="barra-control">
-        <label class="campo"><span>Área</span><select id="avofArea"></select></label>
         <label class="campo"><span>Rango</span><input type="text" id="avofRango" placeholder="Selecciona fechas" readonly style="min-width:200px;cursor:pointer;"></label>
         <label class="campo"><span>Operación</span>
           <select id="avofNivel" onchange="avofPintar()">
+            <option value="penultima" selected>Penúltima operación</option>
             <option value="ultima">Última operación</option>
-            <option value="penultima">Penúltima operación</option>
           </select></label>
         <label class="campo"><span>Buscar</span><input type="text" id="avofBuscar" placeholder="Artículo / OF…" oninput="avofPintar()"></label>
         <button class="btn-mini" onclick="cargarAvof()">Cargar</button>

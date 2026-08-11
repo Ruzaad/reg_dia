@@ -29,17 +29,20 @@
     <button id="tabIncidencias" class="tab">INCIDENCIAS</button>
   </div>
 
-  <!-- Asistencia (tarjetas deslizables) — vista principal -->
+  <!-- Asistencia (vista principal) — todos presentes; marca solo excepciones -->
   <section class="pantalla activa" id="pasoAsistencia">
     <h1>Asistencia de hoy</h1>
-    <div class="fila-filtros">
+    <div class="sub">Todos cuentan como presentes. Marca solo a quien faltó o tiene otro estado.</div>
+    <div class="fila-filtros" style="margin-top:10px;">
       <label class="sub" style="margin:0;">Día: <input type="date" id="asisFecha" style="margin-left:4px;"></label>
       <span class="sub" id="asisProg" style="margin:0;"></span>
-      <button class="btn-mini verde" id="asisRevisar" onclick="aswVerResumen()" disabled>Revisar (0)</button>
+      <button class="btn-mini verde" id="asisGuardar" onclick="asisGuardar()">Guardar</button>
     </div>
-    <div class="swipe-stack" id="asisStack"></div>
-    <div class="swipe-ayuda" id="asisAyuda">Desliza <b>▶ Activo</b> · <b>◀ Falta</b> · <b>▼ Otro estado</b> · <b>▲ Confirmar estado actual</b></div>
-    <div id="asisResumen" hidden></div>
+    <div class="zona-of" style="margin-bottom:12px;">
+      <input class="input-grande" id="asisBuscar" placeholder="Buscar persona…" oninput="asisPintar()"
+             autocomplete="off" style="font-size:20px;letter-spacing:normal;text-align:left;">
+    </div>
+    <div id="asisLista" class="asis-lista"></div>
   </section>
 
   <!-- Personal -->

@@ -1154,17 +1154,62 @@ async function aswGuardar(){
   }catch(e){ mostrarError(e.message); }
 }
 
-/* --- Supervisora · vista ASISTENCIA (swipe, área de la supervisora) --- */
+/* --- Supervisora · Asistencia (lista + buscador; marca solo excepciones) --- */
+let ASIS={list:[],dec:{},fecha:null};
 function asisInit(){
   const s=sesionActual(); if(!s) return;
   const f=$("asisFecha"); if(f && !f.value) f.value=aswHoy();
-  aswStart({
-    stackId:"asisStack", progId:"asisProg", saveBtnId:"asisRevisar", resumenId:"asisResumen", ayudaId:"asisAyuda",
-    estados:()=>ESTADOS_SUP,
-    listar:(fecha)=>rpc("fn_asistencia_marcar_lista",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),p_fecha:fecha}),
-    guardar:(marcas,fecha)=>rpc("fn_asistencia_marcar_guardar",{p_dni:s.dni,p_token:s.token,p_fecha:fecha,p_marcas:marcas}),
-    onSaved:()=>asisInit()
-  }, (f&&f.value)||null);
+  ASIS={list:[],dec:{},fecha:(f&&f.value)||aswHoy()};
+  const g=$("asisLista"); if(g) g.innerHTML=cargandoHTML("Cargando personal…");
+  rpc("fn_asistencia_marcar_lista",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),p_fecha:ASIS.fecha})
+    .then(r=>{
+      if(r&&r.ok===false){ mostrarError(r.error||"Error"); if(g) g.innerHTML=""; return; }
+      ASIS.list=(r&&r.personal)||[];
+      ASIS.list.forEach(p=>{ if(p.estado && p.estado!=="ACTIVO") ASIS.dec[p.dni]=p.estado; });
+      asisPintar();
+    })
+    .catch(e=>{ if(g) g.innerHTML=""; mostrarError(e.message); });
+}
+function asisPintar(){
+  const g=$("asisLista"); if(!g) return;
+  const q=normKey($("asisBuscar")?$("asisBuscar").value:"");
+  const lista=ASIS.list.filter(p=>!q||normKey(p.nombre+" "+p.dni).includes(q));
+  const marc=Object.keys(ASIS.dec).length;
+  if($("asisProg")) $("asisProg").textContent=`${ASIS.list.length-marc} activo(s) · ${marc} con estado`;
+  if(!lista.length){ g.innerHTML=`<div class="vacio-msg">Sin personal</div>`; return; }
+  g.innerHTML=lista.map(p=>{
+    const est=ASIS.dec[p.dni]||"ACTIVO", m=est!=="ACTIVO";
+    return `<div class="asis-fila${m?" marcada":""}" onclick="asisElegir('${esc(p.dni)}')">
+      <div class="asis-nom">${esc(p.nombre)}<div class="asis-dni">DNI ${esc(p.dni)}</div></div>
+      <span class="pill ${esc(est)}">${esc(est)}</span></div>`;
+  }).join("");
+}
+function asisElegir(dni){
+  const p=ASIS.list.find(x=>x.dni===dni); if(!p) return;
+  const cur=ASIS.dec[dni]||"ACTIVO";
+  const ests=["ACTIVO",...(ESTADOS_SUP||[]).filter(e=>e!=="ACTIVO")];
+  const chips=ests.map(e=>`<button class="asis-chip ${e===cur?"sel":""}" onclick="asisSet('${esc(dni)}','${esc(e)}')">${esc(e)}</button>`).join("");
+  abrirModal(`<h2>${esc(p.nombre)}</h2>
+    <div class="sub" style="margin-bottom:10px;">Estado del ${ASIS.fecha}</div>
+    <div class="asis-chips">${chips}</div>
+    <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`);
+}
+function asisSet(dni,est){
+  if(est==="ACTIVO") delete ASIS.dec[dni]; else ASIS.dec[dni]=est;
+  cerrarModal(); asisPintar();
+}
+async function asisGuardar(){
+  const s=sesionActual(); if(!s) return;
+  if(!ASIS.list.length){ mostrarError("Sin personal"); return; }
+  const marcas=ASIS.list.map(p=>({dni:p.dni,estado:ASIS.dec[p.dni]||"ACTIVO"}));
+  const faltas=Object.keys(ASIS.dec).length;
+  if(!confirm(`Guardar asistencia del ${ASIS.fecha}: ${marcas.length-faltas} activo(s) y ${faltas} con otro estado. ¿Continuar?`)) return;
+  try{
+    const r=await rpc("fn_asistencia_marcar_guardar",{p_dni:s.dni,p_token:s.token,p_fecha:ASIS.fecha,p_marcas:marcas});
+    if(r&&r.ok===false){ mostrarError(r.error||"No se pudo guardar"); return; }
+    mostrarOk(`Asistencia guardada (${(r&&r.afectados)||marcas.length}) para ${ASIS.fecha}.`);
+    asisInit();
+  }catch(e){ mostrarError(e.message); }
 }
 function marcarTab(id){
   ["tabAsistencia","tabPersonal","tabAvance","tabIncidencias","tabEfPersonal"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });

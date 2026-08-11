@@ -113,7 +113,6 @@ function poblarSelectsArea(){
   if($("perDashArea")) $("perDashArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
   if($("perMatArea")) $("perMatArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
   if($("dbModArea")) $("dbModArea").innerHTML = elige + AREAS_LISTA.map(op).join("");
-  if($("avofArea"))  $("avofArea").innerHTML  = elige + Object.keys(AREAS).map(op).join(""); // requiere Sheet (ALMACÉN)
   $("filtroAreaEf").innerHTML   = elige + AREAS_LISTA.map(op).join("");   // Efi. Área: requiere elegir
   $("filtroAreaEfR").innerHTML  = todas + AREAS_LISTA.map(op).join("");
   if($("areaTk"))  $("areaTk").innerHTML  = todas + AREAS_LISTA.map(op).join("");
@@ -140,7 +139,7 @@ function recargarIngenieria(){
   else if(act("pasoBases")) cargarBases();
   else if(act("pasoAsis")) perReload();
   else if(act("pasoDash")) dashTab(DASH_TAB||'asis');
-  else if(act("pasoAvOF")){ if($("avofArea")&&$("avofArea").value) cargarAvof(); }
+  else if(act("pasoAvOF")){ if(DB.avofSel&&DB.avofSel.desde) cargarAvof(); }
   else if(act("pasoIncid")) cargarIncidI();
   else if(act("pasoPersonal")||act("pasoAvance")||act("pasoIncidencias")||act("pasoEfPersonal")) recargarSupervisora();
 }
@@ -639,15 +638,21 @@ async function cargarReclamosFec(){
     pintarReclamosFec();
   }catch(e){ $("tablaFec").innerHTML=""; mostrarError(e.message); }
 }
+let fecSort={col:null,dir:1};
+function ordenarFec(col){ if(fecSort.col===col) fecSort.dir*=-1; else fecSort={col,dir:1}; pintarReclamosFec(); }
 function pintarReclamosFec(){
-  const lista = Array.isArray(FEC_RECL) ? FEC_RECL : [];
+  let lista = Array.isArray(FEC_RECL) ? [...FEC_RECL] : [];
   $("resumenFec").textContent = `${lista.length} ticket(s) en esa fecha · ${Object.keys(FEC_SEL).length} seleccionado(s)`;
   if(!lista.length){ $("tablaFec").innerHTML=`<div class="vacio-msg">Ese operario no tiene tickets esa fecha</div>`; return; }
-  const thead=`<thead><tr><th></th><th>OF</th><th class="izq">Operación</th><th>Artículo</th><th>Num.</th><th>Cant</th><th>Min</th><th>Estado</th></tr></thead>`;
+  if(fecSort.col){ const c=fecSort.col; lista.sort((a,b)=>{ const va=a[c],vb=b[c],na=parseFloat(va),nb=parseFloat(vb);
+    const cc=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es"); return cc*fecSort.dir; }); }
+  const fl=k=>fecSort.col===k?(fecSort.dir===1?" ▲":" ▼"):"";
+  const COLS=[["of","OF"],["op","Operación"],["articulo","Artículo"],["num","Num."],["hora","Hora"],["cant","Cant"],["minutos","Min"],["estado","Estado"]];
+  const thead=`<thead><tr><th></th>${COLS.map(c=>`<th class="ord${c[0]==="op"?" izq":""}" onclick="ordenarFec('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}</tr></thead>`;
   $("tablaFec").innerHTML = thead + "<tbody>" + lista.map(r=>`<tr>
-    <td><input type="checkbox" class="chk-lib" ${FEC_SEL[r.id]?"checked":""} onclick="toggleFecSel(${r.id})"></td>
+    <td><input type="checkbox" class="sw" ${FEC_SEL[r.id]?"checked":""} onclick="toggleFecSel(${r.id})"></td>
     <td>${esc(r.of)}</td><td class="izq">${esc(r.op)}</td><td>${esc(r.articulo)}</td>
-    <td>${esc(r.num)}</td><td>${r.cant}</td><td>${r.minutos}</td>
+    <td>${esc(r.num)}</td><td>${esc(r.hora||"")}</td><td>${r.cant}</td><td>${r.minutos}</td>
     <td><span class="pill ${esc(r.estado)}">${esc(r.estado)}</span></td></tr>`).join("") + "</tbody>";
 }
 function toggleFecSel(id){ if(FEC_SEL[id]) delete FEC_SEL[id]; else FEC_SEL[id]=true; pintarReclamosFec(); }
@@ -1308,13 +1313,19 @@ async function perCargarCrud(){
 function perNSelUpd(){ $("perNSel").textContent=Object.keys(PER.crudSel).length; }
 function perLimpiarSel(){ PER.crudSel={}; perNSelUpd(); perPintarCrud(); }
 function perToggleSel(dni){ if(PER.crudSel[dni]) delete PER.crudSel[dni]; else PER.crudSel[dni]=true; perNSelUpd(); }
+let perCrudSort={col:null,dir:1};
+function ordenarPerCrud(col){ if(perCrudSort.col===col) perCrudSort.dir*=-1; else perCrudSort={col,dir:1}; perPintarCrud(); }
 function perPintarCrud(){
   const q=normKey($("perBuscar").value);
-  const lista=PER.crud.filter(p=>!q||normKey(p.nombre+" "+p.dni).includes(q));
+  let lista=PER.crud.filter(p=>!q||normKey(p.nombre+" "+p.dni).includes(q));
+  if(perCrudSort.col){ const c=perCrudSort.col; lista=[...lista].sort((a,b)=>{ const va=a[c],vb=b[c],na=parseFloat(va),nb=parseFloat(vb);
+    const cc=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es"); return cc*perCrudSort.dir; }); }
   $("perResumenCrud").textContent=`${lista.length} persona(s)`;
-  const thead=`<thead><tr><th class="col-check"></th><th class="izq">Nombre</th><th>DNI</th><th>Área actual</th><th>Área origen</th><th>Cargo</th><th>Estado</th><th></th></tr></thead>`;
+  const fl=k=>perCrudSort.col===k?(perCrudSort.dir===1?" ▲":" ▼"):"";
+  const C=[["nombre","Nombre"],["dni","DNI"],["area_actual","Área actual"],["area_origen","Área origen"],["cargo","Cargo"],["estado","Estado"]];
+  const thead=`<thead><tr><th class="col-check"></th>${C.map(c=>`<th class="ord${c[0]==="nombre"?" izq":""}" onclick="ordenarPerCrud('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}<th></th></tr></thead>`;
   const body=lista.length? lista.map(p=>`<tr${p.estado!=="ACTIVO"?' style="opacity:.6;"':''}>
-      <td class="col-check"><input type="checkbox" ${PER.crudSel[p.dni]?"checked":""} onclick="perToggleSel('${esc(p.dni)}')"></td>
+      <td class="col-check"><input type="checkbox" class="sw" ${PER.crudSel[p.dni]?"checked":""} onclick="perToggleSel('${esc(p.dni)}')"></td>
       <td class="izq"><b>${esc(p.nombre)}</b></td><td>${esc(p.dni)}</td>
       <td>${esc(p.area_actual)}</td><td>${esc(p.area_origen||"—")}</td><td>${esc(p.cargo)}</td>
       <td><span class="pill ${esc(p.estado)}">${esc(p.estado)}</span></td>
@@ -1529,7 +1540,7 @@ function dashTab(t){
 }
 let DBCH={};                 // instancias Chart por id de canvas
 let DB={fpReady:false, efSel:{}, cantSel:{}, modSel:{}, avofSel:{}, efModo:"ef", efData:null};
-let AVOF={items:[], prog:{}, area:"", _rows:[]};
+let AVOF={items:[], meta:{}, _rows:[]};
 let avofSort={col:null,dir:1};
 function ordenarAvof(col){ if(avofSort.col===col) avofSort.dir*=-1; else avofSort={col,dir:1}; avofPintar(); }
 function DBCOL(i){ const c=["#0D3B85","#D49D53","#1E7B3C","#1A56B4","#8e6bb5","#B3261E","#5e548e","#3a6ea5","#b0722a","#2e8b8b"]; return c[i%c.length]; }
@@ -1604,71 +1615,79 @@ async function cargarDbMod(){
   }catch(e){ mostrarError(e.message); }
 }
 
-/* --- Avance por OF (realizado = reclamos; programado = ALMACÉN en Sheets) --- */
+/* --- Resumen de OF (trazabilidad cross-área; programado = hoja "OF") --- */
 async function cargarAvof(){
   dbEnsureFp();
-  const area=$("avofArea")?$("avofArea").value:""; if(!area){ mostrarError("Elige un área"); return; }
   const o=DB.avofSel; if(!o.desde||!o.hasta){ mostrarError("Elige el rango"); return; }
-  const cfg=AREAS[area]; if(!cfg||!cfg.sheetId){ mostrarError("Área sin Sheet configurado (ALMACÉN)"); return; }
-  $("avofTabla").innerHTML=cargandoHTML("Cargando avance…"); $("avofResumen").textContent="";
+  $("avofTabla").innerHTML=cargandoHTML("Cargando resumen…"); $("avofResumen").textContent="";
   try{
-    const r=await rpc("fn_avance_of",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_desde:o.desde,p_hasta:o.hasta});
+    const r=await rpc("fn_of_resumen",{p_dni:ING.dni,p_token:ING.token,p_desde:o.desde,p_hasta:o.hasta});
     if(!r.ok){ mostrarError(r.error||"Error"); $("avofTabla").innerHTML=""; return; }
-    const prog=await avofLeerProg(cfg);
-    AVOF={items:r.items||[], prog, area, _rows:[]};
+    AVOF={items:r.items||[], meta:await avofMeta(), _rows:[]};
     avofPintar();
   }catch(e){ $("avofTabla").innerHTML=""; mostrarError(e.message); }
 }
-async function avofLeerProg(cfg){
-  const url=`https://docs.google.com/spreadsheets/d/${cfg.sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(cfg.hoja||"ALMACEN")}`;
-  const prog={};
-  const filas=parseCSV(await (await fetch(url)).text());
-  if(filas.length<2) return prog;
-  const H={}; filas[0].forEach((h,i)=>{ const k=normKey(h); if(k&&H[k]===undefined) H[k]=i; });
-  if(H.OF===undefined||H.NOP===undefined||H.CANT===undefined) return prog;
-  const minNop={};
-  for(let i=1;i<filas.length;i++){ const r=filas[i]; const of=norm(r[H.OF]); if(!of) continue; const nop=Number(norm(r[H.NOP]))||0; if(minNop[of]===undefined||nop<minNop[of]) minNop[of]=nop; }
-  for(let i=1;i<filas.length;i++){ const r=filas[i]; const of=norm(r[H.OF]); if(!of) continue; const nop=Number(norm(r[H.NOP]))||0; if(nop!==minNop[of]) continue; prog[of]=(prog[of]||0)+(Number(norm(r[H.CANT]))||0); }
-  return prog;
+async function avofMeta(){
+  const m={};
+  for(const a of Object.keys(AREAS)){
+    if(!AREAS[a].hojaOF) continue;
+    try{ Object.assign(m, await cargarMetaOF(a)); }catch(e){}
+  }
+  return m;
+}
+function avofFila(it,nivel){
+  const cur=(it.modulos&&it.modulos[0])||{};
+  const real=nivel==="ultima"?(cur.cant_ultima||0):(cur.cant_penultima||0);
+  const k=normKey(it.of||"");
+  const prog=AVOF.meta[k]!==undefined?AVOF.meta[k]:null;
+  return {of:it.of, articulo:it.articulo, area:cur.area||"—", modulo:cur.modulo||"—",
+    prog, real, estado:(prog!=null&&real>=prog)?"COMPLETADO":"PROCESO", it};
 }
 function avofPintar(){
-  const nivel=$("avofNivel")?$("avofNivel").value:"ultima";
+  const nivel=$("avofNivel")?$("avofNivel").value:"penultima";
   const q=normKey($("avofBuscar")?$("avofBuscar").value:"");
-  const rows=(AVOF.items||[]).map(it=>{
-    const prog=AVOF.prog[String(it.of)]!==undefined?AVOF.prog[String(it.of)]:null;
-    const real=nivel==="penultima"?it.cant_penultima:it.cant_ultima;
-    // COMPLETADO = la operación registrada (última/penúltima) alcanzó la cant. programada.
-    const completo = prog!=null && real>=prog;
-    return Object.assign({}, it, {prog, real, estado: completo?"COMPLETADO":"PROCESO"});
-  }).filter(it=>!q||normKey((it.articulo||"")+" "+(it.of||"")).includes(q));
-  if(avofSort.col){
-    const col=avofSort.col;
-    rows.sort((a,b)=>{
-      const va=a[col], vb=b[col], na=parseFloat(va), nb=parseFloat(vb);
-      const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es");
-      return c*avofSort.dir;
-    });
-  }
+  let rows=(AVOF.items||[]).map(it=>avofFila(it,nivel))
+    .filter(r=>!q||normKey((r.articulo||"")+" "+(r.of||"")).includes(q));
+  if(avofSort.col){ const c=avofSort.col; rows.sort((a,b)=>{ const va=a[c],vb=b[c],na=parseFloat(va),nb=parseFloat(vb);
+    const cc=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es"); return cc*avofSort.dir; }); }
   AVOF._rows=rows;
-  $("avofResumen").textContent=`${rows.length} OF · ${rows.filter(r=>r.estado==="COMPLETADO").length} completada(s) · operación ${nivel==="penultima"?"penúltima":"última"}`;
-  const fl = k => avofSort.col===k ? (avofSort.dir===1?" ▲":" ▼") : "";
-  const AVC=[["articulo","Artículo"],["of","OF"],["prog","Cant. prog."],["estado","Estado"],["ultimo_modulo","Último módulo"],["fecha_ultima","Fecha últ. op."],["real","Cant. realizada"]];
-  const thead=`<thead><tr>${AVC.map(c=>`<th class="ord${c[0]==="articulo"?" izq":""}" onclick="ordenarAvof('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}</tr></thead>`;
-  const body=rows.length? rows.map(it=>`<tr>
-      <td class="izq"><b>${esc(it.articulo||"—")}</b></td><td>${esc(it.of)}</td>
-      <td>${it.prog!=null?Math.round(it.prog):"—"}</td>
-      <td><span class="pill ${it.estado==="COMPLETADO"?"ACTIVO":"DM"}">${it.estado}</span></td>
-      <td>${esc(it.ultimo_modulo||"—")}</td><td>${esc(it.fecha_ultima||"—")}</td>
-      <td><b>${Math.round(it.real||0)}</b></td></tr>`).join("")
-    : `<tr><td colspan="7"><div class="vacio-msg">Sin OF con reclamos en el rango</div></td></tr>`;
+  $("avofResumen").textContent=`${rows.length} OF · ${rows.filter(r=>r.estado==="COMPLETADO").length} completada(s) · operación ${nivel==="ultima"?"última":"penúltima"}`;
+  const fl=k=>avofSort.col===k?(avofSort.dir===1?" ▲":" ▼"):"";
+  const C=[["articulo","Artículo"],["of","OF"],["area","Área actual"],["modulo","Módulo actual"],["prog","Cant. prog."],["real","Cant. reportada"],["estado","Estado"]];
+  const thead=`<thead><tr><th></th>${C.map(c=>`<th class="ord${c[0]==="articulo"?" izq":""}" onclick="ordenarAvof('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}</tr></thead>`;
+  const body=rows.length? rows.map((r,i)=>`<tr>
+      <td><button class="btn-mini gris" onclick="avofToggle(${i})">▾</button></td>
+      <td class="izq"><b>${esc(r.articulo||"—")}</b></td><td>${esc(r.of)}</td>
+      <td>${esc(r.area)}</td><td>${esc(r.modulo)}</td>
+      <td>${r.prog!=null?Math.round(r.prog):"—"}</td><td><b>${Math.round(r.real||0)}</b></td>
+      <td><span class="pill ${r.estado==="COMPLETADO"?"ACTIVO":"DM"}">${r.estado}</span></td></tr>
+      <tr class="avof-det" id="avofDet${i}" hidden><td></td><td colspan="7">${avofDetalle(r.it)}</td></tr>`).join("")
+    : `<tr><td colspan="8"><div class="vacio-msg">Sin OF con reclamos en el rango</div></td></tr>`;
   $("avofTabla").innerHTML=thead+"<tbody>"+body+"</tbody>";
+}
+function avofToggle(i){ const el=$("avofDet"+i); if(el) el.hidden=!el.hidden; }
+function avofDetalle(it){
+  const mods=(it.modulos||[]).map(m=>`<tr><td>${esc(m.area)}</td><td class="izq">${esc(m.modulo)}</td><td>${m.nop_max}</td><td>${m.cant_penultima}</td><td>${m.cant_ultima}</td><td>${esc(m.fecha_ultima||"—")}</td></tr>`).join("")
+    ||`<tr><td colspan="6"><div class="vacio-msg">Sin módulos</div></td></tr>`;
+  const trz=(it.areas||[]).map(a=>`<tr><td>${esc(a.area)}</td><td>${esc(a.entrada||"—")}</td><td>${esc(a.salida||"—")}</td><td>${a.cantidad}</td></tr>`).join("")
+    ||`<tr><td colspan="4"><div class="vacio-msg">Sin trazas</div></td></tr>`;
+  return `<div class="avof-det-wrap">
+    <div class="tk-ops-title">Por módulo (penúltima / última operación de cada módulo)</div>
+    <table class="tabla"><thead><tr><th>Área</th><th class="izq">Módulo</th><th>N°OP máx</th><th>Penúltima</th><th>Última</th><th>Fecha últ.</th></tr></thead><tbody>${mods}</tbody></table>
+    <div class="tk-ops-title" style="margin-top:10px;">Trazabilidad por área (entró / salió)</div>
+    <table class="tabla"><thead><tr><th>Área</th><th>Entró</th><th>Salió</th><th>Cant.</th></tr></thead><tbody>${trz}</tbody></table>
+  </div>`;
 }
 function descargarAvof(){
   const rows=AVOF._rows||[]; if(!rows.length){ mostrarError("No hay datos para descargar"); return; }
-  const CAB=["Artículo","OF","Cant programada","Estado","Último módulo","Fecha última op","Cant realizada"];
-  const filas=rows.map(it=>[it.articulo,it.of,it.prog,it.estado,it.ultimo_modulo,it.fecha_ultima,it.real]);
-  const ws=XLSX.utils.aoa_to_sheet([CAB,...filas]); const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,"AvanceOF"); XLSX.writeFile(wb,`AVANCE_OF_${AVOF.area}.xlsx`);
+  const CAB=["Artículo","OF","Área actual","Módulo actual","Cant programada","Cant reportada","Estado"];
+  const filas=rows.map(r=>[r.articulo,r.of,r.area,r.modulo,r.prog,r.real,r.estado]);
+  const det=[["OF","Área","Módulo","N°OP máx","Penúltima","Última","Fecha últ."]];
+  rows.forEach(r=>(r.it.modulos||[]).forEach(m=>det.push([r.of,m.area,m.modulo,m.nop_max,m.cant_penultima,m.cant_ultima,m.fecha_ultima])));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "ResumenOF");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(det), "PorModulo");
+  XLSX.writeFile(wb,"RESUMEN_OF.xlsx");
 }
 
 /* ================= TICKETS DEL DÍA ================= */
@@ -1749,9 +1768,14 @@ async function liberarLote(){
   const motivo=prompt(`Liberar ${codigos.length} ticket(s) seleccionado(s).\nMotivo:`);
   if(motivo===null) return;
   try{
-    const r=await rpc("fn_liberar_lote",{p_dni:ING.dni,p_token:ING.token,
-      p_codigos:codigos,p_motivo:motivo.trim()});
-    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
+    // Los códigos son únicos SOLO por área → agrupar por área antes de liberar.
+    const areaDe={}; TK.forEach(t=>{ if(t && t.codigo!=null) areaDe[String(t.codigo)]=t.area; });
+    const porArea={}; codigos.forEach(c=>{ const a=areaDe[String(c)]||tkArea||""; (porArea[a]=porArea[a]||[]).push(c); });
+    for(const a of Object.keys(porArea)){
+      const r=await rpc("fn_liberar_lote",{p_dni:ING.dni,p_token:ING.token,
+        p_codigos:porArea[a],p_motivo:motivo.trim(),p_area:a||null});
+      if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
+    }
     modoLibTk=false; libSel={};
     const bm=$("btnModoLiberar"); if(bm){ bm.textContent="LIBERAR EN LOTE"; bm.classList.remove("gris"); }
     const bs=$("btnLiberarSel"); if(bs) bs.style.display="none";
@@ -1856,14 +1880,15 @@ async function liberarTicket(i){
   if(motivo===null) return;
   try{
     const r = await rpc("fn_liberar_ticket",{p_dni:ING.dni,p_token:ING.token,
-      p_codigo:t.codigo,p_motivo:motivo.trim()});
+      p_codigo:t.codigo,p_motivo:motivo.trim(),p_area:t.area});
     if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
     await cargarTk();
   }catch(e){ mostrarError(e.message); }
 }
 
 /* ---- Tickets · Reclamados x Operación (por OF, sin filtro de fecha) ---- */
-let TKOP={items:[],of:"",area:"",_rows:[]}, tkOpSort={col:null,dir:1};
+let TKOP={items:[],of:"",area:"",_rows:[]}, tkOpSort={col:null,dir:1}, tkOpMarc={}, tkOpPag=1;
+const TKOP_PAGE=10;
 function tkVista(v){
   const op=v==="op";
   $("tkActualView").hidden=op; $("tkOpView").hidden=!op;
@@ -1876,6 +1901,7 @@ async function cargarTkOp(){
   if(!area){ mostrarError("Elige el área"); return; }
   if(!of){ mostrarError("Escribe la OF"); return; }
   $("tablaTkOp").innerHTML=cargandoHTML("Cargando…"); $("tkOpResumen").textContent="";
+  tkOpMarc={}; tkOpPag=1;
   try{
     const r=await rpc("fn_reclamos_por_of",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_of:of});
     if(!r.ok){ mostrarError(r.error||"Error"); $("tablaTkOp").innerHTML=""; return; }
@@ -1885,7 +1911,16 @@ async function cargarTkOp(){
     pintarTkOp();
   }catch(e){ $("tablaTkOp").innerHTML=""; mostrarError(e.message); }
 }
+function tkOpFiltrar(){ tkOpPag=1; pintarTkOp(); }
 function ordenarTkOp(col){ if(tkOpSort.col===col) tkOpSort.dir*=-1; else tkOpSort={col,dir:1}; pintarTkOp(); }
+function tkOpToggle(c){ if(tkOpMarc[c]) delete tkOpMarc[c]; else tkOpMarc[c]=true; pintarTkOp(); }
+function tkOpPagina(d){ tkOpPag+=d; pintarTkOp(); }
+function tkOpMarcarVisibles(){
+  const act=(TKOP._rows||[]).filter(t=>t.estado==='ACTIVO');
+  const faltan=act.some(t=>!tkOpMarc[t.codigo]);
+  act.forEach(t=>{ if(faltan) tkOpMarc[t.codigo]=true; else delete tkOpMarc[t.codigo]; });
+  pintarTkOp();
+}
 function pintarTkOp(){
   const opSel=$("tkOpSel").value, q=normKey($("tkOpBuscar").value), ocultarLib=$("tkOpOcultarLib").checked;
   let rows=(TKOP.items||[]).filter(t=>{
@@ -1897,26 +1932,48 @@ function pintarTkOp(){
   if(tkOpSort.col){ const c=tkOpSort.col; rows.sort((a,b)=>{ const va=a[c],vb=b[c],na=parseFloat(va),nb=parseFloat(vb);
     const cc=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es"); return cc*tkOpSort.dir; }); }
   TKOP._rows=rows;
-  $("tkOpResumen").textContent=`OF ${esc(TKOP.of)} · ${rows.length} ticket(s)`;
+  const totP=Math.max(1,Math.ceil(rows.length/TKOP_PAGE));
+  if(tkOpPag>totP) tkOpPag=totP; if(tkOpPag<1) tkOpPag=1;
+  const pag=rows.slice((tkOpPag-1)*TKOP_PAGE, tkOpPag*TKOP_PAGE);
+  const nsel=Object.keys(tkOpMarc).length;
+  $("tkOpResumen").textContent=`OF ${esc(TKOP.of)} · ${rows.length} ticket(s) · ${nsel} seleccionado(s)`;
+  const bs=$("tkOpLiberarSel"); if(bs) bs.textContent=`Liberar selección (${nsel})`;
   const fl=k=>tkOpSort.col===k?(tkOpSort.dir===1?" ▲":" ▼"):"";
   const COLS=[["nombre","Nombre"],["dni","DNI"],["op","Operación"],["hora","Fecha/hora reclamado"],["numeracion","Numeración"],["estado","Estado"]];
-  const thead=`<thead><tr>${COLS.map(c=>`<th class="ord${c[0]==="nombre"?" izq":""}" onclick="ordenarTkOp('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}<th></th></tr></thead>`;
-  const body=rows.length? rows.map(t=>`<tr${t.estado==='LIBERADO'?' style="opacity:.55;"':''}>
+  const thead=`<thead><tr><th></th>${COLS.map(c=>`<th class="ord${c[0]==="nombre"?" izq":""}" onclick="ordenarTkOp('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}<th></th></tr></thead>`;
+  const body=pag.length? pag.map(t=>`<tr${t.estado==='LIBERADO'?' style="opacity:.55;"':''}>
+      <td>${t.estado==='ACTIVO'?`<input type="checkbox" class="sw" ${tkOpMarc[t.codigo]?"checked":""} onclick="tkOpToggle('${esc(t.codigo)}')">`:""}</td>
       <td class="izq">${esc(t.nombre)}</td><td>${esc(t.dni)}</td><td>${esc(t.op)}</td>
       <td>${esc(t.hora)}</td><td>${esc(t.numeracion||"—")}</td>
       <td><span class="pill ${t.estado==='ACTIVO'?'ACTIVO':'FALTA'}">${esc(t.estado)}</span></td>
       <td>${t.estado==='ACTIVO'?`<button class="btn-mini rojo" onclick="liberarTkOp('${esc(t.codigo)}')">LIBERAR</button>`:""}</td></tr>`).join("")
-    : `<tr><td colspan="7"><div class="vacio-msg">Sin tickets reclamados para esta OF</div></td></tr>`;
+    : `<tr><td colspan="8"><div class="vacio-msg">Sin tickets reclamados para esta OF</div></td></tr>`;
   $("tablaTkOp").innerHTML=thead+"<tbody>"+body+"</tbody>";
+  const pg=$("tkOpPager");
+  if(pg) pg.innerHTML = totP>1
+    ? `<button class="btn-mini" ${tkOpPag<=1?"disabled":""} onclick="tkOpPagina(-1)">‹ Anterior</button>
+       <span class="sub" style="margin:0 8px;">${tkOpPag}/${totP}</span>
+       <button class="btn-mini" ${tkOpPag>=totP?"disabled":""} onclick="tkOpPagina(1)">Siguiente ›</button>` : "";
 }
 async function liberarTkOp(codigo){
   const t=(TKOP.items||[]).find(x=>x.codigo===codigo);
   const motivo=prompt(`Liberar el ticket ${t?(t.numeracion||codigo):codigo} tomado por ${t?t.nombre:""}.\nMotivo:`);
   if(motivo===null) return;
   try{
-    const r=await rpc("fn_liberar_ticket",{p_dni:ING.dni,p_token:ING.token,p_codigo:codigo,p_motivo:(motivo||"").trim()});
+    const r=await rpc("fn_liberar_ticket",{p_dni:ING.dni,p_token:ING.token,p_codigo:codigo,p_motivo:(motivo||"").trim(),p_area:TKOP.area});
     if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
-    await cargarTkOp();
+    delete tkOpMarc[codigo]; await cargarTkOp();
+  }catch(e){ mostrarError(e.message); }
+}
+async function liberarTkOpLote(){
+  const cods=Object.keys(tkOpMarc);
+  if(!cods.length){ mostrarError("No hay tickets seleccionados"); return; }
+  const motivo=prompt(`Liberar ${cods.length} ticket(s) seleccionado(s).\nMotivo:`);
+  if(motivo===null) return;
+  try{
+    const r=await rpc("fn_liberar_lote",{p_dni:ING.dni,p_token:ING.token,p_codigos:cods,p_motivo:motivo.trim(),p_area:TKOP.area});
+    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
+    tkOpMarc={}; await cargarTkOp();
   }catch(e){ mostrarError(e.message); }
 }
 
