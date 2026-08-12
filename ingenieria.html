@@ -460,7 +460,7 @@
     <!-- ===================== RESUMEN DE OF ===================== -->
     <section class="pantalla" id="pasoAvOF">
       <div class="seccion-cab"><h1>Resumen de OF</h1>
-        <p class="seccion-sub">OFs en proceso: área/módulo actual, cantidades (programada vs reportada) y trazabilidad. Toca ▾ para el detalle por módulo y área.</p></div>
+        <p class="seccion-sub">Qué OF está lista y cuál sigue en proceso, en qué módulo va y cuándo entró/salió de cada área. Un módulo cerrado cuenta como completado. Toca ▾ para el detalle.</p></div>
       <div class="barra-control">
         <label class="campo"><span>Rango</span><input type="text" id="avofRango" placeholder="Selecciona fechas" readonly style="min-width:200px;cursor:pointer;"></label>
         <label class="campo"><span>Operación</span>
@@ -468,7 +468,10 @@
             <option value="penultima" selected>Penúltima operación</option>
             <option value="ultima">Última operación</option>
           </select></label>
+        <label class="campo"><span>Área</span>
+          <select id="avofArea" onchange="avofPintar()"><option value="">Todas las áreas</option></select></label>
         <label class="campo"><span>Buscar</span><input type="text" id="avofBuscar" placeholder="Artículo / OF…" oninput="avofPintar()"></label>
+        <label class="chk-inline" title="Prendido: solo las OF completadas. Apagado: solo las que siguen en proceso."><input type="checkbox" class="sw" id="avofSoloCompl" onchange="avofPintar()"> Solo completados</label>
         <button class="btn-mini" onclick="cargarAvof()">Cargar</button>
         <button class="btn-mini verde" onclick="descargarAvof()">⬇ Descargar</button>
       </div>

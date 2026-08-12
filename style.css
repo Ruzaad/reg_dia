@@ -4,6 +4,7 @@
   --blanco:#FAFAFA; --gris-fondo:#F0F2F5; --texto:#212529;
   --exito:#1E7B3C; --alerta:#B3261E; --tomado:#9aa4b1;
   --dorado:#C9A227;
+  --sw-on:var(--enlace); --sw-off:#E1E5EB;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 /* Evita que la "escala de fuente" del sistema (Android/iOS) infle el texto y
@@ -236,6 +237,9 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .pill.FALTA,.pill.DM,.pill.VACACIONES{background:#fdecea;color:var(--alerta);}
 .pill.ACTIVO{background:#eef7f0;color:var(--exito);}
 .pill.LIBERADO{background:#fdecea;color:var(--alerta);}
+/* Avance de OF/módulo: en curso (ocre) y cerrado por ingeniería (azul), no error. */
+.pill.PROCESO{background:#fdf3e4;color:#8a5f18;}
+.pill.CERRADO{background:#e9eefa;color:var(--azul);}
 .contenedor-ancho{max-width:1100px;margin:0 auto;width:100%;}
 .diff-box{background:var(--blanco);border-radius:12px;padding:14px;margin-bottom:10px;
   box-shadow:0 2px 6px rgba(13,59,133,.10);}
@@ -364,13 +368,15 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 
 /* Checkbox estilo toggle iOS compacto (reutilizable) */
 .sw,.chk-lib{appearance:none;-webkit-appearance:none;position:relative;flex:0 0 auto;
-  width:40px;height:22px;border-radius:999px;background:#E1E5EB;cursor:pointer;
+  width:40px;height:22px;min-width:40px;border-radius:999px;background:var(--sw-off);cursor:pointer;
   vertical-align:middle;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1);transition:background .25s ease;margin:0;}
 .sw::after,.chk-lib::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;
   border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);
   transition:left .2s cubic-bezier(.175,.885,.32,1.275);}
-.sw:checked,.chk-lib:checked{background:#0D7EFF;}
+.sw:checked,.chk-lib:checked{background:var(--sw-on);}
 .sw:checked::after,.chk-lib:checked::after{left:20px;}
+/* El foco global (3px + offset 2px) desborda la píldora: aro fino y pegado. */
+.sw:focus-visible,.chk-lib:focus-visible{outline:2px solid var(--enlace);outline-offset:2px;border-radius:999px;}
 
 /* Filtros de supervisión más visibles (personal 30-40 años) */
 #pasoPersonal .zona-of{max-width:620px;}
@@ -446,7 +452,7 @@ body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",mono
 .barra-control select,.barra-control input[type=text],.barra-control input[type=date]{
   background:var(--gris-fondo);border:2px solid #cfd8e6;border-radius:10px;
   font-size:15px;font-weight:600;padding:9px 12px;color:var(--texto);outline:none;min-height:42px;}
-.barra-control select:hover,.barra-control input:hover{border-color:var(--enlace);}
+.barra-control select:hover,.barra-control input:not(.sw):not(.chk-lib):hover{border-color:var(--enlace);}
 .barra-control input[type=number]{background:var(--gris-fondo);border:2px solid #cfd8e6;
   border-radius:10px;font-size:15px;font-weight:600;padding:9px 12px;color:var(--texto);
   outline:none;min-height:42px;max-width:150px;}
@@ -456,8 +462,8 @@ body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",mono
   background:var(--gris-fondo);border:2px solid #cfd8e6;border-radius:10px;
   padding:9px 12px;min-height:42px;}
 .barra-control .campo-check:hover{border-color:var(--enlace);}
-.barra-control .campo-check input[type=checkbox]{width:18px;height:18px;accent-color:var(--azul);
-  cursor:pointer;margin:0;flex:0 0 auto;}
+.barra-control .campo-check input[type=checkbox]:not(.sw):not(.chk-lib){width:18px;height:18px;
+  accent-color:var(--azul);cursor:pointer;margin:0;flex:0 0 auto;}
 .barra-control .campo-check span{font-size:14px;font-weight:700;text-transform:none;
   letter-spacing:0;color:var(--texto);}
 /* Config de empaquetado por tarjeta (Generar tickets) */
@@ -606,6 +612,8 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .avof-det-wrap{background:var(--gris-fondo);border-radius:12px;padding:12px 14px;margin:4px 0;}
 .avof-det-wrap .tabla{background:var(--blanco);}
 .avof-det td[colspan]{padding:0;}
+/* Módulo sin ruta en BASE: el N°OP máx es el mayor reclamado, no el planificado. */
+.avof-aviso{color:var(--alerta);font-weight:800;cursor:help;margin-left:2px;}
 .ing-main{flex:1;min-width:0;overflow-y:auto;padding:18px;position:relative;}
 .ing-main .pantalla{padding:0;overflow:visible;}
 
@@ -673,7 +681,7 @@ body.sidebar-cerrada .ing-sidebar{display:none;}
 /* Checkbox inline dentro de la barra de control */
 .chk-inline{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;
   color:var(--azul);cursor:pointer;align-self:center;user-select:none;}
-.chk-inline input{width:17px;height:17px;cursor:pointer;}
+.chk-inline input:not(.sw):not(.chk-lib){width:17px;height:17px;cursor:pointer;}
 /* Operaciones colapsables dentro del módulo */
 details.mod-op>summary.mod-op-head{cursor:pointer;list-style:none;}
 details.mod-op>summary.mod-op-head::-webkit-details-marker{display:none;}

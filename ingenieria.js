@@ -121,6 +121,7 @@ function poblarSelectsArea(){
   if($("areaFec")) $("areaFec").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("areaInci")) $("areaInci").innerHTML = todas + AREAS_LISTA.map(op).join("");
   if($("areaModEf")) $("areaModEf").innerHTML = elige + AREAS_LISTA.map(op).join("");
+  if($("avofArea")) $("avofArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
   // Operaciones por OF: solo áreas con Sheet configurado (las de AREAS de app.js).
   if($("opfArea")) $("opfArea").innerHTML = elige + Object.keys(AREAS).map(op).join("");
   // Generar tickets: solo áreas con Sheet (las de AREAS de app.js).
@@ -1615,7 +1616,10 @@ async function cargarDbMod(){
   }catch(e){ mostrarError(e.message); }
 }
 
-/* --- Resumen de OF (trazabilidad cross-área; programado = hoja "OF") --- */
+/* --- Resumen de OF (trazabilidad cross-área; programado = hoja "OF") ---
+   Módulo COMPLETADO = ingeniería lo cerró (modulos_cerrados) o su última
+   operación alcanzó la cant. programada. La OF está lista cuando lo están
+   todos sus módulos. El N°OP máx lo da la ruta del módulo en BASE. */
 async function cargarAvof(){
   dbEnsureFp();
   const o=DB.avofSel; if(!o.desde||!o.hasta){ mostrarError("Elige el rango"); return; }
@@ -1635,23 +1639,39 @@ async function avofMeta(){
   }
   return m;
 }
-function avofFila(it,nivel){
-  const cur=(it.modulos&&it.modulos[0])||{};
+/* Meta de la OF. cargarMetaOF devuelve 0 si la celda CANT PROG viene vacía:
+   eso es "sin dato", no "programado cero". */
+function avofProg(of){ const v=AVOF.meta[normKey(of||"")]; return v>0?v:null; }
+/* Cerrado por ingeniería ⇒ completado, aunque la cantidad reportada no llegue. */
+function avofModCompleto(m,prog){
+  return m.cerrado===true || (prog!=null && (Number(m.cant_ultima)||0)>=prog);
+}
+const avofReciente = a => a.slice().sort((x,y)=>String(y.fecha_ultima||"").localeCompare(String(x.fecha_ultima||"")))[0];
+function avofFila(it,nivel,area){
+  const prog=avofProg(it.of);
+  const mods=(it.modulos||[]).filter(m=>!area||m.area===area);
+  const pend=mods.filter(m=>!avofModCompleto(m,prog));
+  const cur=avofReciente(pend.length?pend:mods)||{};   // dónde está la OF ahora mismo
   const real=nivel==="ultima"?(cur.cant_ultima||0):(cur.cant_penultima||0);
-  const k=normKey(it.of||"");
-  const prog=AVOF.meta[k]!==undefined?AVOF.meta[k]:null;
   return {of:it.of, articulo:it.articulo, area:cur.area||"—", modulo:cur.modulo||"—",
-    prog, real, estado:(prog!=null&&real>=prog)?"COMPLETADO":"PROCESO", it};
+    prog, real, mods,
+    estado:(mods.length && !pend.length)?"COMPLETADO":"PROCESO", it};
 }
 function avofPintar(){
   const nivel=$("avofNivel")?$("avofNivel").value:"penultima";
+  const area=$("avofArea")?$("avofArea").value:"";
+  const soloCompl=$("avofSoloCompl")?$("avofSoloCompl").checked:false;
   const q=normKey($("avofBuscar")?$("avofBuscar").value:"");
-  let rows=(AVOF.items||[]).map(it=>avofFila(it,nivel))
+  const todas=(AVOF.items||[]).map(it=>avofFila(it,nivel,area))
+    .filter(r=>r.mods.length)
     .filter(r=>!q||normKey((r.articulo||"")+" "+(r.of||"")).includes(q));
+  const nCompl=todas.filter(r=>r.estado==="COMPLETADO").length;
+  let rows=todas.filter(r=>r.estado===(soloCompl?"COMPLETADO":"PROCESO"));
   if(avofSort.col){ const c=avofSort.col; rows.sort((a,b)=>{ const va=a[c],vb=b[c],na=parseFloat(va),nb=parseFloat(vb);
     const cc=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es"); return cc*avofSort.dir; }); }
   AVOF._rows=rows;
-  $("avofResumen").textContent=`${rows.length} OF · ${rows.filter(r=>r.estado==="COMPLETADO").length} completada(s) · operación ${nivel==="ultima"?"última":"penúltima"}`;
+  $("avofResumen").textContent=`${nCompl} completada(s) · ${todas.length-nCompl} en proceso`
+    + ` · ${area||"todas las áreas"} · operación ${nivel==="ultima"?"última":"penúltima"}`;
   const fl=k=>avofSort.col===k?(avofSort.dir===1?" ▲":" ▼"):"";
   const C=[["articulo","Artículo"],["of","OF"],["area","Área actual"],["modulo","Módulo actual"],["prog","Cant. prog."],["real","Cant. reportada"],["estado","Estado"]];
   const thead=`<thead><tr><th></th>${C.map(c=>`<th class="ord${c[0]==="articulo"?" izq":""}" onclick="ordenarAvof('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}</tr></thead>`;
@@ -1660,30 +1680,44 @@ function avofPintar(){
       <td class="izq"><b>${esc(r.articulo||"—")}</b></td><td>${esc(r.of)}</td>
       <td>${esc(r.area)}</td><td>${esc(r.modulo)}</td>
       <td>${r.prog!=null?Math.round(r.prog):"—"}</td><td><b>${Math.round(r.real||0)}</b></td>
-      <td><span class="pill ${r.estado==="COMPLETADO"?"ACTIVO":"DM"}">${r.estado}</span></td></tr>
-      <tr class="avof-det" id="avofDet${i}" hidden><td></td><td colspan="7">${avofDetalle(r.it)}</td></tr>`).join("")
-    : `<tr><td colspan="8"><div class="vacio-msg">Sin OF con reclamos en el rango</div></td></tr>`;
+      <td><span class="pill ${r.estado==="COMPLETADO"?"ACTIVO":"PROCESO"}">${r.estado}</span></td></tr>
+      <tr class="avof-det" id="avofDet${i}" hidden><td></td><td colspan="7">${avofDetalle(r)}</td></tr>`).join("")
+    : `<tr><td colspan="8"><div class="vacio-msg">Sin OF ${soloCompl?"completadas":"en proceso"} con este filtro</div></td></tr>`;
   $("avofTabla").innerHTML=thead+"<tbody>"+body+"</tbody>";
 }
 function avofToggle(i){ const el=$("avofDet"+i); if(el) el.hidden=!el.hidden; }
-function avofDetalle(it){
-  const mods=(it.modulos||[]).map(m=>`<tr><td>${esc(m.area)}</td><td class="izq">${esc(m.modulo)}</td><td>${m.nop_max}</td><td>${m.cant_penultima}</td><td>${m.cant_ultima}</td><td>${esc(m.fecha_ultima||"—")}</td></tr>`).join("")
-    ||`<tr><td colspan="6"><div class="vacio-msg">Sin módulos</div></td></tr>`;
-  const trz=(it.areas||[]).map(a=>`<tr><td>${esc(a.area)}</td><td>${esc(a.entrada||"—")}</td><td>${esc(a.salida||"—")}</td><td>${a.cantidad}</td></tr>`).join("")
-    ||`<tr><td colspan="4"><div class="vacio-msg">Sin trazas</div></td></tr>`;
+function avofEstadoMod(m,prog){ return m.cerrado?"CERRADO":(avofModCompleto(m,prog)?"COMPLETADO":"PROCESO"); }
+function avofDetalle(r){
+  const pill=t=>`<span class="pill ${t==="CERRADO"?"CERRADO":(t==="COMPLETADO"||t==="LISTO")?"ACTIVO":"PROCESO"}">${t}</span>`;
+  const sinRuta=`<span class="avof-aviso" title="Este módulo no tiene ruta en BASE: se usa el mayor N°OP reclamado.">*</span>`;
+  const mods=(r.mods||[]).map(m=>`<tr><td>${esc(m.area)}</td><td class="izq">${esc(m.modulo)}</td>
+      <td>${m.nop_max==null?"—":m.nop_max}${m.ruta_base===false?sinRuta:""}</td>
+      <td class="izq">${esc(m.op_ultima||"—")}</td><td>${m.cant_penultima}</td><td>${m.cant_ultima}</td>
+      <td>${esc(m.fecha_entrada||"—")}</td><td>${esc(m.fecha_ultima||"—")}</td>
+      <td>${pill(avofEstadoMod(m,r.prog))}</td></tr>`).join("")
+    ||`<tr><td colspan="9"><div class="vacio-msg">Sin módulos</div></td></tr>`;
+  const porArea={};
+  (r.mods||[]).forEach(m=>{ const a=porArea[m.area]=porArea[m.area]||{n:0,ok:0};
+    a.n++; if(avofModCompleto(m,r.prog)) a.ok++; });
+  const trz=(r.it.areas||[]).filter(a=>porArea[a.area]).map(a=>{
+    const s=porArea[a.area], listo=s.ok===s.n;
+    return `<tr><td>${esc(a.area)}</td><td>${esc(a.entrada||"—")}</td><td>${esc(a.salida||"—")}</td>
+      <td>${a.cantidad}</td><td>${s.ok}/${s.n}</td><td>${pill(listo?"LISTO":"EN PROCESO")}</td></tr>`;
+  }).join("")||`<tr><td colspan="6"><div class="vacio-msg">Sin trazas</div></td></tr>`;
   return `<div class="avof-det-wrap">
     <div class="tk-ops-title">Por módulo (penúltima / última operación de cada módulo)</div>
-    <table class="tabla"><thead><tr><th>Área</th><th class="izq">Módulo</th><th>N°OP máx</th><th>Penúltima</th><th>Última</th><th>Fecha últ.</th></tr></thead><tbody>${mods}</tbody></table>
+    <table class="tabla"><thead><tr><th>Área</th><th class="izq">Módulo</th><th>N°OP máx</th><th class="izq">Última op.</th><th>Penúltima</th><th>Última</th><th>Entró</th><th>Fecha últ.</th><th>Estado</th></tr></thead><tbody>${mods}</tbody></table>
     <div class="tk-ops-title" style="margin-top:10px;">Trazabilidad por área (entró / salió)</div>
-    <table class="tabla"><thead><tr><th>Área</th><th>Entró</th><th>Salió</th><th>Cant.</th></tr></thead><tbody>${trz}</tbody></table>
+    <table class="tabla"><thead><tr><th>Área</th><th>Entró</th><th>Salió</th><th>Cant.</th><th>Módulos listos</th><th>Estado</th></tr></thead><tbody>${trz}</tbody></table>
   </div>`;
 }
 function descargarAvof(){
   const rows=AVOF._rows||[]; if(!rows.length){ mostrarError("No hay datos para descargar"); return; }
   const CAB=["Artículo","OF","Área actual","Módulo actual","Cant programada","Cant reportada","Estado"];
   const filas=rows.map(r=>[r.articulo,r.of,r.area,r.modulo,r.prog,r.real,r.estado]);
-  const det=[["OF","Área","Módulo","N°OP máx","Penúltima","Última","Fecha últ."]];
-  rows.forEach(r=>(r.it.modulos||[]).forEach(m=>det.push([r.of,m.area,m.modulo,m.nop_max,m.cant_penultima,m.cant_ultima,m.fecha_ultima])));
+  const det=[["OF","Área","Módulo","N°OP máx","Última op.","Penúltima","Última","Entró","Fecha últ.","Cerrado","Estado"]];
+  rows.forEach(r=>(r.mods||[]).forEach(m=>det.push([r.of,m.area,m.modulo,m.nop_max,m.op_ultima,
+    m.cant_penultima,m.cant_ultima,m.fecha_entrada,m.fecha_ultima,m.cerrado?"SÍ":"NO",avofEstadoMod(m,r.prog)])));
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "ResumenOF");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(det), "PorModulo");
