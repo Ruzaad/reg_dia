@@ -91,6 +91,14 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .badge-disp.vacio{background:var(--tomado);}
 .chip-color{display:inline-block;width:14px;height:14px;border-radius:4px;
   vertical-align:-2px;margin-right:5px;border:1px solid #ccc;}
+/* Mis paquetes: editor en línea para declarar la cantidad realmente hecha. */
+.mp-editor{margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.mp-editor input{flex:0 0 120px;width:120px;background:var(--blanco);
+  border:3px solid var(--azul);border-radius:12px;font-size:26px;font-weight:800;
+  padding:8px 10px;text-align:center;color:var(--texto);outline:none;}
+.mp-editor input:focus{border-color:var(--enlace);}
+.mp-editor .btn-mini{font-size:16px;padding:10px 16px;}
+.card-fila .mp-nota{font-size:15px;color:var(--ocre);font-weight:800;margin-top:4px;}
 
 /* ---- buscador OF ---- */
 .zona-of{max-width:560px;width:100%;margin:0 auto;}

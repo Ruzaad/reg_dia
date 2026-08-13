@@ -76,7 +76,11 @@
   <!-- ACABADO: OF (artículo · color) → operación → cantidad -->
   <section class="pantalla" id="pasoAcabOF">
     <h1>¿En qué OF trabajas?</h1>
-    <div class="sub">Toca la OF, o registra un trabajo sin OF</div>
+    <div class="sub">Escribe la OF o el artículo para filtrar, o toca directamente</div>
+    <div class="zona-of">
+      <input class="input-grande" id="acabBuscaOF" placeholder="OF o artículo…" autocomplete="off"
+        oninput="pintarAcabOF()">
+    </div>
     <div class="lista-cards" id="listaAcabOF"></div>
   </section>
 

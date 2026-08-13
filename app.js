@@ -461,10 +461,17 @@ async function enviarSolicitudAjuste(){
     setTimeout(()=>ex.classList.remove("visible"),2200);
   }catch(e){ $("saMsg").textContent=e.message; }
 }
+/* Artículo de una OF, desde los tickets ya cargados. */
+function artDeOF(of){
+  if(!of || !ALM || !ALM.tickets) return "";
+  const t=ALM.tickets.find(x=>x.of===of && norm(x.articulo));
+  return t ? norm(t.articulo) : "";
+}
 function pintarCrumb(id){
   const el=$("crumbOF"); if(!el) return;
   if(id==="pasoCarga" || id==="pasoOF" || !sel.of){ el.style.display="none"; el.innerHTML=""; return; }
-  const partes=[`OF <b>${esc(sel.of)}</b>`];
+  const art=artDeOF(sel.of);
+  const partes=[(art?`<b>${esc(art)}</b> · `:"")+`OF <b>${esc(sel.of)}</b>`];
   if(sel.modulo) partes.push(`Módulo <b>${esc(sel.modulo)}</b>`);
   if(sel.op)     partes.push(`Operación <b>${esc(sel.op)}</b>`);
   el.innerHTML = partes.join(' <span class="crumb-sep">\u203A</span> ');
@@ -609,7 +616,8 @@ async function cargarAcabado(s, area){
 function acabPct(hecho, meta){ return meta>0 ? Math.min(100, Math.round(hecho/meta*100)) : 0; }
 function pintarAcabOF(){
   const l=$("listaAcabOF"); l.innerHTML="";
-  if(ACAB.extra.length){
+  const q=normKey(($("acabBuscaOF")||{}).value||"");
+  if(ACAB.extra.length && !q){
     const c=document.createElement("div");
     c.className="card-fila";
     c.innerHTML=`<div><div class="cf-titulo">SIN OF</div>
@@ -619,6 +627,7 @@ function pintarAcabOF(){
     l.appendChild(c);
   }
   ACAB.ofs.forEach((o,i)=>{
+    if(q && !normKey((o.of||"")+" "+(o.articulo||"")).includes(q)) return;
     const ops=o.operaciones||[];
     const pend=ops.filter(x=>Number(x.hecho)<Number(o.cant_prog)).length;
     const c=document.createElement("div");
@@ -631,7 +640,9 @@ function pintarAcabOF(){
     c.onclick=()=>{ ACAB.of=ACAB.ofs[i]; pintarAcabOps(); irA("pasoAcabOp"); };
     l.appendChild(c);
   });
-  if(!l.children.length) l.innerHTML=`<div class="vacio-msg">No hay OF con trabajo pendiente en esta área.</div>`;
+  if(!l.children.length) l.innerHTML=`<div class="vacio-msg">${q
+    ? `Ninguna OF o artículo contiene "${esc(($("acabBuscaOF")||{}).value||"")}"`
+    : "No hay OF con trabajo pendiente en esta área."}</div>`;
 }
 function pintarAcabOps(){
   const o=ACAB.of; if(!o) return;
@@ -721,14 +732,15 @@ function pintarMisPaq(){
   MISPAQ.forEach((p,i)=>{
     const c=document.createElement("div");
     c.className="card-fila"+(p.ajustado?" marcada":"");
-    const est = p.ajustado ? `<b>${qty(p.cant)}</b> de ${qty(p.asignada)} und` : `<b>${qty(p.cant)}</b> und · completo`;
+    const est = p.ajustado
+      ? `<div class="mp-nota">Hiciste ${qty(p.cant)} de ${qty(p.asignada)} und</div>`
+      : `<div class="cf-detalle"><b>${qty(p.cant)}</b> und · completo</div>`;
     c.innerHTML=`<div style="flex:1;">
-        <div class="cf-titulo">${esc(p.op)}</div>
+        <div class="cf-titulo">${esc(p.articulo?p.articulo+" · ":"")}${esc(p.op)}</div>
         <div class="cf-detalle">OF ${esc(p.of||"—")} · ${esc(p.num||p.codigo)} · ${esc(p.fecha)} ${esc(p.hora)}</div>
-        <div class="cf-detalle">${est}</div>
-        <div id="mpEd${i}" hidden style="margin-top:8px;display:flex;gap:8px;align-items:center;">
-          <input type="number" id="mpCant${i}" min="1" max="${p.asignada-1}" inputmode="numeric"
-            placeholder="Hice…" style="max-width:110px;">
+        ${est}
+        <div class="mp-editor" id="mpEd${i}" hidden>
+          <input type="number" id="mpCant${i}" min="1" max="${p.asignada-1}" inputmode="numeric" placeholder="0">
           <button class="btn-mini verde" onclick="declararParcial(${i})">Guardar</button>
           <button class="btn-mini gris" onclick="mpEditar(${i},false)">Cancelar</button>
         </div>
@@ -809,14 +821,15 @@ function pintarSugerencias(){
   const ofs = {};
   ALM.tickets.forEach(t=>{
     if(t.of.includes(q)){
-      if(!ofs[t.of]) ofs[t.of]={total:0,libres:0};
+      if(!ofs[t.of]) ofs[t.of]={total:0,libres:0,art:norm(t.articulo)};
+      if(!ofs[t.of].art) ofs[t.of].art=norm(t.articulo);
       ofs[t.of].total++; if(libre(t)) ofs[t.of].libres++;
     }
   });
   Object.keys(ofs).sort().slice(0,8).forEach(of=>{
     const d=document.createElement("div");
     d.className="sug";
-    d.innerHTML=`<span>OF ${esc(of)}</span><small>${ofs[of].libres} de ${ofs[of].total} libres</small>`;
+    d.innerHTML=`<span>${ofs[of].art?esc(ofs[of].art)+" · ":""}OF ${esc(of)}</span><small>${ofs[of].libres} de ${ofs[of].total} libres</small>`;
     d.onclick=()=>{ sel.of=of; sel.modulo=null; sel.op=null; pintarModulos(); irA("pasoModulos"); };
     z.appendChild(d);
   });
@@ -825,7 +838,7 @@ function pintarSugerencias(){
 
 /* --- paso módulos --- */
 function pintarModulos(){
-  $("tituloModulos").textContent = "OF " + sel.of;
+  { const a=artDeOF(sel.of); $("tituloModulos").textContent = (a?a+" · ":"") + "OF " + sel.of; }
   const l=$("listaModulos"); l.innerHTML="";
   const mods={};
   ALM.tickets.forEach(t=>{
