@@ -227,6 +227,30 @@ async function cargarAreasDB(){
   return AREAS_DB;
 }
 
+/* ---------------- CONFIG DE ÁREAS DESDE SUPABASE ----------------
+   Fuente de verdad: tabla `areas_config` (area, sheet_id, hoja_almacen,
+   hoja_of). AREAS (arriba) queda solo como respaldo si la RPC falla.
+   Habilitar un área = darle fila con sheet_id; no hay que tocar código.
+   El mapa de cabeceras se deriva del nombre: ACABADO usa MAPA_ACABADO. */
+let AREAS_HIDRATADAS = false;
+async function hidratarAreas(){
+  if(AREAS_HIDRATADAS) return AREAS;
+  const s = sesionActual(); if(!s || !s.token) return AREAS;
+  try{
+    const r = await rpc("fn_areas_config_listar",{p_dni:s.dni, p_token:s.token});
+    if(!Array.isArray(r) || !r.length) return AREAS;
+    Object.keys(AREAS).forEach(a=>{ AREAS[a].habilitada = false; });
+    r.forEach(c=>{
+      const a = norm(c.area); if(!a || !norm(c.sheet_id)) return;
+      AREAS[a] = {habilitada:true, sheetId:norm(c.sheet_id),
+        hoja: norm(c.hoja_almacen)||"ALMACEN", hojaOF: norm(c.hoja_of)||null,
+        mapa: normKey(a)==="ACABADO" ? MAPA_ACABADO : MAPA_ESTANDAR};
+    });
+    AREAS_HIDRATADAS = true;
+  }catch(e){ console.warn("areas_config no disponible, uso AREAS locales:", e.message); }
+  return AREAS;
+}
+
 /* ---------------- LECTOR DE ALMACÉN (Google Sheets CSV) ---------------- */
 function parseCSV(texto){
   const filas=[]; let fila=[], campo="", dentro=false;
@@ -247,6 +271,7 @@ function parseCSV(texto){
 }
 
 async function cargarAlmacen(nombreArea){
+  await hidratarAreas();
   const cfg = AREAS[nombreArea];
   if(!cfg || !cfg.habilitada) throw new Error("Área no habilitada todavía");
   const url = `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(cfg.hoja)}`;
@@ -363,6 +388,7 @@ function initLogin(){
       guardarSesion({dni:r.dni, nombre:r.nombre, cargo:r.cargo, token:r.token, area:null});
       if(r.cargo==="INGENIERIA"){ location.href="ingenieria.html"; return; }
       $("nombreSaludo").textContent = "Hola, " + r.nombre.split(" ")[0];
+      await hidratarAreas();
       pintarAreas(r.cargo);
       irA("pasoArea");
     }catch(e){ $("msgLogin").textContent = e.message; }
@@ -392,7 +418,8 @@ let AREA_ESTAJERO = null;   // área elegida por el estajero para este reclamo (
 
 const VOLVER_OPERARIO = {
   pasoModulos:"pasoOF", pasoOps:"pasoModulos",
-  pasoTickets:"pasoOps", pasoConf:"pasoTickets"
+  pasoTickets:"pasoOps", pasoConf:"pasoTickets",
+  pasoAcabOp:"pasoAcabOF", pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF"
 };
 
 let sa={signo:-1};
@@ -454,9 +481,9 @@ function aplicarModoAcabado(){
   const oj=$("btnOjoEf"), rl=$("btnReloj");
   if(oj) oj.style.display = ES_ACABADO ? "none" : "";
   if(rl) rl.style.display = "";   // ajuste de tiempo disponible también en ACABADO
-  const subTk = document.querySelector('#pasoTickets .sub');
-  if(subTk) subTk.textContent = ES_ACABADO ? "Registra la cantidad de tu paquete" : "Busca la numeración de tu paquete";
   const lblConf=$("confLabel"); if(lblConf) lblConf.textContent = ES_ACABADO ? "Cantidad" : "Numeración";
+  // ACABADO ya no pasa por el almacén ni por "Mis paquetes": registra por cantidad.
+  const bmp=$("btnMisPaq"); if(bmp) bmp.style.display = ES_ACABADO ? "none" : "";
 }
 function initOperario(){
   const s = sesionActual();
@@ -496,8 +523,8 @@ function initOperario(){
     const btnCambiar=$("btnCambiarAreaEst");
     if(btnCambiar){ btnCambiar.style.display="block"; btnCambiar.onclick=()=>irA("pasoAreaEstajero"); }
     $("tituloArea").textContent = "ESTAJERO";
-    pintarAreasEstajero(s);
     irA("pasoAreaEstajero");
+    hidratarAreas().then(()=>pintarAreasEstajero(s));
   } else {
     AREA_ESTAJERO = s.area;
     $("tituloArea").textContent = s.area;
@@ -532,18 +559,20 @@ async function cargarTodo(s){
   const area = AREA_ESTAJERO || s.area;
   ES_ACABADO = (area === "ACABADO");
   aplicarModoAcabado();
-  $("zonaCarga").innerHTML = cargandoHTML("Cargando almacén de "+area+"…");
+  $("zonaCarga").innerHTML = cargandoHTML("Cargando "+(ES_ACABADO?"OFs":"almacén")+" de "+area+"…");
   try{
-    const [alm, recl, dia] = await Promise.all([
+    // ACABADO ya no lee el almacén: registra por cantidad contra el corte real.
+    if(ES_ACABADO){ await cargarAcabado(s, area); return; }
+    const [alm, recl, dia, res] = await Promise.all([
       cargarAlmacen(area),
       rpc("fn_reclamados", {p_dni:s.dni, p_token:s.token, p_area:area}),
-      ES_ACABADO
-        ? rpc("fn_acabado_metas", {p_dni:s.dni, p_token:s.token, p_area:area})
-        : rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token})
+      rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token}),
+      rpc("fn_residuales", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[])
     ]);
     ALM = alm;
+    if(Array.isArray(res) && res.length) ALM.tickets = ALM.tickets.concat(res.map(mapResidual));
     RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
-    if(ES_ACABADO) setMetasAcabado(dia); else setAvance(dia);
+    setAvance(dia);
     if(alm.duplicados.length) console.warn("Códigos duplicados en almacén:", alm.duplicados);
     irA("pasoOF");
   }catch(e){
@@ -551,6 +580,189 @@ async function cargarTodo(s){
     mostrarError("No se pudo cargar. Revisa la conexión y vuelve a intentar.");
   }
 }
+/* Un residual (-R1, -R2…) se comporta como un paquete más del almacén. */
+function mapResidual(r){
+  const std=Number(r.std)||0, cant=Number(r.cant)||0;
+  return {codigo:r.codigo, std, cant, nop:r.nop, of:norm(r.of), modulo:norm(r.modulo),
+    op:norm(r.op), talla:norm(r.talla), color:norm(r.color), corte:norm(r.corte),
+    num:norm(r.num)||norm(r.padre), articulo:norm(r.articulo),
+    minutos:Math.round(std*cant*10)/10, residual:true};
+}
+
+/* ================= ACABADO: registro por cantidad =================
+   Sin almacén y sin código: OF (artículo · color) → operación → cantidad,
+   con techo en el corte real de la OF. `fn_of_resumen` ignora los registros
+   sin OF, así que el trabajo de reproceso no ensucia el resumen. */
+let ACAB={ofs:[], extra:[], of:null, op:null, tipo:null};
+async function cargarAcabado(s, area){
+  const [ofs, extra, dia] = await Promise.all([
+    rpc("fn_acabado_ofs",{p_dni:s.dni,p_token:s.token,p_area:area}),
+    rpc("fn_extra_listar",{p_dni:s.dni,p_token:s.token,p_area:area,p_todas:false}).catch(()=>[]),
+    rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area})
+  ]);
+  if(ofs && ofs.ok===false) throw new Error(ofs.error||"No se pudieron cargar las OF");
+  ACAB={ofs:(ofs&&ofs.items)||[], extra:Array.isArray(extra)?extra:[], of:null, op:null, tipo:null};
+  setMetasAcabado(dia);
+  pintarAcabOF();
+  irA("pasoAcabOF");
+}
+function acabPct(hecho, meta){ return meta>0 ? Math.min(100, Math.round(hecho/meta*100)) : 0; }
+function pintarAcabOF(){
+  const l=$("listaAcabOF"); l.innerHTML="";
+  if(ACAB.extra.length){
+    const c=document.createElement("div");
+    c.className="card-fila";
+    c.innerHTML=`<div><div class="cf-titulo">SIN OF</div>
+      <div class="cf-detalle">Reproceso · muestra · arreglo</div></div>
+      <div class="badge-disp">${ACAB.extra.length} op.</div>`;
+    c.onclick=()=>{ ACAB.of=null; pintarAcabExtra(); irA("pasoAcabOp"); };
+    l.appendChild(c);
+  }
+  ACAB.ofs.forEach((o,i)=>{
+    const ops=o.operaciones||[];
+    const pend=ops.filter(x=>Number(x.hecho)<Number(o.cant_prog)).length;
+    const c=document.createElement("div");
+    c.className="card-fila";
+    c.innerHTML=`<div>
+        <div class="cf-titulo">${esc(o.articulo||"—")} · OF ${esc(o.of)}</div>
+        <div class="cf-detalle">${esc(o.colores||"—")} · ${qty(o.cant_prog)} und de corte</div>
+      </div>
+      <div class="badge-disp ${pend?"":"vacio"}">${pend} op. pendiente(s)</div>`;
+    c.onclick=()=>{ ACAB.of=ACAB.ofs[i]; pintarAcabOps(); irA("pasoAcabOp"); };
+    l.appendChild(c);
+  });
+  if(!l.children.length) l.innerHTML=`<div class="vacio-msg">No hay OF con trabajo pendiente en esta área.</div>`;
+}
+function pintarAcabOps(){
+  const o=ACAB.of; if(!o) return;
+  $("tituloAcabOp").textContent = `${o.articulo} · OF ${o.of}`;
+  $("subAcabOp").textContent = `${o.colores||"—"} · corte real ${qty(o.cant_prog)} und`;
+  const l=$("listaAcabOp"); l.innerHTML="";
+  (o.operaciones||[]).forEach((x,i)=>{
+    const meta=Number(o.cant_prog)||0, hecho=Number(x.hecho)||0, queda=Math.max(0,meta-hecho);
+    const pct=acabPct(hecho,meta);
+    const c=document.createElement("div");
+    c.className="card-fila"+(queda?"":" off");
+    c.innerHTML=`<div style="flex:1;">
+        <div class="cf-titulo">${esc(x.operacion)}</div>
+        <div class="cf-detalle">${qty(hecho)} de ${qty(meta)} und${Number(x.mio)?` · tú ${qty(x.mio)}`:""}</div>
+        <div class="avance-bar"><div class="avance-fill ${pct>=80?'alto':pct<40?'bajo':''}" style="width:${pct}%"></div>
+          <span class="avance-lbl">${pct}%</span></div>
+      </div>
+      <div class="badge-disp ${queda?"":"vacio"}">${queda?qty(queda)+" und":"completa"}</div>`;
+    if(queda) c.onclick=()=>{ ACAB.op=o.operaciones[i]; ACAB.tipo=null; acabPedirCant(); };
+    l.appendChild(c);
+  });
+}
+function pintarAcabExtra(){
+  $("tituloAcabOp").textContent = "Trabajo sin OF";
+  $("subAcabOp").textContent = "Reprocesos, muestras y arreglos: no descuentan de ninguna OF";
+  const l=$("listaAcabOp"); l.innerHTML="";
+  ACAB.extra.forEach((e,i)=>{
+    const c=document.createElement("div");
+    c.className="card-fila";
+    c.innerHTML=`<div><div class="cf-titulo">${esc(e.operacion)}</div>
+      <div class="cf-detalle">${esc(e.tipo)} · STD ${Number(e.std).toFixed(2)} min</div></div>`;
+    c.onclick=()=>{ ACAB.tipo=ACAB.extra[i]; ACAB.op=null; acabPedirCant(); };
+    l.appendChild(c);
+  });
+}
+function acabPedirCant(){
+  const e=ACAB.tipo, x=ACAB.op, o=ACAB.of;
+  $("tituloAcabCant").textContent = e ? e.operacion : x.operacion;
+  $("acabDet").innerHTML = e
+    ? `${esc(e.tipo)} · STD ${Number(e.std).toFixed(2)} min`
+    : `OF ${esc(o.of)} · ${esc(o.articulo)}<br>Quedan <b>${qty(Math.max(0,Number(o.cant_prog)-Number(x.hecho)))}</b> und de ${qty(o.cant_prog)}`;
+  $("acabCant").value="";
+  irA("pasoAcabCant");
+  setTimeout(()=>$("acabCant").focus(),150);
+}
+async function acabRegistrar(){
+  const cant=parseFloat(String($("acabCant").value).replace(/[^\d.]/g,""));
+  if(!cant || cant<=0){ mostrarError("Escribe la cantidad que hiciste"); return; }
+  const s=sesionActual(), area=AREA_ESTAJERO||s.area;
+  const btn=document.querySelector("#pasoAcabCant .btn-principal");
+  if(btn){ btn.disabled=true; btn.textContent="REGISTRANDO…"; }
+  try{
+    const r = ACAB.tipo
+      ? await rpc("fn_extra_registrar",{p_dni:s.dni,p_token:s.token,p_area:area,p_id:ACAB.tipo.id,p_cant:cant})
+      : await rpc("fn_acabado_registrar",{p_dni:s.dni,p_token:s.token,p_area:area,
+          p_of:ACAB.of.of,p_nop:ACAB.op.n_op,p_cant:cant});
+    if(!r.ok){ mostrarError(r.error||"No se pudo registrar"); return; }
+    $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
+    $("exDetalle").innerHTML = `${qty(cant)} und · `
+      + (ACAB.tipo ? esc(ACAB.tipo.operacion) : `${esc(ACAB.op.operacion)} · OF ${esc(ACAB.of.of)}`)
+      + (r.hecho!=null ? `<br>Van ${qty(r.hecho)} de ${qty(r.cant_prog)} und` : "");
+    mostrarExito();
+    await cargarAcabado(s, area);
+  }catch(e){ mostrarError(e.message); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent="REGISTRAR"; } }
+}
+
+/* ================= MIS PAQUETES (costura) =================
+   Todos cuentan como completos: solo se toca el que quedó a medias. Al
+   declarar menos, el resto sale como paquete nuevo (-R1, -R2…) y queda libre
+   para que quien lo termine sí pueda notificar sus minutos. */
+let MISPAQ=[];
+async function abrirMisPaquetes(){
+  const s=sesionActual(), area=AREA_ESTAJERO||s.area;
+  $("listaMisPaq").innerHTML=cargandoHTML("Cargando…");
+  irA("pasoMisPaq");
+  try{
+    const r=await rpc("fn_mis_paquetes",{p_dni:s.dni,p_token:s.token,p_area:area});
+    if(r && r.ok===false){ mostrarError(r.error||"Error"); MISPAQ=[]; }
+    else MISPAQ=Array.isArray(r)?r:[];
+    pintarMisPaq();
+  }catch(e){ $("listaMisPaq").innerHTML=""; mostrarError(e.message); }
+}
+function pintarMisPaq(){
+  const l=$("listaMisPaq"); l.innerHTML="";
+  if(!MISPAQ.length){ l.innerHTML=`<div class="vacio-msg">No tienes paquetes de hoy ni de ayer.</div>`; return; }
+  MISPAQ.forEach((p,i)=>{
+    const c=document.createElement("div");
+    c.className="card-fila"+(p.ajustado?" marcada":"");
+    const est = p.ajustado ? `<b>${qty(p.cant)}</b> de ${qty(p.asignada)} und` : `<b>${qty(p.cant)}</b> und · completo`;
+    c.innerHTML=`<div style="flex:1;">
+        <div class="cf-titulo">${esc(p.op)}</div>
+        <div class="cf-detalle">OF ${esc(p.of||"—")} · ${esc(p.num||p.codigo)} · ${esc(p.fecha)} ${esc(p.hora)}</div>
+        <div class="cf-detalle">${est}</div>
+        <div id="mpEd${i}" hidden style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+          <input type="number" id="mpCant${i}" min="1" max="${p.asignada-1}" inputmode="numeric"
+            placeholder="Hice…" style="max-width:110px;">
+          <button class="btn-mini verde" onclick="declararParcial(${i})">Guardar</button>
+          <button class="btn-mini gris" onclick="mpEditar(${i},false)">Cancelar</button>
+        </div>
+      </div>`;
+    if(p.divisible && !p.ajustado){
+      const b=document.createElement("button");
+      b.className="btn-mini"; b.textContent="Ajustar";
+      b.onclick=()=>mpEditar(i,true);
+      c.appendChild(b);
+    }
+    l.appendChild(c);
+  });
+}
+function mpEditar(i, abrir){
+  const e=$("mpEd"+i); if(!e) return;
+  e.hidden=!abrir;
+  if(abrir) setTimeout(()=>{ const c=$("mpCant"+i); if(c) c.focus(); },100);
+}
+async function declararParcial(i){
+  const p=MISPAQ[i]; if(!p) return;
+  const v=parseFloat(String(($("mpCant"+i)||{}).value||"").replace(/[^\d.]/g,""));
+  if(!v || v<=0 || v>=p.asignada){ mostrarError(`Escribe entre 1 y ${qty(p.asignada-1)}`); return; }
+  const resto=p.asignada-v;
+  if(!confirm(`¿Hiciste ${qty(v)} de ${qty(p.asignada)} und?\nLas ${qty(resto)} restantes quedarán libres para quien las termine.`)) return;
+  const s=sesionActual(), area=AREA_ESTAJERO||s.area;
+  try{
+    const r=await rpc("fn_declarar_parcial",{p_dni:s.dni,p_token:s.token,p_area:area,p_codigo:p.codigo,p_cant_hecha:v});
+    if(!r.ok){ mostrarError(r.error||"No se pudo ajustar"); return; }
+    mostrarOk(`${qty(v)} und registradas · ${qty(r.resto)} und quedaron libres`);
+    await abrirMisPaquetes();
+    try{ setAvance(await rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token})); }catch(e){}
+  }catch(e){ mostrarError(e.message); }
+}
+
 let ULTIMO_DIA = {eficiencia:0,minutos_prod:0,minutos_disp:0};
 function setAvance(d){
   ULTIMO_DIA = d || ULTIMO_DIA;
@@ -674,6 +886,21 @@ let modoSel=false, marcados={};
 function ticketsActuales(){
   return ALM.tickets.filter(t=>t.of===sel.of && t.modulo===sel.modulo && t.op===sel.op);
 }
+/* Módulo final = las dos últimas operaciones de la ruta de esa OF+artículo
+   (las que el analista puede dividir). Ahí el sticker va como en Acabado. */
+let NOPS_FIN={};
+function esTicketFinal(t){
+  if(t.residual) return true;
+  if(t.nop==null) return false;
+  const k=normKey(t.of)+"|"+normKey(t.articulo);
+  if(!NOPS_FIN[k]){
+    const ns=[...new Set(ALM.tickets.filter(x=>normKey(x.of)===normKey(t.of)
+      && normKey(x.articulo)===normKey(t.articulo) && x.nop!=null).map(x=>Number(x.nop)))]
+      .sort((a,b)=>b-a);
+    NOPS_FIN[k]=ns.slice(0,2);
+  }
+  return NOPS_FIN[k].includes(Number(t.nop));
+}
 function pintarTickets(){
   $("tituloTickets").textContent = sel.op;
   pintarBarraSel();
@@ -684,7 +911,10 @@ function pintarTickets(){
     const c=document.createElement("div");
     c.className="card-ticket"+(r?" tomado":"")+(marcado?" marcada":"");
     const pph = t.std>0 ? Math.round(60/t.std) : "—";
-    const cab = ES_ACABADO
+    // En el módulo final la numeración ya está tapada por la costura: manda la
+    // cantidad, con STD y color debajo. El nº de paquete no se muestra nunca.
+    const fin = esTicketFinal(t);
+    const cab = fin
       ? `<div class="tk-label">Cantidad</div>
          <div class="tk-numeracion">${qty(t.cant)} und</div>`
       : `<div class="tk-min">${t.minutos} min</div>
@@ -694,19 +924,23 @@ function pintarTickets(){
            <div class="tk-col tk-pph"><div class="tk-label tk-oro">PPH</div>
              <div class="tk-numeracion tk-oro">${pph}</div></div>
          </div>`;
-    const fila = ES_ACABADO
-      ? `<div>Talla <b>${esc(t.talla)}</b></div>
-         <div>Corte <b>${esc(t.corte)}</b></div>
-         <div>N°OP <b>${t.nop ?? "—"}</b></div>`
+    // Al dividir la última/penúltima operación el generador pone color "C" y
+    // talla "T": son marcadores, no datos. Solo se muestran si son reales.
+    const col = norm(t.color), tal = norm(t.talla);
+    const fila = fin
+      ? `<div>STD <b>${t.std.toFixed(2)}</b> min</div>
+         ${tal && normKey(tal)!=="T" ? `<div>Talla <b>${esc(tal)}</b></div>` : ""}
+         ${t.residual?`<div class="tk-cant">resto de ${esc(t.num)}</div>`:""}`
       : `<div>Talla <b>${esc(t.talla)}</b></div>
          <div class="tk-cant"><b>${t.cant}</b> und</div>
          <div>STD <b>${t.std.toFixed(2)}</b> min</div>
-         <div>Corte <b>${esc(t.corte)}</b></div>
          <div>N°OP <b>${t.nop ?? "—"}</b></div>`;
     c.innerHTML=`
       ${cab}
       <div class="tk-fila">
-        <div><span class="chip-color" style="background:${colorDe(t.color)}"></span>${esc(t.color)}</div>
+        ${col && normKey(col)!=="C"
+          ? `<div><span class="chip-color" style="background:${colorDe(col)}"></span>${esc(col)}</div>`
+          : ""}
         ${fila}
       </div>
       ${r?`<div class="tk-tomado-por">Tomado por ${esc(soloApellidos(r.nombre))} · ${esc(r.hora)}</div>`:""}`;

@@ -47,6 +47,8 @@
       <input class="input-grande" id="inputOF" inputmode="numeric" placeholder="Ej: 9424" maxlength="6" autocomplete="off">
       <div class="sugerencias" id="sugerenciasOF"></div>
     </div>
+    <button type="button" class="btn-secundario" id="btnMisPaq"
+      style="max-width:300px;margin:14px auto 0;" onclick="abrirMisPaquetes()">MIS PAQUETES</button>
   </section>
 
   <!-- Módulos -->
@@ -69,6 +71,40 @@
     <div class="sub">Busca la numeración de tu paquete</div>
     <div class="barra-sel" id="barraSel"></div>
     <div class="lista-tickets" id="listaTickets"></div>
+  </section>
+
+  <!-- ACABADO: OF (artículo · color) → operación → cantidad -->
+  <section class="pantalla" id="pasoAcabOF">
+    <h1>¿En qué OF trabajas?</h1>
+    <div class="sub">Toca la OF, o registra un trabajo sin OF</div>
+    <div class="lista-cards" id="listaAcabOF"></div>
+  </section>
+
+  <section class="pantalla" id="pasoAcabOp">
+    <h1 id="tituloAcabOp"></h1>
+    <div class="sub" id="subAcabOp">Toca tu operación</div>
+    <div class="lista-cards" id="listaAcabOp"></div>
+  </section>
+
+  <section class="pantalla" id="pasoAcabCant">
+    <div class="zona-conf">
+      <h1 id="tituloAcabCant"></h1>
+      <div class="conf-card">
+        <div class="tk-label">Cantidad que hiciste</div>
+        <input class="input-grande" id="acabCant" inputmode="numeric" placeholder="0" autocomplete="off"
+          style="max-width:220px;margin:6px auto;text-align:center;">
+        <div class="conf-det" id="acabDet"></div>
+      </div>
+      <button class="btn-principal" onclick="acabRegistrar()">REGISTRAR</button>
+      <button class="btn-secundario" onclick="irA('pasoAcabOp')">VOLVER</button>
+    </div>
+  </section>
+
+  <!-- COSTURA: mis paquetes de hoy y ayer -->
+  <section class="pantalla" id="pasoMisPaq">
+    <h1>Mis paquetes</h1>
+    <div class="sub">Hoy y ayer. Están todos como completos: ajusta solo el que dejaste a medias.</div>
+    <div class="lista-cards" id="listaMisPaq"></div>
   </section>
 
   <!-- Confirmación -->

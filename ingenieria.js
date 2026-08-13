@@ -50,6 +50,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   ["fechaEf","fechaTk","fechaMod"].forEach(id=>{ const el=$(id); if(el) el.value = hoyISO(); });
 
   // Áreas desde la base de datos (incluye CORTE, REPROCESOS, etc.)
+  await hidratarAreas();                 // config de Sheets desde areas_config
   AREAS_LISTA = await cargarAreasDB();
   poblarSelectsArea();
   pintarSupAreas();
@@ -73,7 +74,10 @@ document.addEventListener("DOMContentLoaded", async ()=>{
 
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoModEf","pasoBases",
-  "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea"];
+  "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra"];
+/* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
+   Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
+const TABS_VISTAS=new Set();
 
 /* Activa una sección del sidebar (misma lógica que el clic, reutilizable por
    el ruteo por hash). Actualiza el hash sin recargar. */
@@ -85,6 +89,8 @@ function activarTab(tab){
   try{ history.replaceState(null,"","#"+tab); }catch(e){}
   if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
   irA(tab);
+  if(TABS_VISTAS.has(tab)) return;      // reentrada: conserva filtros y datos
+  TABS_VISTAS.add(tab);
   if(tab==='pasoIncid') cargarIncidI();
   else if(tab==='pasoTk') cargarTk();
   else if(tab==='pasoMod') cargarMod();
@@ -95,7 +101,8 @@ function activarTab(tab){
   else if(tab==='pasoFechas') initFechas();
   else if(tab==='pasoGen') genInit();
   else if(tab==='pasoDash'){ dbEnsureFp(); dashTab(DASH_TAB||'asis'); }
-  else if(tab==='pasoAvOF'){ dbEnsureFp(); }
+  else if(tab==='pasoOfs') cargarOfs();
+  else if(tab==='pasoExtra') cargarExtra();
 }
 function toggleSidebar(){ document.body.classList.toggle("sidebar-cerrada"); }
 function cerrarSidebarMovil(){ if(window.innerWidth<=900) document.body.classList.add("sidebar-cerrada"); }
@@ -122,10 +129,11 @@ function poblarSelectsArea(){
   if($("areaInci")) $("areaInci").innerHTML = todas + AREAS_LISTA.map(op).join("");
   if($("areaModEf")) $("areaModEf").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("avofArea")) $("avofArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
-  // Operaciones por OF: solo áreas con Sheet configurado (las de AREAS de app.js).
-  if($("opfArea")) $("opfArea").innerHTML = elige + Object.keys(AREAS).map(op).join("");
-  // Generar tickets: solo áreas con Sheet (las de AREAS de app.js).
-  if($("areaGen")) $("areaGen").innerHTML = elige + Object.keys(AREAS).map(op).join("");
+  if($("exArea")) $("exArea").innerHTML = elige + AREAS_LISTA.map(op).join("");
+  // Operaciones por OF y Generar tickets: solo áreas con Sheet en areas_config.
+  const conSheet = Object.keys(AREAS).filter(a=>AREAS[a].habilitada && AREAS[a].sheetId).sort();
+  if($("opfArea")) $("opfArea").innerHTML = elige + conSheet.map(op).join("");
+  if($("areaGen")) $("areaGen").innerHTML = elige + conSheet.map(op).join("");
 }
 
 /* Recargar la pestaña activa (botón ↻ del header). */
@@ -140,7 +148,7 @@ function recargarIngenieria(){
   else if(act("pasoBases")) cargarBases();
   else if(act("pasoAsis")) perReload();
   else if(act("pasoDash")) dashTab(DASH_TAB||'asis');
-  else if(act("pasoAvOF")){ if(DB.avofSel&&DB.avofSel.desde) cargarAvof(); }
+  else if(act("pasoAvOF")){ if(AVOF.items.length) cargarAvof(); }
   else if(act("pasoIncid")) cargarIncidI();
   else if(act("pasoPersonal")||act("pasoAvance")||act("pasoIncidencias")||act("pasoEfPersonal")) recargarSupervisora();
 }
@@ -433,9 +441,28 @@ async function genSubirJob(id){
     const r=await edgeFn(FN_GENERAR_TICKETS,{p_dni:ING.dni,p_token:ING.token,area:area,filas:j.filas});
     if(!r.ok){ mostrarError(r.error||"No se pudo escribir"); pv.innerHTML=""; return; }
     mostrarOk(`${r.escritas} filas escritas en ALMACEN (OF ${j.hn.of})`);
-    pv.innerHTML=`<div class="estado-vacio">✓ ${r.escritas} filas escritas en el ALMACEN de ${esc(area)} (OF ${esc(j.hn.of)}).</div>`;
+    pv.innerHTML=`<div class="estado-vacio">✓ ${r.escritas} filas escritas en el ALMACEN de ${esc(area)} (OF ${esc(j.hn.of)}).</div>`
+      + await genRegistrarOF(id, j);
     j.filas=null;
   }catch(e){ pv.innerHTML=""; mostrarError(e.message); }
+}
+/* Registra la OF y su desglose en Supabase (parche 26). Una sola subida por OF:
+   la segunda (la de la otra área) corrobora, lista diferencias y no escribe. */
+async function genRegistrarOF(id, j){
+  const nInp = k => { const c=$("genDiv"+k+"_"+id), n=$("genN"+k+"_"+id);
+    return (c&&c.checked&&n) ? (parseInt(n.value,10)||null) : null; };
+  let acum=0;
+  const det=j.hn.tallas.map((t,i)=>{ const c=Number(t.cant)||0, desde=acum+1;
+    acum+=c; return {paq:i+1, talla:norm(t.talla), color:norm(t.color), cant:c, desde, hasta:acum}; });
+  try{
+    const g=await rpc("fn_of_registrar",{p_dni:ING.dni,p_token:ING.token,p_of:j.hn.of,
+      p_articulo:j.hn.articulo, p_prenda:j.hn.prenda, p_cant_prog:acum,
+      p_div_ultima:nInp("U"), p_div_penultima:nInp("P"), p_detalle:det});
+    if(!g || g.ok===false) return `<div class="diff-box"><div class="diff-del">OF no registrada: ${esc((g&&g.error)||"error")}</div></div>`;
+    if(g.creada) return `<div class="diff-box"><div class="cf-detalle">OF ${esc(g.of)} registrada · ${g.paquetes} paquete(s) · ${Math.round(acum)} und programadas.</div></div>`;
+    const dif=(g.difiere||[]).length ? `<br>Diferencias con esta HN: ${esc((g.difiere||[]).join(" · "))}` : "";
+    return `<div class="diff-box"><div class="diff-del">La OF ${esc(g.of)} ya estaba registrada (${esc(g.fecha_carga||"—")}). No se volvió a escribir.${dif}</div></div>`;
+  }catch(e){ return `<div class="diff-box"><div class="diff-del">OF no registrada: ${esc(e.message)}</div></div>`; }
 }
 
 /* ================= OPERACIONES POR OF (agregar / quitar en ALMACÉN) =================
@@ -753,7 +780,7 @@ async function opEntrar(){
    por artículo+módulo en BASE) / meta de la OF (hoja "OF", col CANT PROG).
    No se muestra numeración: se muestra la CANTIDAD. */
 let MODTK=[], modArea="", MOD_META={};
-async function cargarMod(){
+async function cargarMod(reset){
   modArea = $("areaMod") ? $("areaMod").value : "";
   if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
   $("modGate").style.display="none";
@@ -770,8 +797,9 @@ async function cargarMod(){
     }
     try{ MOD_META = await cargarMetaOF(modArea); }catch(e){ MOD_META={}; }
     await cargarModCerrados();
-    // Reinicia la cascada (Artículo → OF) al recargar el área/fecha.
-    if($("artMod")) $("artMod").value="";
+    // Solo al CAMBIAR de área se reinicia la cascada Artículo → OF; al recargar
+    // o al volver a la pestaña se conserva lo que el usuario ya había elegido.
+    if(reset && $("artMod")) $("artMod").value="";
     cerrarArtDrop();
     poblarOfMod();
     pintarMod();
@@ -780,7 +808,7 @@ async function cargarMod(){
 function filtrarModArea(a){
   modArea=a;
   if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
-  cargarMod();
+  cargarMod(true);
 }
 /* --- Cascada Artículo → OF (autocompletado desde los tickets cargados) --- */
 function modArtActual(){
@@ -1540,7 +1568,7 @@ function dashTab(t){
   else if(t==="mod"){ if($("dbModArea")&&$("dbModArea").value) cargarDbMod(); }
 }
 let DBCH={};                 // instancias Chart por id de canvas
-let DB={fpReady:false, efSel:{}, cantSel:{}, modSel:{}, avofSel:{}, efModo:"ef", efData:null};
+let DB={fpReady:false, efSel:{}, cantSel:{}, modSel:{}, efModo:"ef", efData:null};
 let AVOF={items:[], meta:{}, _rows:[]};
 let avofSort={col:null,dir:1};
 function ordenarAvof(col){ if(avofSort.col===col) avofSort.dir*=-1; else avofSort={col,dir:1}; avofPintar(); }
@@ -1554,7 +1582,7 @@ function dbEnsureFp(){
   if(DB.fpReady) return;
   if($("perDashRango")&&window.flatpickr) flatpickr("#perDashRango",{mode:"range",dateFormat:"Y-m-d",locale:{rangeSeparator:" a "},
     onChange:ds=>{ if(ds.length>=1){ PER.dashSel.desde=ds[0].toLocaleDateString("sv-SE"); PER.dashSel.hasta=(ds[1]||new Date()).toLocaleDateString("sv-SE"); } }});
-  dbFp("dbEfRango",DB.efSel); dbFp("dbCantRango",DB.cantSel); dbFp("dbModRango",DB.modSel); dbFp("avofRango",DB.avofSel);
+  dbFp("dbEfRango",DB.efSel); dbFp("dbCantRango",DB.cantSel); dbFp("dbModRango",DB.modSel);
   DB.fpReady=true;
 }
 function dbBar(cid,labels,data,label,colors,horizontal){
@@ -1616,27 +1644,145 @@ async function cargarDbMod(){
   }catch(e){ mostrarError(e.message); }
 }
 
+/* --- Operaciones sin OF (parche 27): reprocesos, muestras, arreglos --- */
+let EXTRA=[];
+async function cargarExtra(){
+  const area=$("exArea")?$("exArea").value:"";
+  if(!area){ $("exTabla").innerHTML=""; $("exResumen").textContent="Elige un área"; return; }
+  $("exTabla").innerHTML=cargandoHTML("Cargando…");
+  try{
+    const r=await rpc("fn_extra_listar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_todas:true});
+    if(r && r.ok===false){ mostrarError(r.error||"Error"); $("exTabla").innerHTML=""; return; }
+    EXTRA=Array.isArray(r)?r:[]; pintarExtra();
+  }catch(e){ $("exTabla").innerHTML=""; mostrarError(e.message); }
+}
+function pintarExtra(){
+  const act=EXTRA.filter(e=>e.activa).length;
+  $("exResumen").textContent=`${EXTRA.length} operación(es) · ${act} activa(s)`;
+  const body=EXTRA.length? EXTRA.map((e,i)=>`<tr>
+      <td>${esc(e.tipo)}</td><td class="izq"><b>${esc(e.operacion)}</b></td>
+      <td>${Number(e.std).toFixed(2)}</td>
+      <td><span class="pill ${e.activa?"ACTIVO":"DM"}">${e.activa?"ACTIVA":"INACTIVA"}</span></td>
+      <td><button class="btn-mini ${e.activa?"rojo":"verde"}" onclick="toggleExtra(${i})">${e.activa?"Desactivar":"Activar"}</button></td>
+    </tr>`).join("")
+    : `<tr><td colspan="5"><div class="vacio-msg">Sin operaciones cargadas para esta área</div></td></tr>`;
+  $("exTabla").innerHTML=`<thead><tr><th>Tipo</th><th class="izq">Operación</th><th>STD</th>
+    <th>Estado</th><th></th></tr></thead><tbody>${body}</tbody>`;
+}
+async function guardarExtra(){
+  const area=$("exArea").value, tipo=$("exTipo").value;
+  const op=norm($("exOp").value), std=parseFloat($("exStd").value);
+  if(!area){ mostrarError("Elige un área"); return; }
+  if(!op){ mostrarError("Escribe la operación"); return; }
+  if(!std || std<=0){ mostrarError("El STD debe ser mayor que cero"); return; }
+  try{
+    const r=await rpc("fn_extra_guardar",{p_dni:ING.dni,p_token:ING.token,p_id:null,
+      p_area:area,p_tipo:tipo,p_operacion:op,p_std:std,p_activa:true});
+    if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); return; }
+    mostrarOk("Operación guardada"); $("exOp").value=""; $("exStd").value="";
+    cargarExtra();
+  }catch(e){ mostrarError(e.message); }
+}
+async function toggleExtra(i){
+  const e=EXTRA[i]; if(!e) return;
+  try{
+    const r=await rpc("fn_extra_guardar",{p_dni:ING.dni,p_token:ING.token,p_id:e.id,
+      p_area:$("exArea").value,p_tipo:e.tipo,p_operacion:e.operacion,p_std:e.std,p_activa:!e.activa});
+    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+    cargarExtra();
+  }catch(e2){ mostrarError(e2.message); }
+}
+
+/* --- OFs registradas (parche 26): lo guardado al confirmar cada HN --- */
+let OFS=[], OFS_VISTA=[];
+async function cargarOfs(){
+  $("ofsTabla").innerHTML=cargandoHTML("Cargando…"); $("ofsResumen").textContent="";
+  try{
+    const r=await rpc("fn_ofs_listar",{p_dni:ING.dni,p_token:ING.token,p_buscar:""});
+    if(r && r.ok===false){ mostrarError(r.error||"Error"); $("ofsTabla").innerHTML=""; return; }
+    OFS=Array.isArray(r)?r:[]; ofsPintar();
+  }catch(e){ $("ofsTabla").innerHTML=""; mostrarError(e.message); }
+}
+function ofsPintar(){
+  const q=normKey($("ofsBuscar")?$("ofsBuscar").value:"");
+  const rows=OFS.filter(o=>!q||normKey((o.of||"")+" "+(o.articulo||"")).includes(q));
+  OFS_VISTA=rows;
+  const und=rows.reduce((a,o)=>a+(Number(o.cant_prog)||0),0);
+  $("ofsResumen").textContent=`${rows.length} OF · ${Math.round(und)} und programadas`;
+  const div=o=>[o.div_ultima?`última en ${o.div_ultima}`:null, o.div_penultima?`penúltima en ${o.div_penultima}`:null]
+    .filter(Boolean).join(" · ")||"—";
+  const body=rows.length? rows.map((o,i)=>`<tr>
+      <td><button class="btn-mini gris" onclick="ofsToggle(${i})">▾</button></td>
+      <td class="izq"><b>${esc(o.articulo||"—")}</b></td><td>${esc(o.of)}</td>
+      <td>${esc(o.prenda||"—")}</td><td><b>${Math.round(o.cant_prog||0)}</b></td>
+      <td>${o.paquetes}</td><td>${esc(div(o))}</td>
+      <td>${esc(o.fecha_carga||"—")}</td></tr>
+      <tr class="avof-det" id="ofsDet${i}" hidden><td></td><td colspan="7"></td></tr>`).join("")
+    : `<tr><td colspan="8"><div class="vacio-msg">Sin OF registradas todavía. Se registran al confirmar una HN en Generar tickets.</div></td></tr>`;
+  $("ofsTabla").innerHTML=`<thead><tr><th></th><th class="izq">Artículo</th><th>OF</th><th>Prenda</th>
+    <th>Cant. prog.</th><th>Paquetes</th><th>División</th><th>Cargada</th></tr></thead><tbody>${body}</tbody>`;
+}
+/* Alta manual: para las OF en curso antes de que se registraran las HN. Sin
+   desglose (of_detalle vacío) — basta el corte real para el techo de ACABADO. */
+async function altaOfManual(){
+  const of=normKey($("ofNueva").value), art=norm($("ofNuevaArt").value).toUpperCase();
+  const prenda=norm($("ofNuevaPrenda").value).toUpperCase(), cant=parseFloat($("ofNuevaCant").value);
+  if(!of){ mostrarError("Escribe la OF"); return; }
+  if(!art){ mostrarError("Escribe el artículo"); return; }
+  if(!cant || cant<=0){ mostrarError("El corte real debe ser mayor que cero"); return; }
+  if(!confirm(`¿Registrar la OF ${of} · ${art} con ${cant} und de corte real?\nSin desglose por paquete: la validación de cantidades de costura no aplicará a esta OF.`)) return;
+  try{
+    const r=await rpc("fn_of_registrar",{p_dni:ING.dni,p_token:ING.token,p_of:of,p_articulo:art,
+      p_prenda:prenda||null,p_cant_prog:cant,p_div_ultima:null,p_div_penultima:null,p_detalle:[]});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"No se pudo registrar"); return; }
+    if(!r.creada){ mostrarError(`La OF ${r.of} ya estaba registrada (${r.fecha_carga||"—"})`); return; }
+    mostrarOk(`OF ${r.of} registrada`);
+    ["ofNueva","ofNuevaArt","ofNuevaPrenda","ofNuevaCant"].forEach(id=>{ if($(id)) $(id).value=""; });
+    cargarOfs();
+  }catch(e){ mostrarError(e.message); }
+}
+function ofsToggle(i){
+  const el=$("ofsDet"+i); if(!el) return;
+  if(!el.dataset.listo){
+    const d=(OFS_VISTA[i]||{}).detalle||[];
+    el.querySelector("td[colspan]").innerHTML=`<div class="avof-det-wrap">
+      <div class="tk-ops-title">Paquetes de la HN</div>
+      <table class="tabla"><thead><tr><th>Talla</th><th>Color</th><th>Cant.</th><th>Numeración</th></tr></thead><tbody>${
+        d.map(x=>`<tr><td>${esc(x.talla||"—")}</td><td>${esc(x.color||"—")}</td><td>${Math.round(x.cant)}</td>
+          <td>${x.desde}-${x.hasta}</td></tr>`).join("")
+        ||`<tr><td colspan="4"><div class="vacio-msg">Sin desglose</div></td></tr>`}</tbody></table></div>`;
+    el.dataset.listo="1";
+  }
+  el.hidden=!el.hidden;
+}
+
 /* --- Resumen de OF (trazabilidad cross-área; programado = hoja "OF") ---
    Módulo COMPLETADO = ingeniería lo cerró (modulos_cerrados) o su última
    operación alcanzó la cant. programada. La OF está lista cuando lo están
    todos sus módulos. El N°OP máx lo da la ruta del módulo en BASE. */
 async function cargarAvof(){
-  dbEnsureFp();
-  const o=DB.avofSel; if(!o.desde||!o.hasta){ mostrarError("Elige el rango"); return; }
   $("avofTabla").innerHTML=cargandoHTML("Cargando resumen…"); $("avofResumen").textContent="";
   try{
-    const r=await rpc("fn_of_resumen",{p_dni:ING.dni,p_token:ING.token,p_desde:o.desde,p_hasta:o.hasta});
+    // Acumulativo: sin rango. Con fechas, una OF terminada a caballo entre dos
+    // meses salía EN PROCESO porque las unidades anteriores quedaban fuera.
+    const r=await rpc("fn_of_resumen",{p_dni:ING.dni,p_token:ING.token,p_desde:null,p_hasta:null});
     if(!r.ok){ mostrarError(r.error||"Error"); $("avofTabla").innerHTML=""; return; }
     AVOF={items:r.items||[], meta:await avofMeta(), _rows:[]};
     avofPintar();
   }catch(e){ $("avofTabla").innerHTML=""; mostrarError(e.message); }
 }
+/* Meta por OF. Base primero (parche 26) y hoja "OF" como respaldo para las OF
+   cargadas antes de que existiera `ofs`; la base manda si están en las dos. */
 async function avofMeta(){
   const m={};
   for(const a of Object.keys(AREAS)){
     if(!AREAS[a].hojaOF) continue;
     try{ Object.assign(m, await cargarMetaOF(a)); }catch(e){}
   }
+  try{
+    const db=await rpc("fn_of_metas",{p_dni:ING.dni,p_token:ING.token});
+    if(db && db.ok!==false) Object.assign(m, db);
+  }catch(e){}
   return m;
 }
 /* Meta de la OF. cargarMetaOF devuelve 0 si la celda CANT PROG viene vacía:
@@ -1681,11 +1827,18 @@ function avofPintar(){
       <td>${esc(r.area)}</td><td>${esc(r.modulo)}</td>
       <td>${r.prog!=null?Math.round(r.prog):"—"}</td><td><b>${Math.round(r.real||0)}</b></td>
       <td><span class="pill ${r.estado==="COMPLETADO"?"ACTIVO":"PROCESO"}">${r.estado}</span></td></tr>
-      <tr class="avof-det" id="avofDet${i}" hidden><td></td><td colspan="7">${avofDetalle(r)}</td></tr>`).join("")
+      <tr class="avof-det" id="avofDet${i}" hidden><td></td><td colspan="7"></td></tr>`).join("")
     : `<tr><td colspan="8"><div class="vacio-msg">Sin OF ${soloCompl?"completadas":"en proceso"} con este filtro</div></td></tr>`;
   $("avofTabla").innerHTML=thead+"<tbody>"+body+"</tbody>";
 }
-function avofToggle(i){ const el=$("avofDet"+i); if(el) el.hidden=!el.hidden; }
+/* El detalle se arma al abrirlo: la vista es acumulativa y puede traer muchas OF. */
+function avofToggle(i){
+  const el=$("avofDet"+i); if(!el) return;
+  if(!el.dataset.listo && AVOF._rows[i]){
+    el.querySelector("td[colspan]").innerHTML=avofDetalle(AVOF._rows[i]); el.dataset.listo="1";
+  }
+  el.hidden=!el.hidden;
+}
 function avofEstadoMod(m,prog){ return m.cerrado?"CERRADO":(avofModCompleto(m,prog)?"COMPLETADO":"PROCESO"); }
 function avofDetalle(r){
   const pill=t=>`<span class="pill ${t==="CERRADO"?"CERRADO":(t==="COMPLETADO"||t==="LISTO")?"ACTIVO":"PROCESO"}">${t}</span>`;

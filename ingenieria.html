@@ -36,6 +36,8 @@
         <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Por módulo</a>
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
         <a class="nav-item" data-tab="pasoOpsOF" href="#pasoOpsOF">Operaciones (OF)</a>
+        <a class="nav-item" data-tab="pasoOfs" href="#pasoOfs">OFs registradas</a>
+        <a class="nav-item" data-tab="pasoExtra" href="#pasoExtra">Operaciones sin OF</a>
         <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Resumen de OF</a>
       </details>
       <details class="nav-group" open>
@@ -457,12 +459,52 @@
       </div>
     </section>
 
+    <!-- ===================== OPERACIONES SIN OF ===================== -->
+    <section class="pantalla" id="pasoExtra">
+      <div class="seccion-cab"><h1>Operaciones sin OF</h1>
+        <p class="seccion-sub">Reprocesos, muestras y arreglos. No descuentan de ninguna OF, pero su STD cuenta para la eficiencia del operario.</p></div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="exArea" onchange="cargarExtra()"></select></label>
+        <label class="campo"><span>Tipo</span>
+          <select id="exTipo">
+            <option>REPROCESO</option><option>MUESTRA</option><option>ARREGLO</option><option>OTRO</option>
+          </select></label>
+        <label class="campo"><span>Operación</span><input type="text" id="exOp" placeholder="Ej: RETOCAR CAMISA"></label>
+        <label class="campo"><span>STD (min)</span><input type="number" id="exStd" min="0.01" step="0.01" placeholder="0.14"></label>
+        <button class="btn-mini verde" onclick="guardarExtra()">Añadir</button>
+      </div>
+      <div class="sub" id="exResumen"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;"><table class="tabla" id="exTabla"></table></div>
+    </section>
+
+    <!-- ===================== OFs REGISTRADAS ===================== -->
+    <section class="pantalla" id="pasoOfs">
+      <div class="seccion-cab"><h1>OFs registradas</h1>
+        <p class="seccion-sub">Lo que quedó guardado al confirmar cada HN: cantidad programada y desglose por paquete. Toca ▾ para ver el detalle.</p></div>
+      <div class="barra-control">
+        <label class="campo"><span>Buscar</span><input type="text" id="ofsBuscar" placeholder="OF / artículo…" oninput="ofsPintar()"></label>
+        <button class="btn-mini" onclick="cargarOfs()">Cargar</button>
+      </div>
+      <details class="nav-group" style="margin:4px 0 10px;">
+        <summary class="nav-sep" style="cursor:pointer;">Dar de alta una OF a mano</summary>
+        <p class="seccion-sub" style="margin:6px 0;">Para las OF que ya estaban en curso antes de registrar HNs. Sin desglose por paquete: solo el corte real, que es lo que ACABADO necesita para su techo.</p>
+        <div class="barra-control">
+          <label class="campo"><span>OF</span><input type="text" id="ofNueva" inputmode="numeric" placeholder="Ej: 9804"></label>
+          <label class="campo"><span>Artículo</span><input type="text" id="ofNuevaArt" placeholder="Ej: ML1022"></label>
+          <label class="campo"><span>Prenda</span><input type="text" id="ofNuevaPrenda" placeholder="Ej: CAMISA"></label>
+          <label class="campo"><span>Corte real</span><input type="number" id="ofNuevaCant" min="1" placeholder="1076"></label>
+          <button class="btn-mini verde" onclick="altaOfManual()">Registrar OF</button>
+        </div>
+      </details>
+      <div class="sub" id="ofsResumen"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="ofsTabla"></table></div>
+    </section>
+
     <!-- ===================== RESUMEN DE OF ===================== -->
     <section class="pantalla" id="pasoAvOF">
       <div class="seccion-cab"><h1>Resumen de OF</h1>
-        <p class="seccion-sub">Qué OF está lista y cuál sigue en proceso, en qué módulo va y cuándo entró/salió de cada área. Un módulo cerrado cuenta como completado. Toca ▾ para el detalle.</p></div>
+        <p class="seccion-sub">Acumulado de toda la historia de cada OF (sin rango de fechas): qué está listo, qué sigue en proceso, en qué módulo va y cuándo entró/salió de cada área. Un módulo cerrado cuenta como completado. Toca ▾ para el detalle.</p></div>
       <div class="barra-control">
-        <label class="campo"><span>Rango</span><input type="text" id="avofRango" placeholder="Selecciona fechas" readonly style="min-width:200px;cursor:pointer;"></label>
         <label class="campo"><span>Operación</span>
           <select id="avofNivel" onchange="avofPintar()">
             <option value="penultima" selected>Penúltima operación</option>
