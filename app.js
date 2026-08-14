@@ -123,10 +123,16 @@ function irA(id){
    supervisora). Al retroceder con el hardware se ejecuta la MISMA lógica que el
    botón Volver; solo en un paso raíz se permite salir de la app. */
 function pasoActivo(){ const el=document.querySelector(".pantalla.activa"); return el?el.id:null; }
+/* El botón Atrás del celular vuelve DIRECTO a la pantalla de OF: encadenar
+   Volver→Volver→Volver era lento en planta. `window.VOLVER_INICIO` lo fija cada
+   página (operario: la lista de OF); si no está, se usa el salto de uno en uno. */
 function volverAtras(){
   const o=$("modalOverlay");
   if(o && o.classList.contains("visible")){ cerrarModal(); return true; }   // 1º cierra modal
-  const t=(window.VOLVER_MAP||{})[pasoActivo()];
+  const act=pasoActivo();
+  const ini=window.VOLVER_INICIO;
+  if(ini && act && act!==ini && (window.VOLVER_MAP||{})[act]){ irA(ini); return true; }
+  const t=(window.VOLVER_MAP||{})[act];
   if(t){ irA(t); return true; }
   return false;
 }
@@ -176,6 +182,21 @@ function sesionActual(){
   }catch(e){ return null; }
 }
 function cerrarSesion(){ localStorage.removeItem("stx_sesion"); try{ sessionStorage.removeItem("stx_volver_ing"); }catch(e){} location.href = "index.html"; }
+/* Si se entró como operario o como supervisora DESDE ingeniería, botón de vuelta.
+   Restaura la sesión original de ingeniería, que se guardó al salir. */
+function botonVolverIng(){
+  try{
+    const prevIng = sessionStorage.getItem("stx_volver_ing");
+    const badges = document.querySelector("header .badges");
+    if(!prevIng || !badges || $("btnVolverIng")) return;
+    const b=document.createElement("button");
+    b.type="button"; b.className="btn-hdr-icon"; b.id="btnVolverIng";
+    b.title="Volver a Ingeniería"; b.textContent="🏭";
+    b.onclick=()=>{ localStorage.setItem("stx_sesion", prevIng);
+      sessionStorage.removeItem("stx_volver_ing"); location.href="ingenieria.html"; };
+    badges.insertBefore(b, badges.firstChild);
+  }catch(e){}
+}
 
 /* ---------------- SUPABASE (RPC) ---------------- */
 async function rpc(fn, args){
@@ -504,6 +525,7 @@ function aplicarModoAcabado(){
   const lblConf=$("confLabel"); if(lblConf) lblConf.textContent = ES_ACABADO ? "Cantidad" : "Numeración";
   // ACABADO ya no pasa por el almacén ni por "Mis paquetes": registra por cantidad.
   const bmp=$("btnMisPaq"); if(bmp) bmp.style.display = ES_ACABADO ? "none" : "";
+  window.VOLVER_INICIO = ES_ACABADO ? "pasoAcabOF" : "pasoOF";
 }
 function initOperario(){
   const s = sesionActual();
@@ -514,17 +536,7 @@ function initOperario(){
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
   { const rc=$("btnRecargar"); if(rc) rc.onclick=recargarMiEficiencia; }
   { const oj=$("btnOjoEf"); if(oj) oj.onclick=()=>{ EF_CENSURADA=!EF_CENSURADA; setAvance(ULTIMO_DIA); }; }
-  // Si se entró como operario DESDE ingeniería, botón para volver a Ingeniería.
-  try{
-    const prevIng = sessionStorage.getItem("stx_volver_ing");
-    const badges = document.querySelector("header .badges");
-    if(prevIng && badges && !$("btnVolverIng")){
-      const b=document.createElement("button");
-      b.type="button"; b.className="btn-hdr-icon"; b.id="btnVolverIng"; b.title="Volver a Ingeniería"; b.textContent="🏭";
-      b.onclick=()=>{ localStorage.setItem("stx_sesion", prevIng); sessionStorage.removeItem("stx_volver_ing"); location.href="ingenieria.html"; };
-      badges.insertBefore(b, badges.firstChild);
-    }
-  }catch(e){}
+  botonVolverIng();
   window.onCambioPaso = (id)=>{
     // Al retroceder, limpiar la selección más profunda para que el
     // breadcrumb del encabezado no deje pasos viejos colgados.
@@ -551,6 +563,8 @@ function initOperario(){
     cargarTodo(s);
   }
   window.VOLVER_MAP = VOLVER_OPERARIO;
+  // Atrás siempre devuelve a la lista de OF (o a la de Acabado, según el área).
+  window.VOLVER_INICIO = ES_ACABADO ? "pasoAcabOF" : "pasoOF";
   initBackTrap();
 }
 
@@ -1305,11 +1319,16 @@ async function verEfPersonaOps(dni, nombre){
 function initSupervisora(){
   const s=sesionActual();
   if(!s || !s.area){ location.href="index.html"; return; }
-  if(s.cargo!=="SUPERVISORA"){ location.href = destinoPorCargo(s.cargo); return; }
+  // INGENIERIA puede entrar aquí desde "Operar como → Supervisora": reutiliza esta
+  // pantalla en vez del panel embebido, que se quedaba desactualizado.
+  const desdeIng = (()=>{ try{ return !!sessionStorage.getItem("stx_volver_ing"); }catch(e){ return false; } })();
+  if(s.cargo!=="SUPERVISORA" && !(s.cargo==="INGENIERIA" && desdeIng)){
+    location.href = destinoPorCargo(s.cargo); return; }
   SUP_AREA_OVERRIDE=null;
   $("tituloArea").textContent = s.area + " · Supervisión";
   $("quienBadge").textContent = s.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
+  botonVolverIng();
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
   { const rc=$("btnRecargar"); if(rc) rc.onclick=()=>{ recargarSupervisora(); }; }
   bindSupervisoraUI();

@@ -202,14 +202,16 @@ function ingSupVolverAreas(){
   irA("pasoSupArea");
   document.querySelectorAll(".nav-item[data-tab]").forEach(x=>x.classList.toggle("activo", x.dataset.tab==="pasoSupArea"));
 }
+/* Entra a supervisora.html con la sesión de ingeniería y el área elegida, igual
+   que "Operar como operario". El panel embebido se quedaba desactualizado cada
+   vez que cambiaba supervisora.html; así siempre es la pantalla real. */
 function ingSupElegirArea(area){
-  SUP_AREA_OVERRIDE=area;
-  if(!supBound){ bindSupervisoraUI(); supBound=true; }
-  $("supAreaActual").textContent = area;
-  $("supTabs").style.display="flex";
-  marcarTab("tabPersonal");
-  cargarPersonal(sesionActual());
-  irA("pasoPersonal");
+  try{
+    const s=sesionActual();
+    sessionStorage.setItem("stx_volver_ing", localStorage.getItem("stx_sesion")||"");
+    guardarSesion({...s, area});          // misma sesión, con el área a supervisar
+  }catch(e){ mostrarError("No se pudo abrir supervisión"); return; }
+  location.href="supervisora.html";
 }
 
 /* ================= GENERAR TICKETS DESDE HN ================= */
@@ -229,24 +231,44 @@ function genAreaChange(){ renderGenJobs(); genOfsRecargar(); }
 /* ===== Generar desde una OF ya registrada (parche 29) =====
    No escribe el ALMACÉN: marca la OF como servida por el sistema y guarda qué
    operaciones se trocean. Los tickets se derivan de of_detalle × bases. */
-let GEN_RUTA=null;
+let GEN_RUTA=null, GEN_OFS=[], GEN_OFMATCH=[];
+function genEsAcabadoArea(){ return normKey($("areaGen")?$("areaGen").value:"").includes("ACABADO"); }
 async function genOfsRecargar(){
-  const sel=$("genOfSel"); if(!sel) return;
+  const inp=$("genOfBuscar"); if(!inp) return;
   const area=$("areaGen")?$("areaGen").value:"";
-  $("genRuta").innerHTML=""; GEN_RUTA=null;
-  if(!area){ sel.innerHTML=`<option value="">— Elige área primero —</option>`; return; }
-  sel.innerHTML=`<option value="">Cargando…</option>`;
+  $("genRuta").innerHTML=""; GEN_RUTA=null; GEN_OFS=[]; inp.value=""; genOfsCerrar();
+  if(!area){ inp.disabled=true; inp.placeholder="— Elige área primero —"; return; }
+  inp.disabled=false; inp.placeholder="Cargando OFs…";
   try{
     const r=await rpc("fn_ofs_generables",{p_dni:ING.dni,p_token:ING.token,p_area:area});
-    const ofs=Array.isArray(r)?r:[];
-    sel.innerHTML=`<option value="">— Elige una OF —</option>`+ofs.map(o=>
-      `<option value="${esc(o.of)}">${esc(o.articulo)} · OF ${esc(o.of)} · ${Math.round(o.cant_prog)} und`
-      +`${o.generada?" ✓ generada":""}${o.paquetes?"":" (sin desglose)"}</option>`).join("");
-    if(!ofs.length) sel.innerHTML=`<option value="">Ninguna OF registrada con BASE en esta área</option>`;
-  }catch(e){ sel.innerHTML=`<option value="">Error</option>`; mostrarError(e.message); }
+    GEN_OFS=Array.isArray(r)?r:[];
+    inp.placeholder = GEN_OFS.length
+      ? "Escribe la OF o el artículo…"
+      : "Ninguna OF registrada con BASE en esta área";
+  }catch(e){ inp.placeholder="Error"; mostrarError(e.message); }
 }
-async function genRutaCargar(){
-  const of=$("genOfSel").value, area=$("areaGen").value;
+function genOfsCerrar(){ const d=$("genOfDrop"); if(d) d.style.display="none"; }
+function genOfsBuscar(){
+  const inp=$("genOfBuscar"), drop=$("genOfDrop"); if(!inp||!drop) return;
+  const q=normKey(inp.value);
+  GEN_OFMATCH=GEN_OFS.filter(o=>!q||normKey((o.of||"")+" "+(o.articulo||"")).includes(q)).slice(0,40);
+  if(!GEN_OFMATCH.length){
+    drop.innerHTML=`<div class="ac-item" style="color:#5a6270;">${GEN_OFS.length?"Sin coincidencias":"Registra la OF en OFs registradas"}</div>`;
+    drop.style.display="block"; return;
+  }
+  drop.innerHTML=GEN_OFMATCH.map((o,i)=>`<div class="ac-item" onmousedown="genOfElegir(${i})">
+    <b>${esc(o.articulo)}</b> · OF ${esc(o.of)} · ${Math.round(o.cant_prog)} und${
+      o.generada?' · <span class="pill ACTIVO">generada</span>':""}${
+      o.paquetes?"":' · <span class="pill DM">sin desglose</span>'}</div>`).join("");
+  drop.style.display="block";
+}
+function genOfElegir(i){
+  const o=GEN_OFMATCH[i]; if(!o) return;
+  $("genOfBuscar").value=`${o.articulo} · OF ${o.of}`;
+  genOfsCerrar(); genRutaCargar(o.of);
+}
+async function genRutaCargar(ofElegida){
+  const of=ofElegida||"", area=$("areaGen").value;
   const z=$("genRuta"); GEN_RUTA=null;
   if(!of){ z.innerHTML=""; return; }
   z.innerHTML=cargandoHTML("Cruzando con BASE…");
@@ -258,6 +280,29 @@ async function genRutaCargar(){
 }
 function genRutaPintar(){
   const r=GEN_RUTA; if(!r) return;
+  const cab=`<div class="diff-box">
+      <h3>${esc(r.articulo)} · OF ${esc(r.of)}</h3>
+      <div class="cf-detalle">${Math.round(r.cant_prog)} und · ${r.paquetes} paquete(s) de la HN · ${(r.ruta||[]).length} operación(es) en BASE
+        ${r.generada?' · <span class="pill ACTIVO">YA GENERADA</span>':""}</div>
+    </div>`;
+
+  /* ACABADO no genera tickets: registra por cantidad contra el corte real, así
+     que no hay paquetes que trocear. Basta con que la OF esté registrada y el
+     artículo tenga BASE en el área — con eso ya le sale al operario. */
+  if(genEsAcabadoArea()){
+    $("genRuta").innerHTML = cab + `<div class="diff-box">
+      <div class="cf-detalle"><b>ACABADO no genera tickets.</b> Registra por cantidad contra el corte real,
+      así que no hay paquetes ni troceo. Esta OF ya le aparece al operario del área porque está registrada
+      y su artículo tiene BASE.</div></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:44vh;">
+        <table class="tabla"><thead><tr><th>N°OP</th><th class="izq">Módulo</th><th class="izq">Operación</th><th>STD</th></tr></thead>
+        <tbody>${(r.ruta||[]).map(o=>`<tr><td>${o.n_op}</td><td class="izq">${esc(o.modulo||"—")}</td>
+          <td class="izq"><b>${esc(o.operacion)}</b></td><td>${Number(o.std).toFixed(2)}</td></tr>`).join("")
+          ||`<tr><td colspan="4"><div class="vacio-msg">Sin BASE para este artículo</div></td></tr>`}</tbody></table>
+      </div>`;
+    return;
+  }
+
   const filas=(r.ruta||[]).map((o,i)=>`<tr>
       <td>${o.n_op}</td><td class="izq">${esc(o.modulo||"—")}</td>
       <td class="izq"><b>${esc(o.operacion)}</b></td><td>${Number(o.std).toFixed(2)}</td>
@@ -267,16 +312,11 @@ function genRutaPintar(){
         value="${o.troceo||""}" style="max-width:90px;" ${o.troceo?"":"disabled"}></td>
     </tr>`).join("");
   const aviso = r.con_reclamos
-    ? `<div class="diff-del">Esta OF ya tiene tickets reclamados en el área. No se puede cambiar el troceo sin liberarlos antes: cambiarlo cambiaría los códigos.</div>`
+    ? `<div class="diff-box"><div class="diff-del">Esta OF ya tiene tickets reclamados en el área. No se puede cambiar el troceo sin liberarlos antes: cambiarlo cambiaría los códigos.</div></div>`
     : !r.paquetes
-      ? `<div class="diff-del">La OF no tiene desglose de paquetes. Complétalo con su HN en OFs registradas antes de generar.</div>`
+      ? `<div class="diff-box"><div class="diff-del">La OF no tiene desglose de paquetes. Complétalo con su HN en OFs registradas antes de generar.</div></div>`
       : "";
-  $("genRuta").innerHTML=`<div class="diff-box">
-      <h3>${esc(r.articulo)} · OF ${esc(r.of)}</h3>
-      <div class="cf-detalle">${Math.round(r.cant_prog)} und · ${r.paquetes} paquete(s) de la HN · ${(r.ruta||[]).length} operación(es) en BASE
-        ${r.generada?' · <span class="pill ACTIVO">YA GENERADA</span>':""}</div>
-    </div>
-    ${aviso}
+  $("genRuta").innerHTML=cab+aviso+`
     <div class="contenedor-ancho tabla-scroll" style="max-height:44vh;">
       <table class="tabla"><thead><tr><th>N°OP</th><th class="izq">Módulo</th><th class="izq">Operación</th>
         <th>STD</th><th>Trocear</th><th>Cantidad</th></tr></thead><tbody>${filas
@@ -319,7 +359,7 @@ async function genConfirmarOF(){
     const g=await rpc("fn_of_generar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_of:r.of,p_troceo:tro});
     if(!g.ok){ mostrarError(g.error||"No se pudo generar"); return; }
     mostrarOk(`OF ${g.of} generada · ${g.tickets} tickets · ${g.troceadas} operación(es) troceada(s)`);
-    await genOfsRecargar(); $("genOfSel").value=r.of; genRutaCargar();
+    await genOfsRecargar(); $("genOfBuscar").value=`${r.articulo} · OF ${r.of}`; genRutaCargar(r.of);
   }catch(e){ mostrarError(e.message); }
 }
 function celTxt(v){ return v==null?"":String(v).trim(); }

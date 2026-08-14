@@ -384,6 +384,7 @@
           <div class="swipe-ayuda" id="perSwipeAyuda">Desliza <b>▶ Activo</b> · <b>◀ Falta</b> · <b>▼ Otro estado</b> · <b>▲ Confirmar estado actual</b></div>
           <div id="perMarcarResumen" hidden></div>
         </div>
+      </div>
       <div id="perMov" hidden>
         <div class="barra-control">
           <label class="campo"><span>Área</span><select id="movArea" onchange="cargarMovs()"></select></label>
@@ -392,7 +393,6 @@
         </div>
         <div class="sub" id="movResumen"></div>
         <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;"><table class="tabla" id="movTabla"></table></div>
-      </div>
       </div>
     </section>
 
@@ -589,8 +589,8 @@
     <!-- ===================== GENERAR TICKETS (HOJA DE NUMERACIÓN) ===================== -->
     <section class="pantalla" id="pasoGen">
       <div class="seccion-cab">
-        <h1>Generar tickets desde HN</h1>
-        <p class="seccion-sub">Sube uno o varios Excel (hoja <b>HN</b>). Cada archivo/OF se procesa por separado: revisa, corrige, cruza con la BASE y escribe al ALMACÉN del área. Solo ingeniería.</p>
+        <h1>Generar tickets</h1>
+        <p class="seccion-sub">La OF se registra primero en <b>OFs registradas</b> (subiendo su HN). Aquí eliges el área y la OF, decides qué operaciones trocear y se generan sus tickets desde el desglose — sin escribir el ALMACÉN. Solo ingeniería.</p>
       </div>
       <div class="tabs gen-subtabs">
         <button class="tab activo" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
@@ -598,24 +598,16 @@
         <button class="tab" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
       </div>
       <div class="barra-control">
-        <label class="campo"><span>Área (ALMACEN destino)</span>
+        <label class="campo"><span>Área</span>
           <select id="areaGen" onchange="genAreaChange()"></select></label>
-        <label class="btn-mini" style="cursor:pointer;align-self:flex-end;">
-          Subir Excel HN (uno o varios)
-          <input type="file" id="fileGen" accept=".xlsx,.xls,.xlsm" multiple style="display:none" onchange="genLeerHN(this)">
-        </label>
-      </div>
-      <p class="seccion-sub" style="margin:0 0 12px;">Cada archivo/OF configura su propio empaquetado. Costura: dividir última y/o penúltima operación con su cantidad. Acabado: paquetes estándar/pequeño sobre el total (por color o global).</p>
-      <div class="barra-control" style="border-top:1px dashed #cfd8e6;padding-top:12px;margin-top:4px;">
-        <label class="campo"><span>OF registrada</span>
-          <select id="genOfSel" onchange="genRutaCargar()"><option value="">— Elige área primero —</option></select></label>
+        <label class="campo autocomplete" style="min-width:300px;"><span>OF registrada</span>
+          <input type="text" id="genOfBuscar" placeholder="— Elige área primero —" autocomplete="off" disabled
+            oninput="genOfsBuscar()" onfocus="genOfsBuscar()" onblur="setTimeout(genOfsCerrar,150)">
+          <div id="genOfDrop" class="autocomplete-drop" style="display:none;"></div></label>
         <button class="btn-mini" onclick="genOfsRecargar()">↻ OFs</button>
-        <span class="sub" style="align-self:flex-end;">Genera los tickets desde el desglose de la HN, sin escribir el ALMACÉN.</span>
       </div>
       <div id="genRuta"></div>
-
-      <div id="genGate" class="estado-vacio">Elige el área y sube uno o más Excel (hoja HN), o genera una OF ya registrada.</div>
-      <div id="genJobs"></div>
+      <div id="genGate" class="estado-vacio">Elige el área y luego la OF. Si la OF no aparece, regístrala en <b>OFs registradas</b>.</div>
     </section>
 
     <!-- ===================== CORREGIR FECHAS DE RECLAMO ===================== -->
