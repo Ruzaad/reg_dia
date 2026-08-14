@@ -118,10 +118,35 @@
     </div>
 
     <div class="zona-of" id="zonaMotivo" style="display:none;margin-top:12px;">
-      <div class="campo-label">Motivo (hora de salida / regreso)</div>
+      <div class="campo-label">Motivo</div>
       <input class="input-grande" id="inputMotivo" autocomplete="off" maxlength="120"
-             placeholder="Ej: salió al seguro 10:00, regresó 11:30"
+             placeholder="Escribe el motivo"
              style="font-size:19px;letter-spacing:normal;text-align:left;">
+    </div>
+
+    <!-- SEGURO / PERMISO: hora de salida y de retorno -->
+    <div class="zona-of" id="zonaSalida" style="display:none;margin-top:12px;">
+      <div class="modal-2col">
+        <div><div class="campo-label">Hora de salida</div>
+          <input class="input-grande" type="time" id="ocSalida" onchange="ocCalcSalida()"
+                 style="font-size:22px;letter-spacing:normal;"></div>
+        <div><div class="campo-label">Hora de retorno</div>
+          <input class="input-grande" type="time" id="ocRetorno" onchange="ocCalcSalida()"
+                 style="font-size:22px;letter-spacing:normal;"></div>
+      </div>
+      <label class="chk-inline" style="margin-top:12px;">
+        <input type="checkbox" class="sw" id="ocNoRetorna" onchange="ocCalcSalida()"> No retorna a planta
+      </label>
+      <div class="cf-detalle" id="ocSalidaCalc" style="margin-top:10px;font-size:16px;"></div>
+    </div>
+
+    <!-- TARDANZA: solo confirmar -->
+    <div class="zona-of" id="zonaTardanza" style="display:none;margin-top:12px;">
+      <div class="conf-card" style="text-align:center;">
+        <div class="tk-label">Se descontará</div>
+        <div class="conf-num">1 hora</div>
+        <div class="conf-det">60 minutos de sus disponibles del día</div>
+      </div>
     </div>
 
     <div style="max-width:560px;margin:16px auto 0;width:100%;">
@@ -187,6 +212,7 @@
     <h1>Incidencias del personal</h1>
     <div class="sub">Solicitudes de ajuste de tiempo enviadas por el personal</div>
     <button type="button" class="btn-recargar" onclick="cargarIncidencias()">↻ RECARGAR</button>
+    <div id="zonaRetornos" style="margin-top:14px;"></div>
     <div class="lista-cards" id="listaIncidencias" style="margin-top:14px;"></div>
   </section>
 </main>

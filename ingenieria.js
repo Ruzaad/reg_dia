@@ -72,6 +72,23 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   activarTab(NAV_TABS.includes(hashTab) ? hashTab : "pasoTk");
 });
 
+/* Comparador único de las tablas ordenables.
+   Antes cada tabla hacía parseFloat(v): "2026-08-10" daba 2026, así que todas
+   las fechas del mismo año empataban y no ordenaban; "18:43" daba 18 y por eso
+   las horas sí funcionaban. Ahora solo se compara como número si TODO el valor
+   lo es; el resto va por texto, y los formatos ISO (YYYY-MM-DD [HH:MM]) ordenan
+   bien lexicográficamente. Los vacíos siempre al final. */
+const esNum = v => v!=null && v!=="" &&
+  (typeof v==="number" || /^-?\d+([.,]\d+)?$/.test(String(v).trim()));
+function cmpVal(va, vb){
+  if(esNum(va) && esNum(vb))
+    return Number(String(va).replace(",",".")) - Number(String(vb).replace(",","."));
+  const a = va==null?"":String(va).trim(), b = vb==null?"":String(vb).trim();
+  if(!a && b) return 1;
+  if(!b && a) return -1;
+  return a.localeCompare(b, "es", {numeric:true, sensitivity:"base"});
+}
+
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoModEf","pasoBases",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra"];
@@ -130,6 +147,7 @@ function poblarSelectsArea(){
   if($("areaModEf")) $("areaModEf").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("avofArea")) $("avofArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
   if($("exArea")) $("exArea").innerHTML = elige + AREAS_LISTA.map(op).join("");
+  if($("movArea")) $("movArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
   // Operaciones por OF y Generar tickets: solo áreas con Sheet en areas_config.
   const conSheet = Object.keys(AREAS).filter(a=>AREAS[a].habilitada && AREAS[a].sheetId).sort();
   if($("opfArea")) $("opfArea").innerHTML = elige + conSheet.map(op).join("");
@@ -203,9 +221,107 @@ function genInit(){
   GEN_JOBS=[]; GEN_SEQ=0;
   $("genGate").style.display="block";
   if($("genJobs")) $("genJobs").innerHTML="";
+  genOfsRecargar();
 }
 /* La config de empaquetado vive EN CADA tarjeta; al cambiar de área se re-renderiza. */
-function genAreaChange(){ renderGenJobs(); }
+function genAreaChange(){ renderGenJobs(); genOfsRecargar(); }
+
+/* ===== Generar desde una OF ya registrada (parche 29) =====
+   No escribe el ALMACÉN: marca la OF como servida por el sistema y guarda qué
+   operaciones se trocean. Los tickets se derivan de of_detalle × bases. */
+let GEN_RUTA=null;
+async function genOfsRecargar(){
+  const sel=$("genOfSel"); if(!sel) return;
+  const area=$("areaGen")?$("areaGen").value:"";
+  $("genRuta").innerHTML=""; GEN_RUTA=null;
+  if(!area){ sel.innerHTML=`<option value="">— Elige área primero —</option>`; return; }
+  sel.innerHTML=`<option value="">Cargando…</option>`;
+  try{
+    const r=await rpc("fn_ofs_generables",{p_dni:ING.dni,p_token:ING.token,p_area:area});
+    const ofs=Array.isArray(r)?r:[];
+    sel.innerHTML=`<option value="">— Elige una OF —</option>`+ofs.map(o=>
+      `<option value="${esc(o.of)}">${esc(o.articulo)} · OF ${esc(o.of)} · ${Math.round(o.cant_prog)} und`
+      +`${o.generada?" ✓ generada":""}${o.paquetes?"":" (sin desglose)"}</option>`).join("");
+    if(!ofs.length) sel.innerHTML=`<option value="">Ninguna OF registrada con BASE en esta área</option>`;
+  }catch(e){ sel.innerHTML=`<option value="">Error</option>`; mostrarError(e.message); }
+}
+async function genRutaCargar(){
+  const of=$("genOfSel").value, area=$("areaGen").value;
+  const z=$("genRuta"); GEN_RUTA=null;
+  if(!of){ z.innerHTML=""; return; }
+  z.innerHTML=cargandoHTML("Cruzando con BASE…");
+  try{
+    const r=await rpc("fn_of_ruta",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_of:of});
+    if(!r.ok){ z.innerHTML=""; mostrarError(r.error||"Error"); return; }
+    GEN_RUTA=r; genRutaPintar();
+  }catch(e){ z.innerHTML=""; mostrarError(e.message); }
+}
+function genRutaPintar(){
+  const r=GEN_RUTA; if(!r) return;
+  const filas=(r.ruta||[]).map((o,i)=>`<tr>
+      <td>${o.n_op}</td><td class="izq">${esc(o.modulo||"—")}</td>
+      <td class="izq"><b>${esc(o.operacion)}</b></td><td>${Number(o.std).toFixed(2)}</td>
+      <td><label class="chk-inline"><input type="checkbox" class="sw" id="gtOn${i}"
+        ${o.troceo?"checked":""} onchange="genTroceoToggle(${i})"> trocear</label></td>
+      <td><input type="number" id="gtN${i}" min="1" inputmode="numeric" placeholder="Ej: 10"
+        value="${o.troceo||""}" style="max-width:90px;" ${o.troceo?"":"disabled"}></td>
+    </tr>`).join("");
+  const aviso = r.con_reclamos
+    ? `<div class="diff-del">Esta OF ya tiene tickets reclamados en el área. No se puede cambiar el troceo sin liberarlos antes: cambiarlo cambiaría los códigos.</div>`
+    : !r.paquetes
+      ? `<div class="diff-del">La OF no tiene desglose de paquetes. Complétalo con su HN en OFs registradas antes de generar.</div>`
+      : "";
+  $("genRuta").innerHTML=`<div class="diff-box">
+      <h3>${esc(r.articulo)} · OF ${esc(r.of)}</h3>
+      <div class="cf-detalle">${Math.round(r.cant_prog)} und · ${r.paquetes} paquete(s) de la HN · ${(r.ruta||[]).length} operación(es) en BASE
+        ${r.generada?' · <span class="pill ACTIVO">YA GENERADA</span>':""}</div>
+    </div>
+    ${aviso}
+    <div class="contenedor-ancho tabla-scroll" style="max-height:44vh;">
+      <table class="tabla"><thead><tr><th>N°OP</th><th class="izq">Módulo</th><th class="izq">Operación</th>
+        <th>STD</th><th>Trocear</th><th>Cantidad</th></tr></thead><tbody>${filas
+        ||`<tr><td colspan="6"><div class="vacio-msg">Sin BASE para este artículo</div></td></tr>`}</tbody></table>
+    </div>
+    <div class="fila-filtros" style="margin-top:8px;">
+      <button class="btn-mini verde" onclick="genConfirmarOF()"
+        ${(r.con_reclamos||!r.paquetes||!(r.ruta||[]).length)?"disabled":""}>
+        ${r.generada?"Regenerar":"Generar"} tickets de la OF ${esc(r.of)}</button>
+      <span class="sub" id="genPrev"></span>
+    </div>`;
+  genPrevisualizar();
+}
+function genTroceoToggle(i){
+  const c=$("gtOn"+i), n=$("gtN"+i); if(!c||!n) return;
+  n.disabled=!c.checked; if(!c.checked) n.value="";
+  else if(!n.value) n.focus();
+  genPrevisualizar();
+}
+function genTroceoActual(){
+  return (GEN_RUTA.ruta||[]).map((o,i)=>{
+    const c=$("gtOn"+i), n=$("gtN"+i);
+    const v=(c&&c.checked&&n)?parseInt(n.value,10):0;
+    return v>0 ? {n_op:o.n_op, n:v} : null;
+  }).filter(Boolean);
+}
+function genPrevisualizar(){
+  const r=GEN_RUTA, p=$("genPrev"); if(!r||!p) return;
+  const tro=genTroceoActual(), byOp={}; tro.forEach(t=>byOp[t.n_op]=t.n);
+  const total=(r.ruta||[]).reduce((a,o)=>a + (byOp[o.n_op]
+    ? Math.ceil(r.cant_prog/byOp[o.n_op]) : r.paquetes), 0);
+  p.textContent = `${total} tickets · ${tro.length} operación(es) troceada(s)`;
+}
+async function genConfirmarOF(){
+  const r=GEN_RUTA; if(!r) return;
+  const area=$("areaGen").value, tro=genTroceoActual();
+  const det=tro.length ? tro.map(t=>`N°OP ${t.n_op} en paquetes de ${t.n}`).join("\n") : "sin trocear ninguna operación";
+  if(!confirm(`¿Generar los tickets de la OF ${r.of} en ${area}?\n\n${det}\n\nNo se escribe el ALMACÉN: los tickets se calculan desde el desglose de la HN.`)) return;
+  try{
+    const g=await rpc("fn_of_generar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_of:r.of,p_troceo:tro});
+    if(!g.ok){ mostrarError(g.error||"No se pudo generar"); return; }
+    mostrarOk(`OF ${g.of} generada · ${g.tickets} tickets · ${g.troceadas} operación(es) troceada(s)`);
+    await genOfsRecargar(); $("genOfSel").value=r.of; genRutaCargar();
+  }catch(e){ mostrarError(e.message); }
+}
 function celTxt(v){ return v==null?"":String(v).trim(); }
 
 /* Carga MÚLTIPLES archivos: cada uno = un trabajo independiente (su hoja HN). */
@@ -526,44 +642,79 @@ async function opfCargarOF(){
   }catch(e){ $("opfDelList").innerHTML=""; mostrarError(e.message); }
 }
 
+/* La operación se busca escribiendo y el N°OP sale de la BASE: pedirlo a mano
+   era pedir dos veces el mismo dato. Se pueden añadir varias de una vez. */
 function opfRenderAdd(){
-  const sel=$("opfOp"); if(!sel) return;
-  const existentes=new Set(OPF.ops.map(o=>normKey(o.op)));
-  sel.innerHTML = OPF.baseOps.length
-    ? OPF.baseOps.map(o=>`<option value="${esc(o.op)}">${esc(o.op)}${existentes.has(normKey(o.op))?" (ya en la OF)":""}</option>`).join("")
-    : `<option value="">Sin operaciones en la BASE de ${esc(OPF.articulo||"—")}</option>`;
+  OPF.sel=OPF.sel||[];
+  opfPintarSel();
   $("opfAddPv").innerHTML=`<div class="cf-detalle" style="margin-top:8px;">OF ${esc(OPF.of)} · ${esc(OPF.prenda)} / ${esc(OPF.articulo)} · ${OPF.ops.length} operación(es) actuales · paquetes de referencia: ${opfTemplate().length}.</div>`;
 }
+function opfBuscarOp(){
+  const inp=$("opfOp"), drop=$("opfOpDrop"); if(!inp||!drop) return;
+  const q=normKey(inp.value);
+  const yaOF=new Set(OPF.ops.map(o=>normKey(o.op)));
+  const yaSel=new Set((OPF.sel||[]).map(o=>normKey(o.op)));
+  OPF.match=(OPF.baseOps||[])
+    .filter(o=>!yaSel.has(normKey(o.op)) && (!q || normKey(o.op).includes(q)))
+    .slice(0,40);
+  if(!OPF.match.length){
+    drop.innerHTML=`<div class="ac-item" style="color:#5a6270;">${OPF.baseOps.length?"Sin coincidencias":"Sin BASE para "+esc(OPF.articulo||"—")}</div>`;
+    drop.style.display="block"; return;
+  }
+  drop.innerHTML=OPF.match.map((o,i)=>`<div class="ac-item" onmousedown="opfElegirOp(${i})">
+    <b>${esc(o.op)}</b> · N°OP ${o.n_op} · STD ${Number(o.std).toFixed(2)}${yaOF.has(normKey(o.op))?" · ya en la OF":""}</div>`).join("");
+  drop.style.display="block";
+}
+function opfCerrarDrop(){ const d=$("opfOpDrop"); if(d) d.style.display="none"; }
+function opfElegirOp(i){
+  const o=(OPF.match||[])[i]; if(!o) return;
+  (OPF.sel=OPF.sel||[]).push(o);
+  $("opfOp").value=""; opfCerrarDrop(); opfPintarSel(); $("opfAddPv").innerHTML="";
+}
+function opfQuitarSel(i){ OPF.sel.splice(i,1); opfPintarSel(); $("opfAddPv").innerHTML=""; }
+function opfLimpiarSel(){ OPF.sel=[]; opfPintarSel(); $("opfAddPv").innerHTML=""; OPF.pendAdd=null; }
+function opfPintarSel(){
+  const z=$("opfSel"); if(!z) return;
+  const s=OPF.sel||[];
+  z.innerHTML = s.length
+    ? `Se añadirán ${s.length}: ` + s.map((o,i)=>`<span class="pill CERRADO" style="cursor:pointer;margin:2px;"
+        onclick="opfQuitarSel(${i})" title="Quitar de la selección">${esc(o.op)} · N°OP ${o.n_op} ✕</span>`).join("")
+    : `Escribe arriba para buscar operaciones de la BASE. Puedes elegir varias.`;
+}
 function opfPreviewAdd(){
-  const opNom=$("opfOp").value.trim(); const nop=parseInt($("opfNop").value,10);
-  if(!opNom){ mostrarError("Elige la operación"); return; }
-  if(!nop||nop<=0){ mostrarError("Indica el N°OP (posición)"); return; }
-  const base=OPF.baseOps.find(o=>normKey(o.op)===normKey(opNom));
-  const std=base?Number(base.std)||0:0, modulo=base?norm(base.modulo):"";
+  const sel=OPF.sel||[];
+  if(!sel.length){ mostrarError("Elige al menos una operación"); return; }
   const H=OPF.H, tpl=opfTemplate();
   if(!tpl.length){ mostrarError("No hay paquetes de referencia en la OF"); return; }
-  const filas=[], set=new Set();
-  for(const r of tpl){
-    const corteRaw = H.NCORTE!==undefined ? norm(r[H.NCORTE]) : "";
-    const corteNum = parseInt(corteRaw) || (filas.length+1);
-    const corte = corteRaw || String(corteNum);
-    const talla = H.TALLA!==undefined?norm(r[H.TALLA]):"";
-    const color = H.COLOR!==undefined?norm(r[H.COLOR]):"";
-    const cant  = Number(norm(r[H.CANT]))||0;
-    const col13 = H.NUMERACION!==undefined?norm(r[H.NUMERACION]):"";
-    const codigo = opfCodigo(OPF.of, nop, corteNum);
-    if(set.has(codigo)){ mostrarError("Código duplicado interno: "+codigo); return; }
-    set.add(codigo);
-    const ef=Math.round(((std*cant)/576)*100*100)/100;
-    filas.push([OPF.prenda,OPF.articulo,modulo,opNom,std,Number(OPF.of),talla,color,corte,cant,codigo,nop,col13,ef]);
+  const filas=[], set=new Set(), resumen=[];
+  for(const base of sel){
+    const nop=parseInt(base.n_op,10);
+    if(!nop||nop<=0){ mostrarError(`La operación ${base.op} no tiene N°OP en la BASE`); return; }
+    const std=Number(base.std)||0, modulo=norm(base.modulo), opNom=norm(base.op);
+    let n=0;
+    for(const r of tpl){
+      const corteRaw = H.NCORTE!==undefined ? norm(r[H.NCORTE]) : "";
+      const corteNum = parseInt(corteRaw) || (n+1);
+      const corte = corteRaw || String(corteNum);
+      const talla = H.TALLA!==undefined?norm(r[H.TALLA]):"";
+      const color = H.COLOR!==undefined?norm(r[H.COLOR]):"";
+      const cant  = Number(norm(r[H.CANT]))||0;
+      const col13 = H.NUMERACION!==undefined?norm(r[H.NUMERACION]):"";
+      const codigo = opfCodigo(OPF.of, nop, corteNum);
+      if(set.has(codigo)){ mostrarError("Código duplicado interno: "+codigo+" ("+opNom+")"); return; }
+      set.add(codigo); n++;
+      const ef=Math.round(((std*cant)/576)*100*100)/100;
+      filas.push([OPF.prenda,OPF.articulo,modulo,opNom,std,Number(OPF.of),talla,color,corte,cant,codigo,nop,col13,ef]);
+    }
+    resumen.push(`<b>${esc(opNom)}</b> · N°OP ${nop} · STD ${std} · ${esc(modulo||"—")} · ${n} tickets`);
   }
   const yaExisten=new Set(); Object.values(OPF.rowsByOp).forEach(rows=>rows.forEach(r=>yaExisten.add(String(norm(r[H.CODIGO])))));
   const dup=filas.filter(f=>yaExisten.has(String(f[10])));
   OPF.pendAdd = dup.length?null:filas;
-  let html=`<div class="diff-box"><h3>${filas.length} tickets a generar</h3>
-    <div class="cf-detalle">Operación <b>${esc(opNom)}</b> · N°OP ${nop} · STD ${std} · módulo ${esc(modulo||"—")}<br>código = OF+DDMM+N°OP+corte (ej. ${filas[0]?filas[0][10]:"—"})</div></div>`;
+  let html=`<div class="diff-box"><h3>${filas.length} tickets a generar · ${sel.length} operación(es)</h3>
+    <div class="cf-detalle">${resumen.join("<br>")}</div></div>`;
   if(dup.length){
-    html+=`<div class="diff-box"><div class="diff-del">${dup.length} código(s) YA existen (¿ya agregaste esta operación hoy con ese N°OP?).</div></div>`;
+    html+=`<div class="diff-box"><div class="diff-del">${dup.length} código(s) YA existen (¿ya agregaste alguna de estas operaciones?).</div></div>`;
   } else {
     html+=`<div class="fila-filtros"><button class="btn-mini verde" onclick="opfConfirmAdd()">Confirmar y escribir en ALMACÉN (${filas.length})</button></div>`;
   }
@@ -678,8 +829,7 @@ function pintarReclamosFec(){
   let lista = Array.isArray(FEC_RECL) ? [...FEC_RECL] : [];
   $("resumenFec").textContent = `${lista.length} ticket(s) en esa fecha · ${Object.keys(FEC_SEL).length} seleccionado(s)`;
   if(!lista.length){ $("tablaFec").innerHTML=`<div class="vacio-msg">Ese operario no tiene tickets esa fecha</div>`; return; }
-  if(fecSort.col){ const c=fecSort.col; lista.sort((a,b)=>{ const va=a[c],vb=b[c],na=parseFloat(va),nb=parseFloat(vb);
-    const cc=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es"); return cc*fecSort.dir; }); }
+  if(fecSort.col){ const c=fecSort.col; lista.sort((a,b)=>{ return cmpVal(a[c],b[c])*fecSort.dir; }); }
   const fl=k=>fecSort.col===k?(fecSort.dir===1?" ▲":" ▼"):"";
   const COLS=[["of","OF"],["op","Operación"],["articulo","Artículo"],["num","Num."],["hora","Hora"],["cant","Cant"],["minutos","Min"],["estado","Estado"]];
   const thead=`<thead><tr><th></th>${COLS.map(c=>`<th class="ord${c[0]==="op"?" izq":""}" onclick="ordenarFec('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}</tr></thead>`;
@@ -1023,8 +1173,7 @@ function pintarEf(){
   const cmp = (a,b)=>{
     if(!efSort.col) return String(a.nombre||"").localeCompare(String(b.nombre||""),"es");
     const va=a[efSort.col], vb=b[efSort.col];
-    const na=parseFloat(va), nb=parseFloat(vb);
-    const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es");
+      const c=cmpVal(va,vb);
     return c*efSort.dir;
   };
   const flecha = k => efSort.col===k ? (efSort.dir===1?" \u25B2":" \u25BC") : "";
@@ -1180,8 +1329,7 @@ function pintarModEf(){
   if(modEfSort.col){
     lista.sort((a,b)=>{
       const va=a[modEfSort.col], vb=b[modEfSort.col];
-      const na=parseFloat(va), nb=parseFloat(vb);
-      const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es");
+      const c=cmpVal(va,vb);
       return c*modEfSort.dir;
     });
   }
@@ -1331,9 +1479,67 @@ function perReload(){
 }
 function perTab(t){
   PER.tab=t;
-  [["crud","perCrud","perTabCrud"],["rango","perRango","perTabRango"],["matriz","perMatriz","perTabMatriz"],["marcar","perMarcar","perTabMarcar"]]
-    .forEach(x=>{ $(x[1]).hidden=x[0]!==t; $(x[2]).classList.toggle("activo",x[0]===t); });
+  [["crud","perCrud","perTabCrud"],["rango","perRango","perTabRango"],["matriz","perMatriz","perTabMatriz"],
+   ["marcar","perMarcar","perTabMarcar"],["mov","perMov","perTabMov"]]
+    .forEach(x=>{ if($(x[1])) $(x[1]).hidden=x[0]!==t; if($(x[2])) $(x[2]).classList.toggle("activo",x[0]===t); });
+  if(t==="mov"){ if($("movFecha")&&!$("movFecha").value) $("movFecha").value=hoyISO(); cargarMovs(); return; }
   perReload();
+}
+
+/* ===== Movimientos de área (parche 33) =====
+   `_disp_prorrateado` reparte los 575 min del día usando la HORA del movimiento.
+   Si se movió a alguien a destiempo, esa hora era intocable y los minutos
+   quedaban mal repartidos; aquí se corrige. */
+let MOVS=[];
+async function cargarMovs(){
+  const area=$("movArea")?$("movArea").value:"", fecha=$("movFecha")?$("movFecha").value:"";
+  if(!fecha){ $("movTabla").innerHTML=""; $("movResumen").textContent="Elige la fecha"; return; }
+  $("movTabla").innerHTML=cargandoHTML("Cargando…");
+  try{
+    const r=await rpc("fn_movimientos_listar",{p_dni:ING.dni,p_token:ING.token,p_area:area||"",p_fecha:fecha});
+    if(r && r.ok===false){ mostrarError(r.error||"Error"); $("movTabla").innerHTML=""; return; }
+    MOVS=Array.isArray(r)?r:[]; pintarMovs();
+  }catch(e){ $("movTabla").innerHTML=""; mostrarError(e.message); }
+}
+function pintarMovs(){
+  $("movResumen").textContent=`${MOVS.length} movimiento(s) · la hora reparte los 575 min del día entre las áreas`;
+  const body=MOVS.length? MOVS.map((m,i)=>`<tr>
+      <td class="izq"><b>${esc(soloApellidos(m.nombre))}</b></td>
+      <td>${esc(m.desde_area||"—")}</td><td>${esc(m.hacia_area)}</td>
+      <td><input type="time" id="mvH${i}" value="${esc(m.hora)}" style="max-width:110px;"></td>
+      <td>${m.min_origen==null?"—":m.min_origen+" min"}</td>
+      <td>${m.min_destino} min</td>
+      <td class="izq">${esc(soloApellidos(m.movido_por||"—"))}</td>
+      <td><button class="btn-mini verde" onclick="guardarMovHora(${i})">Guardar</button>
+          <button class="btn-mini rojo" onclick="eliminarMov(${i})">Deshacer</button></td>
+    </tr>`).join("")
+    : `<tr><td colspan="8"><div class="vacio-msg">Sin movimientos de área en esa fecha</div></td></tr>`;
+  $("movTabla").innerHTML=`<thead><tr><th class="izq">Persona</th><th>Desde</th><th>Hacia</th>
+    <th>Hora</th><th>Min. origen</th><th>Min. destino</th><th class="izq">Movido por</th><th></th></tr></thead>
+    <tbody>${body}</tbody>`;
+}
+async function guardarMovHora(i){
+  const m=MOVS[i]; if(!m) return;
+  const h=(($("mvH"+i)||{}).value||"").trim();
+  if(!h){ mostrarError("Indica la hora"); return; }
+  if(h===m.hora){ mostrarOk("Sin cambios"); return; }
+  try{
+    const r=await rpc("fn_movimiento_hora",{p_dni:ING.dni,p_token:ING.token,p_id:m.id,p_hora:h});
+    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+    mostrarOk(`${soloApellidos(m.nombre)} · ${h} · ${r.min_origen==null?"":r.min_origen+" min en "+m.desde_area+" y "}${r.min_destino} min en ${m.hacia_area}`);
+    cargarMovs();
+  }catch(e){ mostrarError(e.message); }
+}
+async function eliminarMov(i){
+  const m=MOVS[i]; if(!m) return;
+  if(!confirm(`¿Deshacer el movimiento de ${soloApellidos(m.nombre)} (${m.desde_area||"—"} → ${m.hacia_area}, ${m.hora})?\n`
+    + `Si es su último movimiento, vuelve a ${m.desde_area||"su área anterior"}.`)) return;
+  try{
+    const r=await rpc("fn_movimiento_eliminar",{p_dni:ING.dni,p_token:ING.token,p_id:m.id});
+    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+    mostrarOk(r.revertido?`Deshecho · vuelve a ${m.desde_area}`:"Movimiento eliminado");
+    cargarMovs();
+  }catch(e){ mostrarError(e.message); }
 }
 
 /* --- CRUD --- */
@@ -1353,8 +1559,7 @@ function ordenarPerCrud(col){ if(perCrudSort.col===col) perCrudSort.dir*=-1; els
 function perPintarCrud(){
   const q=normKey($("perBuscar").value);
   let lista=PER.crud.filter(p=>!q||normKey(p.nombre+" "+p.dni).includes(q));
-  if(perCrudSort.col){ const c=perCrudSort.col; lista=[...lista].sort((a,b)=>{ const va=a[c],vb=b[c],na=parseFloat(va),nb=parseFloat(vb);
-    const cc=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es"); return cc*perCrudSort.dir; }); }
+  if(perCrudSort.col){ const c=perCrudSort.col; lista=[...lista].sort((a,b)=>{ return cmpVal(a[c],b[c])*perCrudSort.dir; }); }
   $("perResumenCrud").textContent=`${lista.length} persona(s)`;
   const fl=k=>perCrudSort.col===k?(perCrudSort.dir===1?" ▲":" ▼"):"";
   const C=[["nombre","Nombre"],["dni","DNI"],["area_actual","Área actual"],["area_origen","Área origen"],["cargo","Cargo"],["estado","Estado"]];
@@ -1651,9 +1856,16 @@ async function cargarDbMod(){
 }
 
 /* --- Operaciones sin OF (parche 27): reprocesos, muestras, arreglos --- */
-let EXTRA=[];
+let EXTRA=[], EXTRA_TIPOS=[];
 async function cargarExtra(){
   const area=$("exArea")?$("exArea").value:"";
+  /* El tipo es catálogo abierto, como los motivos de Corregir fechas: si el
+     analista escribe uno nuevo, queda dado de alta al guardar (parche 30). */
+  try{
+    const t=await rpc("fn_tipos_extra_listar",{p_dni:ING.dni,p_token:ING.token});
+    EXTRA_TIPOS=Array.isArray(t)?t:[];
+    if($("exTiposLista")) $("exTiposLista").innerHTML=EXTRA_TIPOS.map(x=>`<option value="${esc(x)}">`).join("");
+  }catch(e){}
   if(!area){ $("exTabla").innerHTML=""; $("exResumen").textContent="Elige un área"; return; }
   $("exTabla").innerHTML=cargandoHTML("Cargando…");
   try{
@@ -1676,9 +1888,10 @@ function pintarExtra(){
     <th>Estado</th><th></th></tr></thead><tbody>${body}</tbody>`;
 }
 async function guardarExtra(){
-  const area=$("exArea").value, tipo=$("exTipo").value;
+  const area=$("exArea").value, tipo=norm($("exTipo").value).toUpperCase();
   const op=norm($("exOp").value), std=parseFloat($("exStd").value);
   if(!area){ mostrarError("Elige un área"); return; }
+  if(!tipo){ mostrarError("Escribe el tipo"); return; }
   if(!op){ mostrarError("Escribe la operación"); return; }
   if(!std || std<=0){ mostrarError("El STD debe ser mayor que cero"); return; }
   try{
@@ -1750,6 +1963,7 @@ function ofsLeerHN(input){
           p_div_ultima:null, p_div_penultima:null, p_detalle:det});
         if(!g || g.ok===false) lineas.push(`<div class="diff-del">${esc(file.name)}: ${esc((g&&g.error)||"error")}</div>`);
         else if(g.creada) lineas.push(`<div class="cf-detalle">✓ OF ${esc(g.of)} · ${g.paquetes} paquete(s) · ${Math.round(total)} und</div>`);
+        else if(g.completada) lineas.push(`<div class="cf-detalle">✓ OF ${esc(g.of)} completada con su desglose · ${g.paquetes} paquete(s) · ${Math.round(total)} und</div>`);
         else lineas.push(`<div class="diff-del">OF ${esc(g.of)} ya registrada (${esc(g.fecha_carga||"—")}). No se escribió.`
           + ((g.difiere||[]).length?`<br>Diferencias: ${esc((g.difiere||[]).join(" · "))}`:"")+`</div>`);
       }catch(err){ lineas.push(`<div class="diff-del">${esc(file.name)}: ${esc(err.message)}</div>`); }
@@ -1824,19 +2038,21 @@ async function avofMeta(){
 /* Meta de la OF. cargarMetaOF devuelve 0 si la celda CANT PROG viene vacía:
    eso es "sin dato", no "programado cero". */
 function avofProg(of){ const v=AVOF.meta[normKey(of||"")]; return v>0?v:null; }
-/* Cerrado por ingeniería ⇒ completado, aunque la cantidad reportada no llegue. */
-function avofModCompleto(m,prog){
-  return m.cerrado===true || (prog!=null && (Number(m.cant_ultima)||0)>=prog);
+/* Cerrado por ingeniería ⇒ completado, aunque la cantidad reportada no llegue.
+   El nivel elegido (última/penúltima) manda en TODO el cálculo, no solo en la
+   columna que se muestra. */
+function avofCant(m,nivel){ return Number(nivel==="ultima" ? m.cant_ultima : m.cant_penultima)||0; }
+function avofModCompleto(m,prog,nivel){
+  return m.cerrado===true || (prog!=null && avofCant(m,nivel)>=prog);
 }
 const avofReciente = a => a.slice().sort((x,y)=>String(y.fecha_ultima||"").localeCompare(String(x.fecha_ultima||"")))[0];
 function avofFila(it,nivel,area){
   const prog=avofProg(it.of);
   const mods=(it.modulos||[]).filter(m=>!area||m.area===area);
-  const pend=mods.filter(m=>!avofModCompleto(m,prog));
+  const pend=mods.filter(m=>!avofModCompleto(m,prog,nivel));
   const cur=avofReciente(pend.length?pend:mods)||{};   // dónde está la OF ahora mismo
-  const real=nivel==="ultima"?(cur.cant_ultima||0):(cur.cant_penultima||0);
   return {of:it.of, articulo:it.articulo, area:cur.area||"—", modulo:cur.modulo||"—",
-    prog, real, mods,
+    prog, real:avofCant(cur,nivel), mods, nivel,
     estado:(mods.length && !pend.length)?"COMPLETADO":"PROCESO", it};
 }
 function avofPintar(){
@@ -1849,8 +2065,7 @@ function avofPintar(){
     .filter(r=>!q||normKey((r.articulo||"")+" "+(r.of||"")).includes(q));
   const nCompl=todas.filter(r=>r.estado==="COMPLETADO").length;
   let rows=todas.filter(r=>r.estado===(soloCompl?"COMPLETADO":"PROCESO"));
-  if(avofSort.col){ const c=avofSort.col; rows.sort((a,b)=>{ const va=a[c],vb=b[c],na=parseFloat(va),nb=parseFloat(vb);
-    const cc=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es"); return cc*avofSort.dir; }); }
+  if(avofSort.col){ const c=avofSort.col; rows.sort((a,b)=>{ return cmpVal(a[c],b[c])*avofSort.dir; }); }
   AVOF._rows=rows;
   $("avofResumen").textContent=`${nCompl} completada(s) · ${todas.length-nCompl} en proceso`
     + ` · ${area||"todas las áreas"} · operación ${nivel==="ultima"?"última":"penúltima"}`;
@@ -1875,7 +2090,7 @@ function avofToggle(i){
   }
   el.hidden=!el.hidden;
 }
-function avofEstadoMod(m,prog){ return m.cerrado?"CERRADO":(avofModCompleto(m,prog)?"COMPLETADO":"PROCESO"); }
+function avofEstadoMod(m,prog,nivel){ return m.cerrado?"CERRADO":(avofModCompleto(m,prog,nivel)?"COMPLETADO":"PROCESO"); }
 function avofDetalle(r){
   const pill=t=>`<span class="pill ${t==="CERRADO"?"CERRADO":(t==="COMPLETADO"||t==="LISTO")?"ACTIVO":"PROCESO"}">${t}</span>`;
   const sinRuta=`<span class="avof-aviso" title="Este módulo no tiene ruta en BASE: se usa el mayor N°OP reclamado.">*</span>`;
@@ -1883,11 +2098,11 @@ function avofDetalle(r){
       <td>${m.nop_max==null?"—":m.nop_max}${m.ruta_base===false?sinRuta:""}</td>
       <td class="izq">${esc(m.op_ultima||"—")}</td><td>${m.cant_penultima}</td><td>${m.cant_ultima}</td>
       <td>${esc(m.fecha_entrada||"—")}</td><td>${esc(m.fecha_ultima||"—")}</td>
-      <td>${pill(avofEstadoMod(m,r.prog))}</td></tr>`).join("")
+      <td>${pill(avofEstadoMod(m,r.prog,r.nivel))}</td></tr>`).join("")
     ||`<tr><td colspan="9"><div class="vacio-msg">Sin módulos</div></td></tr>`;
   const porArea={};
   (r.mods||[]).forEach(m=>{ const a=porArea[m.area]=porArea[m.area]||{n:0,ok:0};
-    a.n++; if(avofModCompleto(m,r.prog)) a.ok++; });
+    a.n++; if(avofModCompleto(m,r.prog,r.nivel)) a.ok++; });
   const trz=(r.it.areas||[]).filter(a=>porArea[a.area]).map(a=>{
     const s=porArea[a.area], listo=s.ok===s.n;
     return `<tr><td>${esc(a.area)}</td><td>${esc(a.entrada||"—")}</td><td>${esc(a.salida||"—")}</td>
@@ -1895,7 +2110,9 @@ function avofDetalle(r){
   }).join("")||`<tr><td colspan="6"><div class="vacio-msg">Sin trazas</div></td></tr>`;
   return `<div class="avof-det-wrap">
     <div class="tk-ops-title">Por módulo (penúltima / última operación de cada módulo)</div>
-    <table class="tabla"><thead><tr><th>Área</th><th class="izq">Módulo</th><th>N°OP máx</th><th class="izq">Última op.</th><th>Penúltima</th><th>Última</th><th>Entró</th><th>Fecha últ.</th><th>Estado</th></tr></thead><tbody>${mods}</tbody></table>
+    <table class="tabla"><thead><tr><th>Área</th><th class="izq">Módulo</th><th>N°OP máx</th><th class="izq">Última op.</th>
+      <th>Penúltima${r.nivel!=="ultima"?" ◄":""}</th><th>Última${r.nivel==="ultima"?" ◄":""}</th>
+      <th>Entró</th><th>Fecha últ.</th><th>Estado</th></tr></thead><tbody>${mods}</tbody></table>
     <div class="tk-ops-title" style="margin-top:10px;">Trazabilidad por área (entró / salió)</div>
     <table class="tabla"><thead><tr><th>Área</th><th>Entró</th><th>Salió</th><th>Cant.</th><th>Módulos listos</th><th>Estado</th></tr></thead><tbody>${trz}</tbody></table>
   </div>`;
@@ -1906,7 +2123,7 @@ function descargarAvof(){
   const filas=rows.map(r=>[r.articulo,r.of,r.area,r.modulo,r.prog,r.real,r.estado]);
   const det=[["OF","Área","Módulo","N°OP máx","Última op.","Penúltima","Última","Entró","Fecha últ.","Cerrado","Estado"]];
   rows.forEach(r=>(r.mods||[]).forEach(m=>det.push([r.of,m.area,m.modulo,m.nop_max,m.op_ultima,
-    m.cant_penultima,m.cant_ultima,m.fecha_entrada,m.fecha_ultima,m.cerrado?"SÍ":"NO",avofEstadoMod(m,r.prog)])));
+    m.cant_penultima,m.cant_ultima,m.fecha_entrada,m.fecha_ultima,m.cerrado?"SÍ":"NO",avofEstadoMod(m,r.prog,r.nivel)])));
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "ResumenOF");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(det), "PorModulo");
@@ -2022,8 +2239,7 @@ function pintarTk(){
   if(tkSort.col){
     TK_VISTA.sort((a,b)=>{
       const va=a[tkSort.col], vb=b[tkSort.col];
-      const na=parseFloat(va), nb=parseFloat(vb);
-      const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es");
+      const c=cmpVal(va,vb);
       return c*tkSort.dir;
     });
   }
@@ -2152,8 +2368,7 @@ function pintarTkOp(){
     if(!q) return true;
     return normKey((t.nombre||"")+" "+(t.dni||"")+" "+(t.numeracion||"")+" "+(t.codigo||"")).includes(q);
   });
-  if(tkOpSort.col){ const c=tkOpSort.col; rows.sort((a,b)=>{ const va=a[c],vb=b[c],na=parseFloat(va),nb=parseFloat(vb);
-    const cc=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es"); return cc*tkOpSort.dir; }); }
+  if(tkOpSort.col){ const c=tkOpSort.col; rows.sort((a,b)=>{ return cmpVal(a[c],b[c])*tkOpSort.dir; }); }
   TKOP._rows=rows;
   const totP=Math.max(1,Math.ceil(rows.length/TKOP_PAGE));
   if(tkOpPag>totP) tkOpPag=totP; if(tkOpPag<1) tkOpPag=1;
@@ -2291,8 +2506,7 @@ function pintarBases(){
   if(baseSort.col){
     lista = [...lista].sort((a,b)=>{
       const va=a[baseSort.col], vb=b[baseSort.col];
-      const na=parseFloat(va), nb=parseFloat(vb);
-      const c = (!isNaN(na)&&!isNaN(nb)) ? na-nb : String(va??"").localeCompare(String(vb??""),"es");
+      const c=cmpVal(va,vb);
       return c*baseSort.dir;
     });
   }
@@ -2684,8 +2898,7 @@ function pintarOcurrencias(){
   // orden
   lista=[...lista].sort((a,b)=>{
     const va=a[inciSort.col], vb=b[inciSort.col];
-    const na=parseFloat(va), nb=parseFloat(vb);
-    const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va??"").localeCompare(String(vb??""),"es");
+      const c=cmpVal(va,vb);
     return c*inciSort.dir;
   });
   const flecha=k=>inciSort.col===k?(inciSort.dir===1?" ▲":" ▼"):"";

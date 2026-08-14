@@ -423,39 +423,52 @@ const VOLVER_OPERARIO = {
 };
 
 let sa={signo:-1};
+/* El operario solo pide RESTAR minutos: nunca sumaron. Los motivos habituales
+   son botones; "OTROS" abre los minutos y el texto libre, que se guarda en
+   mayúsculas. */
+const SA_MOTIVOS=["MÁQUINA PARADA","ARREGLOS","MUESTRAS","REPROCESOS","DESCOSER","OTROS"];
 function abrirSolicitudAjuste(){
-  sa={signo:-1};
+  sa={signo:-1, motivo:null};
   abrirModal(`
-    <h2>Solicitar ajuste de tiempo</h2>
-    <div class="sub" style="margin-bottom:12px;">Pides a supervisión sumar o restar minutos de tu día</div>
-    <div class="seg" id="saSeg">
-      <button id="saResta" class="activo" onclick="saSigno(-1)">RESTA min</button>
-      <button id="saSuma" onclick="saSigno(1)">SUMA min</button>
+    <h2>Solicitar descuento de tiempo</h2>
+    <div class="sub" style="margin-bottom:12px;">Pides a supervisión restar minutos de tu día</div>
+    <div class="sa-motivos" id="saMotivos">
+      ${SA_MOTIVOS.map((m,i)=>`<button type="button" class="sa-mot" id="saMot${i}" onclick="saElegir(${i})">${esc(m)}</button>`).join("")}
     </div>
-    <div class="modal-campo"><label>Minutos</label>
-      <input id="saMin" inputmode="numeric" maxlength="3" placeholder="Ej: 30"></div>
-    <div class="modal-campo"><label>Motivo</label>
-      <input id="saMotivo" maxlength="140" placeholder="Ej: máquina parada 9:00 a 9:30"></div>
+    <div class="modal-campo"><label>Minutos a descontar</label>
+      <input id="saMin" inputmode="numeric" maxlength="3" placeholder="Ej: 30" disabled></div>
+    <div class="modal-campo" id="saMotivoCampo" hidden><label>¿Cuál fue el motivo?</label>
+      <input id="saMotivo" maxlength="140" placeholder="Escribe el motivo"></div>
     <div class="modal-msg" id="saMsg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" onclick="enviarSolicitudAjuste()">ENVIAR</button>
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
     </div>`);
 }
-function saSigno(s){ sa.signo=s; $("saResta").classList.toggle("activo",s===-1); $("saSuma").classList.toggle("activo",s===1); }
+function saElegir(i){
+  sa.motivo=SA_MOTIVOS[i];
+  SA_MOTIVOS.forEach((_,k)=>{ const b=$("saMot"+k); if(b) b.classList.toggle("activo",k===i); });
+  const otros = sa.motivo==="OTROS";
+  $("saMotivoCampo").hidden=!otros;
+  $("saMin").disabled=false;
+  $("saMsg").textContent="";
+  setTimeout(()=>{ const el=otros?$("saMotivo"):$("saMin"); if(el) el.focus(); },80);
+}
 async function enviarSolicitudAjuste(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  if(!sa.motivo){ $("saMsg").textContent="Elige el motivo"; return; }
   const v=parseInt($("saMin").value,10);
-  const motivo=$("saMotivo").value.trim();
+  const libre=($("saMotivo").value||"").trim().toUpperCase();
   if(!v||v<=0){ $("saMsg").textContent="Ingresa los minutos"; return; }
-  if(!motivo){ $("saMsg").textContent="Indica el motivo"; return; }
+  if(sa.motivo==="OTROS" && !libre){ $("saMsg").textContent="Escribe cuál fue el motivo"; return; }
+  const motivo = sa.motivo==="OTROS" ? libre : sa.motivo;
   try{
     const r=await rpc("fn_solicitud_ajuste_crear",{p_dni:s.dni,p_token:s.token,p_area:AREA_ESTAJERO||s.area,
-      p_minutos:v*sa.signo,p_motivo:motivo});
+      p_minutos:-Math.abs(v),p_motivo:motivo});
     if(!r.ok){ $("saMsg").textContent=r.error||"No se pudo enviar"; return; }
     cerrarModal();
     $("exTitulo").textContent="Solicitud enviada";
-    $("exDetalle").innerHTML=`${sa.signo>0?"+":"-"}${v} min · esperando aprobación`;
+    $("exDetalle").innerHTML=`−${v} min · ${esc(motivo)} · esperando aprobación`;
     $("exAvance").textContent=""; $("exTimer").textContent="";
     const ex=$("exito"); ex.classList.add("visible");
     setTimeout(()=>ex.classList.remove("visible"),2200);
@@ -570,13 +583,23 @@ async function cargarTodo(s){
   try{
     // ACABADO ya no lee el almacén: registra por cantidad contra el corte real.
     if(ES_ACABADO){ await cargarAcabado(s, area); return; }
-    const [alm, recl, dia, res] = await Promise.all([
-      cargarAlmacen(area),
+    // Las OF generadas en el sistema (parche 29) se derivan de of_detalle × bases:
+    // no están en el Sheet. Las anteriores siguen saliendo del almacén, así que
+    // ambas conviven y el Sheet se vacía solo conforme entren OF nuevas.
+    const [alm, recl, dia, res, der] = await Promise.all([
+      cargarAlmacen(area).catch(e=>({tickets:[],duplicados:[],_err:e.message})),
       rpc("fn_reclamados", {p_dni:s.dni, p_token:s.token, p_area:area}),
       rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token}),
-      rpc("fn_residuales", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[])
+      rpc("fn_residuales", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
+      rpc("fn_tickets_area", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[])
     ]);
     ALM = alm;
+    if(Array.isArray(der) && der.length){
+      const propias=new Set(der.map(t=>normKey(t.of)));
+      // Si una OF ya se sirve del sistema, se ignora lo que quede de ella en el Sheet.
+      ALM.tickets = ALM.tickets.filter(t=>!propias.has(normKey(t.of))).concat(der.map(mapDerivado));
+    }
+    if(alm._err && !ALM.tickets.length) throw new Error(alm._err);
     if(Array.isArray(res) && res.length) ALM.tickets = ALM.tickets.concat(res.map(mapResidual));
     RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
     setAvance(dia);
@@ -586,6 +609,13 @@ async function cargarTodo(s){
     $("zonaCarga").innerHTML = `<div class="vacio-msg">${esc(e.message)}</div>`;
     mostrarError("No se pudo cargar. Revisa la conexión y vuelve a intentar.");
   }
+}
+/* Ticket derivado (parche 29): misma forma que una fila del almacén. */
+function mapDerivado(t){
+  const std=Number(t.std)||0, cant=Number(t.cant)||0;
+  return {codigo:norm(t.codigo), std, cant, nop:t.nop, of:norm(t.of), modulo:norm(t.modulo),
+    op:norm(t.op), talla:norm(t.talla), color:norm(t.color), corte:norm(t.corte),
+    num:norm(t.num), articulo:norm(t.articulo), minutos:Math.round(std*cant*10)/10};
 }
 /* Un residual (-R1, -R2…) se comporta como un paquete más del almacén. */
 function mapResidual(r){
@@ -1118,6 +1148,48 @@ async function cargarIncidencias(){
     if(!r.ok){ mostrarError(r.error||"Error"); z.innerHTML=""; return; }
     pintarIncidencias(r.items||[], z, "inc", "resolverIncidencia");
   }catch(e){ z.innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`; }
+  cargarRetornos();
+}
+
+/* Retornos de seguro/permiso pendientes de confirmar. Mientras no se confirmen,
+   esa persona tiene descontado hasta el fin de jornada: confirmarlo le devuelve
+   los minutos de después del regreso. Si no volvió, se marca y se queda igual. */
+let RETORNOS=[];
+async function cargarRetornos(){
+  const s=sesionActual(), z=$("zonaRetornos"); if(!s||!z) return;
+  try{
+    const r=await rpc("fn_retornos_pendientes",{p_dni:s.dni,p_token:s.token,p_area:areaSup()});
+    RETORNOS=Array.isArray(r)?r:[];
+  }catch(e){ RETORNOS=[]; }
+  if(!RETORNOS.length){ z.innerHTML=""; return; }
+  z.innerHTML=`<div class="diff-box"><h3>Confirmar regreso (${RETORNOS.length})</h3>
+    <div class="cf-detalle">Hasta confirmarlo se les descuenta como si no hubieran vuelto.</div></div>`
+    + RETORNOS.map((x,i)=>`<div class="card-fila" style="cursor:default;">
+      <div style="flex:1;">
+        <div class="cf-titulo">${esc(soloApellidos(x.nombre))}</div>
+        <div class="cf-detalle">${esc(x.tipo)} · salió ${esc(x.salida)} · descontados ${Math.abs(x.minutos)} min</div>
+        <div class="mp-editor">
+          <input type="time" id="rtH${i}" value="${esc(x.retorno)}">
+          <button class="btn-mini verde" onclick="confirmarRetorno(${i},true)">Sí regresó</button>
+          <button class="btn-mini rojo" onclick="confirmarRetorno(${i},false)">No regresó</button>
+        </div>
+        <div class="cf-detalle">Si confirmas las ${esc(x.retorno)}, el descuento baja a ${Math.abs(x.min_si_confirma)} min.</div>
+      </div></div>`).join("");
+}
+async function confirmarRetorno(i, regreso){
+  const x=RETORNOS[i]; if(!x) return;
+  const s=sesionActual();
+  const hora = regreso ? (($("rtH"+i)||{}).value||x.retorno) : null;
+  if(regreso && !hora){ mostrarError("Indica la hora de regreso"); return; }
+  if(!confirm(regreso
+      ? `¿${soloApellidos(x.nombre)} regresó a las ${hora}?`
+      : `¿${soloApellidos(x.nombre)} NO regresó a planta?\nSe le descuenta desde su salida hasta el fin de la jornada.`)) return;
+  try{
+    const r=await rpc("fn_retorno_confirmar",{p_dni:s.dni,p_token:s.token,p_id:x.id,p_retorno:hora});
+    if(!r.ok){ mostrarError(r.error||"No se pudo confirmar"); return; }
+    mostrarOk(`Confirmado · ${Math.abs(r.minutos)} min de descuento`);
+    await recargarSupervisora(); cargarRetornos();
+  }catch(e){ mostrarError(e.message); }
 }
 function pintarIncidencias(items, z, pref, fn){
   if(!items.length){ z.innerHTML=`<div class="vacio-msg">Sin incidencias pendientes</div>`; return; }
@@ -1518,6 +1590,14 @@ async function cargarPersonal(s){
     $("gridPersonal").innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`;
   }
 }
+/* Los minutos disponibles solo tienen sentido si la persona está en planta.
+   Si su estado del día es otro (FALTA, DM, VACACIONES, LICENCIA…), se muestra
+   el estado en su lugar: enseñar "575 min" de alguien que faltó confunde. */
+function dispPersona(p){
+  const e=norm(p.estado_dia||"");
+  if(p.ausente || (e && e!=="ACTIVO")) return `<span class="pill ${esc(e||"FALTA")}">${esc(e||"—")}</span>`;
+  return `${p.disp} min`;
+}
 function pintarPersonal(){
   const q = normKey($("filtroNombre").value);
   const g = oc.multiple ? $("gridPersonalSel") : $("gridPersonal");
@@ -1533,7 +1613,7 @@ function pintarPersonal(){
         <div class="cp-nombre">${esc(p.nombre)}</div>
         <div class="cp-dni">DNI ${esc(p.dni)}</div>
       </div>
-      <div class="cp-disp">${p.disp} min</div>`;
+      <div class="cp-disp">${dispPersona(p)}</div>`;
     c.onclick=()=>{
       if(oc.multiple){
         const i=oc.dnis.indexOf(p.dni);
@@ -1556,11 +1636,34 @@ function actualizarBtnContinuar(){
 }
 
 /* --- selección de tipo --- */
-const TIPOS_MOTIVO = ["TARDANZA","SEGURO","PERMISO"];
+const TIPOS_MOTIVO = ["OTROS"];              // los únicos que aún piden texto libre
+const TIPOS_SALIDA = ["SEGURO","PERMISO"];   // se registran por hora de salida/retorno
 function elegirTipo(tipo){
   oc.tipo=tipo; oc.minutos=0;
   $("zonaMotivo").style.display = TIPOS_MOTIVO.includes(tipo) ? "block" : "none";
-  $("inputMotivo").value="";
+  if($("inputMotivo")) $("inputMotivo").value="";
+  const esSalida = TIPOS_SALIDA.includes(tipo);
+  $("zonaSalida").style.display  = esSalida ? "block" : "none";
+  $("zonaTardanza").style.display = tipo==="TARDANZA" ? "block" : "none";
+
+  if(esSalida){
+    // Sin minutos: se deducen de la hora de salida y la de retorno.
+    $("tituloMin").textContent = tipo==="SEGURO" ? "Salida al seguro" : "Permiso";
+    $("subMin").textContent = "Indica desde qué hora salió y si vuelve a planta";
+    $("zonaStepper").style.display="none"; $("zonaMinutos").style.display="none";
+    ["ocSalida","ocRetorno"].forEach(id=>{ if($(id)) $(id).value=""; });
+    if($("ocNoRetorna")) $("ocNoRetorna").checked=false;
+    ocCalcSalida();
+    irA("pasoMinutos"); return;
+  }
+  if(tipo==="TARDANZA"){
+    // Siempre 1 hora y sin motivo: la pantalla solo confirma.
+    oc.minutos=-60;
+    $("tituloMin").textContent="Tardanza";
+    $("subMin").textContent="Confirma que esta persona llegó tarde";
+    $("zonaStepper").style.display="none"; $("zonaMinutos").style.display="none";
+    irA("pasoMinutos"); return;
+  }
   if(tipo==="HORA_EXTRA"){
     oc.horas=1;
     $("tituloMin").textContent="Horas extra";
@@ -1582,6 +1685,31 @@ function elegirTipo(tipo){
   }
   irA("pasoMinutos");
 }
+/* Minutos de una salida. Sin retorno confirmado se descuenta hasta el fin de
+   jornada (18:20): lo conservador. Al confirmar el regreso se devuelven los
+   minutos posteriores, así una hora de retorno optimista nunca regala tiempo. */
+const FIN_JORNADA="18:20", INI_JORNADA="08:00";
+const hm=t=>{ const m=/^(\d{1,2}):(\d{2})$/.exec(String(t||"")); return m?(+m[1])*60+(+m[2]):null; };
+function minSalida(salida, retorno){
+  const s=hm(salida), f=hm(FIN_JORNADA), i=hm(INI_JORNADA);
+  if(s==null) return 0;
+  const desde=Math.min(Math.max(s,i),f), hasta=retorno!=null?Math.min(hm(retorno),f):f;
+  return Math.max(0, Math.round(hasta-desde));
+}
+function ocCalcSalida(){
+  const noRet=$("ocNoRetorna") && $("ocNoRetorna").checked;
+  const ret=$("ocRetorno");
+  if(ret){ ret.disabled=!!noRet; if(noRet) ret.value=""; }
+  const s=$("ocSalida")?$("ocSalida").value:"", r=(!noRet && ret)?ret.value:"";
+  const z=$("ocSalidaCalc"); if(!z) return;
+  if(!s){ z.innerHTML="Indica la hora de salida."; return; }
+  if(r && hm(r)<=hm(s)){ z.innerHTML=`<b style="color:var(--alerta)">El retorno debe ser posterior a la salida.</b>`; return; }
+  const sinVolver=minSalida(s,null);
+  z.innerHTML = (noRet || !r)
+    ? `No vuelve a planta: se descuentan <b>${sinVolver} min</b> (de ${s} a ${FIN_JORNADA}).`
+    : `Se descuentan <b>${sinVolver} min</b> hasta confirmar el regreso.<br>`
+      + `Si se confirma que volvió a las ${r}, quedan <b>${minSalida(s,r)} min</b> de descuento.`;
+}
 function stepper(d){
   oc.horas=Math.max(1, Math.min(6,(oc.horas||1)+d));
   $("valorStepper").textContent=oc.horas+" h";
@@ -1592,18 +1720,46 @@ function marcarSigno(s){
   $("btnSuma").classList.toggle("activo",s===1);
 }
 
+/* SEGURO / PERMISO: se guarda la hora de salida y la de retorno. Mientras el
+   regreso no se confirme cuenta como si no hubiera vuelto. */
+async function confirmarSalida(s){
+  const salida=$("ocSalida").value;
+  const noRet=$("ocNoRetorna").checked;
+  const retorno=noRet?null:($("ocRetorno").value||null);
+  if(!salida){ mostrarError("Indica la hora de salida"); return; }
+  if(!noRet && !retorno){ mostrarError("Indica la hora de retorno o marca «No retorna»"); return; }
+  if(retorno && hm(retorno)<=hm(salida)){ mostrarError("El retorno debe ser posterior a la salida"); return; }
+  const btn=$("btnGuardarOc"); btn.disabled=true; btn.textContent="GUARDANDO…";
+  try{
+    const r=await rpc("fn_ocurrencia_salida",{p_dni:s.dni,p_token:s.token,p_dnis:oc.dnis,
+      p_area:s.area,p_tipo:oc.tipo,p_salida:salida,p_retorno:retorno});
+    if(!r.ok){ mostrarError(r.error||"No se pudo registrar"); return; }
+    mostrarOk(r.pendiente_confirmar
+      ? `Registrado · ${Math.abs(r.minutos)} min. Confirma el regreso cuando vuelva.`
+      : `Registrado · ${Math.abs(r.minutos)} min descontados`);
+    await recargarSupervisora();
+    irA("pasoPersonal");
+  }catch(e){ mostrarError(e.message); }
+  finally{ btn.disabled=false; btn.textContent="GUARDAR"; }
+}
+
 /* --- confirmar ocurrencia --- */
 async function confirmarOcurrencia(){
   const s=sesionActual(); if(!s){location.href="index.html";return;}
+
+  // SEGURO / PERMISO: van por su propia RPC, con horas en vez de minutos.
+  if(TIPOS_SALIDA.includes(oc.tipo)) return confirmarSalida(s);
+
   let minutos;
-  if(oc.tipo==="HORA_EXTRA") minutos = oc.horas*60;
+  if(oc.tipo==="TARDANZA") minutos = -60;                 // siempre 1 hora
+  else if(oc.tipo==="HORA_EXTRA") minutos = oc.horas*60;
   else {
     const v=parseInt($("inputMinutos").value,10);
     if(!v || v<=0){ mostrarError("Ingresa los minutos"); return; }
     minutos = v * oc.signo;
   }
-  const motivo = ($("inputMotivo") ? $("inputMotivo").value.trim() : "");
-  if(TIPOS_MOTIVO.includes(oc.tipo) && !motivo){ mostrarError("Indica el motivo (hora de salida/regreso)"); return; }
+  const motivo = ($("inputMotivo") ? $("inputMotivo").value.trim().toUpperCase() : "");
+  if(TIPOS_MOTIVO.includes(oc.tipo) && !motivo){ mostrarError("Indica el motivo"); return; }
   // La supervisora YA NO registra minutos directamente: crea una solicitud que
   // aprueba únicamente Ingeniería. Ingeniería (operar como) sigue registrando directo.
   const esSupervisora = s.cargo === "SUPERVISORA";
@@ -1672,7 +1828,7 @@ function pintarPersonalMov(){
         <div class="cp-nombre">${esc(p.nombre)}</div>
         <div class="cp-dni">DNI ${esc(p.dni)}</div>
       </div>
-      <div class="cp-disp">${p.disp} min</div>`;
+      <div class="cp-disp">${dispPersona(p)}</div>`;
     c.onclick=()=>{
       const i=mv.dnis.indexOf(p.dni);
       if(i>=0) mv.dnis.splice(i,1); else mv.dnis.push(p.dni);

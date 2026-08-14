@@ -33,11 +33,9 @@
       <details class="nav-group" open>
         <summary class="nav-sep">Tickets</summary>
         <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
-        <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Por módulo</a>
+        <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Avance por módulo</a>
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
-        <a class="nav-item" data-tab="pasoOpsOF" href="#pasoOpsOF">Operaciones (OF)</a>
         <a class="nav-item" data-tab="pasoOfs" href="#pasoOfs">OFs registradas</a>
-        <a class="nav-item" data-tab="pasoExtra" href="#pasoExtra">Operaciones sin OF</a>
         <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Resumen de OF</a>
       </details>
       <details class="nav-group" open>
@@ -155,6 +153,11 @@
         <h1>Operaciones por OF</h1>
         <p class="seccion-sub">Agrega o quita operaciones de una OF ya generada, escribiendo/borrando en el ALMACÉN — sin renumerar ni tocar los tickets ya reclamados.</p>
       </div>
+      <div class="tabs gen-subtabs">
+        <button class="tab" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
+        <button class="tab activo" onclick="activarTab(&quot;pasoOpsOF&quot;)">OPERACIONES POR OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
+      </div>
       <div class="tabs sup-subtabs">
         <button id="opfTabAdd" class="tab activo" onclick="opfModo('add')">AGREGAR OPERACIÓN</button>
         <button id="opfTabDel" class="tab" onclick="opfModo('del')">QUITAR OPERACIÓN</button>
@@ -169,9 +172,16 @@
         <!-- AGREGAR -->
         <div id="opfAdd">
           <div class="barra-control">
-            <label class="campo"><span>Operación (de la BASE)</span><select id="opfOp"></select></label>
-            <label class="campo"><span>N°OP (posición)</span><input type="number" id="opfNop" min="1" placeholder="Ej: 10"></label>
+            <label class="campo autocomplete" style="min-width:280px;"><span>Operación (escribe para buscar en la BASE)</span>
+              <input type="text" id="opfOp" placeholder="Ej: PEGAR CUELLO" autocomplete="off"
+                oninput="opfBuscarOp()" onfocus="opfBuscarOp()" onblur="setTimeout(opfCerrarDrop,150)">
+              <div id="opfOpDrop" class="autocomplete-drop" style="display:none;"></div></label>
+            <span class="sub" style="align-self:flex-end;">El N°OP sale de la BASE.</span>
+          </div>
+          <div class="sub" id="opfSel" style="margin-bottom:8px;"></div>
+          <div class="fila-filtros">
             <button class="btn-mini verde" onclick="opfPreviewAdd()">Previsualizar</button>
+            <button class="btn-mini gris" onclick="opfLimpiarSel()">Limpiar selección</button>
           </div>
           <div id="opfAddPv"></div>
         </div>
@@ -247,7 +257,7 @@
     <!-- ===================== POR MÓDULO ===================== -->
     <section class="pantalla" id="pasoMod">
       <div class="seccion-cab">
-        <h1>Tickets por módulo</h1>
+        <h1>Avance por módulo</h1>
         <p class="seccion-sub">Acumulado hasta la fecha elegida. Avance por módulo (última operación vs meta de la OF); las operaciones son colapsables.</p>
       </div>
       <div class="barra-control">
@@ -303,6 +313,7 @@
         <button id="perTabRango" class="tab" onclick="perTab('rango')">ESTADOS POR RANGO</button>
         <button id="perTabMatriz" class="tab" onclick="perTab('matriz')">MATRIZ</button>
         <button id="perTabMarcar" class="tab" onclick="perTab('marcar')">MARCAR ASISTENCIA</button>
+        <button id="perTabMov" class="tab" onclick="perTab('mov')">MOVIMIENTOS</button>
       </div>
 
       <!-- CRUD -->
@@ -373,6 +384,15 @@
           <div class="swipe-ayuda" id="perSwipeAyuda">Desliza <b>▶ Activo</b> · <b>◀ Falta</b> · <b>▼ Otro estado</b> · <b>▲ Confirmar estado actual</b></div>
           <div id="perMarcarResumen" hidden></div>
         </div>
+      <div id="perMov" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Área</span><select id="movArea" onchange="cargarMovs()"></select></label>
+          <label class="campo"><span>Fecha</span><input type="date" id="movFecha" onchange="cargarMovs()"></label>
+          <button class="btn-mini" onclick="cargarMovs()">Cargar</button>
+        </div>
+        <div class="sub" id="movResumen"></div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;"><table class="tabla" id="movTabla"></table></div>
+      </div>
       </div>
     </section>
 
@@ -463,12 +483,16 @@
     <section class="pantalla" id="pasoExtra">
       <div class="seccion-cab"><h1>Operaciones sin OF</h1>
         <p class="seccion-sub">Reprocesos, muestras y arreglos. No descuentan de ninguna OF, pero su STD cuenta para la eficiencia del operario.</p></div>
+      <div class="tabs gen-subtabs">
+        <button class="tab" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoOpsOF&quot;)">OPERACIONES POR OF</button>
+        <button class="tab activo" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
+      </div>
       <div class="barra-control">
         <label class="campo"><span>Área</span><select id="exArea" onchange="cargarExtra()"></select></label>
         <label class="campo"><span>Tipo</span>
-          <select id="exTipo">
-            <option>REPROCESO</option><option>MUESTRA</option><option>ARREGLO</option><option>OTRO</option>
-          </select></label>
+          <input type="text" id="exTipo" list="exTiposLista" placeholder="REPROCESO, MUESTRA…" autocomplete="off">
+          <datalist id="exTiposLista"></datalist></label>
         <label class="campo"><span>Operación</span><input type="text" id="exOp" placeholder="Ej: RETOCAR CAMISA"></label>
         <label class="campo"><span>STD (min)</span><input type="number" id="exStd" min="0.01" step="0.01" placeholder="0.14"></label>
         <button class="btn-mini verde" onclick="guardarExtra()">Añadir</button>
@@ -568,6 +592,11 @@
         <h1>Generar tickets desde HN</h1>
         <p class="seccion-sub">Sube uno o varios Excel (hoja <b>HN</b>). Cada archivo/OF se procesa por separado: revisa, corrige, cruza con la BASE y escribe al ALMACÉN del área. Solo ingeniería.</p>
       </div>
+      <div class="tabs gen-subtabs">
+        <button class="tab activo" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoOpsOF&quot;)">OPERACIONES POR OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
+      </div>
       <div class="barra-control">
         <label class="campo"><span>Área (ALMACEN destino)</span>
           <select id="areaGen" onchange="genAreaChange()"></select></label>
@@ -577,7 +606,15 @@
         </label>
       </div>
       <p class="seccion-sub" style="margin:0 0 12px;">Cada archivo/OF configura su propio empaquetado. Costura: dividir última y/o penúltima operación con su cantidad. Acabado: paquetes estándar/pequeño sobre el total (por color o global).</p>
-      <div id="genGate" class="estado-vacio">Elige el área y sube uno o más Excel (hoja HN).</div>
+      <div class="barra-control" style="border-top:1px dashed #cfd8e6;padding-top:12px;margin-top:4px;">
+        <label class="campo"><span>OF registrada</span>
+          <select id="genOfSel" onchange="genRutaCargar()"><option value="">— Elige área primero —</option></select></label>
+        <button class="btn-mini" onclick="genOfsRecargar()">↻ OFs</button>
+        <span class="sub" style="align-self:flex-end;">Genera los tickets desde el desglose de la HN, sin escribir el ALMACÉN.</span>
+      </div>
+      <div id="genRuta"></div>
+
+      <div id="genGate" class="estado-vacio">Elige el área y sube uno o más Excel (hoja HN), o genera una OF ya registrada.</div>
       <div id="genJobs"></div>
     </section>
 
