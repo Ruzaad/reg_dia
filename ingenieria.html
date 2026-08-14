@@ -486,8 +486,16 @@
         <button class="btn-mini" onclick="cargarOfs()">Cargar</button>
       </div>
       <details class="nav-group" style="margin:4px 0 10px;">
-        <summary class="nav-sep" style="cursor:pointer;">Dar de alta una OF a mano</summary>
-        <p class="seccion-sub" style="margin:6px 0;">Para las OF que ya estaban en curso antes de registrar HNs. Sin desglose por paquete: solo el corte real, que es lo que ACABADO necesita para su techo.</p>
+        <summary class="nav-sep" style="cursor:pointer;">Dar de alta una OF</summary>
+        <p class="seccion-sub" style="margin:6px 0;">Para las OF que ya estaban en curso antes de registrar HNs. <b>Con la HN</b> queda el desglose completo por paquete; <b>a mano</b> solo el corte real, que es lo que ACABADO necesita para su techo.</p>
+        <div class="barra-control">
+          <label class="btn-mini verde" style="cursor:pointer;align-self:flex-end;">
+            Cargar desde HN (uno o varios)
+            <input type="file" id="fileOfHN" accept=".xlsx,.xls,.xlsm" multiple style="display:none" onchange="ofsLeerHN(this)">
+          </label>
+          <span class="sub" style="align-self:flex-end;">No escribe en el ALMACÉN: solo registra la OF y su desglose.</span>
+        </div>
+        <div id="ofsHNRes"></div>
         <div class="barra-control">
           <label class="campo"><span>OF</span><input type="text" id="ofNueva" inputmode="numeric" placeholder="Ej: 9804"></label>
           <label class="campo"><span>Artículo</span><input type="text" id="ofNuevaArt" placeholder="Ej: ML1022"></label>

@@ -448,12 +448,18 @@ async function genSubirJob(id){
 }
 /* Registra la OF y su desglose en Supabase (parche 26). Una sola subida por OF:
    la segunda (la de la otra área) corrobora, lista diferencias y no escribe. */
+/* Desglose de la HN: un paquete por fila, con la numeración acumulada (la misma
+   que el generador escribe en la col. 13 del ALMACÉN). `paq` = N° CORTE. */
+function hnDetalle(tallas){
+  let acum=0;
+  const det=(tallas||[]).map((t,i)=>{ const c=Number(t.cant)||0, desde=acum+1;
+    acum+=c; return {paq:i+1, talla:norm(t.talla), color:norm(t.color), cant:c, desde, hasta:acum}; });
+  return {det, total:acum};
+}
 async function genRegistrarOF(id, j){
   const nInp = k => { const c=$("genDiv"+k+"_"+id), n=$("genN"+k+"_"+id);
     return (c&&c.checked&&n) ? (parseInt(n.value,10)||null) : null; };
-  let acum=0;
-  const det=j.hn.tallas.map((t,i)=>{ const c=Number(t.cant)||0, desde=acum+1;
-    acum+=c; return {paq:i+1, talla:norm(t.talla), color:norm(t.color), cant:c, desde, hasta:acum}; });
+  const {det, total:acum} = hnDetalle(j.hn.tallas);
   try{
     const g=await rpc("fn_of_registrar",{p_dni:ING.dni,p_token:ING.token,p_of:j.hn.of,
       p_articulo:j.hn.articulo, p_prenda:j.hn.prenda, p_cant_prog:acum,
@@ -1722,8 +1728,38 @@ function ofsPintar(){
   $("ofsTabla").innerHTML=`<thead><tr><th></th><th class="izq">Artículo</th><th>OF</th><th>Prenda</th>
     <th>Cant. prog.</th><th>Paquetes</th><th>División</th><th>Cargada</th></tr></thead><tbody>${body}</tbody>`;
 }
-/* Alta manual: para las OF en curso antes de que se registraran las HN. Sin
-   desglose (of_detalle vacío) — basta el corte real para el techo de ACABADO. */
+/* Alta desde la HN: mismo parseo que Generar tickets, pero SIN escribir en el
+   ALMACÉN. Registra la OF con su desglose completo (talla, color, numeración). */
+function ofsLeerHN(input){
+  const files=[...input.files]; input.value="";
+  if(!files.length) return;
+  const z=$("ofsHNRes"); z.innerHTML=cargandoHTML(`Leyendo ${files.length} archivo(s)…`);
+  let hechos=0; const lineas=[];
+  files.forEach(file=>{
+    const lector=new FileReader();
+    lector.onload=async(e)=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:"array"});
+        if(!wb.SheetNames.includes("HN")) throw new Error("no se encontró la hoja HN");
+        const hn=parseHN(XLSX.utils.sheet_to_json(wb.Sheets["HN"],{header:1,defval:null,raw:true}));
+        if(!hn.of) throw new Error("la HN no trae la ORDEN (OF)");
+        const {det, total}=hnDetalle(hn.tallas);
+        if(total<=0) throw new Error("la HN no trae cantidades");
+        const g=await rpc("fn_of_registrar",{p_dni:ING.dni,p_token:ING.token,p_of:hn.of,
+          p_articulo:hn.articulo, p_prenda:hn.prenda, p_cant_prog:total,
+          p_div_ultima:null, p_div_penultima:null, p_detalle:det});
+        if(!g || g.ok===false) lineas.push(`<div class="diff-del">${esc(file.name)}: ${esc((g&&g.error)||"error")}</div>`);
+        else if(g.creada) lineas.push(`<div class="cf-detalle">✓ OF ${esc(g.of)} · ${g.paquetes} paquete(s) · ${Math.round(total)} und</div>`);
+        else lineas.push(`<div class="diff-del">OF ${esc(g.of)} ya registrada (${esc(g.fecha_carga||"—")}). No se escribió.`
+          + ((g.difiere||[]).length?`<br>Diferencias: ${esc((g.difiere||[]).join(" · "))}`:"")+`</div>`);
+      }catch(err){ lineas.push(`<div class="diff-del">${esc(file.name)}: ${esc(err.message)}</div>`); }
+      if(++hechos===files.length){ z.innerHTML=`<div class="diff-box">${lineas.join("")}</div>`; cargarOfs(); }
+    };
+    lector.readAsArrayBuffer(file);
+  });
+}
+/* Alta manual: sin desglose (of_detalle vacío) — basta el corte real para el
+   techo de ACABADO, pero la validación de cantidades de costura no aplicará. */
 async function altaOfManual(){
   const of=normKey($("ofNueva").value), art=norm($("ofNuevaArt").value).toUpperCase();
   const prenda=norm($("ofNuevaPrenda").value).toUpperCase(), cant=parseFloat($("ofNuevaCant").value);
