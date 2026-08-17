@@ -5,6 +5,7 @@ let ING=null;
 let AREAS_LISTA = Object.keys(AREAS);       // se reemplaza con fn_areas_listar al iniciar
 const CARGOS_LISTA = ["OPERARIO","SUPERVISORA","ESTAJERO"];
 const ESTADOS_OPERARIO = ["ACTIVO","INACTIVO"];
+const CATEGORIAS_LISTA = ["","A","B","C","D"];   // "" = sin asignar (parche 34)
 let ESTADOS_ASIS = [];
 let EF_CENS_ING = false;                     // censura de eficiencia (****) en toda la pestaña
 function hoyISO(){ return new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"}); }
@@ -1239,13 +1240,28 @@ function pintarEf(){
   }
   $("tablaEf").innerHTML = thead + "<tbody>" + tbody + "</tbody>";
 }
-function descargarEf(){
+/* Meta por DNI (área origen + categoría) para los Excel — parche 34.
+   Va por su propio RPC para no reescribir fn_eficiencia_dia/_rango. */
+let PMETA=null;
+async function cargarPersonalMeta(){
+  if(PMETA) return PMETA;
+  try{ const r=await rpc("fn_personal_meta",{p_dni:ING.dni,p_token:ING.token});
+       PMETA=(r&&r.ok===false)?{}:(r||{}); }
+  catch(e){ PMETA={}; }
+  return PMETA;
+}
+const pmOrigen=d=>(PMETA&&PMETA[d]&&PMETA[d].origen)||"";
+const pmCat   =d=>(PMETA&&PMETA[d]&&PMETA[d].categoria)||"";
+
+async function descargarEf(){
   if(!EF){ mostrarError("Carga la eficiencia primero"); return; }
   const fArea=$("filtroAreaEf").value; if(!fArea){ mostrarError("Elige un área"); return; }
   const lista=(EF.personas||[]).filter(p=>p.area===fArea);
   if(!lista.length){ mostrarError("No hay datos para descargar"); return; }
-  const CAB=["Nombre","DNI","Área","Estado","Tickets","Min prod","Min disp","Eficiencia %"];
-  const filas=lista.map(p=>[p.nombre,p.dni,p.area,p.estado,p.tickets,p.prod,p.disp,Math.round(p.eficiencia)]);
+  await cargarPersonalMeta();
+  const CAB=["Nombre","DNI","Área Actual","Área Origen","Categoría","Estado","Tickets","Min prod","Min disp","Eficiencia %"];
+  const filas=lista.map(p=>[p.nombre,p.dni,p.area,pmOrigen(p.dni),pmCat(p.dni),
+    p.estado,p.tickets,p.prod,p.disp,Math.round(p.eficiencia)]);
   const ws=XLSX.utils.aoa_to_sheet([CAB,...filas]); const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"Eficiencia"); XLSX.writeFile(wb,`EFICIENCIA_${fArea}_${$("fechaEf").value}.xlsx`);
 }
@@ -1324,15 +1340,21 @@ function pintarEfRango(){
   $("tablaEfR").innerHTML = thead + tbody;
 }
 
-function descargarEfRango(){
+async function descargarEfRango(){
   if(!EFR.personal.length){ mostrarError("Carga primero un rango"); return; }
+  await cargarPersonalMeta();
   // Igual que la tabla: cada celda es "XX%" (texto), o el estado (FALTA, VACACIONES…)
-  // como texto, o "—" si no hay dato. El promedio va al FINAL de la fila.
-  const celda=(v,est)=> v!=null ? `${Math.round(v)}%` : (est ? est : "—");
-  const CAB = ["DNI","Nombre","Área", ...EFR.dias.map(d=>d.slice(8,10)+"-"+d.slice(5,7)), "Promedio"]; // DD-MM
+  // como texto. Donde antes iba "—" y el día es fin de semana, ahora se rotula
+  // SABADO/DOMINGO: solo etiqueta, ningún cálculo cambia. Si alguien sí trabajó
+  // ese día, manda su porcentaje. "T00:00:00" evita el corrimiento por UTC.
+  const FINDE={0:"DOMINGO",6:"SABADO"};
+  const finde=d=>FINDE[new Date(d+"T00:00:00").getDay()]||"";
+  const celda=(v,est,d)=> v!=null ? `${Math.round(v)}%` : (est || finde(d) || "—");
+  const CAB = ["DNI","Nombre","Área Actual","Área Origen","Categoría",
+    ...EFR.dias.map(d=>d.slice(8,10)+"-"+d.slice(5,7)), "Promedio"]; // DD-MM
   const filas = EFR.personal.map(p=>[
-    p.dni, p.nombre, p.area,
-    ...EFR.dias.map(d=>celda(p.registros[d], p.estados ? p.estados[d] : null)),
+    p.dni, p.nombre, p.area, pmOrigen(p.dni), pmCat(p.dni),
+    ...EFR.dias.map(d=>celda(p.registros[d], p.estados ? p.estados[d] : null, d)),
     `${Math.round(p.promedio)}%`
   ]);
   const ws = XLSX.utils.aoa_to_sheet([CAB, ...filas]);
@@ -1404,7 +1426,7 @@ function cerrarModal(){
 /* ---- Modal: crear / editar personal ---- */
 async function abrirModalPersonal(dni){
   let datos = {dni:"", nombres_apellidos:"", area_origen:AREAS_LISTA[0]||"", area_actual:AREAS_LISTA[0]||"",
-    estado:"ACTIVO", cargo:"OPERARIO"};
+    estado:"ACTIVO", cargo:"OPERARIO", categoria:""};
   const esEdicion = !!dni;
   if(esEdicion){
     abrirModal(cargandoHTML("Cargando datos…"));
@@ -1447,6 +1469,11 @@ async function abrirModalPersonal(dni){
         <select id="mpCargo">${CARGOS_LISTA.map(c=>`<option ${c===datos.cargo?"selected":""}>${esc(c)}</option>`).join("")}</select>
       </div>
     </div>
+    <div class="modal-campo">
+      <label>Categoría</label>
+      <select id="mpCategoria">${CATEGORIAS_LISTA.map(c=>
+        `<option value="${esc(c)}" ${c===(datos.categoria||"")?"selected":""}>${c||"— sin asignar —"}</option>`).join("")}</select>
+    </div>
     <div class="modal-msg" id="mpMsg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" onclick="guardarPersonal(${esEdicion?`'${esc(datos.dni)}'`:"null"})">GUARDAR</button>
@@ -1463,19 +1490,21 @@ async function guardarPersonal(dniOriginal){
   const areaActual = $("mpAreaActual").value;
   const estado = $("mpEstado").value;
   const cargo = $("mpCargo").value;
+  const categoria = $("mpCategoria").value;
   if(!dni || !nombres){ $("mpMsg").textContent = "DNI y nombres son obligatorios"; return; }
   try{
     let r;
     if(dniOriginal){
       r = await rpc("fn_personal_editar",{p_dni_ing:ING.dni,p_token:ING.token,
         p_dni:dni,p_nombres:nombres,p_area_origen:areaOrigen,p_area_actual:areaActual,
-        p_estado:estado,p_cargo:cargo});
+        p_estado:estado,p_cargo:cargo,p_categoria:categoria});
     } else {
       r = await rpc("fn_personal_crear",{p_dni_ing:ING.dni,p_token:ING.token,
         p_dni:dni,p_nombres:nombres,p_area_origen:areaOrigen,p_area_actual:areaActual,
-        p_estado:estado,p_cargo:cargo});
+        p_estado:estado,p_cargo:cargo,p_categoria:categoria});
     }
     if(!r.ok){ $("mpMsg").textContent = r.error||"No se pudo guardar"; return; }
+    PMETA=null;   // cambió área origen o categoría: el Excel debe releerlas
     cerrarModal();
     AREAS_DB=null; AREAS_LISTA = await cargarAreasDB(); poblarSelectsArea();  // por si se creó un área nueva
     await perReload();
@@ -1602,15 +1631,16 @@ function perPintarCrud(){
   if(perCrudSort.col){ const c=perCrudSort.col; lista=[...lista].sort((a,b)=>{ return cmpVal(a[c],b[c])*perCrudSort.dir; }); }
   $("perResumenCrud").textContent=`${lista.length} persona(s)`;
   const fl=k=>perCrudSort.col===k?(perCrudSort.dir===1?" ▲":" ▼"):"";
-  const C=[["nombre","Nombre"],["dni","DNI"],["area_actual","Área actual"],["area_origen","Área origen"],["cargo","Cargo"],["estado","Estado"]];
+  const C=[["nombre","Nombre"],["dni","DNI"],["area_actual","Área actual"],["area_origen","Área origen"],["categoria","Cat."],["cargo","Cargo"],["estado","Estado"]];
   const thead=`<thead><tr><th class="col-check"></th>${C.map(c=>`<th class="ord${c[0]==="nombre"?" izq":""}" onclick="ordenarPerCrud('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}<th></th></tr></thead>`;
   const body=lista.length? lista.map(p=>`<tr${p.estado!=="ACTIVO"?' style="opacity:.6;"':''}>
       <td class="col-check"><input type="checkbox" class="sw" ${PER.crudSel[p.dni]?"checked":""} onclick="perToggleSel('${esc(p.dni)}')"></td>
       <td class="izq"><b>${esc(p.nombre)}</b></td><td>${esc(p.dni)}</td>
-      <td>${esc(p.area_actual)}</td><td>${esc(p.area_origen||"—")}</td><td>${esc(p.cargo)}</td>
+      <td>${esc(p.area_actual)}</td><td>${esc(p.area_origen||"—")}</td>
+      <td>${p.categoria?`<b>${esc(p.categoria)}</b>`:"—"}</td><td>${esc(p.cargo)}</td>
       <td><span class="pill ${esc(p.estado)}">${esc(p.estado)}</span></td>
       <td><button class="acc-editar" onclick="abrirModalPersonal('${esc(p.dni)}')">Editar</button></td></tr>`).join("")
-    : `<tr><td colspan="8"><div class="vacio-msg">Sin personal</div></td></tr>`;
+    : `<tr><td colspan="9"><div class="vacio-msg">Sin personal</div></td></tr>`;
   $("perTablaCrud").innerHTML=thead+"<tbody>"+body+"</tbody>";
 }
 async function perMoverArea(){
