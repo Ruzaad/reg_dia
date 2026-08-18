@@ -121,6 +121,7 @@ function activarTab(tab){
   else if(tab==='pasoDash'){ dbEnsureFp(); dashTab(DASH_TAB||'asis'); }
   else if(tab==='pasoOfs') cargarOfs();
   else if(tab==='pasoExtra') cargarExtra();
+  else if(tab==='pasoCausas') cargarCausas();
 }
 function toggleSidebar(){ document.body.classList.toggle("sidebar-cerrada"); }
 function cerrarSidebarMovil(){ if(window.innerWidth<=900) document.body.classList.add("sidebar-cerrada"); }
@@ -341,14 +342,16 @@ function genTroceoActual(){
   return (GEN_RUTA.ruta||[]).map((o,i)=>{
     const c=$("gtOn"+i), n=$("gtN"+i);
     const v=(c&&c.checked&&n)?parseInt(n.value,10):0;
-    return v>0 ? {n_op:o.n_op, n:v} : null;
+    // op_id manda (parche 35); n_op va de respaldo para rutas sin migrar.
+    return v>0 ? {op_id:o.op_id, n_op:o.n_op, n:v} : null;
   }).filter(Boolean);
 }
 function genPrevisualizar(){
   const r=GEN_RUTA, p=$("genPrev"); if(!r||!p) return;
-  const tro=genTroceoActual(), byOp={}; tro.forEach(t=>byOp[t.n_op]=t.n);
-  const total=(r.ruta||[]).reduce((a,o)=>a + (byOp[o.n_op]
-    ? Math.ceil(r.cant_prog/byOp[o.n_op]) : r.paquetes), 0);
+  const tro=genTroceoActual(), byOp={}; tro.forEach(t=>byOp[t.op_id!=null?t.op_id:"n"+t.n_op]=t.n);
+  const kOp=o=>byOp[o.op_id!=null?o.op_id:"n"+o.n_op];
+  const total=(r.ruta||[]).reduce((a,o)=>a + (kOp(o)
+    ? Math.ceil(r.cant_prog/kOp(o)) : r.paquetes), 0);
   p.textContent = `${total} tickets · ${tro.length} operación(es) troceada(s)`;
 }
 async function genConfirmarOF(){
@@ -873,12 +876,16 @@ function pintarReclamosFec(){
   if(fecSort.col){ const c=fecSort.col; lista.sort((a,b)=>{ return cmpVal(a[c],b[c])*fecSort.dir; }); }
   const fl=k=>fecSort.col===k?(fecSort.dir===1?" ▲":" ▼"):"";
   const COLS=[["of","OF"],["op","Operación"],["articulo","Artículo"],["num","Num."],["hora","Hora"],["cant","Cant"],["minutos","Min"],["estado","Estado"]];
-  const thead=`<thead><tr><th></th>${COLS.map(c=>`<th class="ord${c[0]==="op"?" izq":""}" onclick="ordenarFec('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}</tr></thead>`;
+  const thead=`<thead><tr><th></th>${COLS.map(c=>`<th class="ord${c[0]==="op"?" izq":""}" onclick="ordenarFec('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}<th></th></tr></thead>`;
+  // Un registro por CANTIDAD (sin código, típico de Acabado) puede haberse hecho
+  // en dos días: "Partir" deja una parte aquí y manda el resto a otra fecha.
   $("tablaFec").innerHTML = thead + "<tbody>" + lista.map(r=>`<tr>
     <td><input type="checkbox" class="sw" ${FEC_SEL[r.id]?"checked":""} onclick="toggleFecSel(${r.id})"></td>
     <td>${esc(r.of)}</td><td class="izq">${esc(r.op)}</td><td>${esc(r.articulo)}</td>
     <td>${esc(r.num)}</td><td>${esc(r.hora||"")}</td><td>${r.cant}</td><td>${r.minutos}</td>
-    <td><span class="pill ${esc(r.estado)}">${esc(r.estado)}</span></td></tr>`).join("") + "</tbody>";
+    <td><span class="pill ${esc(r.estado)}">${esc(r.estado)}</span></td>
+    <td>${(!r.codigo && r.estado==='ACTIVO' && Number(r.cant)>1)
+        ? `<button class="btn-mini" onclick="abrirPartirFec(${r.id})">Partir</button>` : ""}</td></tr>`).join("") + "</tbody>";
 }
 function toggleFecSel(id){ if(FEC_SEL[id]) delete FEC_SEL[id]; else FEC_SEL[id]=true; pintarReclamosFec(); }
 function marcarTodosFec(){
@@ -888,6 +895,56 @@ function marcarTodosFec(){
   if(faltan) lista.forEach(r=>{ FEC_SEL[r.id]=true; });
   pintarReclamosFec();
 }
+async function abrirPartirFec(id){
+  const r=(FEC_RECL||[]).find(x=>Number(x.id)===Number(id)); if(!r) return;
+  if(!CAUSAS_ING.length) await cargarCausasSilencioso();
+  const mots=(FEC_MOTIVOS||[]).map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join("");
+  abrirModal(`
+    <h2>Partir el registro</h2>
+    <div class="sub" style="margin-bottom:12px;">${esc(r.op)} · OF ${esc(r.of||"—")} · ${qty(r.cant)} und el ${esc(r.fecha)}</div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>Cantidad que se mueve</label>
+        <input id="prtCant" type="number" min="1" max="${Number(r.cant)-1}" inputmode="numeric" placeholder="Ej: 150"></div>
+      <div class="modal-campo"><label>A la fecha</label>
+        <input id="prtFecha" type="date" value="${esc(r.fecha)}"></div>
+    </div>
+    <div class="modal-campo"><label>Causa de la parte separada</label>
+      <select id="prtCausa">
+        <option value="">Sin causa · al STD de la base</option>
+        ${(CAUSAS_ING||[]).filter(c=>c.activa).map(c=>
+          `<option value="${esc(c.texto)}" ${r.causa===c.texto?"selected":""}>${esc(c.texto)} (${Number(c.delta)>0?"+":""}${Number(c.delta).toFixed(2)} min/prenda)</option>`).join("")}
+      </select></div>
+    <div class="modal-campo"><label>Motivo</label>
+      <input id="prtMotivo" list="prtMotivos" maxlength="120" placeholder="Ej: SE REGISTRÓ TODO EN UN DÍA">
+      <datalist id="prtMotivos">${mots}</datalist></div>
+    <div class="cf-detalle">Queda lo demás en ${esc(r.fecha)}${r.causa?` con la causa ${esc(r.causa)}`:""}.
+      Si solo cambias la causa, deja la misma fecha.</div>
+    <div class="modal-msg" id="prtMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="confirmarPartirFec(${r.id})">PARTIR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+}
+async function confirmarPartirFec(id){
+  const cant=parseFloat($("prtCant").value);
+  const fecha=$("prtFecha").value;
+  const motivo=norm($("prtMotivo").value).toUpperCase();
+  const causa=$("prtCausa")?$("prtCausa").value:"";
+  if(!cant || cant<=0){ $("prtMsg").textContent="Escribe la cantidad a mover"; return; }
+  if(!fecha){ $("prtMsg").textContent="Elige la fecha"; return; }
+  if(!motivo){ $("prtMsg").textContent="Indica el motivo"; return; }
+  try{
+    const r=await rpc("fn_reclamo_partir",{p_dni:ING.dni,p_token:ING.token,
+      p_id:id,p_cant:cant,p_fecha:fecha,p_motivo:motivo,p_causa:causa});
+    if(!r.ok){ $("prtMsg").textContent=r.error||"No se pudo partir"; return; }
+    cerrarModal();
+    mostrarOk(`${qty(r.movido)} und · ${esc(r.fecha)}${r.causa?" · "+esc(r.causa):""} · quedan ${qty(r.queda)}`);
+    FEC_MOTIVOS = await rpc("fn_motivos_fecha_listar",{p_dni:ING.dni,p_token:ING.token}).catch(()=>FEC_MOTIVOS);
+    pintarMotivosFec();
+    await cargarReclamosFec();
+  }catch(e){ $("prtMsg").textContent=e.message; }
+}
+
 async function aplicarCambioFec(){
   const ids = Object.keys(FEC_SEL).map(Number);
   if(!ids.length){ mostrarError("Marca al menos un ticket"); return; }
@@ -1982,6 +2039,63 @@ async function toggleExtra(i){
   }catch(e2){ mostrarError(e2.message); }
 }
 
+/* --- Causas de variación del STD (parche 36) --- */
+let CAUSAS_ING=[];
+async function cargarCausasSilencioso(){
+  try{ const r=await rpc("fn_causas_std_listar",{p_dni:ING.dni,p_token:ING.token,p_todas:true});
+       if(Array.isArray(r)) CAUSAS_ING=r; }catch(e){}
+}
+async function cargarCausas(){
+  $("cauTabla").innerHTML=cargandoHTML("Cargando…");
+  try{
+    const r=await rpc("fn_causas_std_listar",{p_dni:ING.dni,p_token:ING.token,p_todas:true});
+    if(r && r.ok===false){ mostrarError(r.error||"Error"); $("cauTabla").innerHTML=""; return; }
+    CAUSAS_ING=Array.isArray(r)?r:[]; pintarCausasIng();
+  }catch(e){ $("cauTabla").innerHTML=""; mostrarError(e.message); }
+}
+function pintarCausasIng(){
+  const act=CAUSAS_ING.filter(c=>c.activa).length;
+  $("cauResumen").textContent=`${CAUSAS_ING.length} causa(s) · ${act} activa(s)`;
+  const body=CAUSAS_ING.length? CAUSAS_ING.map((c,i)=>`<tr>
+      <td class="izq"><b>${esc(c.texto)}</b></td>
+      <td>${Number(c.delta)>0?"+":""}${Number(c.delta).toFixed(2)}</td>
+      <td><span class="pill ${c.activa?"ACTIVO":"DM"}">${c.activa?"ACTIVA":"INACTIVA"}</span></td>
+      <td><button class="btn-mini" onclick="editarCausa(${i})">Editar</button></td>
+      <td><button class="btn-mini ${c.activa?"rojo":"verde"}" onclick="toggleCausa(${i})">${c.activa?"Desactivar":"Activar"}</button></td>
+    </tr>`).join("")
+    : `<tr><td colspan="5"><div class="vacio-msg">Sin causas cargadas</div></td></tr>`;
+  $("cauTabla").innerHTML=`<thead><tr><th class="izq">Causa</th><th>Min/prenda</th>
+    <th>Estado</th><th></th><th></th></tr></thead><tbody>${body}</tbody>`;
+}
+function editarCausa(i){
+  const c=CAUSAS_ING[i]; if(!c) return;
+  $("cauTexto").value=c.texto; $("cauDelta").value=c.delta;
+  $("cauTexto").focus();
+}
+async function guardarCausa(){
+  const texto=norm($("cauTexto").value).toUpperCase();
+  const delta=parseFloat($("cauDelta").value);
+  if(!texto){ mostrarError("Escribe la causa"); return; }
+  if(!delta || delta===0 || isNaN(delta)){ mostrarError("Los minutos por prenda deben ser distintos de cero"); return; }
+  try{
+    const r=await rpc("fn_causa_std_guardar",{p_dni:ING.dni,p_token:ING.token,
+      p_texto:texto,p_delta:delta,p_activa:true});
+    if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); return; }
+    mostrarOk(`Causa "${r.texto}" guardada`);
+    $("cauTexto").value=""; $("cauDelta").value="";
+    cargarCausas();
+  }catch(e){ mostrarError(e.message); }
+}
+async function toggleCausa(i){
+  const c=CAUSAS_ING[i]; if(!c) return;
+  try{
+    const r=await rpc("fn_causa_std_guardar",{p_dni:ING.dni,p_token:ING.token,
+      p_texto:c.texto,p_delta:c.delta,p_activa:!c.activa});
+    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+    cargarCausas();
+  }catch(e){ mostrarError(e.message); }
+}
+
 /* --- OFs registradas (parche 26): lo guardado al confirmar cada HN --- */
 let OFS=[], OFS_VISTA=[];
 async function cargarOfs(){
@@ -2444,18 +2558,23 @@ function pintarTkOp(){
   if(tkOpPag>totP) tkOpPag=totP; if(tkOpPag<1) tkOpPag=1;
   const pag=rows.slice((tkOpPag-1)*TKOP_PAGE, tkOpPag*TKOP_PAGE);
   const nsel=Object.keys(tkOpMarc).length;
-  $("tkOpResumen").textContent=`OF ${esc(TKOP.of)} · ${rows.length} ticket(s) · ${nsel} seleccionado(s)`;
+  const act=rows.filter(t=>t.estado==='ACTIVO');
+  const sum=(a,k)=>a.reduce((x,t)=>x+(Number(t[k])||0),0);
+  $("tkOpResumen").textContent=`OF ${esc(TKOP.of)} · ${rows.length} ticket(s) · `
+    + `${qty(sum(act,"cant"))} und · ${Math.round(sum(act,"minutos"))} min (activos) · ${nsel} seleccionado(s)`;
   const bs=$("tkOpLiberarSel"); if(bs) bs.textContent=`Liberar selección (${nsel})`;
   const fl=k=>tkOpSort.col===k?(tkOpSort.dir===1?" ▲":" ▼"):"";
-  const COLS=[["nombre","Nombre"],["dni","DNI"],["op","Operación"],["hora","Fecha/hora reclamado"],["numeracion","Numeración"],["estado","Estado"]];
+  const COLS=[["nombre","Nombre"],["dni","DNI"],["op","Operación"],["hora","Fecha/hora reclamado"],["numeracion","Numeración"],["cant","Cant"],["minutos","Min"],["estado","Estado"]];
   const thead=`<thead><tr><th></th>${COLS.map(c=>`<th class="ord${c[0]==="nombre"?" izq":""}" onclick="ordenarTkOp('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}<th></th></tr></thead>`;
   const body=pag.length? pag.map(t=>`<tr${t.estado==='LIBERADO'?' style="opacity:.55;"':''}>
       <td>${t.estado==='ACTIVO'?`<input type="checkbox" class="sw" ${tkOpMarc[t.codigo]?"checked":""} onclick="tkOpToggle('${esc(t.codigo)}')">`:""}</td>
-      <td class="izq">${esc(t.nombre)}</td><td>${esc(t.dni)}</td><td>${esc(t.op)}</td>
+      <td class="izq">${esc(t.nombre)}</td><td>${esc(t.dni)}</td>
+      <td>${esc(t.op)}${t.causa?`<div class="cf-detalle">${esc(t.causa)}</div>`:""}</td>
       <td>${esc(t.hora)}</td><td>${esc(t.numeracion||"—")}</td>
+      <td><b>${t.cant!=null?qty(t.cant):"—"}</b></td><td>${t.minutos!=null?t.minutos:"—"}</td>
       <td><span class="pill ${t.estado==='ACTIVO'?'ACTIVO':'FALTA'}">${esc(t.estado)}</span></td>
       <td>${t.estado==='ACTIVO'?`<button class="btn-mini rojo" onclick="liberarTkOp('${esc(t.codigo)}')">LIBERAR</button>`:""}</td></tr>`).join("")
-    : `<tr><td colspan="8"><div class="vacio-msg">Sin tickets reclamados para esta OF</div></td></tr>`;
+    : `<tr><td colspan="10"><div class="vacio-msg">Sin tickets reclamados para esta OF</div></td></tr>`;
   $("tablaTkOp").innerHTML=thead+"<tbody>"+body+"</tbody>";
   const pg=$("tkOpPager");
   if(pg) pg.innerHTML = totP>1
@@ -2674,8 +2793,22 @@ async function confirmarBorrarArt(){
 let BASE_VALORES={};   // cache por área de valores históricos (prendas/clientes/…/maxop)
 async function abrirModalBaseOp(id){
   const area = $("areaBase").value;
-  const b = id!=null ? (BASE.find(x=>Number(x.id)===Number(id))||{}) : {};
   const esEdicion = id!=null;
+  // Al AGREGAR, el artículo lo manda el filtro: con dos o más a la vista no se
+  // sabe a cuál cuelga la operación nueva. Sin artículos visibles se deja libre,
+  // que es como se da de alta el primero de un artículo nuevo.
+  let pre = null;
+  if(!esEdicion){
+    const vis = basesFiltradas();
+    const arts = [...new Set(vis.map(x=>normKey(x.articulo)).filter(Boolean))];
+    if(arts.length > 1){
+      mostrarError("Filtra hasta dejar un solo artículo para agregar una operación");
+      return;
+    }
+    if(arts.length === 1) pre = vis.find(x=>normKey(x.articulo)===arts[0]) || null;
+  }
+  const b = esEdicion ? (BASE.find(x=>Number(x.id)===Number(id))||{})
+          : (pre ? {prenda:pre.prenda, cliente:pre.cliente, articulo:pre.articulo} : {});
   const v = k => esc(b[k]!=null?b[k]:"");
   // Valores históricos para los desplegables (una vez por área).
   if(!BASE_VALORES[area]){
@@ -2699,7 +2832,7 @@ async function abrirModalBaseOp(id){
     </div>
     <div class="modal-2col">
       <div class="modal-campo"><label>Módulo</label><input id="boModulo" list="dlModulo" value="${v('modulo')}" maxlength="80" placeholder="Elige o escribe…"></div>
-      <div class="modal-campo"><label>Artículo</label><input id="boArticulo" list="dlArticulo" value="${v('articulo')}" maxlength="80" placeholder="Elige o escribe…" oninput="autoMaxOp()"></div>
+      <div class="modal-campo"><label>Artículo${pre?` <span class="cf-detalle" style="font-weight:600;">(del filtro)</span>`:""}</label><input id="boArticulo" list="dlArticulo" value="${v('articulo')}" maxlength="80" placeholder="Elige o escribe…" oninput="autoMaxOp()"${pre?` readonly style="background:var(--gris-fondo);color:#5a6270;"`:""}></div>
     </div>
     <div class="modal-campo"><label>Operación</label><input id="boOperacion" value="${v('operacion')}" maxlength="120"></div>
     <div class="modal-2col">
@@ -2778,8 +2911,14 @@ async function eliminarBaseOp(id, nombre, articulo){
   try{ const pv=await rpc("fn_base_almacen_map",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:articulo}); if(pv&&pv.ok) tot=pv.reclamos_total||0; }catch(e){}
   if(!confirm(`¿Eliminar la operación "${nombre}"?`+(tot>0?`\nReescribirá ${tot} ticket(s) del artículo ${articulo} en ALMACÉN y Supabase.`:""))) return;
   try{
-    const r=await rpc("fn_base_op_eliminar",{p_dni:ING.dni,p_token:ING.token,p_id:id});
+    let r=await rpc("fn_base_op_eliminar",{p_dni:ING.dni,p_token:ING.token,p_id:id,p_confirmar:false});
+    // Parche 35: si la operación tiene trabajo reclamado, se confirma aparte.
+    if(!r.ok && r.requiere_confirmacion){
+      if(!confirm(`${r.error}\n\n¿Eliminarla de todos modos?`)) return;
+      r=await rpc("fn_base_op_eliminar",{p_dni:ING.dni,p_token:ING.token,p_id:id,p_confirmar:true});
+    }
     if(!r.ok){ mostrarError(r.error||"No se pudo eliminar"); return; }
+    if(r.reclamos_sueltos>0) mostrarOk(`Eliminada · ${r.reclamos_sueltos} reclamo(s) quedaron fuera de la ruta`);
     delete BASES_CACHE[area];
     await sincronizarAlmacen(area, articulo);
     await cargarBases();

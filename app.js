@@ -134,6 +134,9 @@ function volverAtras(){
   if(ini && act && act!==ini && (window.VOLVER_MAP||{})[act]){ irA(ini); return true; }
   const t=(window.VOLVER_MAP||{})[act];
   if(t){ irA(t); return true; }
+  // Paso raíz: antes se dejaba salir de la app y en planta eso era un deslogueo
+  // casual. Si la página define onSalirApp, pide confirmación y no sale.
+  if(typeof window.onSalirApp === "function"){ window.onSalirApp(); return true; }
   return false;
 }
 function _armarAtras(){ try{ history.pushState({stx:1}, ""); }catch(e){} }
@@ -565,7 +568,21 @@ function initOperario(){
   window.VOLVER_MAP = VOLVER_OPERARIO;
   // Atrás siempre devuelve a la lista de OF (o a la de Acabado, según el área).
   window.VOLVER_INICIO = ES_ACABADO ? "pasoAcabOF" : "pasoOF";
+  window.onSalirApp = confirmarSalir;
   initBackTrap();
+}
+
+/* Atrás desde la pantalla raíz (OF o OF de Acabado): confirma antes de salir.
+   Volver a pulsar atrás cierra este modal, así que no hay forma de deslogearse
+   sin querer: hay que tocar el botón. */
+function confirmarSalir(){
+  abrirModal(`
+    <h2>¿Cerrar sesión?</h2>
+    <div class="sub" style="margin-bottom:12px;">Vas a salir de la aplicación. Lo que ya registraste no se pierde.</div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="cerrarSesion()">SÍ, CERRAR SESIÓN</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">NO, SEGUIR AQUÍ</button>
+    </div>`);
 }
 
 function pintarAreasEstajero(s){
@@ -600,13 +617,16 @@ async function cargarTodo(s){
     // Las OF generadas en el sistema (parche 29) se derivan de of_detalle × bases:
     // no están en el Sheet. Las anteriores siguen saliendo del almacén, así que
     // ambas conviven y el Sheet se vacía solo conforme entren OF nuevas.
-    const [alm, recl, dia, res, der] = await Promise.all([
+    const [alm, recl, dia, res, der, mp] = await Promise.all([
       cargarAlmacen(area).catch(e=>({tickets:[],duplicados:[],_err:e.message})),
       rpc("fn_reclamados", {p_dni:s.dni, p_token:s.token, p_area:area}),
       rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token}),
       rpc("fn_residuales", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
-      rpc("fn_tickets_area", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[])
+      rpc("fn_tickets_area", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
+      rpc("fn_mis_paquetes", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[])
     ]);
+    MISPAQ = Array.isArray(mp) ? mp : [];
+    aplicarBotonMisPaq();
     ALM = alm;
     if(Array.isArray(der) && der.length){
       const propias=new Set(der.map(t=>normKey(t.of)));
@@ -645,12 +665,27 @@ function mapResidual(r){
    con techo en el corte real de la OF. `fn_of_resumen` ignora los registros
    sin OF, así que el trabajo de reproceso no ensucia el resumen. */
 let ACAB={ofs:[], extra:[], of:null, op:null, tipo:null};
+let CAUSAS=[];
+/* El operario elige una causa (auditoría, falta de vapor…); los minutos que
+   suma los pone la BD desde `causas_std`. Nunca ve el número. */
+function pintarCausas(){
+  const card=$("acabCausaCard"), sel=$("acabCausa");
+  if(!card || !sel) return;
+  // No aplica al trabajo sin OF: ese ya tiene su propio STD.
+  const aplica = CAUSAS.length && !ACAB.tipo;
+  card.hidden = !aplica;
+  sel.innerHTML = `<option value="">No, como siempre</option>`
+    + (aplica ? CAUSAS.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("") : "");
+  sel.value = "";
+}
 async function cargarAcabado(s, area){
-  const [ofs, extra, dia] = await Promise.all([
+  const [ofs, extra, dia, causas] = await Promise.all([
     rpc("fn_acabado_ofs",{p_dni:s.dni,p_token:s.token,p_area:area}),
     rpc("fn_extra_listar",{p_dni:s.dni,p_token:s.token,p_area:area,p_todas:false}).catch(()=>[]),
-    rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area})
+    rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area}),
+    rpc("fn_causas_std_listar",{p_dni:s.dni,p_token:s.token}).catch(()=>[])
   ]);
+  CAUSAS = Array.isArray(causas) ? causas : [];
   if(ofs && ofs.ok===false) throw new Error(ofs.error||"No se pudieron cargar las OF");
   ACAB={ofs:(ofs&&ofs.items)||[], extra:Array.isArray(extra)?extra:[], of:null, op:null, tipo:null};
   setMetasAcabado(dia);
@@ -729,6 +764,7 @@ function acabPedirCant(){
     ? `${esc(e.tipo)} · STD ${Number(e.std).toFixed(2)} min`
     : `OF ${esc(o.of)} · ${esc(o.articulo)}<br>Quedan <b>${qty(Math.max(0,Number(o.cant_prog)-Number(x.hecho)))}</b> und de ${qty(o.cant_prog)}`;
   $("acabCant").value="";
+  pintarCausas();
   irA("pasoAcabCant");
   setTimeout(()=>$("acabCant").focus(),150);
 }
@@ -742,11 +778,13 @@ async function acabRegistrar(){
     const r = ACAB.tipo
       ? await rpc("fn_extra_registrar",{p_dni:s.dni,p_token:s.token,p_area:area,p_id:ACAB.tipo.id,p_cant:cant})
       : await rpc("fn_acabado_registrar",{p_dni:s.dni,p_token:s.token,p_area:area,
-          p_of:ACAB.of.of,p_nop:ACAB.op.n_op,p_cant:cant});
+          p_of:ACAB.of.of,p_nop:ACAB.op.n_op,p_cant:cant,
+          p_causa:(($("acabCausa")||{}).value||"")});
     if(!r.ok){ mostrarError(r.error||"No se pudo registrar"); return; }
     $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
     $("exDetalle").innerHTML = `${qty(cant)} und · `
       + (ACAB.tipo ? esc(ACAB.tipo.operacion) : `${esc(ACAB.op.operacion)} · OF ${esc(ACAB.of.of)}`)
+      + (r.causa ? `<br>${esc(r.causa)}` : "")
       + (r.hecho!=null ? `<br>Van ${qty(r.hecho)} de ${qty(r.cant_prog)} und` : "");
     mostrarExito();
     await cargarAcabado(s, area);
@@ -759,6 +797,14 @@ async function acabRegistrar(){
    declarar menos, el resto sale como paquete nuevo (-R1, -R2…) y queda libre
    para que quien lo termine sí pueda notificar sus minutos. */
 let MISPAQ=[];
+/* Solo son "míos y ajustables" los paquetes de una operación troceada (o un
+   residual). El resto no se puede partir, así que ni se listan. */
+function misPaqAjustables(){ return MISPAQ.filter(p=>p.divisible || p.ajustado); }
+/* Sin ninguno, el botón sobra: evita que intenten trocear lo que no se trocea. */
+function aplicarBotonMisPaq(){
+  const b=$("btnMisPaq"); if(!b) return;
+  b.style.display = (ES_ACABADO || !misPaqAjustables().length) ? "none" : "";
+}
 async function abrirMisPaquetes(){
   const s=sesionActual(), area=AREA_ESTAJERO||s.area;
   $("listaMisPaq").innerHTML=cargandoHTML("Cargando…");
@@ -767,13 +813,15 @@ async function abrirMisPaquetes(){
     const r=await rpc("fn_mis_paquetes",{p_dni:s.dni,p_token:s.token,p_area:area});
     if(r && r.ok===false){ mostrarError(r.error||"Error"); MISPAQ=[]; }
     else MISPAQ=Array.isArray(r)?r:[];
+    aplicarBotonMisPaq();
     pintarMisPaq();
   }catch(e){ $("listaMisPaq").innerHTML=""; mostrarError(e.message); }
 }
 function pintarMisPaq(){
   const l=$("listaMisPaq"); l.innerHTML="";
-  if(!MISPAQ.length){ l.innerHTML=`<div class="vacio-msg">No tienes paquetes de hoy ni de ayer.</div>`; return; }
-  MISPAQ.forEach((p,i)=>{
+  const lista=misPaqAjustables();
+  if(!lista.length){ l.innerHTML=`<div class="vacio-msg">No tienes paquetes que se puedan ajustar.</div>`; return; }
+  lista.forEach((p,i)=>{
     const c=document.createElement("div");
     c.className="card-fila"+(p.ajustado?" marcada":"");
     const est = p.ajustado
@@ -804,7 +852,7 @@ function mpEditar(i, abrir){
   if(abrir) setTimeout(()=>{ const c=$("mpCant"+i); if(c) c.focus(); },100);
 }
 async function declararParcial(i){
-  const p=MISPAQ[i]; if(!p) return;
+  const p=misPaqAjustables()[i]; if(!p) return;   // el índice es de la lista pintada
   const v=parseFloat(String(($("mpCant"+i)||{}).value||"").replace(/[^\d.]/g,""));
   if(!v || v<=0 || v>=p.asignada){ mostrarError(`Escribe entre 1 y ${qty(p.asignada-1)}`); return; }
   const resto=p.asignada-v;
@@ -1339,6 +1387,7 @@ function initSupervisora(){
     pasoTipo:"pasoPersonal", pasoMinutos:"pasoTipo",
     pasoMoverSel:"pasoPersonal", pasoMoverArea:"pasoMoverSel"
   };
+  window.onSalirApp = confirmarSalir;   // mismo resguardo que el operario
   initBackTrap();
 }
 /* Recargar según la pestaña activa (botón ↻ del header). */

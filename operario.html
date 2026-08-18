@@ -99,6 +99,13 @@
           style="max-width:220px;margin:6px auto;text-align:center;">
         <div class="conf-det" id="acabDet"></div>
       </div>
+      <!-- Variación del método (parche 36): el operario elige la causa, nunca minutos. -->
+      <div class="conf-card" id="acabCausaCard" hidden style="margin-top:10px;">
+        <div class="tk-label">¿Lo hiciste distinto?</div>
+        <select id="acabCausa" style="width:100%;max-width:280px;margin:6px auto;display:block;">
+          <option value="">No, como siempre</option>
+        </select>
+      </div>
       <button class="btn-principal" onclick="acabRegistrar()">REGISTRAR</button>
       <button class="btn-secundario" onclick="irA('pasoAcabOp')">VOLVER</button>
     </div>

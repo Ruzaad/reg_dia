@@ -157,6 +157,7 @@
         <button class="tab" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
         <button class="tab activo" onclick="activarTab(&quot;pasoOpsOF&quot;)">OPERACIONES POR OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoCausas&quot;)">CAUSAS DE STD</button>
       </div>
       <div class="tabs sup-subtabs">
         <button id="opfTabAdd" class="tab activo" onclick="opfModo('add')">AGREGAR OPERACIÓN</button>
@@ -487,6 +488,7 @@
         <button class="tab" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoOpsOF&quot;)">OPERACIONES POR OF</button>
         <button class="tab activo" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoCausas&quot;)">CAUSAS DE STD</button>
       </div>
       <div class="barra-control">
         <label class="campo"><span>Área</span><select id="exArea" onchange="cargarExtra()"></select></label>
@@ -499,6 +501,25 @@
       </div>
       <div class="sub" id="exResumen"></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;"><table class="tabla" id="exTabla"></table></div>
+    </section>
+
+    <!-- ===================== CAUSAS DE STD ===================== -->
+    <section class="pantalla" id="pasoCausas">
+      <div class="seccion-cab"><h1>Causas de STD</h1>
+        <p class="seccion-sub">Cuando el método cambia a mitad de una OF, el operario elige la causa y estos minutos por prenda se suman a su STD. Él nunca ve el número: solo el texto.</p></div>
+      <div class="tabs gen-subtabs">
+        <button class="tab" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoOpsOF&quot;)">OPERACIONES POR OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
+        <button class="tab activo" onclick="activarTab(&quot;pasoCausas&quot;)">CAUSAS DE STD</button>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Causa</span><input type="text" id="cauTexto" placeholder="Ej: FALTA DE VAPOR" maxlength="80"></label>
+        <label class="campo"><span>Minutos por prenda</span><input type="number" id="cauDelta" step="0.01" placeholder="0.33"></label>
+        <button class="btn-mini verde" onclick="guardarCausa()">Añadir / actualizar</button>
+      </div>
+      <div class="sub" id="cauResumen"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;"><table class="tabla" id="cauTabla"></table></div>
     </section>
 
     <!-- ===================== OFs REGISTRADAS ===================== -->
@@ -596,6 +617,7 @@
         <button class="tab activo" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoOpsOF&quot;)">OPERACIONES POR OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoCausas&quot;)">CAUSAS DE STD</button>
       </div>
       <div class="barra-control">
         <label class="campo"><span>Área</span>
