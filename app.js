@@ -677,6 +677,15 @@ function pintarCausas(){
   sel.innerHTML = `<option value="">No, como siempre</option>`
     + (aplica ? CAUSAS.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("") : "");
   sel.value = "";
+  acabCausaCambio();
+}
+/* Marca la tarjeta cuando hay causa elegida. Solo señal visual: el operario
+   nunca ve minutos, el delta lo aplica la BD desde `causas_std`. */
+function acabCausaCambio(){
+  const card=$("acabCausaCard"), nota=$("acabCausaNota"), sel=$("acabCausa");
+  const hay = !!(sel && sel.value);
+  if(card) card.classList.toggle("activa", hay);
+  if(nota) nota.hidden = !hay;
 }
 async function cargarAcabado(s, area){
   const [ofs, extra, dia, causas] = await Promise.all([

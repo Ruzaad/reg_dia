@@ -176,6 +176,22 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
   box-shadow:0 2px 8px rgba(13,59,133,.12);text-align:center;}
 .conf-num{font-size:44px;font-weight:800;color:var(--azul);}
 .conf-det{font-size:19px;line-height:1.6;margin-top:8px;}
+
+/* Acabado · variación del método (parche 36). Todo va scoped a `.acab-causa`:
+   una regla suelta de `select`/`input` aquí pisaría el toggle `.sw`. */
+.acab-causa{padding:16px 18px;}
+.acab-causa .tk-label{display:block;margin-bottom:10px;}
+.acab-causa select{width:100%;max-width:320px;margin:0 auto;display:block;
+  background:var(--gris-fondo);color:var(--texto);
+  border:2px solid var(--sw-off);border-radius:12px;
+  font-size:19px;font-weight:700;font-family:inherit;
+  padding:13px 12px;cursor:pointer;}
+.acab-causa select:focus{border-color:var(--enlace);}
+/* Con causa elegida la tarjeta se marca en ocre: el operario ve que cambió
+   algo respecto de lo normal, sin que aparezca ningún minutaje. */
+.acab-causa.activa{box-shadow:0 2px 8px rgba(212,157,83,.35);}
+.acab-causa.activa select{border-color:var(--ocre);color:var(--azul);}
+.acab-causa-nota{margin-top:10px;font-size:14px;font-weight:700;color:var(--ocre);}
 .btn-principal{background:var(--exito);color:#fff;border:none;border-radius:15px;
   font-size:26px;font-weight:800;padding:18px;cursor:pointer;width:100%;}
 .btn-principal:disabled{background:var(--tomado);}
