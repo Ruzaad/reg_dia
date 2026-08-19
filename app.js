@@ -680,6 +680,40 @@ function pintarCausas(){
   sel.value = "";
   acabCausaCambio();
 }
+/* Histórico de la operación (parche 42): quién registró qué y qué día en esta
+   misma (OF, operación). Sirve para no volver a declarar lo que otro ya puso.
+   No aplica al trabajo sin OF, que no tiene operación de ruta. */
+async function cargarAcabHist(){
+  const card=$("acabHistCard"), z=$("acabHist");
+  if(!card||!z) return;
+  card.hidden=true; z.innerHTML="";
+  if(ACAB.tipo || !ACAB.of || !ACAB.op) return;
+  const s=sesionActual(), area=AREA_ESTAJERO||s.area;
+  try{
+    const r=await rpc("fn_acabado_historial",{p_dni:s.dni,p_token:s.token,
+      p_area:area, p_of:ACAB.of.of, p_nop:ACAB.op.n_op});
+    if(!r || r.ok===false) return;
+    pintarAcabHist(r.items||[]);
+  }catch(e){ /* el histórico nunca debe impedir registrar */ }
+}
+function pintarAcabHist(items){
+  const card=$("acabHistCard"), z=$("acabHist");
+  if(!items.length){ card.hidden=true; return; }
+  const total=items.reduce((a,x)=>a+(Number(x.cant)||0),0);
+  const hoy=new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"});
+  const cuando=f=> f===hoy ? "hoy" : f;
+  z.innerHTML=`<div class="acab-hist-lista">${items.map(x=>`
+      <div class="acab-hist-fila${x.mio?" mio":""}">
+        <div>
+          <div class="acab-hist-quien">${esc(soloApellidos(x.nombre))}${x.mio?" (tú)":""}</div>
+          <div class="acab-hist-cuando">${esc(cuando(x.fecha))} · ${esc(x.hora)}</div>
+          ${x.causa?`<div class="acab-hist-causa">${esc(x.causa)}</div>`:""}
+        </div>
+        <div class="acab-hist-cant">${qty(x.cant)} und</div>
+      </div>`).join("")}</div>
+    <div class="acab-hist-total">${items.length} registro(s) · <b>${qty(total)}</b> und en total</div>`;
+  card.hidden=false;
+}
 /* Marca la tarjeta cuando hay causa elegida. Solo señal visual: el operario
    nunca ve minutos, el delta lo aplica la BD desde `causas_std`. */
 function acabCausaCambio(){
@@ -807,14 +841,21 @@ function pintarAcabExtra(){
     l.appendChild(c);
   });
 }
-function acabPedirCant(){
+/* Cabecera y "quedan N und". Separado para poder refrescarlo con el botón ↻
+   sin borrar la cantidad que el operario ya tecleó. */
+function acabDetalle(){
   const e=ACAB.tipo, x=ACAB.op, o=ACAB.of;
+  if(!e && (!x || !o)) return;
   $("tituloAcabCant").textContent = e ? e.operacion : x.operacion;
   $("acabDet").innerHTML = e
     ? `${esc(e.tipo)} · STD ${Number(e.std).toFixed(2)} min`
     : `OF ${esc(o.of)} · ${esc(o.articulo)}<br>Quedan <b>${qty(Math.max(0,Number(o.cant_prog)-Number(x.hecho)))}</b> und de ${qty(o.cant_prog)}`;
+}
+function acabPedirCant(){
+  acabDetalle();
   $("acabCant").value="";
   pintarCausas();
+  cargarAcabHist();
   irA("pasoAcabCant");
   setTimeout(()=>$("acabCant").focus(),150);
 }
@@ -837,6 +878,7 @@ async function acabRegistrar(){
       + (r.causa ? `<br>${esc(r.causa)}` : "")
       + (r.hecho!=null ? `<br>Van ${qty(r.hecho)} de ${qty(r.cant_prog)} und` : "");
     mostrarExito();
+    { const c=$("acabHistCard"); if(c) c.hidden=true; }
     await cargarAcabado(s, area);
   }catch(e){ mostrarError(e.message); }
   finally{ if(btn){ btn.disabled=false; btn.textContent="REGISTRAR"; } }
@@ -944,13 +986,41 @@ async function recargarMiEficiencia(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   const b=$("btnRecargar"); if(b) b.classList.add("girando");
   try{
-    if(ES_ACABADO) await refrescarMetasAcabado();
-    else setAvance(await rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token}));
-    // Refresca estados de tickets (p.ej. liberaciones de ingeniería) sin recargar la app.
-    await refrescarReclamos(s);
     const act=pasoActivo();
-    if(act==="pasoTickets") pintarTickets();
-    else if(act==="pasoModulos") pintarModulos();
+    if(ES_ACABADO){
+      /* En Acabado no hay tickets que liberar: lo que cambia es la ruta (una
+         operación nueva en la BASE) y lo ya registrado por otros. Se recarga
+         eso, conservando dónde está el operario. */
+      const area=AREA_ESTAJERO||s.area;
+      const ofAnt=ACAB.of&&ACAB.of.of, opAnt=ACAB.op&&ACAB.op.n_op, prAnt=ACAB.prenda;
+      const [ofs, extra, dia] = await Promise.all([
+        rpc("fn_acabado_ofs",{p_dni:s.dni,p_token:s.token,p_area:area}),
+        rpc("fn_extra_listar",{p_dni:s.dni,p_token:s.token,p_area:area,p_todas:false}).catch(()=>[]),
+        rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area})
+      ]);
+      if(ofs && ofs.ok===false) throw new Error(ofs.error||"No se pudieron cargar las OF");
+      ACAB.ofs=(ofs&&ofs.items)||[];
+      ACAB.extra=Array.isArray(extra)?extra:[];
+      setMetasAcabado(dia);
+      // Reengancha la OF y la operación donde estaba, ya con los datos nuevos.
+      ACAB.of = ofAnt ? (ACAB.ofs.find(x=>normKey(x.of)===normKey(ofAnt)) || null) : null;
+      ACAB.prenda = ACAB.of && (ACAB.of.prendas||[]).includes(prAnt) ? prAnt : ACAB.prenda;
+      ACAB.op = (ACAB.of && opAnt!=null)
+        ? ((ACAB.of.operaciones||[]).find(x=>Number(x.n_op)===Number(opAnt)) || null) : null;
+      if(act==="pasoAcabOF") pintarAcabOF();
+      else if(act==="pasoAcabPrenda") pintarAcabPrendas();
+      else if(act==="pasoAcabOp"){ if(ACAB.of) pintarAcabOps(); else pintarAcabExtra(); }
+      else if(act==="pasoAcabCant"){
+        if(ACAB.op){ acabDetalle(); await cargarAcabHist(); }
+        else { pintarAcabOF(); irA("pasoAcabOF"); }
+      }
+    }else{
+      setAvance(await rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token}));
+      // Refresca estados de tickets (p.ej. liberaciones de ingeniería) sin recargar la app.
+      await refrescarReclamos(s);
+      if(act==="pasoTickets") pintarTickets();
+      else if(act==="pasoModulos") pintarModulos();
+    }
   }catch(e){ mostrarError(e.message); }
   finally{ if(b) setTimeout(()=>b.classList.remove("girando"),500); }
 }

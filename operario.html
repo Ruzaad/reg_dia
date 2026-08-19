@@ -114,6 +114,11 @@
         </select>
         <div class="acab-causa-nota" id="acabCausaNota" hidden>Se registrará con el tiempo de esa causa</div>
       </div>
+      <!-- Historico de la operacion (parche 42): quien registro que y cuando -->
+      <div class="conf-card acab-hist" id="acabHistCard" hidden>
+        <div class="tk-label">Ya registrado en esta operación</div>
+        <div id="acabHist"></div>
+      </div>
       <button class="btn-principal" onclick="acabRegistrar()">REGISTRAR</button>
       <button class="btn-secundario" onclick="irA('pasoAcabOp')">VOLVER</button>
     </div>
