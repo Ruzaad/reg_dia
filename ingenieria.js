@@ -2126,35 +2126,151 @@ function ofsPintar(){
     <th>Cant. prog.</th><th>Paquetes</th><th>División</th><th>Cargada</th></tr></thead><tbody>${body}</tbody>`;
 }
 /* Alta desde la HN: mismo parseo que Generar tickets, pero SIN escribir en el
-   ALMACÉN. Registra la OF con su desglose completo (talla, color, numeración). */
+   ALMACÉN. Registra la OF con su desglose completo (talla, color, numeración).
+
+   Antes registraba en cuanto se soltaba el archivo: una HN con la cabecera
+   corrida entraba con la OF mal leída y no había vuelta atrás. Ahora se lee,
+   se muestra una tarjeta por hoja con lo detectado —editable— y solo al
+   CONFIRMAR se escribe. Las diferencias de una OF ya registrada se siguen
+   mostrando igual que siempre. */
+let OFS_JOBS=[], OFS_SEQ=0;
 function ofsLeerHN(input){
   const files=[...input.files]; input.value="";
   if(!files.length) return;
-  const z=$("ofsHNRes"); z.innerHTML=cargandoHTML(`Leyendo ${files.length} archivo(s)…`);
-  let hechos=0; const lineas=[];
+  $("ofsHNRes").innerHTML="";
+  let leidos=0;
   files.forEach(file=>{
     const lector=new FileReader();
-    lector.onload=async(e)=>{
+    lector.onload=(e)=>{
       try{
         const wb=XLSX.read(e.target.result,{type:"array"});
         if(!wb.SheetNames.includes("HN")) throw new Error("no se encontró la hoja HN");
         const hn=parseHN(XLSX.utils.sheet_to_json(wb.Sheets["HN"],{header:1,defval:null,raw:true}));
-        if(!hn.of) throw new Error("la HN no trae la ORDEN (OF)");
-        const {det, total}=hnDetalle(hn.tallas);
-        if(total<=0) throw new Error("la HN no trae cantidades");
-        const g=await rpc("fn_of_registrar",{p_dni:ING.dni,p_token:ING.token,p_of:hn.of,
-          p_articulo:hn.articulo, p_prenda:hn.prenda, p_cant_prog:total,
-          p_div_ultima:null, p_div_penultima:null, p_detalle:det});
-        if(!g || g.ok===false) lineas.push(`<div class="diff-del">${esc(file.name)}: ${esc((g&&g.error)||"error")}</div>`);
-        else if(g.creada) lineas.push(`<div class="cf-detalle">✓ OF ${esc(g.of)} · ${g.paquetes} paquete(s) · ${Math.round(total)} und</div>`);
-        else if(g.completada) lineas.push(`<div class="cf-detalle">✓ OF ${esc(g.of)} completada con su desglose · ${g.paquetes} paquete(s) · ${Math.round(total)} und</div>`);
-        else lineas.push(`<div class="diff-del">OF ${esc(g.of)} ya registrada (${esc(g.fecha_carga||"—")}). No se escribió.`
-          + ((g.difiere||[]).length?`<br>Diferencias: ${esc((g.difiere||[]).join(" · "))}`:"")+`</div>`);
-      }catch(err){ lineas.push(`<div class="diff-del">${esc(file.name)}: ${esc(err.message)}</div>`); }
-      if(++hechos===files.length){ z.innerHTML=`<div class="diff-box">${lineas.join("")}</div>`; cargarOfs(); }
+        OFS_JOBS.push({id:++OFS_SEQ, name:file.name, hn, error:null});
+      }catch(err){
+        OFS_JOBS.push({id:++OFS_SEQ, name:file.name, hn:null, error:err.message});
+      }
+      if(++leidos===files.length) ofsCargarPrendas().then(renderOfsJobs);
     };
     lector.readAsArrayBuffer(file);
   });
+}
+/* La HN dice `TERNO(PANTALÓN)` y la BASE dice `PANTALON`: lo que se guarda
+   tiene que ser SIEMPRE el vocabulario de la BASE, o después no cruza. Se
+   ofrecen las prendas que existen de verdad y se preselecciona la que encaja
+   con el texto de la hoja; el analista solo confirma. */
+async function ofsCargarPrendas(){
+  for(const j of OFS_JOBS){
+    if(!j.hn || j.prendas) continue;
+    try{
+      const r=await rpc("fn_prendas_articulo",{p_dni:ING.dni,p_token:ING.token,p_articulo:j.hn.articulo});
+      j.prendas = Array.isArray(r) ? r : [];
+    }catch(e){ j.prendas = []; }
+    j.sug = ofsSugerirPrenda(j.hn.prenda, j.prendas);
+  }
+}
+/* Encaje por contención normalizada: "PANTALON" está dentro de "TERNOPANTALON".
+   Gana la más larga, para que "SACO" no le robe el sitio a "SACO SPORT". */
+function ofsSugerirPrenda(texto, lista){
+  const t=normKey(texto||""); let mejor="";
+  (lista||[]).forEach(p=>{ const k=normKey(p);
+    if(k && t.includes(k) && k.length>normKey(mejor).length) mejor=p; });
+  return mejor;
+}
+function ofsQuitarJob(id){ OFS_JOBS=OFS_JOBS.filter(j=>j.id!==id); renderOfsJobs(); }
+function ofsCancelarHN(){ OFS_JOBS=[]; renderOfsJobs(); }
+function renderOfsJobs(){
+  const cont=$("ofsHNCont"), z=$("ofsHNJobs"), c=$("ofsHNConteo");
+  if(!cont||!z) return;
+  cont.hidden = !OFS_JOBS.length;
+  if(!OFS_JOBS.length){ z.innerHTML=""; if(c) c.textContent=""; return; }
+  const ok=OFS_JOBS.filter(j=>j.hn).length, mal=OFS_JOBS.length-ok;
+  c.innerHTML=`<b>${OFS_JOBS.length}</b> hoja(s) leída(s) · <b>${ok}</b> OF por registrar`
+    + (mal?` · <span style="color:var(--alerta);font-weight:700;">${mal} con problema</span>`:"")
+    + ` — revisa y corrige antes de confirmar.`;
+  z.innerHTML=OFS_JOBS.map(j=>{
+    if(j.error) return `<div class="gen-job"><div class="gen-job-head">
+      <div class="gen-job-name">${esc(j.name)}</div>
+      <button class="btn-mini gris" onclick="ofsQuitarJob(${j.id})">Quitar</button></div>
+      <div class="diff-box"><div class="diff-del">${esc(j.error)}</div></div></div>`;
+    const {det, total}=hnDetalle(j.hn.tallas);
+    const filas=j.hn.tallas.map((t,i)=>`<tr><td>${i+1}</td><td>${esc(t.talla)}</td><td>${t.cant}</td><td class="izq">${esc(t.color)}</td></tr>`).join("");
+    const avisos=[];
+    if(!j.hn.of) avisos.push("No se leyó la ORDEN (OF): escríbela a mano.");
+    if(!j.hn.articulo) avisos.push("No se leyó el ARTÍCULO.");
+    if(total<=0) avisos.push("La HN no trae cantidades.");
+    if((j.prendas||[]).length>1 && !j.sug)
+      avisos.push(`El artículo tiene varias prendas en la BASE (${j.prendas.join(" · ")}) y ninguna encaja con "${j.hn.prenda||"—"}": elígela a mano.`);
+    if((j.prendas||[]).length===0 && j.hn.articulo)
+      avisos.push("Ese artículo no tiene BASE cargada con prenda: se guardará lo que escribas.");
+    return `<div class="gen-job" id="ofsJob_${j.id}">
+      <div class="gen-job-head">
+        <div class="gen-job-name">${esc(j.name)}</div>
+        <button class="btn-mini gris" onclick="ofsQuitarJob(${j.id})">Quitar</button>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>OF</span><input type="text" id="ofsJofOf_${j.id}" inputmode="numeric" value="${esc(j.hn.of)}"></label>
+        <label class="campo"><span>Artículo</span><input type="text" id="ofsJofArt_${j.id}" value="${esc(j.hn.articulo)}"></label>
+        <label class="campo"><span>Prenda ${j.hn.prenda?`<span class="cf-detalle">(la hoja dice: ${esc(j.hn.prenda)})</span>`:""}</span>
+          ${(j.prendas||[]).length
+            ? `<select id="ofsJofPre_${j.id}">
+                 <option value="">— elige la prenda —</option>
+                 ${j.prendas.map(pr=>`<option value="${esc(pr)}" ${pr===j.sug?"selected":""}>${esc(pr)}</option>`).join("")}
+               </select>`
+            : `<input type="text" id="ofsJofPre_${j.id}" value="${esc(j.hn.prenda)}" placeholder="Sin BASE: escríbela">`}
+        </label>
+        <span class="sub" style="align-self:flex-end;">${j.hn.bloques} bloque(s) · ${det.length} paquete(s) · <b>${Math.round(total)}</b> und</span>
+      </div>
+      ${avisos.length?`<div class="diff-box"><div class="diff-del">${avisos.map(esc).join("<br>")}</div></div>`:""}
+      <div class="contenedor-ancho tabla-scroll" style="max-height:28vh;">
+        <table class="tabla"><thead><tr><th>#</th><th>Talla</th><th>Cant</th><th class="izq">Color</th></tr></thead>
+        <tbody>${filas}</tbody></table>
+      </div>
+    </div>`;
+  }).join("");
+}
+async function ofsConfirmarHN(){
+  const vivos=OFS_JOBS.filter(j=>j.hn);
+  if(!vivos.length){ mostrarError("No hay ninguna hoja válida para registrar"); return; }
+  // Toma lo que hay en pantalla: puede haberse corregido a mano.
+  const pend=[];
+  for(const j of vivos){
+    const of=($("ofsJofOf_"+j.id).value||"").replace(/\D/g,"");
+    const art=($("ofsJofArt_"+j.id).value||"").trim().toUpperCase();
+    const pre=($("ofsJofPre_"+j.id).value||"").trim().toUpperCase();
+    const {det, total}=hnDetalle(j.hn.tallas);
+    if(!of){ mostrarError(`${j.name}: falta la OF`); return; }
+    if(!art){ mostrarError(`${j.name}: falta el artículo`); return; }
+    if((j.prendas||[]).length>1 && !pre){
+      mostrarError(`${j.name}: ese artículo tiene varias prendas, elige cuál es esta hoja`); return; }
+    if(total<=0){ mostrarError(`${j.name}: la HN no trae cantidades`); return; }
+    pend.push({j, of, art, pre, det, total});
+  }
+  const dupe=pend.map(p=>p.of).filter((v,i,a)=>a.indexOf(v)!==i);
+  if(dupe.length && !confirm(`Hay hojas con la misma OF (${[...new Set(dupe)].join(", ")}).
+Se registrarán una tras otra y la segunda saldrá como "ya registrada". ¿Sigo?`)) return;
+  const resumen=pend.map(p=>`OF ${p.of} · ${p.art} · ${Math.round(p.total)} und`).join("\n");
+  if(!confirm(`¿Registrar ${pend.length} OF?\n\n${resumen}`)) return;
+
+  const lineas=[];
+  for(const p of pend){
+    try{
+      const g=await rpc("fn_of_registrar",{p_dni:ING.dni,p_token:ING.token,p_of:p.of,
+        p_articulo:p.art, p_prenda:p.pre, p_cant_prog:p.total,
+        p_div_ultima:null, p_div_penultima:null, p_detalle:p.det});
+      if(!g || g.ok===false) lineas.push(`<div class="diff-del">${esc(p.j.name)}: ${esc((g&&g.error)||"error")}</div>`);
+      else if(g.creada) lineas.push(`<div class="cf-detalle">✓ OF ${esc(g.of)}${g.prenda?" · "+esc(g.prenda):""}`
+        + (g.prenda_nueva?" <b>(segunda prenda de una OF ya registrada)</b>":"")
+        + ` · ${g.paquetes} paquete(s) · ${Math.round(p.total)} und`
+        + ((g.difiere||[]).length?`<br>Aviso: ${esc((g.difiere||[]).join(" · "))}`:"")+`</div>`);
+      else if(g.completada) lineas.push(`<div class="cf-detalle">✓ OF ${esc(g.of)} completada con su desglose · ${g.paquetes} paquete(s) · ${Math.round(p.total)} und</div>`);
+      else lineas.push(`<div class="diff-del">OF ${esc(g.of)} ya registrada (${esc(g.fecha_carga||"—")}). No se escribió.`
+        + ((g.difiere||[]).length?`<br>Diferencias con esta HN: ${esc((g.difiere||[]).join(" · "))}`:"")+`</div>`);
+    }catch(err){ lineas.push(`<div class="diff-del">${esc(p.j.name)}: ${esc(err.message)}</div>`); }
+  }
+  OFS_JOBS=[]; renderOfsJobs();
+  $("ofsHNRes").innerHTML=`<div class="diff-box">${lineas.join("")}</div>`;
+  cargarOfs();
 }
 /* Alta manual: sin desglose (of_detalle vacío) — basta el corte real para el
    techo de ACABADO, pero la validación de cantidades de costura no aplicará. */

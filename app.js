@@ -443,7 +443,8 @@ let AREA_ESTAJERO = null;   // área elegida por el estajero para este reclamo (
 const VOLVER_OPERARIO = {
   pasoModulos:"pasoOF", pasoOps:"pasoModulos",
   pasoTickets:"pasoOps", pasoConf:"pasoTickets",
-  pasoAcabOp:"pasoAcabOF", pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF"
+  pasoAcabPrenda:"pasoAcabOF", pasoAcabOp:"pasoAcabOF",
+  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF"
 };
 
 let sa={signo:-1};
@@ -516,8 +517,8 @@ function pintarCrumb(id){
 }
 let EF_CENSURADA = false;   // operario: ojo para censurar su propia eficiencia
 /* ACABADO: se cuenta CANTIDAD (sin numeración, sin minutaje, sin eficiencia).
-   META_ACABADO[op] = {hoy, meta, ref}; meta = último día que trabajó esa op. */
-let ES_ACABADO = false, META_ACABADO = {}, CANT_HOY_ACABADO = 0;
+   Las metas diarias se retiraron en el parche 40. */
+let ES_ACABADO = false, CANT_HOY_ACABADO = 0;
 const qty = v => (Math.round((+v||0)*100)/100);   // cantidad legible (2 dec máx)
 /* Oculta en la cabecera lo que no aplica a Acabado (ojo de eficiencia, ajuste
    de minutos) y ajusta el subtítulo del paso Tickets. */
@@ -664,7 +665,7 @@ function mapResidual(r){
    Sin almacén y sin código: OF (artículo · color) → operación → cantidad,
    con techo en el corte real de la OF. `fn_of_resumen` ignora los registros
    sin OF, así que el trabajo de reproceso no ensucia el resumen. */
-let ACAB={ofs:[], extra:[], of:null, op:null, tipo:null};
+let ACAB={ofs:[], extra:[], of:null, op:null, tipo:null, prenda:null};
 let CAUSAS=[];
 /* El operario elige una causa (auditoría, falta de vapor…); los minutos que
    suma los pone la BD desde `causas_std`. Nunca ve el número. */
@@ -711,7 +712,8 @@ function pintarAcabOF(){
     c.innerHTML=`<div><div class="cf-titulo">SIN OF</div>
       <div class="cf-detalle">Reproceso · muestra · arreglo</div></div>
       <div class="badge-disp">${ACAB.extra.length} op.</div>`;
-    c.onclick=()=>{ ACAB.of=null; pintarAcabExtra(); irA("pasoAcabOp"); };
+    c.onclick=()=>{ ACAB.of=null; ACAB.prenda=null;
+      window.VOLVER_MAP.pasoAcabOp="pasoAcabOF"; pintarAcabExtra(); irA("pasoAcabOp"); };
     l.appendChild(c);
   }
   ACAB.ofs.forEach((o,i)=>{
@@ -725,19 +727,58 @@ function pintarAcabOF(){
         <div class="cf-detalle">${esc(o.colores||"—")} · ${qty(o.cant_prog)} und de corte</div>
       </div>
       <div class="badge-disp ${pend?"":"vacio"}">${pend} op. pendiente(s)</div>`;
-    c.onclick=()=>{ ACAB.of=ACAB.ofs[i]; pintarAcabOps(); irA("pasoAcabOp"); };
+    c.onclick=()=>{ ACAB.of=ACAB.ofs[i]; abrirAcabOF(); };
     l.appendChild(c);
   });
   if(!l.children.length) l.innerHTML=`<div class="vacio-msg">${q
     ? `Ninguna OF o artículo contiene "${esc(($("acabBuscaOF")||{}).value||"")}"`
     : "No hay OF con trabajo pendiente en esta área."}</div>`;
 }
+/* Una OF puede llevar dos prendas (un terno = pantalón + saco): misma OF,
+   mismo artículo, rutas distintas dentro de la misma BASE. Si es el caso se
+   intercala un paso para elegirla; con una sola prenda el flujo no cambia. */
+function acabPrendas(){ const p=(ACAB.of&&ACAB.of.prendas)||[]; return Array.isArray(p)?p:[]; }
+function abrirAcabOF(){
+  const pr=acabPrendas();
+  if(pr.length > 1){
+    ACAB.prenda=null;
+    window.VOLVER_MAP.pasoAcabOp="pasoAcabPrenda";
+    pintarAcabPrendas(); irA("pasoAcabPrenda");
+  }else{
+    ACAB.prenda = pr.length===1 ? pr[0] : null;
+    window.VOLVER_MAP.pasoAcabOp="pasoAcabOF";
+    pintarAcabOps(); irA("pasoAcabOp");
+  }
+}
+function pintarAcabPrendas(){
+  const o=ACAB.of; if(!o) return;
+  $("tituloAcabPrenda").textContent = `${o.articulo} · OF ${o.of}`;
+  const l=$("listaAcabPrenda"); l.innerHTML="";
+  acabPrendas().forEach(pren=>{
+    const ops=(o.operaciones||[]).filter(x=>x.prenda===pren);
+    const meta=Number(o.cant_prog)||0;
+    const pend=ops.filter(x=>Number(x.hecho)<meta).length;
+    const c=document.createElement("div");
+    c.className="card-fila"+(pend?"":" off");
+    c.innerHTML=`<div>
+        <div class="cf-titulo">${esc(pren)}</div>
+        <div class="cf-detalle">${ops.length} operación(es) · ${qty(meta)} und de corte</div>
+      </div>
+      <div class="badge-disp ${pend?"":"vacio"}">${pend?pend+" pendiente(s)":"completa"}</div>`;
+    c.onclick=()=>{ ACAB.prenda=pren; pintarAcabOps(); irA("pasoAcabOp"); };
+    l.appendChild(c);
+  });
+}
 function pintarAcabOps(){
   const o=ACAB.of; if(!o) return;
-  $("tituloAcabOp").textContent = `${o.articulo} · OF ${o.of}`;
+  $("tituloAcabOp").textContent = `${o.articulo}${ACAB.prenda?" · "+ACAB.prenda:""} · OF ${o.of}`;
   $("subAcabOp").textContent = `${o.colores||"—"} · corte real ${qty(o.cant_prog)} und`;
   const l=$("listaAcabOp"); l.innerHTML="";
-  (o.operaciones||[]).forEach((x,i)=>{
+  // Con dos prendas se listan solo las operaciones de la elegida.
+  const lista = acabPrendas().length>1 && ACAB.prenda
+    ? (o.operaciones||[]).filter(x=>x.prenda===ACAB.prenda)
+    : (o.operaciones||[]);
+  lista.forEach((x,i)=>{
     const meta=Number(o.cant_prog)||0, hecho=Number(x.hecho)||0, queda=Math.max(0,meta-hecho);
     const pct=acabPct(hecho,meta);
     const c=document.createElement("div");
@@ -749,7 +790,7 @@ function pintarAcabOps(){
           <span class="avance-lbl">${pct}%</span></div>
       </div>
       <div class="badge-disp ${queda?"":"vacio"}">${queda?qty(queda)+" und":"completa"}</div>`;
-    if(queda) c.onclick=()=>{ ACAB.op=o.operaciones[i]; ACAB.tipo=null; acabPedirCant(); };
+    if(queda) c.onclick=()=>{ ACAB.op=lista[i]; ACAB.tipo=null; acabPedirCant(); };
     l.appendChild(c);
   });
 }
@@ -884,9 +925,11 @@ function setAvance(d){
   b.textContent = `Hoy: ${ef} · ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
   b.classList.add("visible");
 }
-/* ACABADO: badge = cantidad de hoy (sin eficiencia ni minutaje). */
+/* ACABADO: badge = cantidad de hoy (sin eficiencia ni minutaje).
+   Las metas diarias se retiraron (parche 40): no las usaban para guiarse y
+   salían mal en el encabezado. `fn_acabado_metas` se sigue llamando solo por
+   `cant_hoy`; su campo `ops` ya no se lee. */
 function setMetasAcabado(d){
-  META_ACABADO = (d && d.ops) || {};
   CANT_HOY_ACABADO = (d && +d.cant_hoy) || 0;
   const b=$("badgeAvance");
   b.textContent = `Hoy: ${qty(CANT_HOY_ACABADO)} und`;
@@ -972,15 +1015,7 @@ function pintarOperaciones(){
     const c=document.createElement("div");
     c.className="card-fila";
     if(ES_ACABADO){
-      const m=META_ACABADO[op]||{}; const hoy=+m.hoy||0, meta=+m.meta||0;
-      const cumplida = meta>0 && hoy>=meta;
-      const detMeta = meta>0
-        ? `Hoy <b>${qty(hoy)}</b> · Meta <b>${qty(meta)}</b> und ${cumplida?'✓':''}`
-        : (hoy>0 ? `Hoy <b>${qty(hoy)}</b> und · sin meta previa` : `Sin meta previa`);
-      c.innerHTML=`<div>
-          <div class="cf-titulo">${esc(op)}</div>
-          <div class="cf-detalle"${cumplida?' style="color:var(--verde,#2e7d32);font-weight:700;"':''}>${detMeta}</div>
-        </div>
+      c.innerHTML=`<div><div class="cf-titulo">${esc(op)}</div></div>
         <div class="badge-disp ${o.libres===0?'vacio':''}">${qty(o.cantLibre)} und libres</div>`;
     } else {
       c.innerHTML=`<div>
@@ -1353,21 +1388,19 @@ async function verEfPersonaOps(dni, nombre){
     if(!r.ok){ mostrarError(r.error||"Error"); cerrarModal(); return; }
     const ops=r.ops||[];
     const acabado = areaSup()==="ACABADO";
-    const nCols = acabado?4:3;
+    const nCols = 3;
     const filas = ops.length
       ? ops.map(o=>{
-          const meta=+o.meta||0, cant=+o.cantidad||0, ok=meta>0&&cant>=meta;
+          const cant=+o.cantidad||0;
           return `<tr><td>${esc(o.of)}</td><td class="izq">${esc(o.op)}</td>
-            <td><b>${Math.round(cant)}</b></td>`+
-            (acabado?`<td${ok?' style="color:#2e7d32;font-weight:700;"':''}>${meta>0?Math.round(meta):"—"}${ok?" ✓":""}</td>`:"")+
-            `</tr>`;
+            <td><b>${Math.round(cant)}</b></td></tr>`;
         }).join("")
       : `<tr><td colspan="${nCols}"><div class="vacio-msg">Sin operaciones ese día</div></td></tr>`;
     abrirModal(`
       <h2>${esc(soloApellidos(nombre))}</h2>
-      <div class="sub" style="margin-bottom:12px;">Operaciones por OF · ${esc(fd?fd.value:"")}${acabado?" · Meta = último día trabajado":""}</div>
+      <div class="sub" style="margin-bottom:12px;">Operaciones por OF · ${esc(fd?fd.value:"")}</div>
       <div style="max-height:60vh;overflow:auto;">
-        <table class="tabla"><thead><tr><th>OF</th><th class="izq">Operación</th><th>Cantidad</th>${acabado?"<th>Meta</th>":""}</tr></thead>
+        <table class="tabla"><thead><tr><th>OF</th><th class="izq">Operación</th><th>Cantidad</th></tr></thead>
         <tbody>${filas}</tbody></table>
       </div>
       <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`);

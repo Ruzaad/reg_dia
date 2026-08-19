@@ -540,6 +540,14 @@
           </label>
           <span class="sub" style="align-self:flex-end;">No escribe en el ALMACÉN: solo registra la OF y su desglose.</span>
         </div>
+        <div id="ofsHNCont" hidden>
+          <div class="sub" id="ofsHNConteo" style="margin:8px 0;"></div>
+          <div id="ofsHNJobs"></div>
+          <div class="fila-filtros" style="margin-bottom:10px;">
+            <button class="btn-mini verde" onclick="ofsConfirmarHN()">CONFIRMAR Y REGISTRAR</button>
+            <button class="btn-mini gris" onclick="ofsCancelarHN()">Cancelar todo</button>
+          </div>
+        </div>
         <div id="ofsHNRes"></div>
         <div class="barra-control">
           <label class="campo"><span>OF</span><input type="text" id="ofNueva" inputmode="numeric" placeholder="Ej: 9804"></label>
