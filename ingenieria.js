@@ -2106,6 +2106,20 @@ async function cargarOfs(){
     OFS=Array.isArray(r)?r:[]; ofsPintar();
   }catch(e){ $("ofsTabla").innerHTML=""; mostrarError(e.message); }
 }
+/* Una OF puede llevar dos prendas (terno = pantalón + saco): `ofs.prenda`
+   solo guarda la de la primera hoja, así que para mostrar hay que mirar lo
+   que realmente se guardó en `of_detalle`. */
+function ofsPrendas(o){ const p=(o&&o.prendas)||[]; return Array.isArray(p)?p:[]; }
+function ofsPrendasTxt(o){
+  const p=ofsPrendas(o).map(x=>x.prenda).filter(Boolean);
+  return p.length ? p.join(" · ") : (o.prenda||"—");
+}
+/* Con dos hojas, "26" solo confunde: se muestra de dónde sale. */
+function ofsPaqDesglose(o){
+  const p=ofsPrendas(o);
+  if(p.length<2) return "";
+  return ` <span class="cf-detalle">(${p.map(x=>x.paquetes).join("+")})</span>`;
+}
 function ofsPintar(){
   const q=normKey($("ofsBuscar")?$("ofsBuscar").value:"");
   const rows=OFS.filter(o=>!q||normKey((o.of||"")+" "+(o.articulo||"")).includes(q));
@@ -2117,8 +2131,8 @@ function ofsPintar(){
   const body=rows.length? rows.map((o,i)=>`<tr>
       <td><button class="btn-mini gris" onclick="ofsToggle(${i})">▾</button></td>
       <td class="izq"><b>${esc(o.articulo||"—")}</b></td><td>${esc(o.of)}</td>
-      <td>${esc(o.prenda||"—")}</td><td><b>${Math.round(o.cant_prog||0)}</b></td>
-      <td>${o.paquetes}</td><td>${esc(div(o))}</td>
+      <td>${esc(ofsPrendasTxt(o))}</td><td><b>${Math.round(o.cant_prog||0)}</b></td>
+      <td>${o.paquetes}${ofsPaqDesglose(o)}</td><td>${esc(div(o))}</td>
       <td>${esc(o.fecha_carga||"—")}</td></tr>
       <tr class="avof-det" id="ofsDet${i}" hidden><td></td><td colspan="7"></td></tr>`).join("")
     : `<tr><td colspan="8"><div class="vacio-msg">Sin OF registradas todavía. Se registran al confirmar una HN en Generar tickets.</div></td></tr>`;
@@ -2294,13 +2308,24 @@ async function altaOfManual(){
 function ofsToggle(i){
   const el=$("ofsDet"+i); if(!el) return;
   if(!el.dataset.listo){
-    const d=(OFS_VISTA[i]||{}).detalle||[];
+    const o=OFS_VISTA[i]||{}, d=o.detalle||[];
+    // Cada HN numera sus paquetes desde 1: mezclarlas hacía parecer que la
+    // numeración estaba duplicada. Se pinta una tabla por prenda.
+    const grupos=[...new Set(d.map(x=>x.prenda||""))];
+    const tabla=(pren)=>{
+      const filas=d.filter(x=>(x.prenda||"")===pren);
+      const und=filas.reduce((a,x)=>a+(Number(x.cant)||0),0);
+      return `${grupos.length>1
+          ? `<div class="tk-ops-title">${esc(pren||"Sin prenda")} · ${filas.length} paquete(s) · ${Math.round(und)} und</div>`
+          : ""}
+        <table class="tabla"><thead><tr><th>Talla</th><th>Color</th><th>Cant.</th><th>Numeración</th></tr></thead><tbody>${
+          filas.map(x=>`<tr><td>${esc(x.talla||"—")}</td><td>${esc(x.color||"—")}</td><td>${Math.round(x.cant)}</td>
+            <td>${x.desde}-${x.hasta}</td></tr>`).join("")}</tbody></table>`;
+    };
     el.querySelector("td[colspan]").innerHTML=`<div class="avof-det-wrap">
       <div class="tk-ops-title">Paquetes de la HN</div>
-      <table class="tabla"><thead><tr><th>Talla</th><th>Color</th><th>Cant.</th><th>Numeración</th></tr></thead><tbody>${
-        d.map(x=>`<tr><td>${esc(x.talla||"—")}</td><td>${esc(x.color||"—")}</td><td>${Math.round(x.cant)}</td>
-          <td>${x.desde}-${x.hasta}</td></tr>`).join("")
-        ||`<tr><td colspan="4"><div class="vacio-msg">Sin desglose</div></td></tr>`}</tbody></table></div>`;
+      ${d.length ? grupos.map(tabla).join("")
+                 : `<div class="vacio-msg">Sin desglose</div>`}</div>`;
     el.dataset.listo="1";
   }
   el.hidden=!el.hidden;
