@@ -268,6 +268,8 @@ async function hidratarAreas(){
       const a = norm(c.area); if(!a || !norm(c.sheet_id)) return;
       AREAS[a] = {habilitada:true, sheetId:norm(c.sheet_id),
         hoja: norm(c.hoja_almacen)||"ALMACEN", hojaOF: norm(c.hoja_of)||null,
+        // parche 45: false = esta área ya no lee el ALMACEN del Sheet.
+        usaAlmacen: (c.usa_almacen===undefined ? true : !!c.usa_almacen),
         mapa: normKey(a)==="ACABADO" ? MAPA_ACABADO : MAPA_ESTANDAR};
     });
     AREAS_HIDRATADAS = true;
@@ -618,8 +620,11 @@ async function cargarTodo(s){
     // Las OF generadas en el sistema (parche 29) se derivan de of_detalle × bases:
     // no están en el Sheet. Las anteriores siguen saliendo del almacén, así que
     // ambas conviven y el Sheet se vacía solo conforme entren OF nuevas.
+    // parche 45: si el área ya no usa el Sheet, ni se pide.
+    const usaAlm = (AREAS[area] && AREAS[area].usaAlmacen !== false);
     const [alm, recl, dia, res, der, mp] = await Promise.all([
-      cargarAlmacen(area).catch(e=>({tickets:[],duplicados:[],_err:e.message})),
+      usaAlm ? cargarAlmacen(area).catch(e=>({tickets:[],duplicados:[],_err:e.message}))
+             : Promise.resolve({tickets:[],duplicados:[]}),
       rpc("fn_reclamados", {p_dni:s.dni, p_token:s.token, p_area:area}),
       rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token}),
       rpc("fn_residuales", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),

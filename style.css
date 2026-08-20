@@ -206,6 +206,13 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .acab-hist-cant{font-weight:800;font-size:18px;white-space:nowrap;}
 .acab-hist-causa{font-size:13px;font-weight:700;color:var(--ocre);}
 .acab-hist-total{margin-top:10px;font-size:14px;font-weight:700;text-align:center;color:#5a6270;}
+
+/* OFs registradas · estado por área (parche 44) */
+.of-area{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;
+  padding:3px 9px;margin:2px 3px 2px 0;white-space:nowrap;border:1px solid transparent;}
+.of-area.lista{background:#e6f3ea;color:var(--exito);border-color:#bfe0c9;}
+.of-area.pendiente{background:#fdf3e3;color:#8a6116;border-color:#ecd9b0;}
+.of-area.sin-base{background:#fdecea;color:var(--alerta);border-color:#f3c7c2;cursor:help;}
 .btn-principal{background:var(--exito);color:#fff;border:none;border-radius:15px;
   font-size:26px;font-weight:800;padding:18px;cursor:pointer;width:100%;}
 .btn-principal:disabled{background:var(--tomado);}

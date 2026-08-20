@@ -37,6 +37,8 @@
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
         <a class="nav-item" data-tab="pasoOfs" href="#pasoOfs">OFs registradas</a>
         <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Resumen de OF</a>
+        <a class="nav-item" data-tab="pasoFlujo" href="#pasoFlujo">Entradas y salidas</a>
+        <a class="nav-item" data-tab="pasoOrigen" href="#pasoOrigen">Origen de tickets</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Eficiencia</summary>
@@ -580,6 +582,52 @@
       </div>
       <div class="sub" id="avofResumen"></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="avofTabla"></table></div>
+    </section>
+
+    <!-- ===================== ENTRADAS Y SALIDAS POR ÁREA ===================== -->
+    <section class="pantalla" id="pasoFlujo">
+      <div class="seccion-cab"><h1>Entradas y salidas por área</h1>
+        <p class="seccion-sub">Qué entró y qué salió de cada área en un rango.
+        <b>Entró</b> = tiene al menos una operación registrada. <b>Salió</b> = su operación de
+        referencia alcanzó la cantidad programada. El Resumen de OF sigue siendo acumulativo.</p></div>
+      <div class="barra-control">
+        <label class="campo"><span>Desde</span><input type="date" id="fjDesde"></label>
+        <label class="campo"><span>Hasta</span><input type="date" id="fjHasta"></label>
+        <label class="campo"><span>Operación de referencia</span>
+          <select id="fjRef">
+            <option value="ULTIMA">Última de la ruta</option>
+            <option value="PENULTIMA">Penúltima de la ruta</option>
+          </select></label>
+        <label class="campo"><span>Ver</span>
+          <select id="fjVista" onchange="pintarFlujo()">
+            <option value="salio">Lo que salió</option>
+            <option value="entro">Lo que entró</option>
+            <option value="proceso">En proceso</option>
+            <option value="todo">Todo</option>
+          </select></label>
+        <label class="campo"><span>Área</span><select id="fjArea" onchange="pintarFlujo()"></select></label>
+        <button class="btn-mini" onclick="cargarFlujo()">↻ CARGAR</button>
+        <button class="btn-mini" onclick="fjRango(0)">Hoy</button>
+        <button class="btn-mini" onclick="fjRango(7)">Últimos 7 días</button>
+        <button class="btn-mini" onclick="fjRango(30)">Últimos 30</button>
+        <button class="btn-mini verde" onclick="descargarFlujo()">DESCARGAR XLSX</button>
+      </div>
+      <div class="sub" id="fjResumen"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;"><table class="tabla" id="fjTabla"></table></div>
+    </section>
+
+    <!-- ===================== ORIGEN DE TICKETS ===================== -->
+    <section class="pantalla" id="pasoOrigen">
+      <div class="seccion-cab"><h1>Origen de tickets</h1>
+        <p class="seccion-sub">De dónde viene lo que se está reclamando ahora mismo: de las OF
+        generadas en el sistema, o del almacén del Sheet. Un área se puede desconectar del Sheet
+        cuando ya no le cuelga nada.</p></div>
+      <div class="barra-control">
+        <button class="btn-mini" onclick="cargarOrigen()">↻ CARGAR</button>
+        <span class="sub" style="align-self:flex-end;">ACABADO no usa almacén: registra por cantidad.</span>
+      </div>
+      <div class="sub" id="orResumen"></div>
+      <div id="orZona"></div>
     </section>
 
     <!-- ===================== INCIDENCIAS (ajustes) ===================== -->

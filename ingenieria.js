@@ -122,6 +122,8 @@ function activarTab(tab){
   else if(tab==='pasoOfs') cargarOfs();
   else if(tab==='pasoExtra') cargarExtra();
   else if(tab==='pasoCausas') cargarCausas();
+  else if(tab==='pasoFlujo') fjInit();
+  else if(tab==='pasoOrigen') cargarOrigen();
 }
 function toggleSidebar(){ document.body.classList.toggle("sidebar-cerrada"); }
 function cerrarSidebarMovil(){ if(window.innerWidth<=900) document.body.classList.add("sidebar-cerrada"); }
@@ -1632,6 +1634,7 @@ function pintarMovs(){
   const body=MOVS.length? MOVS.map((m,i)=>`<tr>
       <td class="izq"><b>${esc(soloApellidos(m.nombre))}</b></td>
       <td>${esc(m.desde_area||"—")}</td><td>${esc(m.hacia_area)}</td>
+      <td><input type="date" id="mvF${i}" value="${esc(m.fecha||"")}" style="max-width:140px;"></td>
       <td><input type="time" id="mvH${i}" value="${esc(m.hora)}" style="max-width:110px;"></td>
       <td>${m.min_origen==null?"—":m.min_origen+" min"}</td>
       <td>${m.min_destino} min</td>
@@ -1639,20 +1642,26 @@ function pintarMovs(){
       <td><button class="btn-mini verde" onclick="guardarMovHora(${i})">Guardar</button>
           <button class="btn-mini rojo" onclick="eliminarMov(${i})">Deshacer</button></td>
     </tr>`).join("")
-    : `<tr><td colspan="8"><div class="vacio-msg">Sin movimientos de área en esa fecha</div></td></tr>`;
+    : `<tr><td colspan="9"><div class="vacio-msg">Sin movimientos de área en esa fecha</div></td></tr>`;
   $("movTabla").innerHTML=`<thead><tr><th class="izq">Persona</th><th>Desde</th><th>Hacia</th>
-    <th>Hora</th><th>Min. origen</th><th>Min. destino</th><th class="izq">Movido por</th><th></th></tr></thead>
+    <th>Fecha</th><th>Hora</th><th>Min. origen</th><th>Min. destino</th><th class="izq">Movido por</th><th></th></tr></thead>
     <tbody>${body}</tbody>`;
 }
 async function guardarMovHora(i){
   const m=MOVS[i]; if(!m) return;
   const h=(($("mvH"+i)||{}).value||"").trim();
+  const f=(($("mvF"+i)||{}).value||"").trim() || m.fecha;
   if(!h){ mostrarError("Indica la hora"); return; }
-  if(h===m.hora){ mostrarOk("Sin cambios"); return; }
+  if(h===m.hora && f===m.fecha){ mostrarOk("Sin cambios"); return; }
+  // Cambiar de día mueve el reparto de minutos de los DOS días: se avisa.
+  if(f!==m.fecha && !confirm(`¿Mover el movimiento de ${soloApellidos(m.nombre)} del ${m.fecha} al ${f}?
+`
+    + `Se recalculan los minutos de los dos días.`)) return;
   try{
-    const r=await rpc("fn_movimiento_hora",{p_dni:ING.dni,p_token:ING.token,p_id:m.id,p_hora:h});
+    const r=await rpc("fn_movimiento_hora",{p_dni:ING.dni,p_token:ING.token,p_id:m.id,p_hora:h,p_fecha:f});
     if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
-    mostrarOk(`${soloApellidos(m.nombre)} · ${h} · ${r.min_origen==null?"":r.min_origen+" min en "+m.desde_area+" y "}${r.min_destino} min en ${m.hacia_area}`);
+    mostrarOk(`${soloApellidos(m.nombre)} · ${r.fecha} ${h} · ${r.min_origen==null?"":r.min_origen+" min en "+m.desde_area+" y "}${r.min_destino} min en ${m.hacia_area}`
+      + (r.fecha_anterior?` · se recalculó también el ${r.fecha_anterior}`:""));
     cargarMovs();
   }catch(e){ mostrarError(e.message); }
 }
@@ -2039,6 +2048,149 @@ async function toggleExtra(i){
   }catch(e2){ mostrarError(e2.message); }
 }
 
+/* --- Origen de tickets (parche 47) ---
+   Qué se está reclamando y de dónde viene. El almacén del Sheet solo se puede
+   apagar cuando al área no le cuelga ninguna OF sin generar; si cuelga algo,
+   la BD lo rechaza y hay que confirmarlo a sabiendas. */
+let ORIGEN=[];
+async function cargarOrigen(){
+  $("orZona").innerHTML=cargandoHTML("Revisando…"); $("orResumen").textContent="";
+  try{
+    const r=await rpc("fn_origen_reclamos",{p_dni:ING.dni,p_token:ING.token});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("orZona").innerHTML=""; return; }
+    ORIGEN=r.areas||[]; pintarOrigen();
+  }catch(e){ $("orZona").innerHTML=""; mostrarError(e.message); }
+}
+function pintarOrigen(){
+  const conSheet=ORIGEN.filter(a=>a.usa_almacen).length;
+  const listas=ORIGEN.filter(a=>a.usa_almacen && a.listo_para_apagar).length;
+  $("orResumen").innerHTML=`${ORIGEN.length} área(s) · <b>${conSheet}</b> siguen leyendo el Sheet`
+    + (listas?` · <b>${listas}</b> ya se pueden desconectar`:"");
+  $("orZona").innerHTML = ORIGEN.map(a=>{
+    const pend=a.pendientes||[];
+    const estado = !a.usa_almacen
+      ? `<span class="of-area lista">desconectada del Sheet</span>`
+      : (a.listo_para_apagar
+          ? `<span class="of-area lista">lista para desconectar</span>`
+          : `<span class="of-area pendiente">${a.ofs_sheet} OF colgando del Sheet</span>`);
+    const btn = a.usa_almacen
+      ? `<button class="btn-mini ${a.listo_para_apagar?"verde":"rojo"}" onclick="apagarAlmacen('${esc(a.area)}')">Desconectar del Sheet</button>`
+      : `<button class="btn-mini" onclick="prenderAlmacen('${esc(a.area)}')">Volver a conectar</button>`;
+    const tabla = pend.length ? `
+      <div class="contenedor-ancho tabla-scroll" style="max-height:26vh;margin-top:8px;">
+        <table class="tabla"><thead><tr><th>OF</th><th>Tickets</th><th>Personas</th>
+          <th>Und.</th><th>Último reclamo</th><th>¿Registrada?</th></tr></thead><tbody>${
+          pend.map(x=>`<tr><td>${esc(x.of)}</td><td><b>${x.tickets}</b></td><td>${x.personas}</td>
+            <td>${x.und}</td><td>${esc(x.ultima||"—")}</td>
+            <td>${x.registrada
+              ? `<span class="of-area pendiente">sí · falta generar</span>`
+              : `<span class="of-area sin-base">no está en el sistema</span>`}</td></tr>`).join("")
+        }</tbody></table></div>` : "";
+    return `<div class="gen-job">
+      <div class="gen-job-head">
+        <div class="gen-job-name">${esc(a.area)} &nbsp; ${estado}</div>
+        ${btn}
+      </div>
+      <div class="cf-detalle">Del sistema: <b>${a.ofs_sistema}</b> OF · ${a.tickets_sistema} ticket(s)
+        &nbsp;·&nbsp; Del Sheet: <b>${a.ofs_sheet}</b> OF · ${a.tickets_sheet} ticket(s)</div>
+      ${tabla}</div>`;
+  }).join("") || `<div class="vacio-msg">Sin áreas configuradas</div>`;
+}
+async function apagarAlmacen(area){
+  try{
+    let r=await rpc("fn_area_almacen",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_usar:false,p_confirmar:false});
+    if(!r.ok && r.requiere_confirmacion){
+      if(!confirm(`${r.error}
+
+¿Desconectar de todos modos?`)) return;
+      r=await rpc("fn_area_almacen",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_usar:false,p_confirmar:true});
+    }
+    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+    mostrarOk(`${area} ya no lee el almacén del Sheet`);
+    cargarOrigen();
+  }catch(e){ mostrarError(e.message); }
+}
+async function prenderAlmacen(area){
+  try{
+    const r=await rpc("fn_area_almacen",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_usar:true,p_confirmar:true});
+    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+    mostrarOk(`${area} vuelve a leer el almacén del Sheet`);
+    cargarOrigen();
+  }catch(e){ mostrarError(e.message); }
+}
+
+/* --- Entradas y salidas por área (parche 46) ---
+   ENTRÓ = al menos una operación registrada. SALIÓ = la operación de
+   referencia (última o penúltima, a elección) alcanzó lo programado.
+   Vista aparte del Resumen de OF, que es acumulativo a propósito. */
+let FLUJO={items:[], ref:"ULTIMA", desde:"", hasta:""};
+function fjInit(){
+  if(!$("fjDesde").value) fjRango(7);
+  else cargarFlujo();
+}
+function fjRango(dias){
+  const hoy=hoyISO();
+  const d=new Date(hoy+"T00:00:00"); d.setDate(d.getDate()-dias);
+  $("fjDesde").value=d.toLocaleDateString("sv-SE");
+  $("fjHasta").value=hoy;
+  cargarFlujo();
+}
+async function cargarFlujo(){
+  const desde=$("fjDesde").value, hasta=$("fjHasta").value;
+  if(!desde||!hasta){ mostrarError("Elige el rango"); return; }
+  $("fjTabla").innerHTML=cargandoHTML("Calculando…"); $("fjResumen").textContent="";
+  try{
+    const r=await rpc("fn_flujo_areas",{p_dni:ING.dni,p_token:ING.token,
+      p_desde:desde,p_hasta:hasta,p_ref:$("fjRef").value});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("fjTabla").innerHTML=""; return; }
+    FLUJO={items:r.items||[], ref:r.ref, desde:r.desde, hasta:r.hasta};
+    const areas=[...new Set(FLUJO.items.map(x=>x.area))].sort((a,b)=>a.localeCompare(b,"es"));
+    $("fjArea").innerHTML=`<option value="">Todas</option>`+areas.map(a=>`<option>${esc(a)}</option>`).join("");
+    pintarFlujo();
+  }catch(e){ $("fjTabla").innerHTML=""; mostrarError(e.message); }
+}
+function fjFiltradas(){
+  const v=$("fjVista").value, ar=$("fjArea").value;
+  return FLUJO.items.filter(x=>{
+    if(ar && x.area!==ar) return false;
+    if(v==="salio")   return x.salio_en_rango;
+    if(v==="entro")   return x.entro_en_rango;
+    if(v==="proceso") return !x.salida;
+    return true;
+  });
+}
+function pintarFlujo(){
+  if(!FLUJO.items.length){ $("fjTabla").innerHTML=`<tbody><tr><td><div class="vacio-msg">Sin movimiento en ese rango</div></td></tr></tbody>`; return; }
+  const l=fjFiltradas();
+  const und=l.reduce((a,x)=>a+(Number(x.und_ref)||0),0);
+  const salieron=l.filter(x=>x.salio_en_rango).length;
+  $("fjResumen").innerHTML=`${FLUJO.desde} → ${FLUJO.hasta} · referencia: <b>${esc(FLUJO.ref==="PENULTIMA"?"penúltima":"última")} operación</b>`
+    + ` · ${l.length} OF-área · ${salieron} salieron · ${Math.round(und)} und en la operación de referencia`;
+  const body=l.length? l.map(x=>`<tr>
+      <td class="izq"><b>${esc(x.area)}</b></td>
+      <td>${esc(x.of)}</td><td class="izq">${esc(x.articulo)}</td>
+      <td>${esc(x.prenda||"—")}</td>
+      <td>${Math.round(x.cant_prog)}</td>
+      <td><b>${Math.round(x.und_ref)}</b></td>
+      <td>${esc(x.entrada||"—")}</td>
+      <td>${esc(x.salida||"—")}</td>
+      <td><span class="pill ${x.salida?"ACTIVO":"DM"}">${esc(x.estado)}</span></td></tr>`).join("")
+    : `<tr><td colspan="9"><div class="vacio-msg">Nada con ese filtro</div></td></tr>`;
+  $("fjTabla").innerHTML=`<thead><tr><th class="izq">Área</th><th>OF</th><th class="izq">Artículo</th>
+    <th>Prenda</th><th>Cant. prog.</th><th>Und. ref.</th><th>Entró</th><th>Salió</th><th>Estado</th></tr></thead>
+    <tbody>${body}</tbody>`;
+}
+function descargarFlujo(){
+  const l=fjFiltradas();
+  if(!l.length){ mostrarError("No hay datos para descargar"); return; }
+  const CAB=["Área","OF","Artículo","Prenda","Cant. prog.","Und. operación ref.","Und. total área","Registros","Entró","Salió","Estado"];
+  const filas=l.map(x=>[x.area,x.of,x.articulo,x.prenda||"",Math.round(x.cant_prog),
+    Math.round(x.und_ref),Math.round(x.und_total),x.registros,x.entrada||"",x.salida||"",x.estado]);
+  const ws=XLSX.utils.aoa_to_sheet([CAB,...filas]); const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Flujo");
+  XLSX.writeFile(wb,`FLUJO_${FLUJO.desde}_a_${FLUJO.hasta}.xlsx`);
+}
+
 /* --- Causas de variación del STD (parche 36) --- */
 let CAUSAS_ING=[];
 async function cargarCausasSilencioso(){
@@ -2126,18 +2278,28 @@ function ofsPintar(){
   OFS_VISTA=rows;
   const und=rows.reduce((a,o)=>a+(Number(o.cant_prog)||0),0);
   $("ofsResumen").textContent=`${rows.length} OF · ${Math.round(und)} und programadas`;
-  const div=o=>[o.div_ultima?`última en ${o.div_ultima}`:null, o.div_penultima?`penúltima en ${o.div_penultima}`:null]
-    .filter(Boolean).join(" · ")||"—";
+  /* En vez de la división (casi siempre vacía), el estado por área: donde ya
+     está servida, donde falta generar y donde falta subir la BASE. */
+  const areasTxt=o=>{
+    const a=(o.areas||[]); if(!a.length) return "—";
+    return a.map(x=>{
+      if(!x.base) return `<span class="of-area sin-base" title="Falta subir la BASE de ${esc(o.articulo)} en ${esc(x.area)}">${esc(x.area)} · sin BASE</span>`;
+      if(x.acabado) return `<span class="of-area lista">${esc(x.area)} · activa</span>`;
+      return x.generada
+        ? `<span class="of-area lista">${esc(x.area)} · generada</span>`
+        : `<span class="of-area pendiente">${esc(x.area)} · por generar</span>`;
+    }).join(" ");
+  };
   const body=rows.length? rows.map((o,i)=>`<tr>
       <td><button class="btn-mini gris" onclick="ofsToggle(${i})">▾</button></td>
       <td class="izq"><b>${esc(o.articulo||"—")}</b></td><td>${esc(o.of)}</td>
       <td>${esc(ofsPrendasTxt(o))}</td><td><b>${Math.round(o.cant_prog||0)}</b></td>
-      <td>${o.paquetes}${ofsPaqDesglose(o)}</td><td>${esc(div(o))}</td>
+      <td>${o.paquetes}${ofsPaqDesglose(o)}</td><td class="izq">${areasTxt(o)}</td>
       <td>${esc(o.fecha_carga||"—")}</td></tr>
       <tr class="avof-det" id="ofsDet${i}" hidden><td></td><td colspan="7"></td></tr>`).join("")
     : `<tr><td colspan="8"><div class="vacio-msg">Sin OF registradas todavía. Se registran al confirmar una HN en Generar tickets.</div></td></tr>`;
   $("ofsTabla").innerHTML=`<thead><tr><th></th><th class="izq">Artículo</th><th>OF</th><th>Prenda</th>
-    <th>Cant. prog.</th><th>Paquetes</th><th>División</th><th>Cargada</th></tr></thead><tbody>${body}</tbody>`;
+    <th>Cant. prog.</th><th>Paquetes</th><th class="izq">Áreas</th><th>Cargada</th></tr></thead><tbody>${body}</tbody>`;
 }
 /* Alta desde la HN: mismo parseo que Generar tickets, pero SIN escribir en el
    ALMACÉN. Registra la OF con su desglose completo (talla, color, numeración).
