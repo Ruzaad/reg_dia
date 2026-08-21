@@ -214,15 +214,41 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .of-area.pendiente{background:#fdf3e3;color:#8a6116;border-color:#ecd9b0;}
 .of-area.sin-base{background:#fdecea;color:var(--alerta);border-color:#f3c7c2;cursor:help;}
 
-/* Incidencias · desglose de motivos del rango (parche 51) */
+/* Incidencias · desglose de motivos del rango (parche 51; agrupado por tipo en
+   el 52). Un chip por TIPO; el texto libre de OTROS se abre en .mot-sub debajo,
+   en vez de generar un chip por frase. */
+.mot-caja{background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;
+  padding:14px 16px;box-shadow:0 1px 3px rgba(13,59,133,.06);}
 .mot-chips{display:flex;flex-wrap:wrap;gap:8px;}
-.mot-chip{display:inline-flex;align-items:baseline;gap:8px;font-size:13px;
-  background:var(--blanco);border:1px solid var(--sw-off);border-radius:999px;padding:6px 12px;}
+.mot-chip{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-family:inherit;
+  color:var(--texto);text-align:left;background:var(--gris-fondo);border:1px solid var(--sw-off);
+  border-radius:999px;padding:6px 12px;}
 .mot-chip.neg{border-color:#f3c7c2;}
 .mot-chip.pos{border-color:#bfe0c9;}
-.mot-chip .mot-n{font-weight:800;background:var(--gris-fondo);border-radius:999px;padding:1px 8px;}
+.mot-chip .mot-n{font-weight:800;background:var(--blanco);border:1px solid var(--sw-off);
+  border-radius:999px;padding:1px 8px;font-variant-numeric:tabular-nums;}
+.mot-chip .mot-min{font-variant-numeric:tabular-nums;white-space:nowrap;}
 .mot-chip.neg .mot-min{color:var(--alerta);font-weight:800;}
 .mot-chip.pos .mot-min{color:var(--exito);font-weight:800;}
+.mot-chip.mot-abre{cursor:pointer;}
+.mot-chip.mot-abre:hover{border-color:var(--enlace);}
+.mot-chip.abierto{background:var(--azul);color:#fff;border-color:var(--azul);}
+.mot-chip.abierto .mot-n{background:rgba(250,250,250,.18);border-color:transparent;color:#fff;}
+.mot-chip.abierto .mot-min{color:#fff;}
+.mot-chip:focus-visible{outline:2px solid var(--enlace);outline-offset:2px;border-radius:999px;}
+.mot-car{font-size:11px;opacity:.75;}
+/* Motivos declarados dentro de un tipo (solo OTROS los tiene) */
+.mot-sub{margin-top:12px;border-top:1px dashed #d6e0ef;padding-top:10px;}
+.mot-sub-cab{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;
+  color:#5a6270;margin-bottom:6px;}
+.mot-sub-fila{display:flex;align-items:center;gap:10px;font-size:13px;padding:5px 0;
+  border-bottom:1px solid #f0f2f5;}
+.mot-sub-fila:last-child{border-bottom:none;}
+.mot-sub-txt{flex:1;min-width:0;font-weight:600;}
+.mot-sub-fila .mot-n{font-weight:800;background:var(--gris-fondo);border-radius:999px;
+  padding:1px 8px;font-variant-numeric:tabular-nums;}
+.mot-sub-fila .mot-min{color:var(--alerta);font-weight:800;white-space:nowrap;
+  font-variant-numeric:tabular-nums;min-width:74px;text-align:right;}
 
 /* Modal · editar artículo de la BASE (parche 51). Scoped a .ma-tabla. */
 .ma-tabla input{width:100%;background:var(--gris-fondo);color:var(--texto);
@@ -584,11 +610,19 @@ body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",mono
 /* Tablas de datos anchas (CRUD, matriz, eficiencia): usan todo el ancho disponible
    en ingeniería y hacen scroll horizontal si aún no caben (evita columnas cortadas). */
 body[data-pagina="ingenieria"] .tabla-scroll{max-width:100%;}
-/* KPIs de Incidencias más compactos (evita el bloque enorme/desbalanceado). */
-#resumenInci{grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;}
-#resumenInci .kpi{padding:10px 8px;}
-#resumenInci .kpi-num{font-size:21px;}
-#resumenInci .kpi-lbl{font-size:11px;}
+/* KPIs de Incidencias: compactos y alineados a la izquierda como el resto del
+   tablero (centrados a 760px quedaban flotando sobre una tabla a todo lo ancho).
+   La etiqueta admite un <b> con el nombre del tipo/área ganador: el hueco del
+   número es para el número. */
+#resumenInci{grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;
+  max-width:100%;margin:0;}
+#resumenInci .kpi{padding:12px 10px;border-top-width:4px;}
+#resumenInci .kpi-num{font-size:22px;line-height:1.1;}
+#resumenInci .kpi-lbl{font-size:11px;line-height:1.3;text-transform:uppercase;letter-spacing:.3px;}
+#resumenInci .kpi-lbl b{display:block;font-size:12px;color:var(--texto);text-transform:none;
+  letter-spacing:0;margin-top:2px;word-break:break-word;}
+/* Pie de la tabla de incidencias: .sub es 16px centrado (pensado para operario). */
+#resumenInciTxt{text-align:left;font-size:13px;margin:16px 0 8px;}
 
 /* Toolbar de acciones (supervisión: reemplaza el FAB flotante por barra estática) */
 .acc-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}

@@ -450,17 +450,20 @@ const VOLVER_OPERARIO = {
 };
 
 let sa={signo:-1};
-/* El operario solo pide RESTAR minutos: nunca sumaron. Los motivos habituales
-   son botones; "OTROS" abre los minutos y el texto libre, que se guarda en
-   mayúsculas. */
-const SA_MOTIVOS=["MÁQUINA PARADA","ARREGLOS","MUESTRAS","REPROCESOS","DESCOSER","OTROS"];
+/* El operario solo pide RESTAR minutos: nunca sumaron. Cada botón es un TIPO de
+   ocurrencia (se guarda en solicitudes_ajuste.tipo y llega intacto a
+   ocurrencias.tipo al aprobar); "OTROS" es el único que abre el texto libre, que
+   se guarda en mayúsculas como detalle. Par [tipo, etiqueta]: MAQUINA ya existía
+   en el catálogo con ese nombre. */
+const SA_MOTIVOS=[["MAQUINA","MÁQUINA PARADA"],["ARREGLOS","ARREGLOS"],["MUESTRAS","MUESTRAS"],
+                  ["REPROCESOS","REPROCESOS"],["DESCOSER","DESCOSER"],["OTROS","OTROS"]];
 function abrirSolicitudAjuste(){
-  sa={signo:-1, motivo:null};
+  sa={signo:-1, tipo:null, motivo:null};
   abrirModal(`
     <h2>Solicitar descuento de tiempo</h2>
     <div class="sub" style="margin-bottom:12px;">Pides a supervisión restar minutos de tu día</div>
     <div class="sa-motivos" id="saMotivos">
-      ${SA_MOTIVOS.map((m,i)=>`<button type="button" class="sa-mot" id="saMot${i}" onclick="saElegir(${i})">${esc(m)}</button>`).join("")}
+      ${SA_MOTIVOS.map((m,i)=>`<button type="button" class="sa-mot" id="saMot${i}" onclick="saElegir(${i})">${esc(m[1])}</button>`).join("")}
     </div>
     <div class="modal-campo"><label>Minutos a descontar</label>
       <input id="saMin" inputmode="numeric" maxlength="3" placeholder="Ej: 30" disabled></div>
@@ -473,9 +476,9 @@ function abrirSolicitudAjuste(){
     </div>`);
 }
 function saElegir(i){
-  sa.motivo=SA_MOTIVOS[i];
+  sa.tipo=SA_MOTIVOS[i][0]; sa.motivo=SA_MOTIVOS[i][1];
   SA_MOTIVOS.forEach((_,k)=>{ const b=$("saMot"+k); if(b) b.classList.toggle("activo",k===i); });
-  const otros = sa.motivo==="OTROS";
+  const otros = sa.tipo==="OTROS";
   $("saMotivoCampo").hidden=!otros;
   $("saMin").disabled=false;
   $("saMsg").textContent="";
@@ -483,15 +486,15 @@ function saElegir(i){
 }
 async function enviarSolicitudAjuste(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
-  if(!sa.motivo){ $("saMsg").textContent="Elige el motivo"; return; }
+  if(!sa.tipo){ $("saMsg").textContent="Elige el motivo"; return; }
   const v=parseInt($("saMin").value,10);
   const libre=($("saMotivo").value||"").trim().toUpperCase();
   if(!v||v<=0){ $("saMsg").textContent="Ingresa los minutos"; return; }
-  if(sa.motivo==="OTROS" && !libre){ $("saMsg").textContent="Escribe cuál fue el motivo"; return; }
-  const motivo = sa.motivo==="OTROS" ? libre : sa.motivo;
+  if(sa.tipo==="OTROS" && !libre){ $("saMsg").textContent="Escribe cuál fue el motivo"; return; }
+  const motivo = sa.tipo==="OTROS" ? libre : sa.motivo;
   try{
     const r=await rpc("fn_solicitud_ajuste_crear",{p_dni:s.dni,p_token:s.token,p_area:AREA_ESTAJERO||s.area,
-      p_minutos:-Math.abs(v),p_motivo:motivo});
+      p_minutos:-Math.abs(v),p_motivo:motivo,p_tipo:sa.tipo});
     if(!r.ok){ $("saMsg").textContent=r.error||"No se pudo enviar"; return; }
     cerrarModal();
     $("exTitulo").textContent="Solicitud enviada";

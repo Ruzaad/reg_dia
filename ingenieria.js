@@ -3423,7 +3423,15 @@ async function confirmarSubida(){
   }catch(e){ mostrarError(e.message); }
 }
 /* ================= INCIDENCIAS ================= */
-const TIPOS_OC = ["MAQUINA","HORA_EXTRA","TARDANZA","SEGURO","PERMISO","OTROS"];
+/* Catálogo de tipos de ocurrencia (espejo del CHECK ocurrencias_tipo_check).
+   ARREGLOS…DESCOSER son los que pide el operario desde su cuadro de descuento
+   (parche 52): antes llegaban como OTROS con el motivo en el detalle. */
+const TIPOS_OC = ["MAQUINA","HORA_EXTRA","TARDANZA","SEGURO","PERMISO",
+                  "ARREGLOS","MUESTRAS","REPROCESOS","DESCOSER","OTROS"];
+/* Nombre visible del tipo: el operario ve "MÁQUINA PARADA", no "MAQUINA". */
+const TIPO_NOMBRE={MAQUINA:"MÁQUINA PARADA"};
+const TIPO_LBL = t => TIPO_NOMBRE[String(t||"").trim().toUpperCase()]
+                   || String(t||"—").replace(/_/g," ");
 const hoyLima = ()=> new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"});
 let OCURR=[], inciSort={col:"fecha",dir:-1}, INCI_PERSONAL=[];
 
@@ -3488,7 +3496,7 @@ function pintarPendientesInci(){
     const items_=items; items_.forEach(it=>{
       const d=document.createElement("div");
       d.className="card-fila"; d.style.cursor="default"; d.style.flexWrap="wrap";
-      const tipoTxt = it.tipo ? String(it.tipo).replace(/_/g," ") : "";
+      const tipoTxt = it.tipo ? TIPO_LBL(it.tipo) : "";
       d.innerHTML=`
         <div style="flex:1;min-width:220px;">
           <div class="cf-titulo">${esc(it.nombre)}${tipoTxt?` · <span style="font-weight:700;color:var(--azul);">${esc(tipoTxt)}</span>`:""}</div>
@@ -3557,47 +3565,83 @@ function kpiAreaMayor(lista){
     por[a].n++; if(m<0) por[a].desc+=m; else por[a].suma+=m; });
   const top=Object.entries(por).sort((a,b)=>a[1].desc-b[1].desc)[0];
   if(!top || top[1].desc>=0) return "";
-  const k=(t,v,c)=>`<div class="kpi"><div class="kpi-num" style="color:${c};font-size:22px;">${esc(v)}</div><div class="kpi-lbl">${esc(t)}</div></div>`;
-  return k("Área que más descuenta", `${top[0]} (${top[1].desc})`, "var(--alerta)");
+  return `<div class="kpi"><div class="kpi-num" style="color:var(--alerta)">${Math.round(top[1].desc)}</div>`
+       + `<div class="kpi-lbl">Área que más descuenta<b>${esc(top[0])}</b></div></div>`;
 }
-/* Desglose por motivo del rango: cuenta y minutos, lo que más pesa primero. */
+/* Desglose del rango por TIPO (cuenta y minutos, lo que más pesa primero). El
+   texto libre solo existe en OTROS: va anidado dentro de su chip, no como un
+   chip por frase — así dejó de desparramarse una fila entera de motivos. */
+let MOT_INCI=[], MOT_ABIERTO="", MOT_LISTA=[];   // MOT_ABIERTO = tipo desplegado
 function pintarMotivosInci(lista){
   const z=$("motivosInci"); if(!z) return;
+  MOT_LISTA=lista||[];
   const por={};
   (lista||[]).forEach(o=>{
-    const k=(o.detalle||o.tipo||"—").toString().trim().toUpperCase()||"—";
+    const k=(o.tipo||"OTROS").toString().trim().toUpperCase()||"OTROS";
     const m=+o.minutos||0;
-    por[k]=por[k]||{n:0,min:0};
-    por[k].n++; por[k].min+=m;
+    const g=(por[k]=por[k]||{n:0,min:0,libres:{}});
+    g.n++; g.min+=m;
+    // Solo cuenta como motivo declarado lo que NO es un eco del propio tipo
+    // (el front replica el tipo en el detalle salvo en OTROS).
+    const d=(o.detalle||"").toString().trim().toUpperCase(), nd=normKey(d);
+    if(d && nd!==normKey(k) && nd!==normKey(TIPO_LBL(k))){
+      const L=(g.libres[d]=g.libres[d]||{n:0,min:0}); L.n++; L.min+=m; }
   });
-  const filas=Object.entries(por).sort((a,b)=>Math.abs(b[1].min)-Math.abs(a[1].min));
-  if(!filas.length){ z.innerHTML=""; return; }
-  z.innerHTML=`<div class="tk-ops-title">Motivos del rango</div>
-    <div class="mot-chips">${filas.map(([k,v])=>`
-      <span class="mot-chip ${v.min<0?"neg":"pos"}">
-        <b>${esc(k.replace(/_/g," "))}</b>
-        <span class="mot-n">${v.n}</span>
-        <span class="mot-min">${v.min>0?"+":""}${Math.round(v.min)} min</span>
-      </span>`).join("")}</div>`;
+  MOT_INCI=Object.entries(por)
+    .map(([k,v])=>({tipo:k,n:v.n,min:v.min,
+      libres:Object.entries(v.libres).map(([t,x])=>({txt:t,n:x.n,min:x.min}))
+             .sort((a,b)=>Math.abs(b.min)-Math.abs(a.min))}))
+    .sort((a,b)=>Math.abs(b.min)-Math.abs(a.min));
+  if(!MOT_INCI.length){ z.innerHTML=""; return; }
+  // El desplegado se recuerda por TIPO, no por índice: al cambiar el filtro el
+  // orden de los chips cambia y un índice apuntaría a otro tipo.
+  const g=MOT_INCI.find(x=>x.tipo===MOT_ABIERTO && x.libres.length) || null;
+  if(!g) MOT_ABIERTO="";
+  const min=v=>`${v>0?"+":""}${Math.round(v)} min`;
+  const chips=MOT_INCI.map((x,i)=>{
+    // Botón solo si hay algo que desplegar; si no, un chip estático (un button
+    // disabled se vería apagado por el estilo del navegador).
+    const abre=x.libres.length>0, act=x.tipo===MOT_ABIERTO;
+    const cls=`mot-chip ${x.min<0?"neg":"pos"}${abre?" mot-abre":""}${act?" abierto":""}`;
+    const cuerpo=`<b>${esc(TIPO_LBL(x.tipo))}</b>`
+      + `<span class="mot-n">${x.n}</span><span class="mot-min">${min(x.min)}</span>`
+      + (abre?`<span class="mot-car">${act?"▴":"▾"}</span>`:"");
+    return abre
+      ? `<button type="button" class="${cls}" aria-expanded="${act}" onclick="motDetInci(${i})">${cuerpo}</button>`
+      : `<span class="${cls}">${cuerpo}</span>`;
+  }).join("");
+  const det=!g ? "" : `<div class="mot-sub">
+      <div class="mot-sub-cab">${esc(TIPO_LBL(g.tipo))} · ${g.libres.length} motivo(s) declarado(s)</div>
+      ${g.libres.map(l=>`<div class="mot-sub-fila"><span class="mot-sub-txt">${esc(l.txt)}</span>
+        <span class="mot-n">${l.n}</span><span class="mot-min">${min(l.min)}</span></div>`).join("")}</div>`;
+  z.innerHTML=`<div class="mot-caja">
+    <div class="tk-ops-title">Motivos del rango · por tipo</div>
+    <div class="mot-chips">${chips}</div>${det}</div>`;
+}
+function motDetInci(i){
+  const t=(MOT_INCI[i]||{}).tipo||"";
+  MOT_ABIERTO = (MOT_ABIERTO===t ? "" : t);
+  pintarMotivosInci(MOT_LISTA);
 }
 function ordenarInci(col){ if(inciSort.col===col) inciSort.dir*=-1; else inciSort={col,dir:1}; pintarOcurrencias(); }
 function pintarOcurrencias(){
   const q=normKey($("filtroInci")?$("filtroInci").value:"");
-  let lista=OCURR.filter(o=>!q || normKey(`${o.nombre} ${o.tipo} ${o.detalle||""}`).includes(q));
+  let lista=OCURR.filter(o=>!q || normKey(`${o.nombre} ${o.tipo} ${TIPO_LBL(o.tipo)} ${o.detalle||""}`).includes(q));
   // resumen: cuánto suma (+) y cuánto descuenta (-)
   const suma=lista.filter(o=>+o.minutos>0).reduce((a,o)=>a+ +o.minutos,0);
   const resta=lista.filter(o=>+o.minutos<0).reduce((a,o)=>a+ +o.minutos,0);
   const porTipo={}; lista.forEach(o=>{ porTipo[o.tipo]=(porTipo[o.tipo]||0)+ +o.minutos; });
   const topDesc=Object.entries(porTipo).sort((a,b)=>a[1]-b[1])[0];
   const topSum=Object.entries(porTipo).sort((a,b)=>b[1]-a[1])[0];
-  const kpi=(t,v,c)=>`<div class="kpi"><div class="kpi-num" style="color:${c}">${v}</div><div class="sub">${t}</div></div>`;
+  const kpi=(t,v,c,sub)=>`<div class="kpi"><div class="kpi-num" style="color:${c}">${v}</div>`
+    +`<div class="kpi-lbl">${t}${sub?`<b>${esc(sub)}</b>`:""}</div></div>`;
   $("resumenInci").innerHTML =
     kpi("Incidencias", lista.length, "var(--azul)")+
     kpi("Suman (min)", "+"+suma, "var(--exito)")+
     kpi("Descuentan (min)", resta, "var(--alerta)")+
     kpi("Neto (min)", (suma+resta>0?"+":"")+(suma+resta), "var(--azul)")+
-    (topDesc?kpi("Más descuenta", topDesc[1]<0?`${topDesc[0].replace(/_/g," ")} (${topDesc[1]})`:"—", "var(--alerta)"):"")+
-    (topSum && topSum[1]>0?kpi("Más suma", `${topSum[0].replace(/_/g," ")} (+${topSum[1]})`, "var(--exito)"):"")+
+    (topDesc && topDesc[1]<0?kpi("Más descuenta", topDesc[1], "var(--alerta)", TIPO_LBL(topDesc[0])):"")+
+    (topSum && topSum[1]>0?kpi("Más suma", "+"+topSum[1], "var(--exito)", TIPO_LBL(topSum[0])):"")+
     /* Sin área elegida, lo que interesa es DÓNDE pesó más. Con un área
        elegida el comportamiento queda igual que antes. */
     ((($("areaInci")||{}).value||"") ? "" : kpiAreaMayor(lista));
@@ -3615,7 +3659,7 @@ function pintarOcurrencias(){
     const m=+o.minutos, col=m<0?"var(--alerta)":"var(--exito)";
     return `<tr>
       <td>${esc(o.fecha)}</td><td class="izq">${esc(soloApellidos(o.nombre))}</td>
-      <td>${esc(o.area)}</td><td>${esc(String(o.tipo).replace(/_/g," "))}</td>
+      <td>${esc(o.area)}</td><td>${esc(TIPO_LBL(o.tipo))}</td>
       <td style="color:${col};font-weight:800;">${m>0?"+":""}${m}</td>
       <td class="izq">${esc(o.detalle||"")}</td><td>${esc(soloApellidos(o.registrado_por||""))}</td>
       <td><div class="acc-base">
@@ -3633,7 +3677,7 @@ function editarIncidencia(id){ abrirModalInci(OCURR.find(o=>o.id===id)||null); }
 async function abrirModalInci(oc){
   const editar=!!oc;
   const areaSel=(oc&&oc.area)|| ($("areaInci")&&$("areaInci").value)||AREAS_LISTA[0]||"";
-  const opTipo=t=>`<option value="${t}"${oc&&oc.tipo===t?" selected":""}>${t.replace(/_/g," ")}</option>`;
+  const opTipo=t=>`<option value="${t}"${oc&&oc.tipo===t?" selected":""}>${esc(TIPO_LBL(t))}</option>`;
   abrirModal(`
     <h2>${editar?"Editar":"Nueva"} incidencia</h2>
     <div class="modal-campo"><label>Área</label>
