@@ -1020,16 +1020,48 @@ async function recargarMiEficiencia(){
         else { pintarAcabOF(); irA("pasoAcabOF"); }
       }
     }else{
-      setAvance(await rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token}));
-      // Refresca estados de tickets (p.ej. liberaciones de ingeniería) sin recargar la app.
-      await refrescarReclamos(s);
-      if(act==="pasoTickets") pintarTickets();
-      else if(act==="pasoModulos") pintarModulos();
+      /* Costura: antes solo refrescaba mi día y los reclamos, así que una OF
+         nueva, una operación nueva o un troceo deshecho no aparecían hasta
+         recargar la app. Ahora se recarga TODO —almacén (si el área lo usa),
+         derivados, residuales y reclamos— conservando dónde está el operario. */
+      const area = AREA_ESTAJERO || s.area;
+      const usaAlm = (AREAS[area] && AREAS[area].usaAlmacen !== false);
+      const [alm, recl, dia, res, der, mp] = await Promise.all([
+        usaAlm ? cargarAlmacen(area).catch(e=>({tickets:[],duplicados:[],_err:e.message}))
+               : Promise.resolve({tickets:[],duplicados:[]}),
+        rpc("fn_reclamados", {p_dni:s.dni, p_token:s.token, p_area:area}),
+        rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token}),
+        rpc("fn_residuales", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
+        rpc("fn_tickets_area", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
+        rpc("fn_mis_paquetes", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[])
+      ]);
+      const prev = ALM;
+      ALM = alm;
+      if(Array.isArray(der) && der.length){
+        const propias=new Set(der.map(t=>normKey(t.of)));
+        ALM.tickets = ALM.tickets.filter(t=>!propias.has(normKey(t.of))).concat(der.map(mapDerivado));
+      }
+      if(alm._err && !ALM.tickets.length) ALM = prev || ALM;   // no perder lo que ya había
+      if(Array.isArray(res) && res.length) ALM.tickets = ALM.tickets.concat(res.map(mapResidual));
+      RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
+      MISPAQ = Array.isArray(mp) ? mp : [];
+      aplicarBotonMisPaq();
+      setAvance(dia);
+      // Repinta donde está, y si su selección desapareció lo devuelve atrás.
+      if(act==="pasoTickets"){ if(sel.op) pintarTickets(); else volverAOF(); }
+      else if(act==="pasoOps"){ if(sel.modulo) pintarOperaciones(); else volverAOF(); }
+      else if(act==="pasoModulos"){ if(sel.of) pintarModulos(); else volverAOF(); }
+      else if(act==="pasoMisPaq") pintarMisPaq();
+      else if(act==="pasoOF") pintarSugerencias();
     }
   }catch(e){ mostrarError(e.message); }
   finally{ if(b) setTimeout(()=>b.classList.remove("girando"),500); }
 }
 const libre = t => !RECL[t.codigo];
+
+/* Si al recargar desapareció la selección (OF terminada, ticket liberado),
+   se devuelve al buscador de OF en vez de dejar una pantalla vacía. */
+function volverAOF(){ sel.of=null; sel.modulo=null; sel.op=null; pintarSugerencias(); irA("pasoOF"); }
 
 /* --- paso OF: buscador con sugerencias --- */
 function pintarSugerencias(){

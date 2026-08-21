@@ -213,6 +213,23 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .of-area.lista{background:#e6f3ea;color:var(--exito);border-color:#bfe0c9;}
 .of-area.pendiente{background:#fdf3e3;color:#8a6116;border-color:#ecd9b0;}
 .of-area.sin-base{background:#fdecea;color:var(--alerta);border-color:#f3c7c2;cursor:help;}
+
+/* Incidencias · desglose de motivos del rango (parche 51) */
+.mot-chips{display:flex;flex-wrap:wrap;gap:8px;}
+.mot-chip{display:inline-flex;align-items:baseline;gap:8px;font-size:13px;
+  background:var(--blanco);border:1px solid var(--sw-off);border-radius:999px;padding:6px 12px;}
+.mot-chip.neg{border-color:#f3c7c2;}
+.mot-chip.pos{border-color:#bfe0c9;}
+.mot-chip .mot-n{font-weight:800;background:var(--gris-fondo);border-radius:999px;padding:1px 8px;}
+.mot-chip.neg .mot-min{color:var(--alerta);font-weight:800;}
+.mot-chip.pos .mot-min{color:var(--exito);font-weight:800;}
+
+/* Modal · editar artículo de la BASE (parche 51). Scoped a .ma-tabla. */
+.ma-tabla input{width:100%;background:var(--gris-fondo);color:var(--texto);
+  border:2px solid var(--sw-off);border-radius:8px;font-family:inherit;
+  font-size:15px;font-weight:600;padding:7px 8px;}
+.ma-tabla input:focus{border-color:var(--enlace);}
+.ma-tabla td{padding:4px 6px;}
 .btn-principal{background:var(--exito);color:#fff;border:none;border-radius:15px;
   font-size:26px;font-weight:800;padding:18px;cursor:pointer;width:100%;}
 .btn-principal:disabled{background:var(--tomado);}

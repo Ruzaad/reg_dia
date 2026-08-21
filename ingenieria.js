@@ -2702,6 +2702,7 @@ async function liberarLote(){
       const r=await rpc("fn_liberar_lote",{p_dni:ING.dni,p_token:ING.token,
         p_codigos:porArea[a],p_motivo:motivo.trim(),p_area:a||null});
       if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
+      const av=avisoTroceoLote(r); if(av) mostrarOk(`${a||"—"}${av}`);
     }
     modoLibTk=false; libSel={};
     const bm=$("btnModoLiberar"); if(bm){ bm.textContent="LIBERAR EN LOTE"; bm.classList.remove("gris"); }
@@ -2808,6 +2809,7 @@ async function liberarTicket(i){
     const r = await rpc("fn_liberar_ticket",{p_dni:ING.dni,p_token:ING.token,
       p_codigo:t.codigo,p_motivo:motivo.trim(),p_area:t.area});
     if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
+    mostrarOk(`Ticket ${t.codigo} liberado${avisoTroceo(r)}`);
     await cargarTk();
   }catch(e){ mostrarError(e.message); }
 }
@@ -2892,6 +2894,7 @@ async function liberarTkOp(codigo){
   try{
     const r=await rpc("fn_liberar_ticket",{p_dni:ING.dni,p_token:ING.token,p_codigo:codigo,p_motivo:(motivo||"").trim(),p_area:TKOP.area});
     if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
+    mostrarOk(`Ticket ${codigo} liberado${avisoTroceo(r)}`);
     delete tkOpMarc[codigo]; await cargarTkOp();
   }catch(e){ mostrarError(e.message); }
 }
@@ -2903,6 +2906,7 @@ async function liberarTkOpLote(){
   try{
     const r=await rpc("fn_liberar_lote",{p_dni:ING.dni,p_token:ING.token,p_codigos:cods,p_motivo:motivo.trim(),p_area:TKOP.area});
     if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
+    mostrarOk(`${r.liberados||cods.length} ticket(s) liberado(s)${avisoTroceoLote(r)}`);
     tkOpMarc={}; await cargarTkOp();
   }catch(e){ mostrarError(e.message); }
 }
@@ -2984,10 +2988,17 @@ async function cargarBases(){
 }
 function basesFiltradas(){
   const fa=normKey($("fArt").value), fo=normKey($("fOp").value), fc=normKey($("fCli").value);
+  const fm=normKey(($("fMod")||{}).value||"");
   return BASE.filter(b=>
     (!fa||normKey(b.articulo).includes(fa)) &&
     (!fo||normKey(b.operacion).includes(fo)) &&
-    (!fc||normKey(b.cliente).includes(fc)));
+    (!fc||normKey(b.cliente).includes(fc)) &&
+    (!fm||normKey(b.modulo).includes(fm)));
+}
+/* Módulos distintos en la vista actual: si es uno solo, su STD es "el tiempo
+   del módulo" y se muestra aparte. */
+function basesModulosVista(lista){
+  return [...new Set((lista||[]).map(b=>norm(b.modulo)).filter(Boolean))];
 }
 function ordenarBase(col){
   if(baseSort.col===col) baseSort.dir*=-1; else baseSort={col,dir:1};
@@ -3009,7 +3020,14 @@ function pintarBases(){
   const totPag = Math.max(1, Math.ceil(totalFilas/BASE_PAGE));
   if(basePag>totPag) basePag=totPag; if(basePag<1) basePag=1;
   lista = lista.slice((basePag-1)*BASE_PAGE, basePag*BASE_PAGE);
-  $("resumenBases").textContent = `${arts.size} artículo(s) · ${totalFilas} operaciones · STD total: ${Math.round(stdTotal*100)/100}`;
+  const mods=basesModulosVista(lista);
+  const extra = mods.length===1
+    ? ` · módulo ${mods[0]}: ${Math.round(stdTotal*100)/100} min`
+    : (mods.length>1 ? ` · ${mods.length} módulos` : "");
+  $("resumenBases").textContent =
+    `${arts.size} artículo(s) · ${totalFilas} operaciones · STD total: ${Math.round(stdTotal*100)/100}${extra}`;
+  // #11: editar artículo solo tiene sentido con UN artículo a la vista.
+  { const be=$("btnEditArt"); if(be) be.hidden = (arts.size !== 1); }
   const flecha = k => baseSort.col===k ? (baseSort.dir===1?" \u25B2":" \u25BC") : "";
   // Final = mayor N°OP del artículo (⭐ dorada); penúltima = 2º mayor (estrella plateada).
   const finalPorArt = calcularFinalesBase(BASE);
@@ -3104,11 +3122,24 @@ async function abrirModalBaseOp(id){
   if(!esEdicion){
     const vis = basesFiltradas();
     const arts = [...new Set(vis.map(x=>normKey(x.articulo)).filter(Boolean))];
-    if(arts.length > 1){
-      mostrarError("Filtra hasta dejar un solo artículo para agregar una operación");
+    if(arts.length > 2){
+      mostrarError("Filtra hasta dejar uno o dos artículos para agregar una operación");
       return;
     }
+    // Con dos a la vista se pregunta a cuál va, para no colgarla del equivocado.
     if(arts.length === 1) pre = vis.find(x=>normKey(x.articulo)===arts[0]) || null;
+    else if(arts.length === 2){
+      const nombres=arts.map(k=>(vis.find(x=>normKey(x.articulo)===k)||{}).articulo);
+      const cual=prompt(`Hay dos artículos a la vista.
+¿A cuál agregas la operación?
+
+1) ${nombres[0]}
+2) ${nombres[1]}
+
+Escribe 1 o 2:`);
+      if(cual!=="1" && cual!=="2") return;
+      pre = vis.find(x=>normKey(x.articulo)===arts[+cual-1]) || null;
+    }
   }
   const b = esEdicion ? (BASE.find(x=>Number(x.id)===Number(id))||{})
           : (pre ? {prenda:pre.prenda, cliente:pre.cliente, articulo:pre.articulo} : {});
@@ -3152,6 +3183,80 @@ async function abrirModalBaseOp(id){
     </div>`);
   if(!esEdicion) autoMaxOp();
 }
+/* #11 — Editar el artículo completo (parche 51). Se abre con UN artículo a la
+   vista; la cabecera se aplica a todas las filas y el resto va fila por fila.
+   Son `input` normales para poder copiar y pegar, que es el caso de uso. */
+function abrirModalArticulo(){
+  const vis=basesFiltradas();
+  const arts=[...new Set(vis.map(x=>normKey(x.articulo)).filter(Boolean))];
+  if(arts.length!==1){ mostrarError("Filtra hasta dejar un solo artículo para editarlo"); return; }
+  const filas=vis.filter(x=>normKey(x.articulo)===arts[0])
+                 .sort((a,b)=>(Number(a.n_op)||0)-(Number(b.n_op)||0));
+  const p0=filas.find(x=>norm(x.prenda))||{}, c0=filas.find(x=>norm(x.cliente))||{};
+  const distintos=(k)=>[...new Set(filas.map(x=>norm(x[k])))].filter(Boolean).length>1;
+  const aviso=(k,txt)=> distintos(k)
+    ? `<div class="cf-detalle" style="color:var(--ocre);font-weight:700;">Las filas tienen ${txt} distintos: si escribes algo aquí se aplica a todas.</div>` : "";
+  MODART={area:$("areaBase").value, articulo:filas[0].articulo, ids:filas.map(x=>x.id)};
+  abrirModal(`
+    <h2>Editar artículo</h2>
+    <div class="sub" style="margin-bottom:12px;">${esc(MODART.area)} · ${filas.length} operación(es)</div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>Artículo</label>
+        <input id="maArt" value="${esc(filas[0].articulo)}" maxlength="80"></div>
+      <div class="modal-campo"><label>Prenda <span class="cf-detalle">(todas las filas)</span></label>
+        <input id="maPrenda" value="${esc(p0.prenda||"")}" maxlength="80"></div>
+    </div>
+    ${aviso("prenda","prendas")}
+    <div class="modal-campo"><label>Cliente <span class="cf-detalle">(todas las filas)</span></label>
+      <input id="maCliente" value="${esc(c0.cliente||"")}" maxlength="80"></div>
+    ${aviso("cliente","clientes")}
+    <div class="contenedor-ancho tabla-scroll" style="max-height:44vh;margin-top:10px;">
+      <table class="tabla ma-tabla"><thead><tr><th>N°OP</th><th class="izq">Módulo</th>
+        <th class="izq">Operación</th><th>STD</th></tr></thead>
+      <tbody>${filas.map(f=>`<tr>
+        <td><input id="maN_${f.id}" type="number" min="1" value="${esc(f.n_op)}"></td>
+        <td class="izq"><input id="maM_${f.id}" value="${esc(f.modulo||"")}" maxlength="80"></td>
+        <td class="izq"><input id="maO_${f.id}" value="${esc(f.operacion||"")}" maxlength="120"></td>
+        <td><input id="maS_${f.id}" inputmode="decimal" value="${esc(f.std)}"></td>
+      </tr>`).join("")}</tbody></table>
+    </div>
+    <div class="cf-detalle" style="margin-top:6px;">Renombrar una operación aquí <b>conserva su identidad</b>,
+      así que los tickets ya reclamados siguen casando. Al guardar se reordena el N°OP y se sincronizan los reclamos.</div>
+    <div class="modal-msg" id="maMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="guardarModalArticulo()">GUARDAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+}
+let MODART=null;
+async function guardarModalArticulo(){
+  if(!MODART) return;
+  const filas=MODART.ids.map(id=>({
+    id,
+    modulo:   norm(($("maM_"+id)||{}).value||""),
+    operacion:norm(($("maO_"+id)||{}).value||""),
+    std:      (($("maS_"+id)||{}).value||"").trim(),
+    n_op:     (($("maN_"+id)||{}).value||"").trim()
+  }));
+  if(filas.some(f=>!f.operacion)){ $("maMsg").textContent="Ninguna operación puede quedar sin nombre"; return; }
+  const art=norm($("maArt").value).toUpperCase();
+  if(!art){ $("maMsg").textContent="El artículo no puede quedar vacío"; return; }
+  try{
+    const r=await rpc("fn_base_articulo_guardar",{p_dni:ING.dni,p_token:ING.token,
+      p_area:MODART.area, p_articulo:MODART.articulo,
+      p_prenda:norm($("maPrenda").value).toUpperCase(),
+      p_cliente:norm($("maCliente").value).toUpperCase(),
+      p_articulo_nuevo:(art===norm(MODART.articulo).toUpperCase()?null:art),
+      p_filas:filas});
+    if(!r.ok){ $("maMsg").textContent=r.error||"No se pudo guardar"; return; }
+    cerrarModal();
+    mostrarOk(`${r.articulo} · ${r.filas} fila(s) guardada(s)`
+      + (r.reclamos_actualizados?` · ${r.reclamos_actualizados} reclamo(s) sincronizados`:""));
+    delete BASES_CACHE[MODART.area];
+    await cargarBases();
+  }catch(e){ $("maMsg").textContent=e.message; }
+}
+
 /* Max Op. se calcula según el artículo (mayor N°OP histórico). */
 function autoMaxOp(){
   const area=$("areaBase").value;
@@ -3328,24 +3433,59 @@ function inciVista(v){
   $("inciTabApl").classList.toggle("activo",apl); $("inciTabPend").classList.toggle("activo",!apl);
   if(apl) cargarOcurrencias(); else cargarPendientesInci();
 }
+/* Semana del sistema en hora de Lima: lunes a domingo. `getDay()` da 0 el
+   domingo, así que el lunes se calcula con ((dow+6) % 7). */
+function semanaActual(){
+  const hoy = hoyISO();
+  const d = new Date(hoy+"T00:00:00");
+  const lunes = new Date(d); lunes.setDate(d.getDate() - ((d.getDay()+6) % 7));
+  const domingo = new Date(lunes); domingo.setDate(lunes.getDate()+6);
+  const f = x => x.toLocaleDateString("sv-SE");
+  return {desde:f(lunes), hasta:f(domingo)};
+}
 async function cargarIncidI(){        // pendientes + tabla aplicada
   if($("fechaInciH") && !$("fechaInciH").value){
-    $("fechaInciH").value = hoyLima();
-    const d=new Date(); d.setDate(d.getDate()-30);
-    $("fechaInciD").value = d.toLocaleDateString("sv-SE",{timeZone:"America/Lima"});
+    const {desde, hasta} = semanaActual();
+    $("fechaInciD").value = desde;
+    $("fechaInciH").value = hasta;
   }
   await Promise.all([cargarPendientesInci(), cargarOcurrencias()]);
 }
 
+let INCI_PEND=[];
 async function cargarPendientesInci(){
   const z=$("listaIncidI"); z.innerHTML=cargandoHTML("Cargando pendientes…");
   try{
     const r=await rpc("fn_solicitudes_listar",{p_dni:ING.dni,p_token:ING.token,p_area:""});
     if(!r.ok){ mostrarError(r.error||"Error"); z.innerHTML=""; return; }
-    const items=r.items||[];
-    if(!items.length){ z.innerHTML=`<div class="vacio-msg">Sin incidencias pendientes</div>`; return; }
-    z.innerHTML="";
-    items.forEach(it=>{
+    INCI_PEND=r.items||[];
+    // El select de área se llena con lo que hay pendiente, no con todas las áreas.
+    const sel=$("areaInciPend");
+    if(sel){
+      const prev=sel.value;
+      const areas=[...new Set(INCI_PEND.map(x=>x.area).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+      sel.innerHTML=`<option value="">Todas</option>`+areas.map(a=>`<option>${esc(a)}</option>`).join("");
+      if(areas.includes(prev)) sel.value=prev;
+    }
+    pintarPendientesInci();
+  }catch(e){ z.innerHTML=""; mostrarError(e.message); }
+}
+function pintarPendientesInci(){
+  const z=$("listaIncidI"); if(!z) return;
+  const ar=(($("areaInciPend")||{}).value||"");
+  const q=normKey((($("filtroInciPend")||{}).value||""));
+  const items=INCI_PEND.filter(it=>
+    (!ar || it.area===ar) &&
+    (!q || normKey((it.nombre||"")+" "+(it.tipo||"")+" "+(it.motivo||"")+" "+(it.solicitante||"")).includes(q)));
+  { const rp=$("resumenInciPend");
+    if(rp) rp.textContent = `${items.length} de ${INCI_PEND.length} pendiente(s)`; }
+  if(!items.length){
+    z.innerHTML=`<div class="vacio-msg">${INCI_PEND.length?"Nada con ese filtro":"Sin incidencias pendientes"}</div>`;
+    return;
+  }
+  z.innerHTML="";
+  {
+    const items_=items; items_.forEach(it=>{
       const d=document.createElement("div");
       d.className="card-fila"; d.style.cursor="default"; d.style.flexWrap="wrap";
       const tipoTxt = it.tipo ? String(it.tipo).replace(/_/g," ") : "";
@@ -3364,7 +3504,7 @@ async function cargarPendientesInci(){
         </div>`;
       z.appendChild(d);
     });
-  }catch(e){ z.innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`; }
+  }
 }
 async function resolverIncidI(id, aprobar){
   let mf=null;
@@ -3389,6 +3529,57 @@ async function cargarOcurrencias(){
     pintarOcurrencias();
   }catch(e){ mostrarError(e.message); }
 }
+/* Parche 49: al liberar un ticket troceado, el paquete vuelve a su cantidad
+   original y los residuales que salieron de él dejan de existir. Si alguien ya
+   tenía uno tomado, se le liberó también y hay que decirlo. */
+function avisoTroceo(r){
+  const an=(r && r.residuales_anulados) || [];
+  const li=(r && r.reclamos_liberados) || [];
+  if(!an.length && !li.length) return "";
+  let t = an.length ? ` · se anuló ${an.length===1?"el residual":"los residuales"} ${an.join(", ")}` : "";
+  if(li.length) t += ` · se liberó también a ${li.map(x=>soloApellidos(x.nombre)+" ("+x.cant+" und)").join(", ")}`;
+  if(r && r.cant_restaurada) t = ` · el paquete vuelve a ${r.cant_restaurada} und` + t;
+  return t;
+}
+function avisoTroceoLote(r){
+  const t=(r && r.troceos_deshechos) || [];
+  if(!t.length) return "";
+  const n=t.reduce((a,x)=>a+((x.anulados||[]).length),0);
+  const per=t.flatMap(x=>x.liberados||[]);
+  return ` · ${n} residual(es) anulado(s)`
+    + (per.length?` · se liberó también a ${[...new Set(per.map(x=>soloApellidos(x.nombre)))].join(", ")}`:"");
+}
+/* #3 — "dónde fue mayor la incidencia" cuando no hay área elegida. */
+function kpiAreaMayor(lista){
+  const por={};
+  (lista||[]).forEach(o=>{ const a=o.area||"—"; const m=+o.minutos||0;
+    por[a]=por[a]||{n:0,desc:0,suma:0};
+    por[a].n++; if(m<0) por[a].desc+=m; else por[a].suma+=m; });
+  const top=Object.entries(por).sort((a,b)=>a[1].desc-b[1].desc)[0];
+  if(!top || top[1].desc>=0) return "";
+  const k=(t,v,c)=>`<div class="kpi"><div class="kpi-num" style="color:${c};font-size:22px;">${esc(v)}</div><div class="kpi-lbl">${esc(t)}</div></div>`;
+  return k("Área que más descuenta", `${top[0]} (${top[1].desc})`, "var(--alerta)");
+}
+/* Desglose por motivo del rango: cuenta y minutos, lo que más pesa primero. */
+function pintarMotivosInci(lista){
+  const z=$("motivosInci"); if(!z) return;
+  const por={};
+  (lista||[]).forEach(o=>{
+    const k=(o.detalle||o.tipo||"—").toString().trim().toUpperCase()||"—";
+    const m=+o.minutos||0;
+    por[k]=por[k]||{n:0,min:0};
+    por[k].n++; por[k].min+=m;
+  });
+  const filas=Object.entries(por).sort((a,b)=>Math.abs(b[1].min)-Math.abs(a[1].min));
+  if(!filas.length){ z.innerHTML=""; return; }
+  z.innerHTML=`<div class="tk-ops-title">Motivos del rango</div>
+    <div class="mot-chips">${filas.map(([k,v])=>`
+      <span class="mot-chip ${v.min<0?"neg":"pos"}">
+        <b>${esc(k.replace(/_/g," "))}</b>
+        <span class="mot-n">${v.n}</span>
+        <span class="mot-min">${v.min>0?"+":""}${Math.round(v.min)} min</span>
+      </span>`).join("")}</div>`;
+}
 function ordenarInci(col){ if(inciSort.col===col) inciSort.dir*=-1; else inciSort={col,dir:1}; pintarOcurrencias(); }
 function pintarOcurrencias(){
   const q=normKey($("filtroInci")?$("filtroInci").value:"");
@@ -3406,7 +3597,11 @@ function pintarOcurrencias(){
     kpi("Descuentan (min)", resta, "var(--alerta)")+
     kpi("Neto (min)", (suma+resta>0?"+":"")+(suma+resta), "var(--azul)")+
     (topDesc?kpi("Más descuenta", topDesc[1]<0?`${topDesc[0].replace(/_/g," ")} (${topDesc[1]})`:"—", "var(--alerta)"):"")+
-    (topSum && topSum[1]>0?kpi("Más suma", `${topSum[0].replace(/_/g," ")} (+${topSum[1]})`, "var(--exito)"):"");
+    (topSum && topSum[1]>0?kpi("Más suma", `${topSum[0].replace(/_/g," ")} (+${topSum[1]})`, "var(--exito)"):"")+
+    /* Sin área elegida, lo que interesa es DÓNDE pesó más. Con un área
+       elegida el comportamiento queda igual que antes. */
+    ((($("areaInci")||{}).value||"") ? "" : kpiAreaMayor(lista));
+  pintarMotivosInci(lista);
   // orden
   lista=[...lista].sort((a,b)=>{
     const va=a[inciSort.col], vb=b[inciSort.col];

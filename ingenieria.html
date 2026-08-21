@@ -288,9 +288,11 @@
         <input type="text" id="fArt" placeholder="Filtrar artículo…" oninput="filtrarBases()">
         <input type="text" id="fOp" placeholder="Filtrar operación…" oninput="filtrarBases()">
         <input type="text" id="fCli" placeholder="Filtrar cliente…" oninput="filtrarBases()">
+        <input type="text" id="fMod" placeholder="Filtrar módulo…" oninput="filtrarBases()">
         <button class="btn-mini" onclick="cargarBases()">↻ CARGAR</button>
         <button class="btn-mini verde" onclick="descargarBase()">DESCARGAR XLSX</button>
         <button class="btn-mini" onclick="abrirModalBaseOp(null)">+ AGREGAR OPERACIÓN</button>
+        <button class="btn-mini" id="btnEditArt" onclick="abrirModalArticulo()" hidden>EDITAR ARTÍCULO</button>
         <button class="btn-mini rojo" onclick="abrirModalBorrarArt()">BORRAR ARTÍCULO</button>
         <label class="btn-mini" style="cursor:pointer;">
           SUBIR EXCEL
@@ -651,6 +653,7 @@
           <button class="btn-mini verde" onclick="nuevaIncidencia()">+ Nueva incidencia</button>
         </div>
         <div class="kpis" id="resumenInci" style="margin-bottom:14px;"></div>
+        <div id="motivosInci" style="margin-bottom:12px;"></div>
         <div class="sub" id="resumenInciTxt"></div>
         <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;">
           <table class="tabla" id="tablaInci"></table>
@@ -659,6 +662,12 @@
 
       <div id="inciPendientes" hidden>
         <h2 class="tk-ops-title">Pendientes por resolver (aprobar / rechazar)</h2>
+        <div class="barra-control">
+          <label class="campo"><span>Área</span><select id="areaInciPend" onchange="pintarPendientesInci()"></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="filtroInciPend" placeholder="Nombre / tipo / motivo…" oninput="pintarPendientesInci()"></label>
+          <button class="btn-mini" onclick="cargarPendientesInci()">↻ CARGAR</button>
+          <span class="sub" id="resumenInciPend" style="align-self:flex-end;"></span>
+        </div>
         <div class="lista-cards" id="listaIncidI" style="margin-bottom:22px;"></div>
       </div>
     </section>
