@@ -1117,10 +1117,22 @@ function pintarOperaciones(){
   const ops={};
   ALM.tickets.forEach(t=>{
     if(t.of!==sel.of || t.modulo!==sel.modulo) return;
-    if(!ops[t.op]) ops[t.op]={std:t.std,total:0,libres:0,cantLibre:0};
-    ops[t.op].total++; if(libre(t)){ ops[t.op].libres++; ops[t.op].cantLibre+=(+t.cant||0); }
+    if(!ops[t.op]) ops[t.op]={std:t.std,total:0,libres:0,cantLibre:0,nop:null};
+    const o=ops[t.op];
+    // Menor N°OP de la operación: el orden de la ruta, no el alfabético.
+    const n=Number(t.nop); if(!isNaN(n) && t.nop!=null && (o.nop==null || n<o.nop)) o.nop=n;
+    o.total++; if(libre(t)){ o.libres++; o.cantLibre+=(+t.cant||0); }
   });
-  Object.keys(ops).sort().forEach(op=>{
+  /* Orden de RUTA (N°OP), no alfabético: la costurera ve las operaciones en el
+     orden en que se cosen. Las que no traen N°OP van al final, entre ellas
+     alfabéticas (el ALMACÉN de las OF viejas no siempre lo tiene). */
+  Object.keys(ops).sort((a,b)=>{
+    const na=ops[a].nop, nb=ops[b].nop;
+    if(na==null && nb==null) return a.localeCompare(b,"es",{numeric:true});
+    if(na==null) return 1;
+    if(nb==null) return -1;
+    return na-nb || a.localeCompare(b,"es",{numeric:true});
+  }).forEach(op=>{
     const o=ops[op];
     const c=document.createElement("div");
     c.className="card-fila";
