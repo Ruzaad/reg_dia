@@ -206,6 +206,7 @@
       <div class="tabs sup-subtabs">
         <button id="tkTabActual" class="tab activo" onclick="tkVista('actual')">ACTUAL</button>
         <button id="tkTabOp" class="tab" onclick="tkVista('op')">RECLAMADOS X OPERACIÓN</button>
+        <button id="tkTabRep" class="tab" onclick="tkVista('rep')">REPORTE DE HOY</button>
       </div>
 
       <div id="tkActualView">
@@ -254,6 +255,38 @@
           <table class="tabla" id="tablaTkOp"></table>
         </div>
         <div class="pager" id="tkOpPager" style="margin-top:8px;"></div>
+      </div>
+
+      <!-- Reporte de Hoy: tickets activos de la última/penúltima operación + incidencias del día -->
+      <div id="tkRepView" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Fecha</span>
+            <input type="date" id="repFecha" onchange="cargarRep()"></label>
+          <label class="campo"><span>Operación</span>
+            <select id="repOp" onchange="pintarRep()">
+              <option value="u">Última operación</option>
+              <option value="p">Penúltima operación</option>
+            </select></label>
+          <label class="campo"><span>Área</span>
+            <select id="repArea" onchange="pintarRep()"></select></label>
+          <button class="btn-mini" onclick="cargarRep()">Cargar</button>
+        </div>
+        <div class="rep-cols">
+          <div class="rep-col">
+            <div class="tk-ops-title" id="repTitTk">Tickets activos</div>
+            <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;">
+              <table class="tabla" id="tablaRepTk"></table>
+            </div>
+            <div class="sub rep-pie" id="repResTk"></div>
+          </div>
+          <div class="rep-col">
+            <div class="tk-ops-title">Incidencias del día</div>
+            <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;">
+              <table class="tabla" id="tablaRepInci"></table>
+            </div>
+            <div class="sub rep-pie" id="repResInci"></div>
+          </div>
+        </div>
       </div>
     </section>
 

@@ -2818,11 +2818,14 @@ async function liberarTicket(i){
 let TKOP={items:[],of:"",area:"",_rows:[]}, tkOpSort={col:null,dir:1}, tkOpMarc={}, tkOpPag=1;
 const TKOP_PAGE=10;
 function tkVista(v){
-  const op=v==="op";
-  $("tkActualView").hidden=op; $("tkOpView").hidden=!op;
-  $("tkTabActual").classList.toggle("activo",!op); $("tkTabOp").classList.toggle("activo",op);
+  const op=v==="op", rep=v==="rep", act=!op&&!rep;
+  $("tkActualView").hidden=!act; $("tkOpView").hidden=!op; $("tkRepView").hidden=!rep;
+  $("tkTabActual").classList.toggle("activo",act);
+  $("tkTabOp").classList.toggle("activo",op);
+  $("tkTabRep").classList.toggle("activo",rep);
   if(op){ const s=$("tkOpArea"); if(s && !s.value && s.options.length<=1)
     s.innerHTML=`<option value="">— Elige área —</option>`+(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join(""); }
+  if(rep) repInit();
 }
 async function cargarTkOp(){
   const area=$("tkOpArea").value, of=$("tkOpOf").value.trim();
@@ -2915,11 +2918,10 @@ async function liberarTkOpLote(){
    por artículo según la BASE), sobre los tickets ACTIVOS del día.
    Son 2 tarjetas globales (última y penúltima operación), sumando
    cantidades de todos los artículos del día que caigan en cada una. */
-async function cargarResumenUltimas(){
-  const z=$("resumenUltimas"); if(!z) return;
-  z.innerHTML="";
-  if(!TK.length) return;
-  const areas=[...new Set(TK.map(t=>t.area).filter(Boolean))].filter(a=>!tkArea||a===tkArea);
+/* Última (n1) y penúltima (n2) operación por AREA|ARTICULO según la BASE.
+   La comparten las tarjetas de ACTUAL y el Reporte de Hoy: la regla de qué es
+   "última operación" vive en un solo sitio. */
+async function infoUltimas(areas){
   for(const a of areas){
     if(!BASES_CACHE[a]){
       try{ BASES_CACHE[a] = await rpc("fn_bases_listar",{p_dni:ING.dni,p_token:ING.token,p_area:a}); }
@@ -2944,6 +2946,14 @@ async function cargarResumenUltimas(){
       };
     });
   });
+  return info;
+}
+async function cargarResumenUltimas(){
+  const z=$("resumenUltimas"); if(!z) return;
+  z.innerHTML="";
+  if(!TK.length) return;
+  const areas=[...new Set(TK.map(t=>t.area).filter(Boolean))].filter(a=>!tkArea||a===tkArea);
+  const info=await infoUltimas(areas);
   let c1=0,c2=0,sinNop=0; const o1=new Set(), o2=new Set();
   TK.forEach(t=>{
     if(t.estado!=="ACTIVO") return;
@@ -2963,6 +2973,103 @@ async function cargarResumenUltimas(){
       <div class="kpi-lbl">PENÚLTIMA OPERACIÓN · und<br>${esc(nom(o2))}</div></div>`
     + (sinNop?`<div class="kpi"><div class="kpi-num">${sinNop}</div>
       <div class="kpi-lbl">TICKETS SIN N°OP<br>no cuentan en las tarjetas</div></div>`:"");
+}
+
+/* ================= REPORTE DE HOY =================
+   Dos tablas en paralelo para la fecha elegida: a la izquierda los tickets
+   ACTIVOS de la última (o penúltima) operación, agrupados por operación + OF;
+   a la derecha las incidencias del día. Ambas respetan el filtro de área.
+   La fecha es lo único que pide datos al servidor; operación y área filtran
+   en el cliente. */
+let REP={fecha:"", tk:[], inci:[], info:{}};
+function repInit(){
+  if(!$("repFecha")) return;
+  if(!$("repFecha").value){
+    $("repFecha").value = ($("fechaTk") && $("fechaTk").value) || hoyLima();
+    poblarAreaRep();
+    cargarRep();
+  }
+}
+function poblarAreaRep(){
+  const s=$("repArea"); if(!s || s.options.length>1) return;
+  s.innerHTML=`<option value="">Todas las áreas</option>`
+    + (AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+}
+async function cargarRep(){
+  const f=$("repFecha").value;
+  if(!f){ mostrarError("Indica la fecha"); return; }
+  poblarAreaRep();
+  $("tablaRepTk").innerHTML=cargandoHTML("Cargando…");
+  $("tablaRepInci").innerHTML=cargandoHTML("Cargando…");
+  try{
+    const [tk, oc] = await Promise.all([
+      rpc("fn_tickets_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:f}),
+      rpc("fn_ocurrencias_listar",{p_dni:ING.dni,p_token:ING.token,p_area:"",p_desde:f,p_hasta:f})
+    ]);
+    REP.fecha=f;
+    REP.tk=Array.isArray(tk)?tk:[];
+    REP.inci=(oc && oc.ok)?(oc.items||[]):[];
+    if(oc && oc.ok===false) mostrarError(oc.error||"No se pudieron cargar las incidencias");
+    REP.info=await infoUltimas([...new Set(REP.tk.map(t=>t.area).filter(Boolean))]);
+    pintarRep();
+  }catch(e){
+    $("tablaRepTk").innerHTML=""; $("tablaRepInci").innerHTML=""; mostrarError(e.message);
+  }
+}
+function pintarRep(){
+  const area=($("repArea")||{}).value||"";
+  const ult=(($("repOp")||{}).value||"u")==="u";
+  const etiqueta=ult?"última":"penúltima";
+  $("repTitTk").textContent=`Tickets activos · ${etiqueta} operación`;
+
+  /* --- Tabla 1: operación · OF · cantidad total (suma de los ACTIVOS) --- */
+  const grp={}; let sinNop=0, sinBase=0;
+  REP.tk.forEach(t=>{
+    if(t.estado!=="ACTIVO") return;
+    if(area && t.area!==area) return;
+    const i=REP.info[t.area+"|"+normKey(t.articulo)];
+    // Sin BASE del artículo no hay forma de saber cuál es su última operación:
+    // se cuenta aparte en vez de desaparecer del reporte.
+    if(!i){ sinBase++; return; }
+    if(t.nop==null || t.nop==="") { sinNop++; return; }
+    const n=Number(t.nop), obj=ult?i.n1:i.n2;
+    if(obj==null || n!==obj) return;
+    const op=norm(t.op)||"(sin operación)", of=norm(t.of)||"(sin OF)";
+    const k=op+""+of;
+    (grp[k]=grp[k]||{op,of,cant:0,tks:0});
+    grp[k].cant+=Number(t.cant)||0; grp[k].tks++;
+  });
+  const filas=Object.values(grp).sort((a,b)=>
+    a.op.localeCompare(b.op,"es",{numeric:true}) || a.of.localeCompare(b.of,"es",{numeric:true}));
+  const total=filas.reduce((a,x)=>a+x.cant,0);
+  $("tablaRepTk").innerHTML =
+    `<thead><tr><th>Operación</th><th>OF</th><th>Cantidad total</th></tr></thead><tbody>`
+    + (filas.length
+        ? filas.map(x=>`<tr><td class="izq">${esc(x.op)}</td><td>${esc(x.of)}</td>`
+            + `<td class="rep-num">${qty(x.cant)}</td></tr>`).join("")
+        : `<tr><td colspan="3"><div class="vacio-msg">Sin tickets activos en la ${etiqueta} operación</div></td></tr>`)
+    + `</tbody>`;
+  const fuera=[];
+  if(sinNop)  fuera.push(`${sinNop} sin N°OP`);
+  if(sinBase) fuera.push(`${sinBase} sin BASE del artículo`);
+  $("repResTk").textContent = (filas.length ? `${filas.length} fila(s) · ${qty(total)} und en total` : "")
+    + (fuera.length ? `${filas.length?" · ":""}fuera del cálculo: ${fuera.join(", ")}` : "");
+
+  /* --- Tabla 2: incidencias del día --- */
+  const inci=REP.inci.filter(o=>!area || o.area===area);
+  const min=inci.reduce((a,o)=>a+(Number(o.minutos)||0),0);
+  $("tablaRepInci").innerHTML =
+    `<thead><tr><th>Personal</th><th>Minutos</th><th>Tipo</th><th>Descripción</th></tr></thead><tbody>`
+    + (inci.length
+        ? inci.map(o=>{ const m=Number(o.minutos)||0;
+            return `<tr><td class="izq">${esc(o.nombre||"")}</td>`
+              + `<td class="rep-num" style="color:${m<0?"var(--alerta)":"var(--exito)"}">${m>0?"+":""}${m}</td>`
+              + `<td>${esc(TIPO_LBL(o.tipo))}</td><td class="izq">${esc(o.detalle||"")}</td></tr>`;
+          }).join("")
+        : `<tr><td colspan="4"><div class="vacio-msg">Sin incidencias ese día</div></td></tr>`)
+    + `</tbody>`;
+  $("repResInci").textContent = inci.length
+    ? `${inci.length} incidencia(s) · ${min>0?"+":""}${Math.round(min)} min` : "";
 }
 
 /* ================= BASES ================= */
@@ -3612,7 +3719,7 @@ function pintarMotivosInci(lista){
   }).join("");
   const det=!g ? "" : `<div class="mot-sub">
       <div class="mot-sub-cab">${esc(TIPO_LBL(g.tipo))} · ${g.libres.length} motivo(s) declarado(s)</div>
-      ${g.libres.map(l=>`<div class="mot-sub-fila"><span class="mot-sub-txt">${esc(l.txt)}</span>
+      ${g.libres.map(l=>`<div class="mot-sub-fila ${l.min<0?"neg":"pos"}"><span class="mot-sub-txt">${esc(l.txt)}</span>
         <span class="mot-n">${l.n}</span><span class="mot-min">${min(l.min)}</span></div>`).join("")}</div>`;
   z.innerHTML=`<div class="mot-caja">
     <div class="tk-ops-title">Motivos del rango · por tipo</div>

@@ -247,8 +247,10 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .mot-sub-txt{flex:1;min-width:0;font-weight:600;}
 .mot-sub-fila .mot-n{font-weight:800;background:var(--gris-fondo);border-radius:999px;
   padding:1px 8px;font-variant-numeric:tabular-nums;}
-.mot-sub-fila .mot-min{color:var(--alerta);font-weight:800;white-space:nowrap;
+.mot-sub-fila .mot-min{font-weight:800;white-space:nowrap;
   font-variant-numeric:tabular-nums;min-width:74px;text-align:right;}
+.mot-sub-fila.neg .mot-min{color:var(--alerta);}
+.mot-sub-fila.pos .mot-min{color:var(--exito);}
 
 /* Modal · editar artículo de la BASE (parche 51). Scoped a .ma-tabla. */
 .ma-tabla input{width:100%;background:var(--gris-fondo);color:var(--texto);
@@ -623,6 +625,15 @@ body[data-pagina="ingenieria"] .tabla-scroll{max-width:100%;}
   letter-spacing:0;margin-top:2px;word-break:break-word;}
 /* Pie de la tabla de incidencias: .sub es 16px centrado (pensado para operario). */
 #resumenInciTxt{text-align:left;font-size:13px;margin:16px 0 8px;}
+
+/* Tickets · Reporte de Hoy: dos tablas en paralelo (tickets activos de la
+   última/penúltima operación · incidencias del día). Sin reglas sobre `input`. */
+.rep-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;}
+.rep-col{min-width:0;}
+.rep-col .tk-ops-title{margin-bottom:10px;}
+.tabla td.rep-num{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.rep-pie{text-align:left;font-size:13px;margin:10px 0 0;}
+@media (max-width:1100px){ .rep-cols{grid-template-columns:1fr;} }
 
 /* Toolbar de acciones (supervisión: reemplaza el FAB flotante por barra estática) */
 .acc-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
