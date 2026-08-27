@@ -45,6 +45,7 @@
         <a class="nav-item" data-tab="pasoEf" href="#pasoEf">Por área</a>
         <a class="nav-item" data-tab="pasoDia" href="#pasoDia">Por día</a>
         <a class="nav-item" data-tab="pasoModEf" href="#pasoModEf">Módulos (día)</a>
+        <a class="nav-item" data-tab="pasoInc" href="#pasoInc">Incentivos</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Dashboards</summary>
@@ -123,6 +124,43 @@
       <div class="sub" id="resumenEfR"></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:70vh;">
         <table class="tabla-asis-mes" id="tablaEfR"></table>
+      </div>
+    </section>
+
+    <!-- ===================== INCENTIVOS (bonificación de quincena) ===================== -->
+    <section class="pantalla" id="pasoInc">
+      <div class="seccion-cab">
+        <h1>Incentivos</h1>
+        <p class="seccion-sub">Bonificación por eficiencia diaria, de quincena a quincena. Se gana el día que llega a <b>80%</b> o más, según la <b>categoría</b> de la persona; el porcentaje se topa en 100%. Los bonos (A, B, C…) son las semanas laborables del rango. Cualquier penalidad anula la quincena.</p>
+      </div>
+      <div class="tabs sup-subtabs">
+        <button id="incTabQ" class="tab activo" onclick="incVista('q')">QUINCENA</button>
+        <button id="incTabTab" class="tab" onclick="incVista('tabla')">TABLA DE INC.</button>
+      </div>
+
+      <div id="incQView">
+        <div class="barra-control">
+          <label class="campo"><span>Desde</span><input type="date" id="incDesde"></label>
+          <label class="campo"><span>Hasta</span><input type="date" id="incHasta"></label>
+          <label class="campo"><span>Área</span><select id="incArea" onchange="incPintar()"></select></label>
+          <label class="campo"><span>Buscar</span>
+            <input type="text" id="incBuscar" placeholder="Nombre / DNI…" oninput="incPintar()"></label>
+          <label class="campo-check"><input type="checkbox" class="sw" id="incSoloGanan" onchange="incPintar()"> Solo quienes ganan</label>
+          <button class="btn-mini" onclick="cargarInc()">Cargar</button>
+          <button class="btn-mini verde" onclick="descargarInc()">Descargar XLSX</button>
+        </div>
+        <div class="kpis" id="incResumen" style="margin-bottom:14px;"></div>
+        <div class="sub rep-pie" id="incAviso"></div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:66vh;">
+          <table class="tabla tabla-inc" id="tablaInc"></table>
+        </div>
+      </div>
+
+      <div id="incTablaView" hidden>
+        <p class="seccion-sub" style="margin-bottom:14px;">Soles por día según categoría y porcentaje alcanzado. Es la <b>TABLA DE INC.</b> del formato de bonificaciones, guardada en la base (<code>incentivos_tabla</code>): se puede corregir un tramo sin tocar código.</p>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:70vh;">
+          <table class="tabla" id="tablaIncCat"></table>
+        </div>
       </div>
     </section>
 
@@ -350,7 +388,9 @@
         <button id="perTabCrud" class="tab activo" onclick="perTab('crud')">PERSONAL (CRUD)</button>
         <button id="perTabRango" class="tab" onclick="perTab('rango')">ESTADOS POR RANGO</button>
         <button id="perTabMatriz" class="tab" onclick="perTab('matriz')">MATRIZ</button>
-        <button id="perTabMarcar" class="tab" onclick="perTab('marcar')">MARCAR ASISTENCIA</button>
+        <!-- MARCAR ASISTENCIA retirado del menú de Ingeniería: lo hace supervisora
+             desde su propia vista. El panel #perMarcar y su JS siguen en el
+             archivo, sin punto de entrada, a la espera de confirmar el borrado. -->
         <button id="perTabMov" class="tab" onclick="perTab('mov')">MOVIMIENTOS</button>
       </div>
 
@@ -381,12 +421,15 @@
           <label class="campo"><span>Estado</span><select id="perRangoEstado"></select></label>
           <label class="campo"><span>Desde</span><input type="date" id="perRangoDesde"></label>
           <label class="campo"><span>Hasta</span><input type="date" id="perRangoHasta"></label>
+          <label class="campo"><span>Buscar</span>
+            <input type="text" id="perRangoBuscar" placeholder="Nombre / DNI…" oninput="perPintarRango()"></label>
           <button class="btn-mini verde" onclick="perAplicarRango()">Aplicar a seleccionados</button>
         </div>
         <div class="barra-control">
           <span class="sub" style="margin:0;">Seleccionados: <b id="perRangoNSel">0</b></span>
-          <button class="btn-mini gris" onclick="perRangoMarcarTodos()">Marcar todos</button>
+          <button class="btn-mini gris" onclick="perRangoMarcarTodos()">Marcar visibles</button>
           <button class="btn-mini gris" onclick="perRangoLimpiar()">Limpiar</button>
+          <span class="sub" id="perRangoAviso" style="margin:0;color:var(--alerta);"></span>
         </div>
         <div class="grid-personal" id="perRangoList"></div>
       </div>

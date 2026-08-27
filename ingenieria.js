@@ -120,6 +120,7 @@ function activarTab(tab){
   else if(tab==='pasoGen') genInit();
   else if(tab==='pasoDash'){ dbEnsureFp(); dashTab(DASH_TAB||'asis'); }
   else if(tab==='pasoOfs') cargarOfs();
+  else if(tab==='pasoInc') incInit();
   else if(tab==='pasoExtra') cargarExtra();
   else if(tab==='pasoCausas') cargarCausas();
   else if(tab==='pasoFlujo') fjInit();
@@ -1051,7 +1052,10 @@ async function cargarMod(reset){
       try{ BASES_CACHE[modArea] = await rpc("fn_bases_listar",{p_dni:ING.dni,p_token:ING.token,p_area:modArea}); }
       catch(e){ BASES_CACHE[modArea]=[]; }
     }
-    try{ MOD_META = await cargarMetaOF(modArea); }catch(e){ MOD_META={}; }
+    /* Antes esto era `cargarMetaOF(modArea)`: solo la hoja Google. Desde el
+       parche 26 la cantidad programada de las OF nuevas vive en `ofs`, así que
+       el avance salía siempre en "Sube el balance/OF". */
+    try{ MOD_META = await metasOF([modArea]); }catch(e){ MOD_META={}; }
     await cargarModCerrados();
     // Solo al CAMBIAR de área se reinicia la cascada Artículo → OF; al recargar
     // o al volver a la pestaña se conserva lo que el usuario ya había elegido.
@@ -1234,10 +1238,33 @@ function pintarMod(){
 
 /* ================= EFICIENCIAS ================= */
 let EF=null, efSort={col:null,dir:1};
+/* `ef` y `prod/disp` son del ÁREA que se está viendo; `ef_dia` es el día
+   completo de la persona (todas sus áreas), que es la cifra con la que se paga
+   el incentivo. `areas` muestra el reparto cuando estuvo en más de una. */
 const EF_COLS=[
-  {k:"nombre",t:"Nombre"},{k:"dni",t:"DNI"},{k:"area",t:"Área"},{k:"estado",t:"Estado"},
-  {k:"tickets",t:"Tickets"},{k:"prod",t:"Min prod"},{k:"disp",t:"Min disp"},{k:"eficiencia",t:"Eficiencia"}
+  {k:"nombre",t:"Nombre"},{k:"dni",t:"DNI"},{k:"estado",t:"Estado"},
+  {k:"tickets",t:"Tickets"},{k:"prod",t:"Min prod"},{k:"disp",t:"Min disp"},
+  {k:"eficiencia",t:"Ef. del área"},{k:"ef_dia",t:"Ef. del día"},{k:"areas_txt",t:"Áreas del día"}
 ];
+/* Aplana personas × áreas: quien fue movido aparece en el filtro de AMBAS
+   áreas, con los minutos que le corresponden a cada una (parche 55). */
+function efFilas(area){
+  const out=[];
+  (EF && EF.personas || []).forEach(p=>{
+    const lista=(p.areas&&p.areas.length)?p.areas:[{area:p.area,prod:p.prod,disp:p.disp,tickets:p.tickets,eficiencia:p.eficiencia}];
+    const enArea=lista.find(a=>a.area===area);
+    if(!enArea) return;
+    const d=p.dia||{};
+    out.push({dni:p.dni, nombre:p.nombre, area, estado:p.estado,
+      tickets:enArea.tickets||0, prod:enArea.prod||0, disp:enArea.disp||0,
+      eficiencia:enArea.eficiencia||0,
+      ef_dia: d.eficiencia==null ? (p.eficiencia||0) : d.eficiencia,
+      n_areas: d.n_areas||lista.length,
+      areas_txt: lista.length<=1 ? "—"
+        : lista.map(a=>`${a.area} ${Math.round(a.disp)}m`).join(" · ")});
+  });
+  return out;
+}
 
 async function cargarEf(){
   $("tablaEf").innerHTML=""; $("efAreas").innerHTML=cargandoHTML("Calculando…");
@@ -1269,7 +1296,7 @@ function pintarEf(){
     <div class="kpi-lbl">${esc(a.area)}<br>${Math.round(a.prod)} / ${Math.round(a.disp)} min</div></div>`).join("")
     || '<div class="vacio-msg">Sin datos ese día para esta área</div>';
 
-  let lista = (EF.personas||[]).filter(p=>p.area===fArea);
+  let lista = efFilas(fArea);
   const cmp = (a,b)=>{
     if(!efSort.col) return String(a.nombre||"").localeCompare(String(b.nombre||""),"es");
     const va=a[efSort.col], vb=b[efSort.col];
@@ -1277,25 +1304,24 @@ function pintarEf(){
     return c*efSort.dir;
   };
   const flecha = k => efSort.col===k ? (efSort.dir===1?" \u25B2":" \u25BC") : "";
+  const NC=EF_COLS.length;
   const thead = "<thead><tr>"+EF_COLS.map(c=>
     `<th class="ord" onclick="ordenarEf('${c.k}')">${c.t}${flecha(c.k)}</th>`).join("")+"</tr></thead>";
-  // Áreas bien separadas: agrupadas con encabezado de área.
-  const porArea={};
-  lista.forEach(p=>{ (porArea[p.area]=porArea[p.area]||[]).push(p); });
-  const areas=Object.keys(porArea).sort((a,b)=>String(a).localeCompare(String(b),"es"));
+  const gente=[...lista].sort(cmp);
+  const movidos=gente.filter(p=>p.n_areas>1).length;
   let tbody="";
-  if(!lista.length){
-    tbody = `<tr><td colspan="8"><div class="vacio-msg">Sin personas para este filtro</div></td></tr>`;
+  if(!gente.length){
+    tbody = `<tr><td colspan="${NC}"><div class="vacio-msg">Sin personas para este filtro</div></td></tr>`;
   } else {
-    areas.forEach(area=>{
-      const gente=[...porArea[area]].sort(cmp);
-      tbody += `<tr class="grupo-area"><td colspan="8">${esc(area)} · ${gente.length} persona(s)</td></tr>`;
-      tbody += gente.map(p=>`
-        <tr><td>${esc(p.nombre)}</td><td>${esc(p.dni)}</td><td>${esc(p.area)}</td>
-        <td><span class="pill ${esc(p.estado)}">${esc(p.estado)}</span></td>
-        <td>${p.tickets}</td><td>${p.prod}</td><td>${p.disp}</td>
-        <td class="${p.eficiencia>=80?'ef-alta':p.eficiencia<50?'ef-baja':''}">${censEf(Math.round(p.eficiencia)+"%")}</td></tr>`).join("");
-    });
+    tbody += `<tr class="grupo-area"><td colspan="${NC}">${esc(fArea)} · ${gente.length} persona(s)`
+      + (movidos?` · ${movidos} estuvo(estuvieron) en más de un área`:"") + `</td></tr>`;
+    tbody += gente.map(p=>`
+      <tr><td>${esc(p.nombre)}</td><td>${esc(p.dni)}</td>
+      <td><span class="pill ${esc(p.estado)}">${esc(p.estado)}</span></td>
+      <td>${p.tickets}</td><td>${Math.round(p.prod)}</td><td>${Math.round(p.disp)}</td>
+      <td class="${p.eficiencia>=80?'ef-alta':p.eficiencia<50?'ef-baja':''}">${censEf(Math.round(p.eficiencia)+"%")}</td>
+      <td class="${p.ef_dia>=80?'ef-alta':p.ef_dia<50?'ef-baja':''}">${censEf(Math.round(p.ef_dia)+"%")}${p.n_areas>1?' <span class="ef-multi">'+p.n_areas+'</span>':''}</td>
+      <td class="izq ef-areas-txt">${esc(p.areas_txt)}</td></tr>`).join("");
   }
   $("tablaEf").innerHTML = thead + "<tbody>" + tbody + "</tbody>";
 }
@@ -1315,12 +1341,17 @@ const pmCat   =d=>(PMETA&&PMETA[d]&&PMETA[d].categoria)||"";
 async function descargarEf(){
   if(!EF){ mostrarError("Carga la eficiencia primero"); return; }
   const fArea=$("filtroAreaEf").value; if(!fArea){ mostrarError("Elige un área"); return; }
-  const lista=(EF.personas||[]).filter(p=>p.area===fArea);
+  /* Mismas filas que la tabla (parche 55): quien fue movido de área sale en las
+     dos, con los minutos de cada una y su eficiencia del día completo. */
+  const lista=efFilas(fArea);
   if(!lista.length){ mostrarError("No hay datos para descargar"); return; }
   await cargarPersonalMeta();
-  const CAB=["Nombre","DNI","Área Actual","Área Origen","Categoría","Estado","Tickets","Min prod","Min disp","Eficiencia %"];
+  const CAB=["Nombre","DNI","Área","Área Origen","Categoría","Estado","Tickets",
+             "Min prod (área)","Min disp (área)","Eficiencia área %","Eficiencia día %",
+             "Áreas del día","Reparto del día"];
   const filas=lista.map(p=>[p.nombre,p.dni,p.area,pmOrigen(p.dni),pmCat(p.dni),
-    p.estado,p.tickets,p.prod,p.disp,Math.round(p.eficiencia)]);
+    p.estado,p.tickets,Math.round(p.prod),Math.round(p.disp),
+    Math.round(p.eficiencia),Math.round(p.ef_dia),p.n_areas,p.areas_txt]);
   const ws=XLSX.utils.aoa_to_sheet([CAB,...filas]); const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"Eficiencia"); XLSX.writeFile(wb,`EFICIENCIA_${fArea}_${$("fechaEf").value}.xlsx`);
 }
@@ -1606,6 +1637,9 @@ function perReload(){
   else if(PER.tab==="marcar") perMarcarInit();
 }
 function perTab(t){
+  /* 'marcar' ya no tiene botón (lo hace supervisora): si llega por hash viejo,
+     cae en el CRUD en vez de dejar la pantalla en blanco. */
+  if(t==="marcar") t="crud";
   PER.tab=t;
   [["crud","perCrud","perTabCrud"],["rango","perRango","perTabRango"],["matriz","perMatriz","perTabMatriz"],
    ["marcar","perMarcar","perTabMarcar"],["mov","perMov","perTabMov"]]
@@ -1733,12 +1767,26 @@ async function perCargarRango(){
 }
 function perRangoNSelUpd(){ $("perRangoNSel").textContent=Object.keys(PER.rangoSel).length; }
 function perRangoToggle(dni){ if(PER.rangoSel[dni]) delete PER.rangoSel[dni]; else PER.rangoSel[dni]=true; perRangoNSelUpd(); perPintarRango(); }
-function perRangoMarcarTodos(){ PER.rango.forEach(p=>PER.rangoSel[p.dni]=true); perRangoNSelUpd(); perPintarRango(); }
+/* Con filtro activo, "Marcar todos" marca lo VISIBLE. Marcar el área entera
+   cuando la pantalla muestra tres personas es la clase de sorpresa que hace
+   aplicar VACACIONES a quien no debía. */
+function perRangoMarcarTodos(){
+  const q=normKey(($("perRangoBuscar")||{}).value||"");
+  const lista=q ? PER.rango.filter(p=>normKey((p.nombre||"")+" "+(p.dni||"")).includes(q)) : PER.rango;
+  lista.forEach(p=>PER.rangoSel[p.dni]=true); perRangoNSelUpd(); perPintarRango();
+}
 function perRangoLimpiar(){ PER.rangoSel={}; perRangoNSelUpd(); perPintarRango(); }
 function perPintarRango(){
-  $("perRangoList").innerHTML=PER.rango.length? PER.rango.map(p=>`<div class="card-persona${PER.rangoSel[p.dni]?" marcada":""}" onclick="perRangoToggle('${esc(p.dni)}')">
+  /* El filtro solo afecta lo que se PINTA: la selección (PER.rangoSel) vive por
+     DNI, así que buscar no desmarca a nadie ni cambia a quién se aplica. */
+  const q=normKey(($("perRangoBuscar")||{}).value||"");
+  const lista=q ? PER.rango.filter(p=>normKey((p.nombre||"")+" "+(p.dni||"")).includes(q)) : PER.rango;
+  const sel=Object.keys(PER.rangoSel).length;
+  $("perRangoList").innerHTML=lista.length? lista.map(p=>`<div class="card-persona${PER.rangoSel[p.dni]?" marcada":""}" onclick="perRangoToggle('${esc(p.dni)}')">
     <div><div class="cp-nombre">${esc(p.nombre)}</div><div class="cp-dni">DNI ${esc(p.dni)} · ${esc(p.area_actual)}</div></div></div>`).join("")
-    : `<div class="vacio-msg">Sin personal</div>`;
+    : `<div class="vacio-msg">${PER.rango.length?"Nadie con ese nombre o DNI":"Sin personal"}</div>`;
+  const av=$("perRangoAviso");
+  if(av) av.textContent = (q && sel) ? `Hay ${sel} seleccionado(s) en total, incluso fuera del filtro.` : "";
 }
 async function perAplicarRango(){
   const dnis=Object.keys(PER.rangoSel);
@@ -2510,10 +2558,13 @@ async function cargarAvof(){
 }
 /* Meta por OF. Base primero (parche 26) y hoja "OF" como respaldo para las OF
    cargadas antes de que existiera `ofs`; la base manda si están en las dos. */
-async function avofMeta(){
+/* Cantidad programada por OF. La BD (`ofs.cant_prog`, parche 26) MANDA; la hoja
+   Google `OF` queda como respaldo para las OF anteriores a ese parche. Con
+   `p_areas` se limita el respaldo a un área; sin él, todas. */
+async function metasOF(areas){
   const m={};
-  for(const a of Object.keys(AREAS)){
-    if(!AREAS[a].hojaOF) continue;
+  for(const a of (areas || Object.keys(AREAS))){
+    if(!AREAS[a] || !AREAS[a].hojaOF) continue;
     try{ Object.assign(m, await cargarMetaOF(a)); }catch(e){}
   }
   try{
@@ -2522,6 +2573,7 @@ async function avofMeta(){
   }catch(e){}
   return m;
 }
+async function avofMeta(){ return metasOF(null); }
 /* Meta de la OF. cargarMetaOF devuelve 0 si la celda CANT PROG viene vacía:
    eso es "sin dato", no "programado cero". */
 function avofProg(of){ const v=AVOF.meta[normKey(of||"")]; return v>0?v:null; }
@@ -2973,6 +3025,240 @@ async function cargarResumenUltimas(){
       <div class="kpi-lbl">PENÚLTIMA OPERACIÓN · und<br>${esc(nom(o2))}</div></div>`
     + (sinNop?`<div class="kpi"><div class="kpi-num">${sinNop}</div>
       <div class="kpi-lbl">TICKETS SIN N°OP<br>no cuentan en las tarjetas</div></div>`:"");
+}
+
+/* ================= INCENTIVOS (parche 54) =================
+   Matriz persona × día de la quincena. Cada celda es la eficiencia del DÍA
+   COMPLETO de la persona (todas sus áreas), o su etiqueta: SABADO, DOMINGO,
+   el estado de asistencia, o NO ENTREGO cuando estuvo activa y no llenó su
+   boleta virtual. El monto lo pone el servidor con `incentivos_tabla`: aquí
+   no se recalcula nada, solo se pinta y se exporta. */
+let INC=null, INC_TABLA=[];
+const LETRA_BONO = n => String.fromCharCode(64 + Number(n));   // 1 -> A
+const soles = v => (Math.round((+v||0)*100)/100).toFixed(2);
+
+function incVista(v){
+  const t = v==="tabla";
+  $("incQView").hidden=t; $("incTablaView").hidden=!t;
+  $("incTabQ").classList.toggle("activo",!t);
+  $("incTabTab").classList.toggle("activo",t);
+  if(t) cargarIncTabla();
+}
+function incInit(){
+  if($("incDesde") && !$("incDesde").value){
+    /* Quincena por defecto: la que contiene hoy (1–15 o 16–fin de mes). Las
+       fechas son editables porque el corte de pago no siempre es ese. */
+    const [a,m,d]=hoyLima().split("-").map(Number);
+    const ult=new Date(a, m, 0).getDate();
+    const mm=String(m).padStart(2,"0");
+    $("incDesde").value = a+"-"+mm+"-"+(d<=15?"01":"16");
+    $("incHasta").value = a+"-"+mm+"-"+String(d<=15?15:ult).padStart(2,"0");
+  }
+  const sa=$("incArea");
+  if(sa && sa.options.length<=1)
+    sa.innerHTML='<option value="">Todas las áreas</option>'
+      +(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+  if(!INC) cargarInc();
+}
+async function cargarInc(){
+  const d=$("incDesde").value, h=$("incHasta").value;
+  if(!d||!h){ mostrarError("Elige el rango de la quincena"); return; }
+  $("tablaInc").innerHTML=cargandoHTML("Calculando…"); $("incResumen").innerHTML="";
+  try{
+    const r=await rpc("fn_incentivos_quincena",{p_dni:ING.dni,p_token:ING.token,
+      p_desde:d, p_hasta:h, p_area:""});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("tablaInc").innerHTML=""; return; }
+    INC=r; incPintar();
+  }catch(e){ $("tablaInc").innerHTML=""; mostrarError(e.message); }
+}
+async function cargarIncTabla(){
+  if(INC_TABLA.length){ incPintarTabla(); return; }
+  $("tablaIncCat").innerHTML=cargandoHTML("Cargando…");
+  try{
+    const r=await rpc("fn_incentivos_tabla_listar",{p_dni:ING.dni,p_token:ING.token});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("tablaIncCat").innerHTML=""; return; }
+    INC_TABLA=r.items||[]; incPintarTabla();
+  }catch(e){ $("tablaIncCat").innerHTML=""; mostrarError(e.message); }
+}
+function incPintarTabla(){
+  const cats=[...new Set(INC_TABLA.map(x=>x.categoria))].sort();
+  const pcts=[...new Set(INC_TABLA.map(x=>x.pct))].sort((a,b)=>a-b);
+  const m={}; INC_TABLA.forEach(x=>{ m[x.categoria+"|"+x.pct]=x.soles; });
+  $("tablaIncCat").innerHTML =
+    "<thead><tr><th>%</th>"+cats.map(c=>`<th>Categoría ${esc(c)}</th>`).join("")+"</tr></thead><tbody>"
+    + pcts.map(p=>`<tr><td><b>${p}%</b></td>`
+        + cats.map(c=>`<td class="rep-num">S/ ${soles(m[c+"|"+p])}</td>`).join("")+"</tr>").join("")
+    + "</tbody>";
+}
+/* Lista filtrada. El filtro NO cambia el cálculo: solo qué filas se pintan. */
+function incFilas(){
+  if(!INC) return [];
+  const q=normKey(($("incBuscar")||{}).value||"");
+  const ar=($("incArea")||{}).value||"";
+  const solo=!!($("incSoloGanan")||{}).checked;
+  return (INC.personas||[]).filter(p=>
+    (!ar || p.area===ar) &&
+    (!q || normKey((p.nombre||"")+" "+(p.dni||"")).includes(q)) &&
+    (!solo || (+p.final||0) > 0));
+}
+function incPintar(){
+  if(!INC) return;
+  const dias=INC.dias||[], bonos=INC.bonos||[], filas=incFilas();
+  const tot = filas.reduce((a,p)=>a+(+p.final||0),0);
+  const totBruto = filas.reduce((a,p)=>a+(+p.bono_total||0),0);
+  const ganan = filas.filter(p=>(+p.final||0)>0).length;
+  const penal = filas.filter(p=>p.penalizado).length;
+  const sinCat = filas.filter(p=>!p.categoria).length;
+  const ces = filas.filter(p=>p.cesado).length;
+  const kpi=(t,v,c,sub)=>`<div class="kpi"><div class="kpi-num" style="color:${c}">${v}</div>`
+    +`<div class="kpi-lbl">${t}${sub?"<b>"+esc(sub)+"</b>":""}</div></div>`;
+  $("incResumen").innerHTML =
+    kpi("Personas", filas.length, "var(--azul)")+
+    kpi("Ganan incentivo", ganan, "var(--exito)")+
+    kpi("A pagar (S/)", soles(tot), "var(--exito)")+
+    kpi("Antes de penalidad (S/)", soles(totBruto), "var(--azul)")+
+    kpi("Anulados por penalidad", penal, "var(--alerta)")+
+    (sinCat?kpi("Sin categoría", sinCat, "var(--alerta)", "no ganan hasta asignarla"):"")+
+    (ces?kpi("Cesados", ces, "var(--ocre)", "trabajaron en el rango"):"");
+  $("incAviso").textContent = sinCat
+    ? sinCat+" persona(s) sin categoría asignada: no generan incentivo. Se asigna en Personal → editar."
+    : "";
+
+  const cabDias = dias.map(d=>{
+    const dd=d.fecha.split("-")[2];
+    return `<th class="${d.laborable?"":"inc-finde"}" title="${esc(d.fecha)}">${dd}</th>`;
+  }).join("");
+  const cabBonos = bonos.map(b=>`<th>BONO ${LETRA_BONO(b.n)}</th>`).join("");
+  const NCOLS = 4 + dias.length + bonos.length + 6;   // 4 fijas + días + bonos + 6 de cierre
+  const thead = "<thead><tr>"
+    + '<th class="izq">Personal</th><th>DNI</th><th>Área</th><th>Cat.</th>'
+    + cabDias + cabBonos
+    + "<th>Bono total</th><th>Falta</th><th>Tard.</th><th>Calidad</th><th>Boleta</th><th>Bonificación final</th>"
+    + "</tr></thead>";
+
+  const cuerpo = filas.length ? filas.map((p,i)=>{
+    const celdas = dias.map(d=>{
+      const c=(p.dias||{})[d.fecha]||{};
+      if(c.etiqueta){
+        const finde = c.etiqueta==="SABADO"||c.etiqueta==="DOMINGO";
+        return `<td class="inc-etq${finde?" inc-finde":""}" title="${esc(c.etiqueta)}">${esc(c.etiqueta.slice(0,3))}</td>`;
+      }
+      /* Sin eficiencia y sin etiqueta: día activo cuyo disponible quedó en cero
+         o menos (más incidencias que turno). No es fin de semana: clase propia. */
+      if(c.ef==null) return '<td class="inc-nodato" title="Sin eficiencia calculable ese día">·</td>';
+      const pct=Math.round(c.ef);
+      /* El tooltip lleva el reparto por área: es lo que permite auditar el día
+         de alguien a quien movieron de área. */
+      const ar=c.areas&&Object.keys(c.areas).length>1
+        ? " · "+Object.keys(c.areas).map(a=>a+" "+Math.round(c.areas[a])+"m").join(" · ") : "";
+      const multi=c.areas&&Object.keys(c.areas).length>1;
+      return `<td class="${pct>=80?"inc-gana":""}${multi?" inc-multi-dia":""}" `
+        + `title="${pct}% · ${c.prod}/${c.disp} min${esc(ar)}">${pct}</td>`;
+    }).join("");
+    const cb = bonos.map(b=>`<td class="rep-num">${soles((p.bonos||{})[b.n])}</td>`).join("");
+    const pen = v => (+v>0) ? `<td class="inc-pen">${v}</td>` : "<td>·</td>";
+    return `<tr class="${p.penalizado?"inc-anulado":""}">`
+      + `<td class="izq">${esc(p.nombre)}`
+      + (p.cesado?' <span class="inc-cesado" title="Ya no está activo en el maestro: aparece porque trabajó en este rango">CESADO</span>':"")
+      + `</td><td>${esc(p.dni)}</td><td>${esc(p.area||"")}</td>`
+      + `<td>${p.categoria?esc(p.categoria):'<span class="inc-pen">—</span>'}</td>`
+      + celdas + cb
+      + `<td class="rep-num">${soles(p.bono_total)}</td>`
+      + pen(p.faltas) + pen(p.tardanzas)
+      + `<td><button class="btn-mini gris inc-btn" onclick="incAjuste(${i})">${(+p.calidad>0)?p.calidad:"·"}</button></td>`
+      + `<td><button class="btn-mini gris inc-btn" onclick="incAjuste(${i})">${(+p.boleta>0)?p.boleta:"·"}</button></td>`
+      + `<td class="rep-num ${(+p.final>0)?"ef-alta":""}">${soles(p.final)}</td></tr>`;
+  }).join("") : `<tr><td colspan="${NCOLS}"><div class="vacio-msg">Sin personal para este filtro</div></td></tr>`;
+
+  $("tablaInc").innerHTML = thead + "<tbody>" + cuerpo + "</tbody>";
+  /* Los onclick indexan ESTA lista, la misma que se pintó: si se filtra y no se
+     guarda, los índices dejan de coincidir (ya pasó en pintarMisPaq). */
+  INC._filas = filas;
+}
+/* Penalidades manuales. FALTA y TARDANZA no se editan aquí: salen de asistencia
+   y de las incidencias, y se corrigen en su propia pantalla. */
+function incAjuste(i){
+  const p=(INC && INC._filas || [])[i]; if(!p) return;
+  abrirModal(
+    "<h2>Penalidades de la quincena</h2>"
+    + `<div class="sub" style="margin-bottom:12px;">${esc(p.nombre)} · ${esc(INC.desde)} al ${esc(INC.hasta)}</div>`
+    + `<div class="modal-campo"><label>Calidad</label>
+         <input id="iaCal" type="number" step="0.01" min="0" value="${+p.calidad||0}"></div>`
+    + `<div class="modal-campo"><label>Boleta</label>
+         <input id="iaBol" type="number" step="0.01" min="0" value="${+p.boleta||0}"></div>`
+    + `<div class="modal-campo"><label>Nota (opcional)</label>
+         <input id="iaNota" maxlength="140" value="${esc(p.nota||"")}"></div>`
+    + `<div class="inc-ayuda">Falta (${p.faltas}) y tardanza (${p.tardanzas}) salen de asistencia e
+         incidencias: se corrigen ahí. Cualquier penalidad mayor que cero <b>anula toda la quincena</b>.</div>`
+    + '<div class="modal-msg" id="iaMsg"></div>'
+    + '<div class="modal-acciones">'
+    + `<button class="btn-principal btn-modal-guardar" onclick="incAjusteGuardar(${i})">GUARDAR</button>`
+    + '<button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>');
+}
+async function incAjusteGuardar(i){
+  const p=(INC && INC._filas || [])[i]; if(!p) return;
+  const cal=parseFloat($("iaCal").value)||0, bol=parseFloat($("iaBol").value)||0;
+  const nota=($("iaNota").value||"").trim();
+  if(cal<0||bol<0){ $("iaMsg").textContent="Las penalidades no pueden ser negativas"; return; }
+  try{
+    const r=await rpc("fn_incentivo_ajuste_guardar",{p_dni:ING.dni,p_token:ING.token,
+      p_dni_op:p.dni,p_desde:INC.desde,p_hasta:INC.hasta,p_calidad:cal,p_boleta:bol,p_nota:nota});
+    if(!r.ok){ $("iaMsg").textContent=r.error||"No se pudo guardar"; return; }
+    cerrarModal(); await cargarInc();
+  }catch(e){ $("iaMsg").textContent=e.message; }
+}
+/* Export con el formato de `formato de bonificacion.xlsb`: RESUMEN, una hoja por
+   área y la TABLA DE INC. Las celdas llevan la eficiencia como fracción (0.84) o
+   su etiqueta, igual que el archivo que se usa hoy. */
+async function descargarInc(){
+  if(!INC){ mostrarError("Carga primero la quincena"); return; }
+  const filas=incFilas();
+  if(!filas.length){ mostrarError("No hay filas para exportar"); return; }
+  if(!INC_TABLA.length){
+    try{
+      const r=await rpc("fn_incentivos_tabla_listar",{p_dni:ING.dni,p_token:ING.token});
+      if(r && r.ok) INC_TABLA=r.items||[];
+    }catch(e){}
+  }
+  const dias=INC.dias||[], bonos=INC.bonos||[];
+  const cab=["ID","USUARIO","DNI","CATEGORIA"]
+    .concat(dias.map(d=>d.fecha))
+    .concat(bonos.map(b=>"BONO "+LETRA_BONO(b.n)))
+    .concat(["BONO TOTAL","FALTA","TARDANZA","CALIDAD","BOLETA","BONIFICACION FINAL","ESTADO"]);
+  const fila=(p,i)=>[i+1,p.nombre,p.dni,p.categoria||""]
+    .concat(dias.map(d=>{
+      const c=(p.dias||{})[d.fecha]||{};
+      if(c.etiqueta) return c.etiqueta;
+      return c.ef==null ? "" : Math.round(c.ef)/100;
+    }))
+    .concat(bonos.map(b=>+((p.bonos||{})[b.n]||0)))
+    .concat([+(p.bono_total||0), (+p.faltas||0)||"", (+p.tardanzas||0)||"",
+             (+p.calidad||0)||"", (+p.boleta||0)||"", +(p.final||0),
+             p.cesado?"CESADO":""]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,
+    XLSX.utils.aoa_to_sheet([cab].concat(filas.map(fila))), "RESUMEN");
+  const porArea={};
+  filas.forEach(p=>{ const k=p.area||"SIN AREA"; (porArea[k]=porArea[k]||[]).push(p); });
+  const usados={};
+  Object.keys(porArea).sort((a,b)=>a.localeCompare(b,"es")).forEach(a=>{
+    /* Excel: 31 caracteres y sin : \ / ? * [ ] — y sin repetir. */
+    let n=String(a).replace(/[:\\/?*[\]]/g,"-").slice(0,31) || "AREA";
+    let k=2; while(usados[n]){ n=n.slice(0,29)+"_"+k; k++; }
+    usados[n]=true;
+    XLSX.utils.book_append_sheet(wb,
+      XLSX.utils.aoa_to_sheet([cab].concat(porArea[a].map(fila))), n);
+  });
+  if(INC_TABLA.length){
+    const cats=[...new Set(INC_TABLA.map(x=>x.categoria))].sort();
+    const pcts=[...new Set(INC_TABLA.map(x=>x.pct))].sort((x,y)=>x-y);
+    const m={}; INC_TABLA.forEach(x=>{ m[x.categoria+"|"+x.pct]=+x.soles; });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+      [["%"].concat(cats.map(c=>"CAT "+c))]
+      .concat(pcts.map(p=>[p/100].concat(cats.map(c=>m[c+"|"+p]))))),
+      "TABLA DE INC.");
+  }
+  XLSX.writeFile(wb, "BONIFICACION_"+INC.desde+"_"+INC.hasta+".xlsx");
 }
 
 /* ================= REPORTE DE HOY =================

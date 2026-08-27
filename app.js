@@ -467,8 +467,10 @@ function abrirSolicitudAjuste(){
     </div>
     <div class="modal-campo"><label>Minutos a descontar</label>
       <input id="saMin" inputmode="numeric" maxlength="3" placeholder="Ej: 30" disabled></div>
-    <div class="modal-campo" id="saMotivoCampo" hidden><label>¿Cuál fue el motivo?</label>
-      <input id="saMotivo" maxlength="140" placeholder="Escribe el motivo"></div>
+    <div class="modal-campo" id="saMotivoCampo" hidden>
+      <label id="saMotivoLbl">Detalle</label>
+      <input id="saMotivo" maxlength="140" placeholder="Escribe el detalle">
+      <div class="sa-ayuda" id="saMotivoAyuda"></div></div>
     <div class="modal-msg" id="saMsg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" onclick="enviarSolicitudAjuste()">ENVIAR</button>
@@ -478,8 +480,15 @@ function abrirSolicitudAjuste(){
 function saElegir(i){
   sa.tipo=SA_MOTIVOS[i][0]; sa.motivo=SA_MOTIVOS[i][1];
   SA_MOTIVOS.forEach((_,k)=>{ const b=$("saMot"+k); if(b) b.classList.toggle("activo",k===i); });
+  /* El detalle se pide SIEMPRE, no solo en OTROS: describe qué pasó y NO cambia
+     el tipo elegido (parche 53). En OTROS es obligatorio porque ahí es lo único
+     que explica el descuento. */
   const otros = sa.tipo==="OTROS";
-  $("saMotivoCampo").hidden=!otros;
+  $("saMotivoCampo").hidden=false;
+  $("saMotivoLbl").textContent = otros ? "¿Cuál fue el motivo?" : "Detalle (opcional)";
+  $("saMotivo").placeholder = otros ? "Escribe el motivo" : "Ej: OF 9880, máquina 12";
+  $("saMotivoAyuda").textContent = otros ? "" : "Queda registrado como " + sa.motivo + ": el detalle no cambia el tipo.";
+  $("saMotivo").value="";
   $("saMin").disabled=false;
   $("saMsg").textContent="";
   setTimeout(()=>{ const el=otros?$("saMotivo"):$("saMin"); if(el) el.focus(); },80);
@@ -491,7 +500,10 @@ async function enviarSolicitudAjuste(){
   const libre=($("saMotivo").value||"").trim().toUpperCase();
   if(!v||v<=0){ $("saMsg").textContent="Ingresa los minutos"; return; }
   if(sa.tipo==="OTROS" && !libre){ $("saMsg").textContent="Escribe cuál fue el motivo"; return; }
-  const motivo = sa.tipo==="OTROS" ? libre : sa.motivo;
+  /* El detalle viaja solo, sin repetir el tipo (que va aparte en p_tipo). Si no
+     escribió nada, el servidor pone el nombre del tipo como detalle y el
+     desglose de Incidencias lo reconoce como eco y no lo lista. */
+  const motivo = libre || sa.motivo;
   try{
     const r=await rpc("fn_solicitud_ajuste_crear",{p_dni:s.dni,p_token:s.token,p_area:AREA_ESTAJERO||s.area,
       p_minutos:-Math.abs(v),p_motivo:motivo,p_tipo:sa.tipo});
@@ -1825,6 +1837,7 @@ async function cargarPersonal(s){
 /* Los minutos disponibles solo tienen sentido si la persona está en planta.
    Si su estado del día es otro (FALTA, DM, VACACIONES, LICENCIA…), se muestra
    el estado en su lugar: enseñar "575 min" de alguien que faltó confunde. */
+const esAusente = p => !!(p && (p.ausente || (norm(p.estado_dia||"") && norm(p.estado_dia)!=="ACTIVO")));
 function dispPersona(p){
   const e=norm(p.estado_dia||"");
   if(p.ausente || (e && e!=="ACTIVO")) return `<span class="pill ${esc(e||"FALTA")}">${esc(e||"—")}</span>`;
@@ -1840,12 +1853,16 @@ function pintarPersonal(){
   if(!lista.length){ g.innerHTML=`<div class="vacio-msg">Sin coincidencias</div>`; return; }
   lista.forEach(p=>{
     const c=document.createElement("div");
-    c.className="card-persona"+(oc.dnis.includes(p.dni)?" marcada":"");
+    /* Quien no está ACTIVO hoy no recibe incidencias (parche 53): la tarjeta
+       se ve, con su estado, pero no se puede marcar. El servidor lo revalida. */
+    const fuera=esAusente(p);
+    c.className="card-persona"+(oc.dnis.includes(p.dni)?" marcada":"")+(fuera?" inactiva":"");
     c.innerHTML=`<div>
         <div class="cp-nombre">${esc(p.nombre)}</div>
         <div class="cp-dni">DNI ${esc(p.dni)}</div>
       </div>
       <div class="cp-disp">${dispPersona(p)}</div>`;
+    if(fuera){ c.title="No estuvo activo hoy: no puede recibir incidencias"; g.appendChild(c); return; }
     c.onclick=()=>{
       if(oc.multiple){
         const i=oc.dnis.indexOf(p.dni);
@@ -1966,9 +1983,13 @@ async function confirmarSalida(s){
     const r=await rpc("fn_ocurrencia_salida",{p_dni:s.dni,p_token:s.token,p_dnis:oc.dnis,
       p_area:s.area,p_tipo:oc.tipo,p_salida:salida,p_retorno:retorno});
     if(!r.ok){ mostrarError(r.error||"No se pudo registrar"); return; }
-    mostrarOk(r.pendiente_confirmar
+    /* El servidor salta a quien no estuvo activo hoy (parche 53): decirlo, no
+       dejar que la cuenta cuadre en silencio. */
+    const om=(r.omitidos||[]);
+    mostrarOk((r.pendiente_confirmar
       ? `Registrado · ${Math.abs(r.minutos)} min. Confirma el regreso cuando vuelva.`
-      : `Registrado · ${Math.abs(r.minutos)} min descontados`);
+      : `Registrado · ${Math.abs(r.minutos)} min descontados`)
+      + (om.length ? ` · Sin actividad hoy, no se les aplicó: ${om.join(" · ")}` : ""));
     await recargarSupervisora();
     irA("pasoPersonal");
   }catch(e){ mostrarError(e.message); }
@@ -2005,10 +2026,15 @@ async function confirmarOcurrencia(){
     btn.disabled=false; btn.textContent="GUARDAR";
     if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); return; }
     const afectados = esSupervisora ? r.solicitadas : r.afectados;
+    /* El servidor salta a quien no estuvo activo ese día (parche 53) y devuelve
+       a quién: hay que decirlo, no dejar que la cuenta cuadre en silencio. */
+    const om = (r.omitidos||[]);
+    const avisoOm = om.length
+      ? `<br><small style="color:var(--alerta)">Sin actividad hoy, no se les aplicó: ${esc(om.join(" · "))}</small>` : "";
     $("exTitulo").textContent = esSupervisora ? "Solicitud enviada" : "Registrado";
-    $("exDetalle").innerHTML = esSupervisora
+    $("exDetalle").innerHTML = (esSupervisora
       ? `${oc.tipo.replace("_"," ")} · <b>${minutos>0?"+":""}${minutos} min</b> · ${afectados} persona(s)<br><small>Pendiente de aprobación de Ingeniería</small>`
-      : `${oc.tipo.replace("_"," ")} · <b>${minutos>0?"+":""}${minutos} min</b> · ${afectados} persona(s)`;
+      : `${oc.tipo.replace("_"," ")} · <b>${minutos>0?"+":""}${minutos} min</b> · ${afectados} persona(s)`) + avisoOm;
     $("exAvance").textContent="";
     const ex=$("exito"); ex.classList.add("visible");
     setTimeout(async ()=>{
@@ -2024,8 +2050,15 @@ async function confirmarOcurrencia(){
 /* --- flujo OTROS: alcance todos / específicos --- */
 function ocurrenciaGrupal(){ oc={tipo:null,minutos:0,dnis:[],multiple:false}; irA("pasoAlcance"); }
 function alcanceTodos(){
-  oc.dnis = PERSONAL.map(p=>p.dni); oc.multiple=false;
-  $("nombreAfectado").textContent = "Todo el personal del área ("+oc.dnis.length+")";
+  /* "Todo el personal" son los que ESTUVIERON HOY: incluir a los de vacaciones,
+     DM o licencia creaba incidencias que no afectan la eficiencia pero ensucian
+     todo el módulo (parche 53). El servidor los salta igual. */
+  const activos = PERSONAL.filter(p=>!esAusente(p));
+  const fuera = PERSONAL.length - activos.length;
+  if(!activos.length){ mostrarError("Nadie del área está activo hoy"); return; }
+  oc.dnis = activos.map(p=>p.dni); oc.multiple=false;
+  $("nombreAfectado").textContent = "Todo el personal activo del área ("+oc.dnis.length+")"
+    + (fuera ? " · "+fuera+" sin actividad hoy" : "");
   irA("pasoTipo");   // primero elegir el tipo (incidencias predefinidas), luego minutos
 }
 function alcanceAlgunos(){

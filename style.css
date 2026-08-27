@@ -626,6 +626,36 @@ body[data-pagina="ingenieria"] .tabla-scroll{max-width:100%;}
 /* Pie de la tabla de incidencias: .sub es 16px centrado (pensado para operario). */
 #resumenInciTxt{text-align:left;font-size:13px;margin:16px 0 8px;}
 
+/* Descuento de tiempo del operario: ayuda bajo el campo de detalle (parche 53) */
+.sa-ayuda{font-size:12px;color:#5a6270;margin-top:6px;line-height:1.35;}
+/* Personal que no estuvo activo hoy: se ve pero no se puede marcar (parche 53) */
+.card-persona.inactiva{opacity:.55;cursor:not-allowed;background:var(--gris-fondo);}
+.card-persona.inactiva:active{transform:none;}
+
+/* Incentivos · matriz persona × día de la quincena (parche 54).
+   Tabla ancha: celdas compactas y cabecera pegada. Sin reglas sobre `input`. */
+.tabla-inc{font-size:12px;}
+.tabla-inc th{padding:7px 5px;font-size:10px;letter-spacing:.3px;}
+.tabla-inc td{padding:6px 5px;}
+.tabla-inc td.izq{white-space:nowrap;max-width:230px;overflow:hidden;text-overflow:ellipsis;}
+/* Día que alcanza el 80%: es el que paga */
+.tabla-inc td.inc-gana{background:#e6f3ea;color:var(--exito);font-weight:800;}
+/* Día repartido entre dos áreas: el tooltip lleva el desglose */
+.tabla-inc td.inc-multi-dia{box-shadow:inset 0 -3px 0 var(--ocre);cursor:help;}
+/* Fin de semana y días sin dato: se ven, pero no compiten con los números */
+.tabla-inc th.inc-finde,.tabla-inc td.inc-finde{background:var(--gris-fondo);color:#9aa4b1;}
+.tabla-inc td.inc-etq{font-size:10px;font-weight:700;color:#5a6270;cursor:help;}
+.tabla-inc td.inc-nodato{color:#c3ccdb;cursor:help;}
+/* Ya no está en el maestro pero trabajó en la quincena: se paga y se ve por qué */
+.inc-cesado{font-size:9px;font-weight:800;background:var(--ocre);color:var(--texto);
+  border-radius:999px;padding:1px 6px;margin-left:4px;vertical-align:middle;cursor:help;}
+.tabla-inc td.inc-pen{color:var(--alerta);font-weight:800;}
+/* Penalizado: la quincena queda en cero y hay que verlo de un golpe */
+.tabla-inc tr.inc-anulado{background:#fdecea;}
+.tabla-inc tr.inc-anulado td.inc-gana{background:#f6dcd8;color:#8a3129;}
+.tabla-inc .inc-btn{padding:3px 9px;font-size:11px;min-width:34px;}
+.inc-ayuda{font-size:13px;color:#5a6270;text-align:left;line-height:1.4;margin:2px 0 8px;}
+
 /* Tickets · Reporte de Hoy: dos tablas en paralelo (tickets activos de la
    última/penúltima operación · incidencias del día). Sin reglas sobre `input`. */
 .rep-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;}
