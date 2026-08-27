@@ -541,7 +541,10 @@ const qty = v => (Math.round((+v||0)*100)/100);   // cantidad legible (2 dec má
    de minutos) y ajusta el subtítulo del paso Tickets. */
 function aplicarModoAcabado(){
   const oj=$("btnOjoEf"), rl=$("btnReloj");
-  if(oj) oj.style.display = ES_ACABADO ? "none" : "";
+  /* ACABADO ya ve su eficiencia como costura: sus reclamos llevan STD de la BASE
+     y `minutos` es columna generada (std × cant), así que fn_mi_dia la calcula
+     igual. El ojo de censura vuelve a estar disponible. */
+  if(oj) oj.style.display = "";
   if(rl) rl.style.display = "";   // ajuste de tiempo disponible también en ACABADO
   const lblConf=$("confLabel"); if(lblConf) lblConf.textContent = ES_ACABADO ? "Cantidad" : "Numeración";
   // ACABADO ya no pasa por el almacén ni por "Mis paquetes": registra por cantidad.
@@ -556,7 +559,8 @@ function initOperario(){
   { const rb=$("btnReloj"); if(rb) rb.onclick=abrirSolicitudAjuste; }
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
   { const rc=$("btnRecargar"); if(rc) rc.onclick=recargarMiEficiencia; }
-  { const oj=$("btnOjoEf"); if(oj) oj.onclick=()=>{ EF_CENSURADA=!EF_CENSURADA; setAvance(ULTIMO_DIA); }; }
+  { const oj=$("btnOjoEf"); if(oj) oj.onclick=()=>{ EF_CENSURADA=!EF_CENSURADA;
+      if(ES_ACABADO) setMetasAcabado({cant_hoy:CANT_HOY_ACABADO}); else setAvance(ULTIMO_DIA); }; }
   botonVolverIng();
   window.onCambioPaso = (id)=>{
     // Al retroceder, limpiar la selección más profunda para que el
@@ -743,16 +747,17 @@ function acabCausaCambio(){
   if(nota) nota.hidden = !hay;
 }
 async function cargarAcabado(s, area){
-  const [ofs, extra, dia, causas] = await Promise.all([
+  const [ofs, extra, dia, causas, midia] = await Promise.all([
     rpc("fn_acabado_ofs",{p_dni:s.dni,p_token:s.token,p_area:area}),
     rpc("fn_extra_listar",{p_dni:s.dni,p_token:s.token,p_area:area,p_todas:false}).catch(()=>[]),
     rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area}),
-    rpc("fn_causas_std_listar",{p_dni:s.dni,p_token:s.token}).catch(()=>[])
+    rpc("fn_causas_std_listar",{p_dni:s.dni,p_token:s.token}).catch(()=>[]),
+    rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token}).catch(()=>null)
   ]);
   CAUSAS = Array.isArray(causas) ? causas : [];
   if(ofs && ofs.ok===false) throw new Error(ofs.error||"No se pudieron cargar las OF");
   ACAB={ofs:(ofs&&ofs.items)||[], extra:Array.isArray(extra)?extra:[], of:null, op:null, tipo:null};
-  setMetasAcabado(dia);
+  setMetasAcabado(dia, midia);
   pintarAcabOF();
   irA("pasoAcabOF");
 }
@@ -987,20 +992,31 @@ function setAvance(d){
   b.textContent = `Hoy: ${ef} · ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
   b.classList.add("visible");
 }
-/* ACABADO: badge = cantidad de hoy (sin eficiencia ni minutaje).
+/* ACABADO: badge con su eficiencia (igual que costura) MÁS las unidades del día,
+   que es el dato con el que se guían.
    Las metas diarias se retiraron (parche 40): no las usaban para guiarse y
-   salían mal en el encabezado. `fn_acabado_metas` se sigue llamando solo por
-   `cant_hoy`; su campo `ops` ya no se lee. */
-function setMetasAcabado(d){
+   salían mal en el encabezado. De `fn_acabado_metas` solo se lee `cant_hoy`;
+   su campo `ops` ya no se usa. `d2` es el fn_mi_dia del día (opcional: si no
+   llega, se conserva el último conocido). */
+function setMetasAcabado(d, d2){
   CANT_HOY_ACABADO = (d && +d.cant_hoy) || 0;
+  if(d2 && d2.minutos_disp != null) ULTIMO_DIA = d2;
   const b=$("badgeAvance");
-  b.textContent = `Hoy: ${qty(CANT_HOY_ACABADO)} und`;
+  const ef = EF_CENSURADA ? "****" : (ULTIMO_DIA.eficiencia + "%");
+  b.textContent = `Hoy: ${ef} · ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`
+    + ` · ${qty(CANT_HOY_ACABADO)} und`;
   b.classList.add("visible");
 }
 async function refrescarMetasAcabado(){
   const s=sesionActual(); if(!s) return;
   const area = AREA_ESTAJERO || s.area;
-  try{ setMetasAcabado(await rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area})); }catch(e){}
+  try{
+    const [m,dia]=await Promise.all([
+      rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area}),
+      rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token}).catch(()=>null)
+    ]);
+    setMetasAcabado(m, dia);
+  }catch(e){}
 }
 async function recargarMiEficiencia(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
@@ -1013,15 +1029,16 @@ async function recargarMiEficiencia(){
          eso, conservando dónde está el operario. */
       const area=AREA_ESTAJERO||s.area;
       const ofAnt=ACAB.of&&ACAB.of.of, opAnt=ACAB.op&&ACAB.op.n_op, prAnt=ACAB.prenda;
-      const [ofs, extra, dia] = await Promise.all([
+      const [ofs, extra, dia, midia] = await Promise.all([
         rpc("fn_acabado_ofs",{p_dni:s.dni,p_token:s.token,p_area:area}),
         rpc("fn_extra_listar",{p_dni:s.dni,p_token:s.token,p_area:area,p_todas:false}).catch(()=>[]),
-        rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area})
+        rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area}),
+        rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token}).catch(()=>null)
       ]);
       if(ofs && ofs.ok===false) throw new Error(ofs.error||"No se pudieron cargar las OF");
       ACAB.ofs=(ofs&&ofs.items)||[];
       ACAB.extra=Array.isArray(extra)?extra:[];
-      setMetasAcabado(dia);
+      setMetasAcabado(dia, midia);
       // Reengancha la OF y la operación donde estaba, ya con los datos nuevos.
       ACAB.of = ofAnt ? (ACAB.ofs.find(x=>normKey(x.of)===normKey(ofAnt)) || null) : null;
       ACAB.prenda = ACAB.of && (ACAB.of.prendas||[]).includes(prAnt) ? prAnt : ACAB.prenda;
@@ -1345,7 +1362,9 @@ async function registrar(){
         ? `${esc(sel.op)}<br>Cantidad <b>${qty(t.cant)} und</b>`
         : `${esc(sel.op)}<br>Numeración <b>${esc(t.num)}</b> · ${t.cant} und · +${t.minutos} min`;
     }
-    $("exAvance").textContent = ES_ACABADO ? `Hoy: ${qty(CANT_HOY_ACABADO)} und` : `Tu día: ${r.eficiencia}%`;
+    $("exAvance").textContent = ES_ACABADO
+      ? `Hoy: ${qty(CANT_HOY_ACABADO)} und · Tu día: ${r.eficiencia}%`
+      : `Tu día: ${r.eficiencia}%`;
     mostrarExito();
   }catch(e){
     btn.textContent="SÍ, REGISTRAR"; btn.disabled=false;
