@@ -78,7 +78,10 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 @media (max-width:400px){ .tab{font-size:10.5px;padding:8px 2px;} }
 /* Sub-pestañas dentro de una sección de Ingeniería (Generar tickets): píldoras,
    no solapas — no cuelgan de un contenedor con fondo propio. */
-.gen-subtabs{padding:0;margin:0 auto 14px;max-width:1100px;flex-wrap:wrap;}
+/* Alineadas a la izquierda como el resto de los subtabs del tablero: centradas
+   y con max-width 1100 la cuarta pestaña ("CAUSAS DE STD") caía sola y centrada
+   en una segunda fila. */
+.gen-subtabs{padding:0;margin:0 0 14px;max-width:100%;flex-wrap:wrap;justify-content:flex-start;}
 .gen-subtabs .tab{flex:0 1 auto;border-radius:999px;padding:10px 18px;font-size:14px;border-width:2px;}
 @media (max-width:560px){ .gen-subtabs .tab{flex:1 1 auto;font-size:11px;padding:9px 8px;} }
 
@@ -612,6 +615,17 @@ body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",mono
 /* Tablas de datos anchas (CRUD, matriz, eficiencia): usan todo el ancho disponible
    en ingeniería y hacen scroll horizontal si aún no caben (evita columnas cortadas). */
 body[data-pagina="ingenieria"] .tabla-scroll{max-width:100%;}
+/* KPIs de Incentivos: mismo trato que los de Incidencias. Sin esto, el <b> del
+   nombre salía en línea ("Sin categoríano ganan hasta asignarla") y la rejilla
+   quedaba centrada a 760 px con una tarjeta suelta en la segunda fila. */
+#incResumen{grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;
+  max-width:100%;margin:0;}
+#incResumen .kpi{padding:12px 10px;border-top-width:4px;}
+#incResumen .kpi-num{font-size:22px;line-height:1.1;}
+#incResumen .kpi-lbl{font-size:11px;line-height:1.3;text-transform:uppercase;letter-spacing:.3px;}
+#incResumen .kpi-lbl b{display:block;font-size:12px;color:var(--texto);text-transform:none;
+  letter-spacing:0;margin-top:2px;word-break:break-word;}
+
 /* KPIs de Incidencias: compactos y alineados a la izquierda como el resto del
    tablero (centrados a 760px quedaban flotando sobre una tabla a todo lo ancho).
    La etiqueta admite un <b> con el nombre del tipo/área ganador: el hueco del
@@ -640,8 +654,9 @@ body[data-pagina="ingenieria"] .tabla-scroll{max-width:100%;}
 .tabla-inc td.izq{white-space:nowrap;max-width:230px;overflow:hidden;text-overflow:ellipsis;}
 /* Día que alcanza el 80%: es el que paga */
 .tabla-inc td.inc-gana{background:#e6f3ea;color:var(--exito);font-weight:800;}
-/* Día repartido entre dos áreas: el tooltip lleva el desglose */
-.tabla-inc td.inc-multi-dia{box-shadow:inset 0 -3px 0 var(--ocre);cursor:help;}
+/* Día repartido entre dos áreas: el tooltip lleva el desglose. Se usa también
+   en Eficiencia día × día (parche 56), así que no va scoped a .tabla-inc. */
+td.inc-multi-dia{box-shadow:inset 0 -3px 0 var(--ocre);cursor:help;}
 /* Fin de semana y días sin dato: se ven, pero no compiten con los números */
 .tabla-inc th.inc-finde,.tabla-inc td.inc-finde{background:var(--gris-fondo);color:#9aa4b1;}
 .tabla-inc td.inc-etq{font-size:10px;font-weight:700;color:#5a6270;cursor:help;}

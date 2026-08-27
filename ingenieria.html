@@ -342,7 +342,7 @@
             oninput="onArtModInput()" onfocus="renderArtDrop()" onblur="setTimeout(cerrarArtDrop,150)">
           <div id="artModDrop" class="autocomplete-drop" style="display:none;"></div></label>
         <label class="campo"><span>OF</span>
-          <select id="ofModSel" onchange="pintarMod()"><option value="">Ninguna</option></select></label>
+          <select id="ofModSel" onchange="cargarModOF()"><option value="">Ninguna</option></select></label>
         <label class="campo"><span>Hasta la fecha</span>
           <input type="date" id="fechaMod" onchange="cargarMod()"></label>
         <button class="btn-mini" onclick="cargarMod()">Cargar</button>

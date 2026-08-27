@@ -371,27 +371,6 @@ async function genConfirmarOF(){
 }
 function celTxt(v){ return v==null?"":String(v).trim(); }
 
-/* Carga MÚLTIPLES archivos: cada uno = un trabajo independiente (su hoja HN). */
-function genLeerHN(input){
-  const files=[...input.files]; input.value="";
-  if(!files.length) return;
-  if(!$("areaGen").value){ mostrarError("Elige primero el área"); return; }
-  $("genGate").style.display="none";
-  files.forEach(file=>{
-    const lector=new FileReader();
-    lector.onload=(e)=>{
-      try{
-        const wb=XLSX.read(e.target.result,{type:"array"});
-        if(!wb.SheetNames.includes("HN")) throw new Error(`"${file.name}": no se encontró la hoja HN.`);
-        const rows=XLSX.utils.sheet_to_json(wb.Sheets["HN"],{header:1,defval:null,raw:true});
-        const hn=parseHN(rows);
-        GEN_JOBS.push({id:++GEN_SEQ, name:file.name, hn, filas:null, dupes:[]});
-        renderGenJobs();
-      }catch(err){ mostrarError(err.message); }
-    };
-    lector.readAsArrayBuffer(file);
-  });
-}
 function parseHN(rows){
   const get=(r,c)=> (rows[r]&&rows[r][c]!=null)?rows[r][c]:null;
   let prenda="", articulo="", of="";
@@ -1036,7 +1015,11 @@ async function opEntrar(){
    Avance del módulo = unidades que pasaron su ÚLTIMA operación (mayor N°OP
    por artículo+módulo en BASE) / meta de la OF (hoja "OF", col CANT PROG).
    No se muestra numeración: se muestra la CANTIDAD. */
-let MODTK=[], modArea="", MOD_META={};
+/* MOD_ARTS es la cascada (artículo → sus OF) y MOD_DATA las tarjetas de la OF
+   elegida, ya agrupadas por el servidor (parche 56). Antes se bajaban TODOS los
+   tickets del área desde siempre y se agrupaban aquí: con el sistema creciendo
+   eso eran decenas de miles de filas para pintar cuatro tarjetas. */
+let MOD_ARTS=[], MOD_DATA=null, modArea="", MOD_META={};
 async function cargarMod(reset){
   modArea = $("areaMod") ? $("areaMod").value : "";
   if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
@@ -1044,29 +1027,36 @@ async function cargarMod(reset){
   $("zonaModulos").innerHTML=cargandoHTML("Cargando…");
   $("resumenMod").textContent="";
   try{
-    // Acumulativo: todos los tickets del área HASTA la fecha indicada.
-    MODTK = await rpc("fn_tickets_rango",{p_dni:ING.dni,p_token:ING.token,
-      p_area:modArea, p_dni_op:"", p_desde:null, p_hasta:$("fechaMod").value});
-    if(MODTK && MODTK.ok===false){ mostrarError(MODTK.error||"Error"); MODTK=[]; }
-    if(!BASES_CACHE[modArea]){
-      try{ BASES_CACHE[modArea] = await rpc("fn_bases_listar",{p_dni:ING.dni,p_token:ING.token,p_area:modArea}); }
-      catch(e){ BASES_CACHE[modArea]=[]; }
-    }
-    /* Antes esto era `cargarMetaOF(modArea)`: solo la hoja Google. Desde el
-       parche 26 la cantidad programada de las OF nuevas vive en `ofs`, así que
-       el avance salía siempre en "Sube el balance/OF". */
+    const r = await rpc("fn_mod_avance",{p_dni:ING.dni,p_token:ING.token,
+      p_area:modArea, p_articulo:"", p_of:"", p_hasta:($("fechaMod")||{}).value||null});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); MOD_ARTS=[]; }
+    else MOD_ARTS = r.articulos||[];
+    /* La meta sale de `ofs.cant_prog` y la hoja Google es respaldo (parche 53).
+       Se conserva porque las OF anteriores al parche 26 solo están en la hoja. */
     try{ MOD_META = await metasOF([modArea]); }catch(e){ MOD_META={}; }
-    await cargarModCerrados();
     // Solo al CAMBIAR de área se reinicia la cascada Artículo → OF; al recargar
     // o al volver a la pestaña se conserva lo que el usuario ya había elegido.
-    if(reset && $("artMod")) $("artMod").value="";
+    if(reset && $("artMod")){ $("artMod").value=""; MOD_DATA=null; }
     cerrarArtDrop();
     poblarOfMod();
+    await cargarModOF();
+  }catch(e){ $("zonaModulos").innerHTML=""; mostrarError(e.message); }
+}
+/* Pide al servidor las tarjetas de la OF elegida. Sin artículo u OF no pide nada. */
+async function cargarModOF(){
+  const art=modArtActual(), of=$("ofModSel")?$("ofModSel").value:"";
+  if(!art || !of){ MOD_DATA=null; pintarMod(); return; }
+  $("zonaModulos").innerHTML=cargandoHTML("Cargando módulos…");
+  try{
+    const r=await rpc("fn_mod_avance",{p_dni:ING.dni,p_token:ING.token,
+      p_area:modArea, p_articulo:art, p_of:of, p_hasta:($("fechaMod")||{}).value||null});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); MOD_DATA=null; }
+    else MOD_DATA=r;
     pintarMod();
   }catch(e){ $("zonaModulos").innerHTML=""; mostrarError(e.message); }
 }
 function filtrarModArea(a){
-  modArea=a;
+  modArea=a; MOD_DATA=null;
   if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
   cargarMod(true);
 }
@@ -1074,34 +1064,33 @@ function filtrarModArea(a){
 function modArtActual(){
   const q=normKey($("artMod")?$("artMod").value:"");
   if(!q) return "";
-  const arts=[...new Set(MODTK.filter(t=>t.estado==='ACTIVO').map(t=>norm(t.articulo)).filter(Boolean))];
-  return arts.find(a=>normKey(a)===q) || "";
+  const a=MOD_ARTS.find(x=>normKey(x.articulo)===q);
+  return a ? a.articulo : "";
 }
 let ART_MATCH=[];
 /* Autocompletado por coincidencia (contains) con dropdown propio y estilizado. */
 function renderArtDrop(){
   const inp=$("artMod"), drop=$("artModDrop"); if(!inp||!drop) return;
   const q=normKey(inp.value);
-  const arts=[...new Set(MODTK.filter(t=>t.estado==='ACTIVO').map(t=>norm(t.articulo)).filter(Boolean))]
-    .sort((a,b)=>a.localeCompare(b,"es"));
+  const arts=MOD_ARTS.map(x=>x.articulo).sort((a,b)=>a.localeCompare(b,"es"));
   ART_MATCH = (q ? arts.filter(a=>normKey(a).includes(q)) : arts).slice(0,60);
   if(!ART_MATCH.length){ drop.style.display="none"; drop.innerHTML=""; return; }
   drop.innerHTML = ART_MATCH.map((a,i)=>`<div class="ac-item" onmousedown="elegirArtMod(${i})">${esc(a)}</div>`).join("");
   drop.style.display="block";
 }
-function elegirArtMod(i){ const a=ART_MATCH[i]; if(a==null) return; $("artMod").value=a; cerrarArtDrop(); poblarOfMod(); pintarMod(); }
+function elegirArtMod(i){ const a=ART_MATCH[i]; if(a==null) return; $("artMod").value=a; cerrarArtDrop(); poblarOfMod(); cargarModOF(); }
 function cerrarArtDrop(){ const d=$("artModDrop"); if(d) d.style.display="none"; }
 function poblarOfMod(){
   const sel=$("ofModSel"); if(!sel) return;
   const art=modArtActual();
   const prev=sel.value;
   if(!art){ sel.innerHTML=`<option value="">Ninguna</option>`; return; }
-  const ofs=[...new Set(MODTK.filter(t=>t.estado==='ACTIVO' && norm(t.articulo)===art).map(t=>norm(t.of)).filter(Boolean))]
-    .sort((a,b)=>a.localeCompare(b,"es"));
+  const a=MOD_ARTS.find(x=>x.articulo===art);
+  const ofs=((a&&a.ofs)||[]).slice().sort((x,y)=>String(x).localeCompare(String(y),"es"));
   sel.innerHTML=`<option value="">Ninguna</option>`+ofs.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("");
   if(prev && ofs.includes(prev)) sel.value=prev;
 }
-function onArtModInput(){ renderArtDrop(); poblarOfMod(); pintarMod(); }
+function onArtModInput(){ renderArtDrop(); poblarOfMod(); cargarModOF(); }
 /* Lee la hoja OF (meta por OF). Devuelve { OF(normalizada): cantidadMeta }. */
 async function cargarMetaOF(area){
   const cfg = AREAS[area];
@@ -1122,35 +1111,8 @@ async function cargarMetaOF(area){
   }
   return m;
 }
-/* Mayor N°OP (última operación) por artículo+módulo, desde BASE del área. */
-function ultimaOpModulo(area, articulo, modulo){
-  const ka=normKey(articulo), km=normKey(modulo); let mx=null;
-  (BASES_CACHE[area]||[]).forEach(b=>{
-    if(normKey(b.articulo)===ka && normKey(b.modulo)===km){
-      const n=Number(b.n_op); if(!isNaN(n) && (mx===null || n>mx)) mx=n;
-    }
-  });
-  return mx;
-}
-/* Nombre exacto de la última operación (mayor N°OP) del módulo, desde BASE. */
-function ultimaOpNombreModulo(area, articulo, modulo){
-  const ka=normKey(articulo), km=normKey(modulo); let mx=null, nom="";
-  (BASES_CACHE[area]||[]).forEach(b=>{
-    if(normKey(b.articulo)===ka && normKey(b.modulo)===km){
-      const n=Number(b.n_op); if(!isNaN(n) && (mx===null || n>mx)){ mx=n; nom=norm(b.operacion); }
-    }
-  });
-  return nom;
-}
 /* Módulos cerrados: ingeniería bloquea el reclamo de tickets de un módulo. */
-let MOD_CERRADOS=new Set(), MOD_GRUPOS=[];
-async function cargarModCerrados(){
-  try{
-    const r=await rpc("fn_modulos_cerrados_listar",{p_dni:ING.dni,p_token:ING.token,p_area:modArea});
-    MOD_CERRADOS = new Set((Array.isArray(r)?r:[]).map(x=>normKey(x.of)+"||"+normKey(x.modulo)));
-  }catch(e){ MOD_CERRADOS=new Set(); }
-}
-function modEstaCerrado(of, mod){ return MOD_CERRADOS.has(normKey(of)+"||"+normKey(mod)); }
+let MOD_GRUPOS=[];
 async function toggleModulo(idx, cerrar){
   const g=MOD_GRUPOS[idx]; if(!g) return;
   const accion = cerrar ? "cerrar" : "liberar";
@@ -1159,7 +1121,7 @@ async function toggleModulo(idx, cerrar){
   try{
     const r=await rpc("fn_modulo_cerrar",{p_dni:ING.dni,p_token:ING.token,p_area:modArea,p_of:g.of,p_modulo:g.mod,p_cerrar:cerrar});
     if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
-    await cargarModCerrados(); pintarMod();
+    await cargarModOF();   // el estado de cerrado viene del servidor
   }catch(e){ mostrarError(e.message); }
 }
 function pintarMod(){
@@ -1172,35 +1134,20 @@ function pintarMod(){
     $("zonaModulos").innerHTML = `<div class="vacio-msg">Elige un artículo y luego una OF para ver los módulos.</div>`;
     return;
   }
-  const activos = MODTK.filter(t=>t.estado==='ACTIVO' && t.area===modArea
-    && norm(t.articulo)===art && normKey(t.of)===normKey(of));
-  // Agrupar por OF · módulo
-  const grp={};
-  activos.forEach(t=>{
-    const mod = norm(t.modulo)||"(sin módulo)";
-    const of = norm(t.of)||"(sin OF)";
-    const key = of+" · "+mod;
-    const g = grp[key] = grp[key] || {of, mod, articulo:norm(t.articulo), ops:{}, ultima:0, tks:0};
-    const opName = norm(t.op)||"(sin operación)";
-    const op = g.ops[opName] = g.ops[opName] || {cant:0, personas:{}};
-    const c = Number(t.cant)||0;
-    op.cant += c; g.tks++;
-    const p = op.personas[t.dni] = op.personas[t.dni] || {nombre:t.nombre, cant:0};
-    p.cant += c;
-    const lastNop = ultimaOpModulo(modArea, t.articulo, mod);
-    if(lastNop!=null && Number(t.nop)===lastNop) g.ultima += c;
-  });
-  const claves=Object.keys(grp).sort((a,b)=>a.localeCompare(b,"es"));
-  MOD_GRUPOS = claves.map(k=>grp[k]);   // referencia por índice para cerrar/abrir
-  $("resumenMod").textContent = `${modArea} · ${claves.length} módulo(s) con actividad · ${activos.length} tickets`;
-  if(!claves.length){ $("zonaModulos").innerHTML=`<div class="vacio-msg">Sin tickets activos para esta área/OF</div>`; return; }
-  $("zonaModulos").innerHTML = claves.map((k,idx)=>{
-    const g=grp[k];
-    const meta = MOD_META[normKey(g.of)] || 0;
+  /* Ya viene agrupado del servidor (parche 56): aquí solo se pinta. */
+  const mods = (MOD_DATA && MOD_DATA.modulos) || [];
+  MOD_GRUPOS = mods.map(m=>({of:m.of, mod:m.modulo, articulo:m.articulo}));
+  const tks = mods.reduce((a,m)=>a+(m.tks||0),0);
+  $("resumenMod").textContent = `${modArea} · ${mods.length} módulo(s) con actividad · ${tks} tickets`;
+  if(!mods.length){ $("zonaModulos").innerHTML=`<div class="vacio-msg">Sin tickets activos para esta área/OF</div>`; return; }
+  $("zonaModulos").innerHTML = mods.map((g,idx)=>{
+    /* `cant_prog` de `ofs` manda; la hoja Google queda de respaldo para las OF
+       anteriores al parche 26. */
+    const meta = Number(g.cant_prog) || MOD_META[normKey(g.of)] || 0;
     const pct = meta>0 ? Math.min(100, Math.round(g.ultima/meta*100)) : null;
-    const ops=Object.keys(g.ops).sort((a,b)=>a.localeCompare(b,"es"));
-    const lastOp = ultimaOpNombreModulo(modArea, g.articulo, g.mod);
-    const cerrado = modEstaCerrado(g.of, g.mod);
+    const ops = g.ops||[];
+    const lastOp = g.op_ultima;
+    const cerrado = !!g.cerrado;
     const barra = pct==null
       ? `<div class="avance-nometa">Sube el balance/OF para calcular el avance</div>`
       : `<div class="avance-bar"><div class="avance-fill ${pct>=80?'alto':pct<40?'bajo':''}" style="width:${pct}%"></div>
@@ -1219,14 +1166,13 @@ function pintarMod(){
       <details class="mod-ops">
         <summary>Ver operaciones (${ops.length})</summary>
         <div class="mod-ops-body">
-        ${ops.map(opName=>{
-          const op=g.ops[opName];
-          const personas=Object.values(op.personas).sort((a,b)=>b.cant-a.cant);
+        ${ops.map(op=>{
+          const personas=op.personas||[];
           return `<details class="mod-op">
-            <summary class="mod-op-head"><span class="mod-op-nom">${esc(opName)}</span>
+            <summary class="mod-op-head"><span class="mod-op-nom">${esc(op.op)}</span>
               <span class="mod-op-sub">${Math.round(op.cant)} und · ${personas.length} operario(s)</span></summary>
             ${personas.map(p=>`<div class="mod-persona">
-              <div class="mp-cab"><b>${esc(soloApellidos(p.nombre))}</b><span>${Math.round(p.cant)} und</span></div>
+              <div class="mp-cab"><b>${esc(soloApellidos(p.nombre||p.dni))}</b><span>${Math.round(p.cant)} und</span></div>
             </div>`).join("")}
           </details>`;
         }).join("")}
@@ -1419,9 +1365,16 @@ function pintarEfRango(){
     EFR.dias.forEach(d=>{
       const v = p.registros[d];
       const est = p.estados ? p.estados[d] : null;
-      if(v!=null) tbody += `<td class="${efClase(v)}">${censEf(v)}</td>`;
+      /* `areas_dia` (parche 56) solo trae los días con MÁS DE UN área: la celda
+         lleva el reparto en el tooltip y el subrayado ocre, igual que en
+         Incentivos, para que se vea que el % es la suma de las dos. */
+      const ar = (p.areas_dia && p.areas_dia[d]) || null;
+      const multi = ar && Object.keys(ar).length > 1;
+      const tip = multi
+        ? ` title="${esc(Object.keys(ar).map(a=>a+" "+Math.round(ar[a])+" min").join(" · "))}"` : "";
+      if(v!=null) tbody += `<td class="${efClase(v)}${multi?" inc-multi-dia":""}"${tip}>${censEf(v)}</td>`;
       else if(est) tbody += `<td><span class="pill ${esc(est)}" style="font-size:10px;">${esc(est)}</span></td>`;
-      else tbody += `<td>\u2014</td>`;
+      else tbody += `<td>—</td>`;
     });
     tbody += `<td class="${efClase(p.promedio)}"><b>${censEf(p.promedio+"%")}</b></td>`;
     tbody += `</tr>`;
@@ -1665,7 +1618,11 @@ async function cargarMovs(){
 }
 function pintarMovs(){
   $("movResumen").textContent=`${MOVS.length} movimiento(s) · la hora reparte los 575 min del día entre las áreas`;
-  const body=MOVS.length? MOVS.map((m,i)=>`<tr>
+  /* `_i` es el índice REAL en MOVS: los botones Guardar/Deshacer lo necesitan
+     porque al ordenar el orden de pintado ya no coincide con el del array. */
+  const filas=ordAplicar("movTabla", MOVS.map((m,i)=>Object.assign({_i:i},m)), null,
+    (x,k)=> k==="nombre" ? soloApellidos(x.nombre) : x[k]);
+  const body=filas.length? filas.map(m=>{ const i=m._i; return `<tr>
       <td class="izq"><b>${esc(soloApellidos(m.nombre))}</b></td>
       <td>${esc(m.desde_area||"—")}</td><td>${esc(m.hacia_area)}</td>
       <td><input type="date" id="mvF${i}" value="${esc(m.fecha||"")}" style="max-width:140px;"></td>
@@ -1675,11 +1632,13 @@ function pintarMovs(){
       <td class="izq">${esc(soloApellidos(m.movido_por||"—"))}</td>
       <td><button class="btn-mini verde" onclick="guardarMovHora(${i})">Guardar</button>
           <button class="btn-mini rojo" onclick="eliminarMov(${i})">Deshacer</button></td>
-    </tr>`).join("")
+    </tr>`; }).join("")
     : `<tr><td colspan="9"><div class="vacio-msg">Sin movimientos de área en esa fecha</div></td></tr>`;
-  $("movTabla").innerHTML=`<thead><tr><th class="izq">Persona</th><th>Desde</th><th>Hacia</th>
-    <th>Fecha</th><th>Hora</th><th>Min. origen</th><th>Min. destino</th><th class="izq">Movido por</th><th></th></tr></thead>
-    <tbody>${body}</tbody>`;
+  $("movTabla").innerHTML=ordThead("movTabla",[
+    {k:"nombre",t:"Persona",cls:"izq"},{k:"desde_area",t:"Desde"},{k:"hacia_area",t:"Hacia"},
+    {k:"fecha",t:"Fecha"},{k:"hora",t:"Hora"},{k:"min_origen",t:"Min. origen"},
+    {k:"min_destino",t:"Min. destino"},{k:"movido_por",t:"Movido por",cls:"izq"},{t:""}
+  ], pintarMovs)+`<tbody>${body}</tbody>`;
 }
 async function guardarMovHora(i){
   const m=MOVS[i]; if(!m) return;
@@ -1815,9 +1774,14 @@ async function perCargarMatriz(){
 }
 function perPintarMatriz(){
   const q=normKey($("perMatBuscar").value), dias=PER.matriz.dias;
-  const lista=PER.matriz.personal.filter(p=>!q||normKey(p.nombre).includes(q));
+  const lista=ordAplicar("perTablaMatriz",
+    PER.matriz.personal.filter(p=>!q||normKey(p.nombre).includes(q)));
   $("perMatResumen").textContent=`${lista.length} persona(s) · ${dias.length} día(s)`;
-  let thead=`<thead><tr><th class="col-nombre-solo">Nombre</th>`+dias.map(d=>`<th>${d.slice(8,10)}-${d.slice(5,7)}</th>`).join("")+`</tr></thead>`;
+  /* Solo la columna Nombre ordena: las demás son los días de la matriz. */
+  const om=ordEstado("perTablaMatriz"); om.pintar=perPintarMatriz;
+  const fm = om.col==="nombre" ? (om.dir===1?" ▲":" ▼") : "";
+  let thead=`<thead><tr><th class="col-nombre-solo ord" onclick="ordCol('perTablaMatriz','nombre')">Nombre${fm}</th>`
+    +dias.map(d=>`<th>${d.slice(8,10)}-${d.slice(5,7)}</th>`).join("")+`</tr></thead>`;
   let tbody="<tbody>";
   if(!lista.length) tbody+=`<tr><td colspan="${dias.length+1}"><div class="vacio-msg">Sin personal</div></td></tr>`;
   lista.forEach(p=>{
@@ -2061,15 +2025,18 @@ async function cargarExtra(){
 function pintarExtra(){
   const act=EXTRA.filter(e=>e.activa).length;
   $("exResumen").textContent=`${EXTRA.length} operación(es) · ${act} activa(s)`;
-  const body=EXTRA.length? EXTRA.map((e,i)=>`<tr>
+  const filas=ordAplicar("exTabla", EXTRA.map((e,i)=>Object.assign({_i:i},e)));
+  const body=filas.length? filas.map(e=>`<tr>
       <td>${esc(e.tipo)}</td><td class="izq"><b>${esc(e.operacion)}</b></td>
       <td>${Number(e.std).toFixed(2)}</td>
       <td><span class="pill ${e.activa?"ACTIVO":"DM"}">${e.activa?"ACTIVA":"INACTIVA"}</span></td>
-      <td><button class="btn-mini ${e.activa?"rojo":"verde"}" onclick="toggleExtra(${i})">${e.activa?"Desactivar":"Activar"}</button></td>
+      <td><button class="btn-mini ${e.activa?"rojo":"verde"}" onclick="toggleExtra(${e._i})">${e.activa?"Desactivar":"Activar"}</button></td>
     </tr>`).join("")
     : `<tr><td colspan="5"><div class="vacio-msg">Sin operaciones cargadas para esta área</div></td></tr>`;
-  $("exTabla").innerHTML=`<thead><tr><th>Tipo</th><th class="izq">Operación</th><th>STD</th>
-    <th>Estado</th><th></th></tr></thead><tbody>${body}</tbody>`;
+  $("exTabla").innerHTML=ordThead("exTabla",[
+    {k:"tipo",t:"Tipo"},{k:"operacion",t:"Operación",cls:"izq"},{k:"std",t:"STD"},
+    {k:"activa",t:"Estado"},{t:""}
+  ], pintarExtra)+`<tbody>${body}</tbody>`;
 }
 async function guardarExtra(){
   const area=$("exArea").value, tipo=norm($("exTipo").value).toUpperCase();
@@ -2214,7 +2181,7 @@ function pintarFlujo(){
   const salieron=l.filter(x=>x.salio_en_rango).length;
   $("fjResumen").innerHTML=`${FLUJO.desde} → ${FLUJO.hasta} · referencia: <b>${esc(FLUJO.ref==="PENULTIMA"?"penúltima":"última")} operación</b>`
     + ` · ${l.length} OF-área · ${salieron} salieron · ${Math.round(und)} und en la operación de referencia`;
-  const body=l.length? l.map(x=>`<tr>
+  const body=l.length? ordAplicar("fjTabla", l).map(x=>`<tr>
       <td class="izq"><b>${esc(x.area)}</b></td>
       <td>${esc(x.of)}</td><td class="izq">${esc(x.articulo)}</td>
       <td>${esc(x.prenda||"—")}</td>
@@ -2224,9 +2191,11 @@ function pintarFlujo(){
       <td>${esc(x.salida||"—")}</td>
       <td><span class="pill ${x.salida?"ACTIVO":"DM"}">${esc(x.estado)}</span></td></tr>`).join("")
     : `<tr><td colspan="9"><div class="vacio-msg">Nada con ese filtro</div></td></tr>`;
-  $("fjTabla").innerHTML=`<thead><tr><th class="izq">Área</th><th>OF</th><th class="izq">Artículo</th>
-    <th>Prenda</th><th>Cant. prog.</th><th>Und. ref.</th><th>Entró</th><th>Salió</th><th>Estado</th></tr></thead>
-    <tbody>${body}</tbody>`;
+  $("fjTabla").innerHTML=ordThead("fjTabla",[
+    {k:"area",t:"Área",cls:"izq"},{k:"of",t:"OF"},{k:"articulo",t:"Artículo",cls:"izq"},
+    {k:"prenda",t:"Prenda"},{k:"cant_prog",t:"Cant. prog."},{k:"und_ref",t:"Und. ref."},
+    {k:"entrada",t:"Entró"},{k:"salida",t:"Salió"},{k:"estado",t:"Estado"}
+  ], pintarFlujo)+`<tbody>${body}</tbody>`;
 }
 function descargarFlujo(){
   const l=fjFiltradas();
@@ -2256,16 +2225,18 @@ async function cargarCausas(){
 function pintarCausasIng(){
   const act=CAUSAS_ING.filter(c=>c.activa).length;
   $("cauResumen").textContent=`${CAUSAS_ING.length} causa(s) · ${act} activa(s)`;
-  const body=CAUSAS_ING.length? CAUSAS_ING.map((c,i)=>`<tr>
+  const filas=ordAplicar("cauTabla", CAUSAS_ING.map((c,i)=>Object.assign({_i:i},c)));
+  const body=filas.length? filas.map(c=>`<tr>
       <td class="izq"><b>${esc(c.texto)}</b></td>
       <td>${Number(c.delta)>0?"+":""}${Number(c.delta).toFixed(2)}</td>
       <td><span class="pill ${c.activa?"ACTIVO":"DM"}">${c.activa?"ACTIVA":"INACTIVA"}</span></td>
-      <td><button class="btn-mini" onclick="editarCausa(${i})">Editar</button></td>
-      <td><button class="btn-mini ${c.activa?"rojo":"verde"}" onclick="toggleCausa(${i})">${c.activa?"Desactivar":"Activar"}</button></td>
+      <td><button class="btn-mini" onclick="editarCausa(${c._i})">Editar</button></td>
+      <td><button class="btn-mini ${c.activa?"rojo":"verde"}" onclick="toggleCausa(${c._i})">${c.activa?"Desactivar":"Activar"}</button></td>
     </tr>`).join("")
     : `<tr><td colspan="5"><div class="vacio-msg">Sin causas cargadas</div></td></tr>`;
-  $("cauTabla").innerHTML=`<thead><tr><th class="izq">Causa</th><th>Min/prenda</th>
-    <th>Estado</th><th></th><th></th></tr></thead><tbody>${body}</tbody>`;
+  $("cauTabla").innerHTML=ordThead("cauTabla",[
+    {k:"texto",t:"Causa",cls:"izq"},{k:"delta",t:"Min/prenda"},{k:"activa",t:"Estado"},{t:""},{t:""}
+  ], pintarCausasIng)+`<tbody>${body}</tbody>`;
 }
 function editarCausa(i){
   const c=CAUSAS_ING[i]; if(!c) return;
@@ -2338,16 +2309,20 @@ function ofsPintar(){
         : `<span class="of-area pendiente">${esc(x.area)} · por generar</span>`;
     }).join(" ");
   };
-  const body=rows.length? rows.map((o,i)=>`<tr>
+  const filas=ordAplicar("ofsTabla", rows.map((o,i)=>Object.assign({_i:i},o)));
+  const body=filas.length? filas.map(o=>{ const i=o._i; return `<tr>
       <td><button class="btn-mini gris" onclick="ofsToggle(${i})">▾</button></td>
       <td class="izq"><b>${esc(o.articulo||"—")}</b></td><td>${esc(o.of)}</td>
       <td>${esc(ofsPrendasTxt(o))}</td><td><b>${Math.round(o.cant_prog||0)}</b></td>
       <td>${o.paquetes}${ofsPaqDesglose(o)}</td><td class="izq">${areasTxt(o)}</td>
       <td>${esc(o.fecha_carga||"—")}</td></tr>
-      <tr class="avof-det" id="ofsDet${i}" hidden><td></td><td colspan="7"></td></tr>`).join("")
+      <tr class="avof-det" id="ofsDet${i}" hidden><td></td><td colspan="7"></td></tr>`; }).join("")
     : `<tr><td colspan="8"><div class="vacio-msg">Sin OF registradas todavía. Se registran al confirmar una HN en Generar tickets.</div></td></tr>`;
-  $("ofsTabla").innerHTML=`<thead><tr><th></th><th class="izq">Artículo</th><th>OF</th><th>Prenda</th>
-    <th>Cant. prog.</th><th>Paquetes</th><th class="izq">Áreas</th><th>Cargada</th></tr></thead><tbody>${body}</tbody>`;
+  $("ofsTabla").innerHTML=ordThead("ofsTabla",[
+    {t:""},{k:"articulo",t:"Artículo",cls:"izq"},{k:"of",t:"OF"},{k:"prenda",t:"Prenda"},
+    {k:"cant_prog",t:"Cant. prog."},{k:"paquetes",t:"Paquetes"},{t:"Áreas",cls:"izq"},
+    {k:"fecha_carga",t:"Cargada"}
+  ], ofsPintar)+`<tbody>${body}</tbody>`;
 }
 /* Alta desde la HN: mismo parseo que Generar tickets, pero SIN escribir en el
    ALMACÉN. Registra la OF con su desglose completo (talla, color, numeración).
@@ -3027,6 +3002,42 @@ async function cargarResumenUltimas(){
       <div class="kpi-lbl">TICKETS SIN N°OP<br>no cuentan en las tarjetas</div></div>`:"");
 }
 
+/* ================= ORDENAMIENTO GENÉRICO DE TABLAS =================
+   Toda tabla de ingeniería tiene que poder ordenarse. En vez de escribir un
+   `ordenarX` por tabla, cada una registra sus columnas y su función de pintado:
+   el estado vive en ORD[idTabla] y el clic vuelve a pintar.
+
+   `cmpVal` (lote 30) ya compara fechas y números bien — no usar parseFloat.
+
+   OJO con los `onclick` de las filas: si la tabla lleva acciones que indexan el
+   array original, hay que arrastrar el índice real (`_i`) porque al ordenar el
+   orden de pintado deja de coincidir. */
+const ORD={};
+function ordEstado(t){ return ORD[t] || (ORD[t]={col:null,dir:1,pintar:null}); }
+/* Columnas: {k:"clave", t:"Título", cls:"izq"}. Sin `k` = no ordena (acciones). */
+function ordThead(t, cols, pintar){
+  const o=ordEstado(t); if(pintar) o.pintar=pintar;
+  return "<thead><tr>"+cols.map(c=>{
+    const cls=c.cls?" "+c.cls:"";
+    if(!c.k) return `<th class="${cls.trim()}">${c.t||""}</th>`;
+    const f = o.col===c.k ? (o.dir===1?" ▲":" ▼") : "";
+    return `<th class="ord${cls}" onclick="ordCol('${t}','${c.k}')">${c.t}${f}</th>`;
+  }).join("")+"</tr></thead>";
+}
+function ordCol(t,col){
+  const o=ordEstado(t);
+  if(o.col===col) o.dir*=-1; else { o.col=col; o.dir=1; }
+  if(o.pintar) o.pintar();
+}
+/* Devuelve una COPIA ordenada. `porDefecto` es el orden natural cuando no hay
+   columna elegida; `get` permite sacar el valor de una clave compuesta. */
+function ordAplicar(t, lista, porDefecto, get){
+  const o=ordEstado(t);
+  if(!o.col) return porDefecto ? [...lista].sort(porDefecto) : lista;
+  const v = get || ((x,k)=>x[k]);
+  return [...lista].sort((a,b)=>cmpVal(v(a,o.col), v(b,o.col))*o.dir);
+}
+
 /* ================= INCENTIVOS (parche 54) =================
    Matriz persona × día de la quincena. Cada celda es la eficiencia del DÍA
    COMPLETO de la persona (todas sus áreas), o su etiqueta: SABADO, DOMINGO,
@@ -3129,14 +3140,20 @@ function incPintar(){
     return `<th class="${d.laborable?"":"inc-finde"}" title="${esc(d.fecha)}">${dd}</th>`;
   }).join("");
   const cabBonos = bonos.map(b=>`<th>BONO ${LETRA_BONO(b.n)}</th>`).join("");
-  const NCOLS = 4 + dias.length + bonos.length + 6;   // 4 fijas + días + bonos + 6 de cierre
+  const NCOLS = 4 + dias.length + bonos.length + 5;   // 4 fijas + días + bonos + 5 de cierre
+  /* Los días y los bonos no ordenan (son la matriz); el resto sí. `boleta` son
+     los días NO ENTREGO: derivada, no se digita. CALIDAD se retiró. */
+  const om=ordEstado("tablaInc"); om.pintar=incPintar;
+  const fl=k=> om.col===k ? (om.dir===1?" ▲":" ▼") : "";
+  const th=(k,t,cls)=>`<th class="ord${cls?" "+cls:""}" onclick="ordCol('tablaInc','${k}')">${t}${fl(k)}</th>`;
   const thead = "<thead><tr>"
-    + '<th class="izq">Personal</th><th>DNI</th><th>Área</th><th>Cat.</th>'
+    + th("nombre","Personal","izq") + th("dni","DNI") + th("area","Área") + th("categoria","Cat.")
     + cabDias + cabBonos
-    + "<th>Bono total</th><th>Falta</th><th>Tard.</th><th>Calidad</th><th>Boleta</th><th>Bonificación final</th>"
+    + th("bono_total","Bono total") + th("faltas","Falta") + th("tardanzas","Tard.")
+    + th("boleta","Boleta") + th("final","Bonificación final")
     + "</tr></thead>";
 
-  const cuerpo = filas.length ? filas.map((p,i)=>{
+  const cuerpo = filas.length ? ordAplicar("tablaInc",filas).map((p,i)=>{
     const celdas = dias.map(d=>{
       const c=(p.dias||{})[d.fecha]||{};
       if(c.etiqueta){
@@ -3164,48 +3181,12 @@ function incPintar(){
       + `<td>${p.categoria?esc(p.categoria):'<span class="inc-pen">—</span>'}</td>`
       + celdas + cb
       + `<td class="rep-num">${soles(p.bono_total)}</td>`
-      + pen(p.faltas) + pen(p.tardanzas)
-      + `<td><button class="btn-mini gris inc-btn" onclick="incAjuste(${i})">${(+p.calidad>0)?p.calidad:"·"}</button></td>`
-      + `<td><button class="btn-mini gris inc-btn" onclick="incAjuste(${i})">${(+p.boleta>0)?p.boleta:"·"}</button></td>`
+      + pen(p.faltas) + pen(p.tardanzas) + pen(p.boleta)
       + `<td class="rep-num ${(+p.final>0)?"ef-alta":""}">${soles(p.final)}</td></tr>`;
   }).join("") : `<tr><td colspan="${NCOLS}"><div class="vacio-msg">Sin personal para este filtro</div></td></tr>`;
 
   $("tablaInc").innerHTML = thead + "<tbody>" + cuerpo + "</tbody>";
-  /* Los onclick indexan ESTA lista, la misma que se pintó: si se filtra y no se
-     guarda, los índices dejan de coincidir (ya pasó en pintarMisPaq). */
-  INC._filas = filas;
-}
-/* Penalidades manuales. FALTA y TARDANZA no se editan aquí: salen de asistencia
-   y de las incidencias, y se corrigen en su propia pantalla. */
-function incAjuste(i){
-  const p=(INC && INC._filas || [])[i]; if(!p) return;
-  abrirModal(
-    "<h2>Penalidades de la quincena</h2>"
-    + `<div class="sub" style="margin-bottom:12px;">${esc(p.nombre)} · ${esc(INC.desde)} al ${esc(INC.hasta)}</div>`
-    + `<div class="modal-campo"><label>Calidad</label>
-         <input id="iaCal" type="number" step="0.01" min="0" value="${+p.calidad||0}"></div>`
-    + `<div class="modal-campo"><label>Boleta</label>
-         <input id="iaBol" type="number" step="0.01" min="0" value="${+p.boleta||0}"></div>`
-    + `<div class="modal-campo"><label>Nota (opcional)</label>
-         <input id="iaNota" maxlength="140" value="${esc(p.nota||"")}"></div>`
-    + `<div class="inc-ayuda">Falta (${p.faltas}) y tardanza (${p.tardanzas}) salen de asistencia e
-         incidencias: se corrigen ahí. Cualquier penalidad mayor que cero <b>anula toda la quincena</b>.</div>`
-    + '<div class="modal-msg" id="iaMsg"></div>'
-    + '<div class="modal-acciones">'
-    + `<button class="btn-principal btn-modal-guardar" onclick="incAjusteGuardar(${i})">GUARDAR</button>`
-    + '<button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>');
-}
-async function incAjusteGuardar(i){
-  const p=(INC && INC._filas || [])[i]; if(!p) return;
-  const cal=parseFloat($("iaCal").value)||0, bol=parseFloat($("iaBol").value)||0;
-  const nota=($("iaNota").value||"").trim();
-  if(cal<0||bol<0){ $("iaMsg").textContent="Las penalidades no pueden ser negativas"; return; }
-  try{
-    const r=await rpc("fn_incentivo_ajuste_guardar",{p_dni:ING.dni,p_token:ING.token,
-      p_dni_op:p.dni,p_desde:INC.desde,p_hasta:INC.hasta,p_calidad:cal,p_boleta:bol,p_nota:nota});
-    if(!r.ok){ $("iaMsg").textContent=r.error||"No se pudo guardar"; return; }
-    cerrarModal(); await cargarInc();
-  }catch(e){ $("iaMsg").textContent=e.message; }
+  INC._filas = ordAplicar("tablaInc",filas);   // la misma lista que se pintó
 }
 /* Export con el formato de `formato de bonificacion.xlsb`: RESUMEN, una hoja por
    área y la TABLA DE INC. Las celdas llevan la eficiencia como fracción (0.84) o
@@ -3224,7 +3205,7 @@ async function descargarInc(){
   const cab=["ID","USUARIO","DNI","CATEGORIA"]
     .concat(dias.map(d=>d.fecha))
     .concat(bonos.map(b=>"BONO "+LETRA_BONO(b.n)))
-    .concat(["BONO TOTAL","FALTA","TARDANZA","CALIDAD","BOLETA","BONIFICACION FINAL","ESTADO"]);
+    .concat(["BONO TOTAL","FALTA","TARDANZA","BOLETA","BONIFICACION FINAL","ESTADO"]);
   const fila=(p,i)=>[i+1,p.nombre,p.dni,p.categoria||""]
     .concat(dias.map(d=>{
       const c=(p.dias||{})[d.fecha]||{};
@@ -3233,8 +3214,7 @@ async function descargarInc(){
     }))
     .concat(bonos.map(b=>+((p.bonos||{})[b.n]||0)))
     .concat([+(p.bono_total||0), (+p.faltas||0)||"", (+p.tardanzas||0)||"",
-             (+p.calidad||0)||"", (+p.boleta||0)||"", +(p.final||0),
-             p.cesado?"CESADO":""]);
+             (+p.boleta||0)||"", +(p.final||0), p.cesado?"CESADO":""]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,
     XLSX.utils.aoa_to_sheet([cab].concat(filas.map(fila))), "RESUMEN");
@@ -3329,9 +3309,11 @@ function pintarRep(){
     a.op.localeCompare(b.op,"es",{numeric:true}) || a.of.localeCompare(b.of,"es",{numeric:true}));
   const total=filas.reduce((a,x)=>a+x.cant,0);
   $("tablaRepTk").innerHTML =
-    `<thead><tr><th>Operación</th><th>OF</th><th>Cantidad total</th></tr></thead><tbody>`
+    ordThead("tablaRepTk",[{k:"op",t:"Operación",cls:"izq"},{k:"of",t:"OF"},
+      {k:"cant",t:"Cantidad total"}], pintarRep)
+    + "<tbody>"
     + (filas.length
-        ? filas.map(x=>`<tr><td class="izq">${esc(x.op)}</td><td>${esc(x.of)}</td>`
+        ? ordAplicar("tablaRepTk",filas).map(x=>`<tr><td class="izq">${esc(x.op)}</td><td>${esc(x.of)}</td>`
             + `<td class="rep-num">${qty(x.cant)}</td></tr>`).join("")
         : `<tr><td colspan="3"><div class="vacio-msg">Sin tickets activos en la ${etiqueta} operación</div></td></tr>`)
     + `</tbody>`;
@@ -3345,9 +3327,11 @@ function pintarRep(){
   const inci=REP.inci.filter(o=>!area || o.area===area);
   const min=inci.reduce((a,o)=>a+(Number(o.minutos)||0),0);
   $("tablaRepInci").innerHTML =
-    `<thead><tr><th>Personal</th><th>Minutos</th><th>Tipo</th><th>Descripción</th></tr></thead><tbody>`
+    ordThead("tablaRepInci",[{k:"nombre",t:"Personal",cls:"izq"},{k:"minutos",t:"Minutos"},
+      {k:"tipo",t:"Tipo"},{k:"detalle",t:"Descripción",cls:"izq"}], pintarRep)
+    + "<tbody>"
     + (inci.length
-        ? inci.map(o=>{ const m=Number(o.minutos)||0;
+        ? ordAplicar("tablaRepInci",inci).map(o=>{ const m=Number(o.minutos)||0;
             return `<tr><td class="izq">${esc(o.nombre||"")}</td>`
               + `<td class="rep-num" style="color:${m<0?"var(--alerta)":"var(--exito)"}">${m>0?"+":""}${m}</td>`
               + `<td>${esc(TIPO_LBL(o.tipo))}</td><td class="izq">${esc(o.detalle||"")}</td></tr>`;
