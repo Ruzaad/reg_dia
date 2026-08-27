@@ -1116,10 +1116,10 @@ let MOD_GRUPOS=[];
 async function toggleModulo(idx, cerrar){
   const g=MOD_GRUPOS[idx]; if(!g) return;
   const accion = cerrar ? "cerrar" : "liberar";
-  if(!confirm(`¿Deseas ${accion} el módulo "${g.mod}" de la OF ${g.of}?\n`
+  if(!confirm(`¿Deseas ${accion} el módulo "${g.modulo}" de la OF ${g.of}?\n`
     + (cerrar ? "Nadie podrá reclamar sus tickets hasta que lo liberes." : "Se podrán volver a reclamar sus tickets."))) return;
   try{
-    const r=await rpc("fn_modulo_cerrar",{p_dni:ING.dni,p_token:ING.token,p_area:modArea,p_of:g.of,p_modulo:g.mod,p_cerrar:cerrar});
+    const r=await rpc("fn_modulo_cerrar",{p_dni:ING.dni,p_token:ING.token,p_area:modArea,p_of:g.of,p_modulo:g.modulo,p_cerrar:cerrar});
     if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
     await cargarModOF();   // el estado de cerrado viene del servidor
   }catch(e){ mostrarError(e.message); }
@@ -1136,7 +1136,7 @@ function pintarMod(){
   }
   /* Ya viene agrupado del servidor (parche 56): aquí solo se pinta. */
   const mods = (MOD_DATA && MOD_DATA.modulos) || [];
-  MOD_GRUPOS = mods.map(m=>({of:m.of, mod:m.modulo, articulo:m.articulo}));
+  MOD_GRUPOS = mods;   // referencia por índice para cerrar/liberar
   const tks = mods.reduce((a,m)=>a+(m.tks||0),0);
   $("resumenMod").textContent = `${modArea} · ${mods.length} módulo(s) con actividad · ${tks} tickets`;
   if(!mods.length){ $("zonaModulos").innerHTML=`<div class="vacio-msg">Sin tickets activos para esta área/OF</div>`; return; }
@@ -1157,7 +1157,7 @@ function pintarMod(){
     return `<div class="mod-card${cerrado?' mod-cerrado':''}">
       <div class="mod-head-fija">
         <div class="mod-head-top">
-          <div class="mod-nombre">${esc(g.mod)}${cerrado?' <span class="mod-badge-cerrado">CERRADO</span>':''}</div>
+          <div class="mod-nombre">${esc(g.modulo)}${cerrado?' <span class="mod-badge-cerrado">CERRADO</span>':''}</div>
           <button class="btn-mini ${cerrado?'verde':'rojo'}" onclick="toggleModulo(${idx}, ${cerrado?'false':'true'})">${cerrado?'Liberar módulo':'Cerrar módulo'}</button>
         </div>
         <div class="mod-sub">OF ${esc(g.of)} · ${esc(g.articulo)} · ${ops.length} operación(es) · ${g.tks} tickets</div>
