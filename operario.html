@@ -41,8 +41,8 @@
   <section class="pantalla" id="pasoOF">
     <h1>¿En qué OF trabajas?</h1>
     <div class="sub">Escribe los números de la OF</div>
-    <button type="button" class="btn-secundario" id="btnCambiarAreaEst"
-      style="display:none;max-width:300px;margin:0 auto 14px;">CAMBIAR ÁREA</button>
+    <button type="button" class="btn-secundario btn-area-chip" id="btnCambiarAreaEst"
+      style="display:none;">CAMBIAR ÁREA</button>
     <div class="zona-of">
       <input class="input-grande" id="inputOF" inputmode="numeric" placeholder="Ej: 9424" maxlength="6" autocomplete="off">
       <div class="sugerencias" id="sugerenciasOF"></div>
@@ -81,6 +81,8 @@
       <input class="input-grande" id="acabBuscaOF" placeholder="OF o artículo…" autocomplete="off"
         oninput="pintarAcabOF()">
     </div>
+    <button type="button" class="btn-secundario" id="btnMisReg"
+      style="display:none;max-width:300px;margin:14px auto 0;" onclick="abrirMisRegistros()">MIS REGISTROS</button>
     <div class="lista-cards" id="listaAcabOF"></div>
   </section>
 
@@ -129,6 +131,13 @@
     <h1>Mis paquetes</h1>
     <div class="sub">Hoy y ayer. Están todos como completos: ajusta solo el que dejaste a medias.</div>
     <div class="lista-cards" id="listaMisPaq"></div>
+  </section>
+
+  <!-- ACABADO: lo que YO registré, por OF (parche 58) -->
+  <section class="pantalla" id="pasoMisReg">
+    <h1>Mis registros</h1>
+    <div class="sub">Lo que has registrado en esta área, por OF. Toca una OF para ver sus fechas.</div>
+    <div class="lista-cards" id="listaMisReg"></div>
   </section>
 
   <!-- Confirmación -->

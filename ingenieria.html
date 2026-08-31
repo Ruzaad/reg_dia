@@ -245,6 +245,7 @@
         <button id="tkTabActual" class="tab activo" onclick="tkVista('actual')">ACTUAL</button>
         <button id="tkTabOp" class="tab" onclick="tkVista('op')">RECLAMADOS X OPERACIÓN</button>
         <button id="tkTabRep" class="tab" onclick="tkVista('rep')">REPORTE DE HOY</button>
+        <button id="tkTabLib" class="tab" onclick="tkVista('lib')">TICKETS LIBRES</button>
       </div>
 
       <div id="tkActualView">
@@ -325,6 +326,33 @@
             <div class="sub rep-pie" id="repResInci"></div>
           </div>
         </div>
+      </div>
+
+      <!-- Tickets libres: lo que falta reclamar, y asignación (parche 58) -->
+      <div id="tkLibView" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Área</span><select id="libArea"></select></label>
+          <label class="campo"><span>OF</span><input type="text" id="libOf" placeholder="Nº OF…"></label>
+          <label class="campo"><span>Artículo</span><input type="text" id="libArt" placeholder="Artículo…"></label>
+          <button class="btn-mini" onclick="cargarLibres()">Cargar</button>
+          <label class="campo"><span>Buscar</span>
+            <input type="text" id="libBuscar" placeholder="Módulo / operación / numeración…" oninput="pintarLibres()"></label>
+          <label class="campo-check"><input type="checkbox" class="sw" id="libOcultarCerrados" onchange="pintarLibres()"> Ocultar módulos cerrados</label>
+        </div>
+        <div class="kpis" id="libResumen" style="margin-bottom:14px;"></div>
+        <div id="libPorOp" style="margin-bottom:14px;"></div>
+        <div class="barra-control">
+          <span class="sub" style="margin:0;">Seleccionados: <b id="libNSel">0</b></span>
+          <button class="btn-mini gris" onclick="libMarcarVisibles()">Marcar visibles</button>
+          <button class="btn-mini gris" onclick="libLimpiar()">Limpiar</button>
+          <label class="campo"><span>Asignar a</span><select id="libDni"></select></label>
+          <button class="btn-mini verde" onclick="asignarLibres()">Asignar selección</button>
+        </div>
+        <div class="sub rep-pie" id="libAviso"></div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;">
+          <table class="tabla" id="tablaLib"></table>
+        </div>
+        <div class="pager" id="libPager" style="margin-top:8px;"></div>
       </div>
     </section>
 
@@ -860,10 +888,14 @@
       <button class="btn-volver" onclick="irA('pasoAlcance')">← Volver</button>
       <h1>Marca a las personas</h1>
       <div class="sub">Toca para marcar o desmarcar</div>
-      <div class="grid-personal" id="gridPersonalSel"></div>
-      <div style="max-width:560px;margin:14px auto 0;width:100%;">
+      <!-- Botón ARRIBA y buscador propio: con 40 personas el botón quedaba al final
+           de la lista, y el filtro de la pantalla anterior no existe aquí. -->
+      <div class="sel-barra">
         <button class="btn-principal" id="btnContinuarSel" disabled onclick="continuarSeleccion()">CONTINUAR</button>
+        <input class="input-grande" id="filtroNombreSel" placeholder="Buscar por nombre…"
+          autocomplete="off" oninput="pintarPersonal()">
       </div>
+      <div class="grid-personal" id="gridPersonalSel"></div>
     </section>
 
     <section class="pantalla" id="pasoTipo">
@@ -871,7 +903,7 @@
       <h1 id="nombreAfectado"></h1>
       <div class="sub">¿Qué ocurrió?</div>
       <div class="opciones-alcance">
-        <button class="btn-principal" style="background:var(--alerta);" onclick="elegirTipo('MAQUINA')">MÁQUINA PARADA</button>
+        <button class="btn-principal" style="background:var(--alerta);" onclick="elegirTipo('PAGO_HORA')">PAGO DE HORA</button>
         <button class="btn-principal" style="background:var(--exito);" onclick="elegirTipo('HORA_EXTRA')">HORA EXTRA</button>
         <button class="btn-principal" style="background:#b0722a;" onclick="elegirTipo('TARDANZA')">TARDANZA</button>
         <button class="btn-principal" style="background:#5e548e;" onclick="elegirTipo('SEGURO')">SEGURO</button>

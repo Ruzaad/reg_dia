@@ -75,10 +75,60 @@ function colorDe(nombre){
   let h=0; for(let i=0;i<k.length;i++) h=(h*31+k.charCodeAt(i))>>>0;  // desconocido: pastel estable
   return `hsl(${h%360},45%,78%)`;
 }
+/* Fecha de hoy en Lima (YYYY-MM-DD). `ingenieria.js` tiene la suya; supervisora
+   y operario solo cargan app.js, así que la necesitan aquí. */
+const hoyLimaApp = () => new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"});
 const esc = s => String(s).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 /* Solo apellidos: todo lo que va ANTES de la primera coma del registro.
    "PEREZ GOMEZ, JUAN CARLOS" -> "PEREZ GOMEZ". Sin coma, devuelve todo. */
 const soloApellidos = s => String(s==null?"":s).split(",")[0].trim() || String(s||"").trim();
+
+/* ================= NOVEDADES (parche 58) =================
+   Popup al iniciar sesión para ingeniería y supervisora. Hoy solo trae los
+   cambios de área automáticos (quien reclamó en un área distinta y el sistema
+   lo movió), pero el tipo viaja en el dato: cualquier aviso nuevo entra aquí
+   sin tocar el front.
+
+   Se marcan leídas al cerrar, así que no vuelven a salir. Si la RPC falla no se
+   interrumpe el arranque: es un aviso, no un requisito. */
+let NOV=[];
+async function mostrarNovedades(){
+  const s = (typeof sesionActual==="function") ? sesionActual() : null;
+  if(!s) return;
+  try{
+    const r = await rpc("fn_notificaciones_pendientes",{p_dni:s.dni,p_token:s.token});
+    NOV = (r && r.ok) ? (r.items||[]) : [];
+  }catch(e){ NOV=[]; return; }
+  if(!NOV.length) return;
+
+  const porFecha={};
+  NOV.forEach(n=>{ (porFecha[n.fecha]=porFecha[n.fecha]||[]).push(n); });
+  const fechas=Object.keys(porFecha).sort((a,b)=>b.localeCompare(a));
+  abrirModal(
+    `<h2>Novedades (${NOV.length})</h2>`
+    + `<div class="sub" style="margin-bottom:10px;">Movimientos y avisos que no habías visto.</div>`
+    + `<div class="nov-lista">`
+    + fechas.map(f=>`<div class="nov-dia">${esc(f)}</div>`
+        + porFecha[f].map(n=>`<div class="nov-item">
+             <div class="nov-tit">${esc(n.titulo)}</div>
+             <div class="nov-det">${esc(n.detalle||"")}</div>
+             <div class="nov-pie">${esc(n.hora||"")}${n.nombre?" · "+esc(n.nombre):""}</div>
+           </div>`).join("")).join("")
+    + `</div>`
+    + `<div class="modal-acciones">
+         <button class="btn-principal btn-modal-guardar" onclick="cerrarNovedades()">ENTENDIDO</button>
+       </div>`);
+}
+/* Marcar leídas es lo que hace que el popup no vuelva a salir. Si falla, se
+   cierra igual: no se deja al usuario atrapado por un error de red. */
+async function cerrarNovedades(){
+  const s=sesionActual(); const ids=NOV.map(n=>n.id).filter(x=>x!=null);
+  cerrarModal();
+  if(!s || !ids.length) return;
+  try{ await rpc("fn_notificaciones_marcar_leidas",{p_dni:s.dni,p_token:s.token,p_ids:ids}); }
+  catch(e){}
+  NOV=[];
+}
 
 /* ---------------- CAMBIO DE PIN (compartido, todas las vistas) ---------------- */
 function abrirCambioPin(){
@@ -446,7 +496,7 @@ const VOLVER_OPERARIO = {
   pasoModulos:"pasoOF", pasoOps:"pasoModulos",
   pasoTickets:"pasoOps", pasoConf:"pasoTickets",
   pasoAcabPrenda:"pasoAcabOF", pasoAcabOp:"pasoAcabOF",
-  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF"
+  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF", pasoMisReg:"pasoAcabOF"
 };
 
 let sa={signo:-1};
@@ -547,8 +597,11 @@ function aplicarModoAcabado(){
   if(oj) oj.style.display = "";
   if(rl) rl.style.display = "";   // ajuste de tiempo disponible también en ACABADO
   const lblConf=$("confLabel"); if(lblConf) lblConf.textContent = ES_ACABADO ? "Cantidad" : "Numeración";
-  // ACABADO ya no pasa por el almacén ni por "Mis paquetes": registra por cantidad.
+  /* ACABADO no pasa por el almacén, así que "Mis paquetes" no aplica; en su
+     lugar tiene "Mis registros" (parche 58), que vive en la pantalla de OF de
+     Acabado. El botón de costura se oculta igual. */
   const bmp=$("btnMisPaq"); if(bmp) bmp.style.display = ES_ACABADO ? "none" : "";
+  const bmr=$("btnMisReg"); if(bmr) bmr.style.display = ES_ACABADO ? "" : "none";
   window.VOLVER_INICIO = ES_ACABADO ? "pasoAcabOF" : "pasoOF";
 }
 function initOperario(){
@@ -576,9 +629,21 @@ function initOperario(){
   };
   $("inputOF").addEventListener("input", pintarSugerencias);
 
+  /* El operario puede cambiar de área (parche 58: al reclamar allí el servidor
+     lo mueve y avisa), pero por MODAL, no por pantalla (parche 59):
+       · una pantalla menos, que es lo que se pidió;
+       · y sobre todo, `pasoAreaEstajero` no está en VOLVER_MAP, así que el
+         botón atrás desde ahí caía en `onSalirApp` → "¿Cerrar sesión?".
+         `volverAtras` cierra el modal primero, así que el riesgo desaparece.
+     El estajero sí conserva la pantalla: no tiene área propia y es su raíz. */
+  const btnCambiar=$("btnCambiarAreaEst");
+  if(btnCambiar){
+    btnCambiar.style.display="block";
+    btnCambiar.onclick = ()=> (s.cargo==='ESTAJERO')
+      ? (hidratarAreas().then(()=>pintarAreasEstajero(s)), irA("pasoAreaEstajero"))
+      : abrirCambioArea(s);
+  }
   if(s.cargo==='ESTAJERO'){
-    const btnCambiar=$("btnCambiarAreaEst");
-    if(btnCambiar){ btnCambiar.style.display="block"; btnCambiar.onclick=()=>irA("pasoAreaEstajero"); }
     $("tituloArea").textContent = "ESTAJERO";
     irA("pasoAreaEstajero");
     hidratarAreas().then(()=>pintarAreasEstajero(s));
@@ -607,6 +672,36 @@ function confirmarSalir(){
     </div>`);
 }
 
+/* Cambio de área en modal: sin pantalla nueva y sin tocar el paso activo, así
+   que el botón atrás no puede confundirse con cerrar sesión. */
+async function abrirCambioArea(s){
+  abrirModal(`<h2>¿En qué área vas a trabajar?</h2>
+    <div class="sub" style="margin-bottom:10px;">Toca el área. Lo que ya registraste no se pierde.</div>
+    <div class="grid-areas grid-areas-modal" id="gridAreaModal">${cargandoHTML("Cargando áreas…")}</div>
+    <div class="modal-acciones">
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+  await hidratarAreas();
+  const g=$("gridAreaModal"); if(!g) return;   // lo cerró antes de que cargara
+  g.innerHTML="";
+  Object.keys(AREAS).forEach(a=>{
+    const cfg=AREAS[a];
+    if(!cfg.habilitada) return;               // en el modal solo lo elegible
+    const actual = a===(AREA_ESTAJERO||s.area);
+    const c=document.createElement("div");
+    c.className="card-area"+(actual?" propia":"");
+    c.innerHTML=`<div class="ca-nombre">${esc(a)}</div>
+      <div class="ca-sub">${actual?"Estás aquí":"Cambiar"}</div>`;
+    c.onclick=()=>{
+      cerrarModal();
+      if(actual) return;
+      AREA_ESTAJERO = a;
+      $("tituloArea").textContent = a;
+      cargarTodo(s);
+    };
+    g.appendChild(c);
+  });
+}
 function pintarAreasEstajero(s){
   const g=$("gridAreaEstajero"); if(!g) return;
   g.innerHTML="";
@@ -904,9 +999,76 @@ async function acabRegistrar(){
       + (r.hecho!=null ? `<br>Van ${qty(r.hecho)} de ${qty(r.cant_prog)} und` : "");
     mostrarExito();
     { const c=$("acabHistCard"); if(c) c.hidden=true; }
-    await cargarAcabado(s, area);
+    /* Antes esto llamaba a `cargarAcabado`, que termina en `irA("pasoAcabOF")`:
+       registrar una operación devolvía a la lista de OF y había que volver a
+       entrar. Se recargan los datos y se vuelve a la LISTA DE OPERACIONES,
+       que es donde estaba. */
+    await refrescarAcabado(s, area, ACAB.tipo ? "extra" : "ops");
   }catch(e){ mostrarError(e.message); }
   finally{ if(btn){ btn.disabled=false; btn.textContent="REGISTRAR"; } }
+}
+
+/* ================= ACABADO · MIS REGISTROS (parche 58) =================
+   Lo que ESTA persona registró en el área, agrupado por OF. Al tocar una OF se
+   abre su detalle por fecha, que ya viene en el mismo JSON (la lista es corta y
+   ahorra un viaje). Solo lo propio: lo del área lo ve supervisión. */
+let MISREG={ofs:[]}, MISREG_ABIERTA="";
+async function abrirMisRegistros(){
+  const s=sesionActual(); if(!s) return;
+  const area=AREA_ESTAJERO||s.area;
+  $("listaMisReg").innerHTML=cargandoHTML("Cargando…");
+  irA("pasoMisReg");
+  await cargarMisRegistros();
+}
+async function cargarMisRegistros(){
+  const s=sesionActual(); if(!s) return;
+  const area=AREA_ESTAJERO||s.area;
+  try{
+    const r=await rpc("fn_acabado_mis_registros",{p_dni:s.dni,p_token:s.token,p_area:area});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); MISREG={ofs:[]}; }
+    else MISREG={ofs:r.ofs||[]};
+    pintarMisReg();
+  }catch(e){ $("listaMisReg").innerHTML=""; mostrarError(e.message); }
+}
+function misRegToggle(of){
+  MISREG_ABIERTA = (MISREG_ABIERTA===of ? "" : of);
+  pintarMisReg();
+}
+function pintarMisReg(){
+  const l=$("listaMisReg"); if(!l) return;
+  const ofs=MISREG.ofs||[];
+  if(!ofs.length){
+    l.innerHTML=`<div class="vacio-msg">Todavía no has registrado nada en esta área.</div>`;
+    return;
+  }
+  const tot=ofs.reduce((a,o)=>a+(+o.cant||0),0);
+  const min=ofs.reduce((a,o)=>a+(+o.minutos||0),0);
+  l.innerHTML =
+    `<div class="mr-resumen">${ofs.length} OF · <b>${qty(tot)} und</b> · ${Math.round(min)} min</div>`
+    + ofs.map(o=>{
+      const abierta = MISREG_ABIERTA===o.of;
+      /* Los datos vienen de la BD: van por esc() y en atributos de comilla
+         doble — esc() no escapa la comilla simple. */
+      const cab=`<div class="card-fila mr-of${abierta?" abierta":""}" onclick="misRegToggle(&quot;${esc(o.of)}&quot;)">
+          <div style="flex:1;min-width:0;">
+            <div class="cf-titulo">OF ${esc(o.of)} · ${esc(o.articulo||"—")}</div>
+            <div class="cf-detalle">${o.registros} registro(s) · ${esc(o.desde||"")} a ${esc(o.hasta||"")}</div>
+          </div>
+          <div class="mr-cant"><b>${qty(o.cant)}</b> und<div class="mr-min">${Math.round(o.minutos)} min</div></div>
+          <div class="mr-car">${abierta?"▴":"▾"}</div>
+        </div>`;
+      if(!abierta) return cab;
+      const ops=(o.ops||[]).map(x=>`<div class="mr-fila">
+          <span class="mr-txt">${esc(x.op)}</span>
+          <span class="mr-n">${qty(x.cant)} und</span></div>`).join("");
+      const dias=(o.dias||[]).map(d=>`<div class="mr-fila">
+          <span class="mr-txt"><b>${esc(d.fecha)}</b><br><small>${esc(d.ops||"")}</small></span>
+          <span class="mr-n">${qty(d.cant)} und</span></div>`).join("");
+      return cab + `<div class="mr-det">
+          <div class="mr-det-tit">Por operación</div>${ops}
+          <div class="mr-det-tit">Por fecha</div>${dias}
+        </div>`;
+    }).join("");
 }
 
 /* ================= MIS PAQUETES (costura) =================
@@ -1018,6 +1180,33 @@ async function refrescarMetasAcabado(){
     setMetasAcabado(m, dia);
   }catch(e){}
 }
+/* Recarga los datos de Acabado conservando dónde estaba el operario.
+   `volverA`: "ops" (lista de operaciones de la OF), "extra" (trabajo sin OF) o
+   null (se queda donde está). Lo comparten el registro y el botón ↻. */
+async function refrescarAcabado(s, area, volverA){
+  const ofAnt=ACAB.of&&ACAB.of.of, opAnt=ACAB.op&&ACAB.op.n_op, prAnt=ACAB.prenda;
+  const [ofs, extra, dia, midia] = await Promise.all([
+    rpc("fn_acabado_ofs",{p_dni:s.dni,p_token:s.token,p_area:area}),
+    rpc("fn_extra_listar",{p_dni:s.dni,p_token:s.token,p_area:area,p_todas:false}).catch(()=>[]),
+    rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area}),
+    rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token}).catch(()=>null)
+  ]);
+  if(ofs && ofs.ok===false) throw new Error(ofs.error||"No se pudieron cargar las OF");
+  ACAB.ofs=(ofs&&ofs.items)||[];
+  ACAB.extra=Array.isArray(extra)?extra:[];
+  setMetasAcabado(dia, midia);
+  ACAB.of = ofAnt ? (ACAB.ofs.find(x=>normKey(x.of)===normKey(ofAnt)) || null) : null;
+  ACAB.prenda = ACAB.of && (ACAB.of.prendas||[]).includes(prAnt) ? prAnt : ACAB.prenda;
+  ACAB.op = (ACAB.of && opAnt!=null)
+    ? ((ACAB.of.operaciones||[]).find(x=>Number(x.n_op)===Number(opAnt)) || null) : null;
+  if(volverA==="extra"){ pintarAcabExtra(); irA("pasoAcabOp"); return; }
+  if(volverA==="ops"){
+    /* Si la OF desapareció (se completó o se dio de baja) no hay lista a la que
+       volver: se cae a la de OF, que es lo honesto. */
+    if(ACAB.of){ pintarAcabOps(); irA("pasoAcabOp"); }
+    else { pintarAcabOF(); irA("pasoAcabOF"); }
+  }
+}
 async function recargarMiEficiencia(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   const b=$("btnRecargar"); if(b) b.classList.add("girando");
@@ -1028,22 +1217,10 @@ async function recargarMiEficiencia(){
          operación nueva en la BASE) y lo ya registrado por otros. Se recarga
          eso, conservando dónde está el operario. */
       const area=AREA_ESTAJERO||s.area;
-      const ofAnt=ACAB.of&&ACAB.of.of, opAnt=ACAB.op&&ACAB.op.n_op, prAnt=ACAB.prenda;
-      const [ofs, extra, dia, midia] = await Promise.all([
-        rpc("fn_acabado_ofs",{p_dni:s.dni,p_token:s.token,p_area:area}),
-        rpc("fn_extra_listar",{p_dni:s.dni,p_token:s.token,p_area:area,p_todas:false}).catch(()=>[]),
-        rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area}),
-        rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token}).catch(()=>null)
-      ]);
-      if(ofs && ofs.ok===false) throw new Error(ofs.error||"No se pudieron cargar las OF");
-      ACAB.ofs=(ofs&&ofs.items)||[];
-      ACAB.extra=Array.isArray(extra)?extra:[];
-      setMetasAcabado(dia, midia);
-      // Reengancha la OF y la operación donde estaba, ya con los datos nuevos.
-      ACAB.of = ofAnt ? (ACAB.ofs.find(x=>normKey(x.of)===normKey(ofAnt)) || null) : null;
-      ACAB.prenda = ACAB.of && (ACAB.of.prendas||[]).includes(prAnt) ? prAnt : ACAB.prenda;
-      ACAB.op = (ACAB.of && opAnt!=null)
-        ? ((ACAB.of.operaciones||[]).find(x=>Number(x.n_op)===Number(opAnt)) || null) : null;
+      /* Mis registros tiene su propia fuente: si el operario está ahí, se
+         recarga eso y no la ruta de OF (parche 58). */
+      if(act==="pasoMisReg"){ await cargarMisRegistros(); return; }
+      await refrescarAcabado(s, area, null);   // recarga y reengancha, sin mover de pantalla
       if(act==="pasoAcabOF") pintarAcabOF();
       else if(act==="pasoAcabPrenda") pintarAcabPrendas();
       else if(act==="pasoAcabOp"){ if(ACAB.of) pintarAcabOps(); else pintarAcabExtra(); }
@@ -1568,6 +1745,7 @@ function initSupervisora(){
   if(s.cargo!=="SUPERVISORA" && !(s.cargo==="INGENIERIA" && desdeIng)){
     location.href = destinoPorCargo(s.cargo); return; }
   SUP_AREA_OVERRIDE=null;
+  mostrarNovedades();   // parche 58: novedades del área al entrar
   $("tituloArea").textContent = s.area + " · Supervisión";
   $("quienBadge").textContent = s.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
@@ -1863,7 +2041,11 @@ function dispPersona(p){
   return `${p.disp} min`;
 }
 function pintarPersonal(){
-  const q = normKey($("filtroNombre").value);
+  /* Cada pantalla tiene su buscador: el de selección múltiple no existía y
+     `pintarPersonal` leía el de la pantalla anterior, así que ahí no se podía
+     filtrar (parche 59). */
+  const inp = oc.multiple ? $("filtroNombreSel") : $("filtroNombre");
+  const q = normKey((inp||{}).value||"");
   const g = oc.multiple ? $("gridPersonalSel") : $("gridPersonal");
   g.innerHTML="";
   const lista = (q.length>=3)
@@ -1906,19 +2088,37 @@ function actualizarBtnContinuar(){
 /* --- selección de tipo --- */
 const TIPOS_MOTIVO = ["OTROS"];              // los únicos que aún piden texto libre
 const TIPOS_SALIDA = ["SEGURO","PERMISO"];   // se registran por hora de salida/retorno
+/* Tipos que se capturan en HORAS con el stepper de 1 h. PAGO_HORA resta (son
+   horas pagadas en las que no pudo producir, como la máquina parada del
+   operario); HORA_EXTRA suma. La supervisora ya no pone MÁQUINA PARADA: ese
+   tipo sigue vivo para el operario y para el histórico (parche 59). */
+const TIPOS_HORAS  = ["HORA_EXTRA","PAGO_HORA"];
+/* Etiqueta visible del tipo. `MAQUINA` sigue siendo MÁQUINA PARADA: es lo que
+   pone el operario y lo que hay en el histórico. */
+const TIPO_OC_NOMBRE = {MAQUINA:"MÁQUINA PARADA", PAGO_HORA:"PAGO DE HORA"};
+const TIPO_OC_LBL = t => TIPO_OC_NOMBRE[String(t||"").trim().toUpperCase()]
+                      || String(t||"—").replace(/_/g," ");
+/* Tipos en los que la supervisora elige el día al que aplica. */
+const TIPOS_FECHA  = ["HORA_EXTRA","PAGO_HORA"];
 function elegirTipo(tipo){
   oc.tipo=tipo; oc.minutos=0;
   $("zonaMotivo").style.display = TIPOS_MOTIVO.includes(tipo) ? "block" : "none";
   if($("inputMotivo")) $("inputMotivo").value="";
   const esSalida = TIPOS_SALIDA.includes(tipo);
-  $("zonaSalida").style.display  = esSalida ? "block" : "none";
-  $("zonaTardanza").style.display = tipo==="TARDANZA" ? "block" : "none";
+  /* El panel embebido de ingeniería no tiene todas las zonas (el flujo real
+     redirige a supervisora.html): sin la guarda, esto lanzaba TypeError. */
+  const mostrar=(id,ok)=>{ const e=$(id); if(e) e.style.display = ok ? "block" : "none"; };
+  mostrar("zonaSalida", esSalida);
+  mostrar("zonaTardanza", tipo==="TARDANZA");
+  mostrar("zonaFechaOc", TIPOS_FECHA.includes(tipo));
+  { const f=$("ocFecha"); if(f && !f.value) f.value = hoyLimaApp(); }
 
   if(esSalida){
     // Sin minutos: se deducen de la hora de salida y la de retorno.
     $("tituloMin").textContent = tipo==="SEGURO" ? "Salida al seguro" : "Permiso";
     $("subMin").textContent = "Indica desde qué hora salió y si vuelve a planta";
-    $("zonaStepper").style.display="none"; $("zonaMinutos").style.display="none";
+    { const e=$("zonaStepper"); if(e) e.style.display="none"; }
+    { const e=$("zonaMinutos"); if(e) e.style.display="none"; }
     ["ocSalida","ocRetorno"].forEach(id=>{ if($(id)) $(id).value=""; });
     if($("ocNoRetorna")) $("ocNoRetorna").checked=false;
     ocCalcSalida();
@@ -1932,10 +2132,15 @@ function elegirTipo(tipo){
     $("zonaStepper").style.display="none"; $("zonaMinutos").style.display="none";
     irA("pasoMinutos"); return;
   }
-  if(tipo==="HORA_EXTRA"){
+  if(TIPOS_HORAS.includes(tipo)){
+    /* Se capturan en HORAS con el stepper de 1 h. La fecha es elegible: una
+       hora extra o un pago de horas casi nunca se registra el mismo día. */
     oc.horas=1;
-    $("tituloMin").textContent="Horas extra";
-    $("subMin").textContent="Cada hora suma 60 minutos disponibles";
+    const suma = tipo==="HORA_EXTRA";
+    $("tituloMin").textContent = suma ? "Horas extra" : "Pago de hora";
+    $("subMin").textContent = suma
+      ? "Cada hora suma 60 minutos disponibles"
+      : "Cada hora resta 60 minutos disponibles: son horas pagadas en las que no pudo producir";
     $("zonaStepper").style.display="flex"; $("zonaMinutos").style.display="none";
     $("valorStepper").textContent="1 h";
   } else {
@@ -2025,6 +2230,7 @@ async function confirmarOcurrencia(){
   let minutos;
   if(oc.tipo==="TARDANZA") minutos = -60;                 // siempre 1 hora
   else if(oc.tipo==="HORA_EXTRA") minutos = oc.horas*60;
+  else if(oc.tipo==="PAGO_HORA")  minutos = -(oc.horas*60);  // resta, como la máquina parada
   else {
     const v=parseInt($("inputMinutos").value,10);
     if(!v || v<=0){ mostrarError("Ingresa los minutos"); return; }
@@ -2035,13 +2241,17 @@ async function confirmarOcurrencia(){
   // La supervisora YA NO registra minutos directamente: crea una solicitud que
   // aprueba únicamente Ingeniería. Ingeniería (operar como) sigue registrando directo.
   const esSupervisora = s.cargo === "SUPERVISORA";
+  /* HORA EXTRA y PAGO DE HORA se registran casi nunca el mismo día: la fecha
+     elegida manda (parche 59). El resto aplica hoy, como siempre. */
+  const fechaOc = TIPOS_FECHA.includes(oc.tipo)
+    ? ((($("ocFecha")||{}).value||"").trim() || null) : null;
   const btn=$("btnGuardarOc"); btn.disabled=true; btn.textContent=esSupervisora?"ENVIANDO…":"GUARDANDO…";
   try{
     const r = esSupervisora
       ? await rpc("fn_solicitud_ocurrencia_crear",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),
-          p_tipo:oc.tipo,p_minutos:minutos,p_detalle:motivo,p_dnis:oc.dnis})
+          p_tipo:oc.tipo,p_minutos:minutos,p_detalle:motivo,p_dnis:oc.dnis,p_fecha:fechaOc})
       : await rpc("fn_ocurrencia",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),
-          p_tipo:oc.tipo,p_minutos:minutos,p_detalle:(motivo||oc.tipo),p_dnis:oc.dnis});
+          p_tipo:oc.tipo,p_minutos:minutos,p_detalle:(motivo||oc.tipo),p_dnis:oc.dnis,p_fecha:fechaOc});
     btn.disabled=false; btn.textContent="GUARDAR";
     if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); return; }
     const afectados = esSupervisora ? r.solicitadas : r.afectados;
@@ -2051,9 +2261,10 @@ async function confirmarOcurrencia(){
     const avisoOm = om.length
       ? `<br><small style="color:var(--alerta)">Sin actividad hoy, no se les aplicó: ${esc(om.join(" · "))}</small>` : "";
     $("exTitulo").textContent = esSupervisora ? "Solicitud enviada" : "Registrado";
+    const diaTxt = (fechaOc && fechaOc!==hoyLimaApp()) ? ` · aplica el ${esc(fechaOc)}` : "";
     $("exDetalle").innerHTML = (esSupervisora
-      ? `${oc.tipo.replace("_"," ")} · <b>${minutos>0?"+":""}${minutos} min</b> · ${afectados} persona(s)<br><small>Pendiente de aprobación de Ingeniería</small>`
-      : `${oc.tipo.replace("_"," ")} · <b>${minutos>0?"+":""}${minutos} min</b> · ${afectados} persona(s)`) + avisoOm;
+      ? `${TIPO_OC_LBL(oc.tipo)} · <b>${minutos>0?"+":""}${minutos} min</b>${diaTxt} · ${afectados} persona(s)<br><small>Pendiente de aprobación de Ingeniería</small>`
+      : `${TIPO_OC_LBL(oc.tipo)} · <b>${minutos>0?"+":""}${minutos} min</b>${diaTxt} · ${afectados} persona(s)`) + avisoOm;
     $("exAvance").textContent="";
     const ex=$("exito"); ex.classList.add("visible");
     setTimeout(async ()=>{
@@ -2082,6 +2293,7 @@ function alcanceTodos(){
 }
 function alcanceAlgunos(){
   oc.dnis=[]; oc.multiple=true;
+  { const i=$("filtroNombreSel"); if(i) i.value=""; }
   actualizarBtnContinuar();
   pintarPersonal();
   irA("pasoSeleccion");

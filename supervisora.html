@@ -76,10 +76,14 @@
     <button class="btn-volver" onclick="irA('pasoAlcance')">← Volver</button>
     <h1>Marca a las personas</h1>
     <div class="sub">Toca para marcar o desmarcar</div>
-    <div class="grid-personal" id="gridPersonalSel"></div>
-    <div style="max-width:560px;margin:14px auto 0;width:100%;">
+    <!-- Botón ARRIBA y buscador propio: con 40 personas el botón quedaba al final
+         de la lista, y el filtro de la pantalla anterior no existe aquí. -->
+    <div class="sel-barra">
       <button class="btn-principal" id="btnContinuarSel" disabled onclick="continuarSeleccion()">CONTINUAR</button>
+      <input class="input-grande" id="filtroNombreSel" placeholder="Buscar por nombre…"
+        autocomplete="off" oninput="pintarPersonal()">
     </div>
+    <div class="grid-personal" id="gridPersonalSel"></div>
   </section>
 
   <!-- Tipo de ocurrencia -->
@@ -88,7 +92,7 @@
     <h1 id="nombreAfectado"></h1>
     <div class="sub">¿Qué ocurrió?</div>
     <div class="opciones-alcance">
-      <button class="btn-principal" style="background:var(--alerta);" onclick="elegirTipo('MAQUINA')">MÁQUINA PARADA</button>
+      <button class="btn-principal" style="background:var(--alerta);" onclick="elegirTipo('PAGO_HORA')">PAGO DE HORA</button>
       <button class="btn-principal" style="background:var(--exito);" onclick="elegirTipo('HORA_EXTRA')">HORA EXTRA</button>
       <button class="btn-principal" style="background:#b0722a;" onclick="elegirTipo('TARDANZA')">TARDANZA</button>
       <button class="btn-principal" style="background:#5e548e;" onclick="elegirTipo('SEGURO')">SEGURO</button>
@@ -138,6 +142,13 @@
         <input type="checkbox" class="sw" id="ocNoRetorna" onchange="ocCalcSalida()"> No retorna a planta
       </label>
       <div class="cf-detalle" id="ocSalidaCalc" style="margin-top:10px;font-size:16px;"></div>
+    </div>
+
+    <!-- HORA EXTRA / PAGO DE HORA: el día al que aplica (parche 59) -->
+    <div class="zona-of" id="zonaFechaOc" style="display:none;margin-top:12px;">
+      <div class="campo-label">Día al que aplica</div>
+      <input class="input-grande" type="date" id="ocFecha"
+             style="font-size:22px;letter-spacing:normal;">
     </div>
 
     <!-- TARDANZA: solo confirmar -->

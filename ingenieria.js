@@ -71,6 +71,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   // Landing: sección del hash si es válida; si no, Tickets · Actual.
   const hashTab=(location.hash||"").replace(/^#/,"");
   activarTab(NAV_TABS.includes(hashTab) ? hashTab : "pasoTk");
+  mostrarNovedades();   // parche 58: cambios de área y avisos sin leer
 });
 
 /* Comparador único de las tablas ordenables.
@@ -2845,14 +2846,17 @@ async function liberarTicket(i){
 let TKOP={items:[],of:"",area:"",_rows:[]}, tkOpSort={col:null,dir:1}, tkOpMarc={}, tkOpPag=1;
 const TKOP_PAGE=10;
 function tkVista(v){
-  const op=v==="op", rep=v==="rep", act=!op&&!rep;
-  $("tkActualView").hidden=!act; $("tkOpView").hidden=!op; $("tkRepView").hidden=!rep;
+  const op=v==="op", rep=v==="rep", lib=v==="lib", act=!op&&!rep&&!lib;
+  $("tkActualView").hidden=!act; $("tkOpView").hidden=!op;
+  $("tkRepView").hidden=!rep;   $("tkLibView").hidden=!lib;
   $("tkTabActual").classList.toggle("activo",act);
   $("tkTabOp").classList.toggle("activo",op);
   $("tkTabRep").classList.toggle("activo",rep);
+  $("tkTabLib").classList.toggle("activo",lib);
   if(op){ const s=$("tkOpArea"); if(s && !s.value && s.options.length<=1)
     s.innerHTML=`<option value="">— Elige área —</option>`+(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join(""); }
   if(rep) repInit();
+  if(lib) libInit();
 }
 async function cargarTkOp(){
   const area=$("tkOpArea").value, of=$("tkOpOf").value.trim();
@@ -3239,6 +3243,156 @@ async function descargarInc(){
       "TABLA DE INC.");
   }
   XLSX.writeFile(wb, "BONIFICACION_"+INC.desde+"_"+INC.hasta+".xlsx");
+}
+
+/* ================= TICKETS LIBRES (parche 58) =================
+   Lo que falta reclamar en un área: el dato completo del ticket, agrupado
+   arriba por módulo y operación, y la posibilidad de asignárselos a un
+   operario. Solo cubre las OF derivadas (`of_generada`, parche 29); las
+   anteriores viven en el Sheet del ALMACÉN y el servidor no las ve. */
+let LIB={items:[],resumen:[]}, libSelCodes={}, libPag=1;
+const LIB_PAGE=100;
+
+function libInit(){
+  const sa=$("libArea");
+  if(sa && sa.options.length<=1){
+    sa.innerHTML=`<option value="">— Elige área —</option>`
+      +(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+    sa.onchange=()=>{ LIB={items:[],resumen:[]}; libSelCodes={}; cargarLibresPersonal(); pintarLibres(); };
+  }
+}
+/* El select de destino se llena con el personal del área elegida: asignar a
+   alguien de otra área lo movería de área (trigger del parche 58) y eso no
+   debería pasar por descuido. */
+async function cargarLibresPersonal(){
+  const sel=$("libDni"); if(!sel) return;
+  const area=($("libArea")||{}).value||"";
+  if(!area){ sel.innerHTML=`<option value="">— Elige área —</option>`; return; }
+  sel.innerHTML=`<option value="">Cargando…</option>`;
+  try{
+    const r=await rpc("fn_personal",{p_dni:ING.dni,p_token:ING.token,p_area:area});
+    const lista=Array.isArray(r)?r:[];
+    sel.innerHTML=`<option value="">— Elige persona —</option>`
+      + lista.map(p=>`<option value="${esc(p.dni)}"${p.ausente?" disabled":""}>`
+          + `${esc(soloApellidos(p.nombre))}${p.ausente?" · "+esc(p.estado_dia||"no activo"):""}</option>`).join("");
+  }catch(e){ sel.innerHTML=`<option value="">Error al cargar</option>`; }
+}
+async function cargarLibres(){
+  const area=($("libArea")||{}).value||"";
+  if(!area){ mostrarError("Elige el área"); return; }
+  $("tablaLib").innerHTML=cargandoHTML("Buscando lo que falta reclamar…");
+  $("libResumen").innerHTML=""; $("libPorOp").innerHTML="";
+  libSelCodes={}; libPag=1;
+  try{
+    const r=await rpc("fn_tickets_libres",{p_dni:ING.dni,p_token:ING.token,
+      p_area:area, p_of:(($("libOf")||{}).value||"").trim(),
+      p_articulo:(($("libArt")||{}).value||"").trim()});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); LIB={items:[],resumen:[]}; }
+    else LIB={items:r.items||[], resumen:r.resumen||[]};
+    await cargarLibresPersonal();
+    pintarLibres();
+  }catch(e){ $("tablaLib").innerHTML=""; mostrarError(e.message); }
+}
+function libFiltrados(){
+  const q=normKey(($("libBuscar")||{}).value||"");
+  const ocultar=!!($("libOcultarCerrados")||{}).checked;
+  return (LIB.items||[]).filter(t=>
+    (!ocultar || !t.cerrado) &&
+    (!q || normKey(`${t.modulo} ${t.op} ${t.of} ${t.articulo} ${t.num} ${t.codigo}`).includes(q)));
+}
+function libNSelUpd(){
+  const n=Object.keys(libSelCodes).length;
+  const e=$("libNSel"); if(e) e.textContent=n;
+}
+function libToggle(cod){
+  if(libSelCodes[cod]) delete libSelCodes[cod]; else libSelCodes[cod]=true;
+  libNSelUpd(); pintarLibres();
+}
+/* Marca lo VISIBLE, no todo: con un filtro puesto, marcar los 900 tickets del
+   área sería la clase de sorpresa que asigna trabajo a quien no debía. */
+function libMarcarVisibles(){
+  const vis=libFiltrados().filter(t=>!t.cerrado);
+  const faltan=vis.some(t=>!libSelCodes[t.codigo]);
+  vis.forEach(t=>{ if(faltan) libSelCodes[t.codigo]=true; else delete libSelCodes[t.codigo]; });
+  libNSelUpd(); pintarLibres();
+}
+function libLimpiar(){ libSelCodes={}; libNSelUpd(); pintarLibres(); }
+function libPagina(d){ libPag+=d; pintarLibres(); }
+
+function pintarLibres(){
+  const lista=libFiltrados();
+  const cerrados=(LIB.items||[]).filter(t=>t.cerrado).length;
+  const und=lista.reduce((a,t)=>a+(+t.cant||0),0);
+  const min=lista.reduce((a,t)=>a+(+t.minutos||0),0);
+  const kpi=(t,v,c,sub)=>`<div class="kpi"><div class="kpi-num" style="color:${c}">${v}</div>`
+    +`<div class="kpi-lbl">${t}${sub?"<b>"+esc(sub)+"</b>":""}</div></div>`;
+  $("libResumen").innerHTML =
+    kpi("Tickets libres", lista.length, "var(--azul)")+
+    kpi("Unidades", qty(und), "var(--azul)")+
+    kpi("Minutos", Math.round(min), "var(--azul)")+
+    kpi("Operaciones", (LIB.resumen||[]).length, "var(--azul)")+
+    (cerrados?kpi("En módulo cerrado", cerrados, "var(--alerta)", "no se pueden reclamar"):"");
+  $("libAviso").textContent = (LIB.items||[]).length
+    ? "Solo se listan las OF generadas por el sistema; las anteriores viven en el ALMACÉN del Sheet."
+    : "";
+
+  /* Resumen por módulo y operación: es la lectura que pide el analista antes de
+     bajar al ticket suelto. */
+  const res=(LIB.resumen||[]);
+  $("libPorOp").innerHTML = res.length ? `<div class="mot-caja">
+      <div class="tk-ops-title">Falta reclamar · por módulo y operación</div>
+      <div class="mot-chips">${res.map(x=>`<span class="mot-chip neg">
+        <b>${esc(x.modulo)} · ${esc(x.op)}</b>
+        <span class="mot-n">${x.tickets}</span>
+        <span class="mot-min">${qty(x.cant)} und</span></span>`).join("")}</div></div>` : "";
+
+  const COLS=[{t:""},{k:"of",t:"OF"},{k:"articulo",t:"Artículo",cls:"izq"},
+    {k:"modulo",t:"Módulo",cls:"izq"},{k:"nop",t:"N°OP"},{k:"op",t:"Operación",cls:"izq"},
+    {k:"num",t:"Numeración"},{k:"corte",t:"Paq."},{k:"talla",t:"Talla"},{k:"color",t:"Color"},
+    {k:"cant",t:"Cant"},{k:"std",t:"STD"},{k:"minutos",t:"Min"},{k:"codigo",t:"Código"}];
+  const orden=ordAplicar("tablaLib", lista);
+  const tot=Math.max(1, Math.ceil(orden.length/LIB_PAGE));
+  libPag=Math.min(Math.max(1,libPag),tot);
+  const pag=orden.slice((libPag-1)*LIB_PAGE, libPag*LIB_PAGE);
+  const body = pag.length ? pag.map(t=>`<tr class="${t.cerrado?"lib-cerrado":""}">
+      <td>${t.cerrado
+        ? '<span class="lib-lock" title="Módulo cerrado por ingeniería">🔒</span>'
+        : `<input type="checkbox" class="lib-chk"${libSelCodes[t.codigo]?" checked":""} onchange="libToggle(&quot;${esc(t.codigo)}&quot;)">`}</td>
+      <td>${esc(t.of)}</td><td class="izq">${esc(t.articulo||"")}</td>
+      <td class="izq">${esc(t.modulo||"")}</td><td>${t.nop==null?"—":t.nop}</td>
+      <td class="izq">${esc(t.op||"")}</td>
+      <td>${esc(t.num||"")}</td><td>${esc(t.corte||"")}</td>
+      <td>${esc(t.talla||"")}</td><td>${esc(t.color||"")}</td>
+      <td><b>${qty(t.cant)}</b></td><td>${Number(t.std||0).toFixed(2)}</td>
+      <td>${Math.round(t.minutos||0)}</td>
+      <td class="lib-cod">${esc(t.codigo)}</td></tr>`).join("")
+    : `<tr><td colspan="${COLS.length}"><div class="vacio-msg">${(LIB.items||[]).length?"Nada con ese filtro":"No hay tickets libres con estos filtros"}</div></td></tr>`;
+  $("tablaLib").innerHTML = ordThead("tablaLib", COLS, pintarLibres) + "<tbody>"+body+"</tbody>";
+  $("libPager").innerHTML = orden.length>LIB_PAGE
+    ? `<button class="btn-mini" ${libPag<=1?"disabled":""} onclick="libPagina(-1)">‹ Anterior</button>
+       <span class="sub" style="margin:0 8px;">${libPag}/${tot} · ${orden.length} ticket(s)</span>
+       <button class="btn-mini" ${libPag>=tot?"disabled":""} onclick="libPagina(1)">Siguiente ›</button>` : "";
+  libNSelUpd();
+}
+async function asignarLibres(){
+  const area=($("libArea")||{}).value||"", dni=($("libDni")||{}).value||"";
+  const codigos=Object.keys(libSelCodes);
+  if(!area){ mostrarError("Elige el área"); return; }
+  if(!dni){ mostrarError("Elige a quién asignarle"); return; }
+  if(!codigos.length){ mostrarError("No hay tickets seleccionados"); return; }
+  const nom=(($("libDni").selectedOptions||[])[0]||{}).textContent||dni;
+  if(!confirm(`¿Asignar ${codigos.length} ticket(s) a ${nom.trim()}?\n`
+    + `Quedan reclamados a su nombre. Si es de otra área, pasará a ${area} y se notificará.`)) return;
+  try{
+    const r=await rpc("fn_asignar_tickets",{p_dni:ING.dni,p_token:ING.token,
+      p_area:area, p_dni_op:dni, p_codigos:codigos});
+    if(!r.ok){ mostrarError(r.error||"No se pudo asignar"); return; }
+    const om=(r.omitidos||[]);
+    mostrarOk(`${r.asignados} ticket(s) asignados a ${nom.trim()}`
+      + (om.length?` · no se pudo con ${om.length}: ${om.join(", ")}`:""));
+    libSelCodes={};
+    await cargarLibres();
+  }catch(e){ mostrarError(e.message); }
 }
 
 /* ================= REPORTE DE HOY =================
@@ -3803,10 +3957,13 @@ async function confirmarSubida(){
 /* Catálogo de tipos de ocurrencia (espejo del CHECK ocurrencias_tipo_check).
    ARREGLOS…DESCOSER son los que pide el operario desde su cuadro de descuento
    (parche 52): antes llegaban como OTROS con el motivo en el detalle. */
-const TIPOS_OC = ["MAQUINA","HORA_EXTRA","TARDANZA","SEGURO","PERMISO",
+const TIPOS_OC = ["MAQUINA","HORA_EXTRA","PAGO_HORA","TARDANZA","SEGURO","PERMISO",
                   "ARREGLOS","MUESTRAS","REPROCESOS","DESCOSER","OTROS"];
 /* Nombre visible del tipo: el operario ve "MÁQUINA PARADA", no "MAQUINA". */
-const TIPO_NOMBRE={MAQUINA:"MÁQUINA PARADA"};
+/* `MAQUINA` es lo que pide el operario y lo que hay en el histórico;
+   `PAGO_HORA` es lo que registra la supervisora desde el parche 59. Son dos
+   cosas distintas y se ven distintas. */
+const TIPO_NOMBRE={MAQUINA:"MÁQUINA PARADA", PAGO_HORA:"PAGO DE HORA"};
 const TIPO_LBL = t => TIPO_NOMBRE[String(t||"").trim().toUpperCase()]
                    || String(t||"—").replace(/_/g," ");
 const hoyLima = ()=> new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"});
