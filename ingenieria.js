@@ -1458,13 +1458,17 @@ async function cargarEstadosAsis(){
 }
 
 /* ================= MODAL genérico ================= */
-function abrirModal(html){
-  $("modalBox").innerHTML = html;
+/* `cls` deja pedir una caja distinta a la de 520px (ver .modal-ancho): un
+   modal con tabla de operaciones no cabe en el ancho de un formulario. */
+function abrirModal(html, cls){
+  const b=$("modalBox");
+  b.className = "modal-box" + (cls?" "+cls:"");
+  b.innerHTML = html;
   $("modalOverlay").classList.add("visible");
 }
 function cerrarModal(){
   $("modalOverlay").classList.remove("visible");
-  $("modalBox").innerHTML = "";
+  const b=$("modalBox"); b.className="modal-box"; b.innerHTML = "";
 }
 
 /* ---- Modal: crear / editar personal ---- */
@@ -2649,7 +2653,7 @@ function descargarAvof(){
 let TK=[], TK_VISTA=[], BASES_CACHE={};
 let tkSort={col:null,dir:1};
 let tkArea="";                 // filtro de área activo (select); "" = todas
-let modoLibTk=false, libSel={}; // modo liberar en lote + códigos marcados
+let modoLibTk=false, libSel={}; // modo liberar en lote + ids de reclamo marcados
 let tkPag=1; const TK_PAGE=100; // paginación de la tabla (100 por página)
 const TK_COLS=[
   {k:"hora",t:"Hora"},{k:"nombre",t:"Nombre"},{k:"area",t:"Área"},{k:"articulo",t:"Artículo"},
@@ -2701,8 +2705,12 @@ function toggleModoLiberar(){
   if(bv) bv.style.display = modoLibTk ? "inline-block" : "none";
   pintarTk();
 }
-function toggleLibSel(codigo){
-  if(libSel[codigo]) delete libSel[codigo]; else libSel[codigo]=true;
+/* La selección va por `id` de reclamo, no por código: Acabado y el trabajo
+   sin OF tienen `codigo = NULL` (parche 27) y todos colapsaban en la misma
+   clave. El id es único en toda la tabla, así que además sobra agrupar por
+   área antes de liberar. */
+function toggleLibSel(id){
+  if(libSel[id]) delete libSel[id]; else libSel[id]=true;
   actualizarLibSel();
 }
 function actualizarLibSel(){
@@ -2710,28 +2718,25 @@ function actualizarLibSel(){
 }
 /* Marcar todos los tickets ACTIVOS visibles (respeta filtro de área/búsqueda). */
 function marcarVisiblesLib(){
-  const todos = TK_VISTA.filter(t=>t.estado==='ACTIVO');
-  const faltan = todos.some(t=>!libSel[t.codigo]);
-  if(faltan) todos.forEach(t=>{ libSel[t.codigo]=true; });   // marca todos
-  else todos.forEach(t=>{ delete libSel[t.codigo]; });        // si ya estaban todos, desmarca
+  const todos = TK_VISTA.filter(t=>t.estado==='ACTIVO' && t.id!=null);
+  const faltan = todos.some(t=>!libSel[t.id]);
+  if(faltan) todos.forEach(t=>{ libSel[t.id]=true; });   // marca todos
+  else todos.forEach(t=>{ delete libSel[t.id]; });        // si ya estaban todos, desmarca
   actualizarLibSel();
   pintarTk();
 }
 async function liberarLote(){
-  const codigos=Object.keys(libSel);
-  if(!codigos.length){ mostrarError("No hay tickets seleccionados"); return; }
-  const motivo=prompt(`Liberar ${codigos.length} ticket(s) seleccionado(s).\nMotivo:`);
+  const ids=Object.keys(libSel).map(Number).filter(n=>!isNaN(n));
+  if(!ids.length){ mostrarError("No hay tickets seleccionados"); return; }
+  const motivo=prompt(`Liberar ${ids.length} ticket(s) seleccionado(s).\nMotivo:`);
   if(motivo===null) return;
   try{
-    // Los códigos son únicos SOLO por área → agrupar por área antes de liberar.
-    const areaDe={}; TK.forEach(t=>{ if(t && t.codigo!=null) areaDe[String(t.codigo)]=t.area; });
-    const porArea={}; codigos.forEach(c=>{ const a=areaDe[String(c)]||tkArea||""; (porArea[a]=porArea[a]||[]).push(c); });
-    for(const a of Object.keys(porArea)){
-      const r=await rpc("fn_liberar_lote",{p_dni:ING.dni,p_token:ING.token,
-        p_codigos:porArea[a],p_motivo:motivo.trim(),p_area:a||null});
-      if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
-      const av=avisoTroceoLote(r); if(av) mostrarOk(`${a||"—"}${av}`);
-    }
+    // Por id: una sola llamada, sirva el ticket para costura (deshace el
+    // troceo) o para Acabado / trabajo sin OF (parche 60).
+    const r=await rpc("fn_liberar_ids",{p_dni:ING.dni,p_token:ING.token,
+      p_ids:ids,p_motivo:motivo.trim()});
+    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
+    mostrarOk(`${r.liberados} ticket(s) liberado(s)${avisoTroceoLote(r)}`);
     modoLibTk=false; libSel={};
     const bm=$("btnModoLiberar"); if(bm){ bm.textContent="LIBERAR EN LOTE"; bm.classList.remove("gris"); }
     const bs=$("btnLiberarSel"); if(bs) bs.style.display="none";
@@ -2778,7 +2783,7 @@ function pintarTk(){
     +"<th></th></tr></thead>";
   $("tablaTk").innerHTML = thead+"<tbody>"+
     pagina.map((t,idx)=>{ const i=ini+idx; return `<tr>
-      ${modoLibTk?`<td>${t.estado==='ACTIVO'?`<input type="checkbox" class="chk-lib" ${libSel[t.codigo]?"checked":""} onclick="toggleLibSel('${esc(t.codigo)}')">`:""}</td>`:""}
+      ${modoLibTk?`<td>${(t.estado==='ACTIVO'&&t.id!=null)?`<input type="checkbox" class="chk-lib" ${libSel[t.id]?"checked":""} onclick="toggleLibSel(${Number(t.id)})">`:""}</td>`:""}
       <td>${esc(t.hora)}</td><td>${esc(t.nombre)}</td><td>${esc(t.area)}</td>
       <td>${esc(t.articulo)}</td><td>${esc(t.of)}</td><td class="izq">${esc(t.op)}</td>
       <td>${t.std!=null?t.std:""}</td><td>${t.cant}</td><td>${t.minutos}</td><td>${esc(t.num)}</td>
@@ -2831,13 +2836,22 @@ function renderTkOpsPanel(activo){
    El servidor vuelve a validar (fn_liberar_ticket); esto es solo UI. */
 async function liberarTicket(i){
   const t = TK_VISTA[i]; if(!t) return;
-  const motivo = prompt(`Liberar el ticket ${t.num||t.codigo} tomado por ${t.nombre}.\nMotivo:`);
+  /* Acabado y el trabajo sin OF no tienen código (parche 27): se identifican
+     por id. Antes se mandaba p_codigo:null, la RPC no encontraba nada y solo
+     se podía deshacer desde la base de datos (parche 60). */
+  const sinCodigo = (t.codigo==null || t.codigo==="");
+  const etiqueta = t.num || t.codigo || `${t.op||"registro"} · ${t.cant} und`;
+  if(sinCodigo && t.id==null){ mostrarError("Este registro no trae id: recarga con ↻"); return; }
+  const motivo = prompt(`Liberar ${etiqueta} tomado por ${t.nombre}.\nMotivo:`);
   if(motivo===null) return;
   try{
-    const r = await rpc("fn_liberar_ticket",{p_dni:ING.dni,p_token:ING.token,
-      p_codigo:t.codigo,p_motivo:motivo.trim(),p_area:t.area});
+    const r = sinCodigo
+      ? await rpc("fn_liberar_ids",{p_dni:ING.dni,p_token:ING.token,
+          p_ids:[Number(t.id)],p_motivo:motivo.trim()})
+      : await rpc("fn_liberar_ticket",{p_dni:ING.dni,p_token:ING.token,
+          p_codigo:t.codigo,p_motivo:motivo.trim(),p_area:t.area});
     if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
-    mostrarOk(`Ticket ${t.codigo} liberado${avisoTroceo(r)}`);
+    mostrarOk(`${etiqueta} liberado${sinCodigo?avisoTroceoLote(r):avisoTroceo(r)}`);
     await cargarTk();
   }catch(e){ mostrarError(e.message); }
 }
@@ -2875,12 +2889,13 @@ async function cargarTkOp(){
 }
 function tkOpFiltrar(){ tkOpPag=1; pintarTkOp(); }
 function ordenarTkOp(col){ if(tkOpSort.col===col) tkOpSort.dir*=-1; else tkOpSort={col,dir:1}; pintarTkOp(); }
-function tkOpToggle(c){ if(tkOpMarc[c]) delete tkOpMarc[c]; else tkOpMarc[c]=true; pintarTkOp(); }
+/* Marcado por id de reclamo: en Acabado el codigo es NULL (parche 60). */
+function tkOpToggle(id){ if(tkOpMarc[id]) delete tkOpMarc[id]; else tkOpMarc[id]=true; pintarTkOp(); }
 function tkOpPagina(d){ tkOpPag+=d; pintarTkOp(); }
 function tkOpMarcarVisibles(){
-  const act=(TKOP._rows||[]).filter(t=>t.estado==='ACTIVO');
-  const faltan=act.some(t=>!tkOpMarc[t.codigo]);
-  act.forEach(t=>{ if(faltan) tkOpMarc[t.codigo]=true; else delete tkOpMarc[t.codigo]; });
+  const act=(TKOP._rows||[]).filter(t=>t.estado==='ACTIVO' && t.id!=null);
+  const faltan=act.some(t=>!tkOpMarc[t.id]);
+  act.forEach(t=>{ if(faltan) tkOpMarc[t.id]=true; else delete tkOpMarc[t.id]; });
   pintarTkOp();
 }
 function pintarTkOp(){
@@ -2906,13 +2921,13 @@ function pintarTkOp(){
   const COLS=[["nombre","Nombre"],["dni","DNI"],["op","Operación"],["hora","Fecha/hora reclamado"],["numeracion","Numeración"],["cant","Cant"],["minutos","Min"],["estado","Estado"]];
   const thead=`<thead><tr><th></th>${COLS.map(c=>`<th class="ord${c[0]==="nombre"?" izq":""}" onclick="ordenarTkOp('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}<th></th></tr></thead>`;
   const body=pag.length? pag.map(t=>`<tr${t.estado==='LIBERADO'?' style="opacity:.55;"':''}>
-      <td>${t.estado==='ACTIVO'?`<input type="checkbox" class="sw" ${tkOpMarc[t.codigo]?"checked":""} onclick="tkOpToggle('${esc(t.codigo)}')">`:""}</td>
+      <td>${(t.estado==='ACTIVO'&&t.id!=null)?`<input type="checkbox" class="sw" ${tkOpMarc[t.id]?"checked":""} onclick="tkOpToggle(${Number(t.id)})">`:""}</td>
       <td class="izq">${esc(t.nombre)}</td><td>${esc(t.dni)}</td>
       <td>${esc(t.op)}${t.causa?`<div class="cf-detalle">${esc(t.causa)}</div>`:""}</td>
       <td>${esc(t.hora)}</td><td>${esc(t.numeracion||"—")}</td>
       <td><b>${t.cant!=null?qty(t.cant):"—"}</b></td><td>${t.minutos!=null?t.minutos:"—"}</td>
       <td><span class="pill ${t.estado==='ACTIVO'?'ACTIVO':'FALTA'}">${esc(t.estado)}</span></td>
-      <td>${t.estado==='ACTIVO'?`<button class="btn-mini rojo" onclick="liberarTkOp('${esc(t.codigo)}')">LIBERAR</button>`:""}</td></tr>`).join("")
+      <td>${(t.estado==='ACTIVO'&&t.id!=null)?`<button class="btn-mini rojo" onclick="liberarTkOp(${Number(t.id)})">LIBERAR</button>`:""}</td></tr>`).join("")
     : `<tr><td colspan="10"><div class="vacio-msg">Sin tickets reclamados para esta OF</div></td></tr>`;
   $("tablaTkOp").innerHTML=thead+"<tbody>"+body+"</tbody>";
   const pg=$("tkOpPager");
@@ -2921,26 +2936,31 @@ function pintarTkOp(){
        <span class="sub" style="margin:0 8px;">${tkOpPag}/${totP}</span>
        <button class="btn-mini" ${tkOpPag>=totP?"disabled":""} onclick="tkOpPagina(1)">Siguiente ›</button>` : "";
 }
-async function liberarTkOp(codigo){
-  const t=(TKOP.items||[]).find(x=>x.codigo===codigo);
-  const motivo=prompt(`Liberar el ticket ${t?(t.numeracion||codigo):codigo} tomado por ${t?t.nombre:""}.\nMotivo:`);
+/* Liberan por id (parche 60): así vale igual para costura —fn_liberar_ids
+   deshace el troceo— y para Acabado / trabajo sin OF, que no tienen código. */
+async function liberarTkOp(id){
+  const t=(TKOP.items||[]).find(x=>Number(x.id)===Number(id));
+  const etq=t?(t.numeracion||t.codigo||`${t.op||"registro"} · ${t.cant} und`):id;
+  const motivo=prompt(`Liberar ${etq} tomado por ${t?t.nombre:""}.\nMotivo:`);
   if(motivo===null) return;
   try{
-    const r=await rpc("fn_liberar_ticket",{p_dni:ING.dni,p_token:ING.token,p_codigo:codigo,p_motivo:(motivo||"").trim(),p_area:TKOP.area});
+    const r=await rpc("fn_liberar_ids",{p_dni:ING.dni,p_token:ING.token,
+      p_ids:[Number(id)],p_motivo:(motivo||"").trim()});
     if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
-    mostrarOk(`Ticket ${codigo} liberado${avisoTroceo(r)}`);
-    delete tkOpMarc[codigo]; await cargarTkOp();
+    mostrarOk(`${etq} liberado${avisoTroceoLote(r)}`);
+    delete tkOpMarc[id]; await cargarTkOp();
   }catch(e){ mostrarError(e.message); }
 }
 async function liberarTkOpLote(){
-  const cods=Object.keys(tkOpMarc);
-  if(!cods.length){ mostrarError("No hay tickets seleccionados"); return; }
-  const motivo=prompt(`Liberar ${cods.length} ticket(s) seleccionado(s).\nMotivo:`);
+  const ids=Object.keys(tkOpMarc).map(Number).filter(n=>!isNaN(n));
+  if(!ids.length){ mostrarError("No hay tickets seleccionados"); return; }
+  const motivo=prompt(`Liberar ${ids.length} ticket(s) seleccionado(s).\nMotivo:`);
   if(motivo===null) return;
   try{
-    const r=await rpc("fn_liberar_lote",{p_dni:ING.dni,p_token:ING.token,p_codigos:cods,p_motivo:motivo.trim(),p_area:TKOP.area});
+    const r=await rpc("fn_liberar_ids",{p_dni:ING.dni,p_token:ING.token,
+      p_ids:ids,p_motivo:motivo.trim()});
     if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
-    mostrarOk(`${r.liberados||cods.length} ticket(s) liberado(s)${avisoTroceoLote(r)}`);
+    mostrarOk(`${r.liberados||ids.length} ticket(s) liberado(s)${avisoTroceoLote(r)}`);
     tkOpMarc={}; await cargarTkOp();
   }catch(e){ mostrarError(e.message); }
 }
@@ -3727,37 +3747,46 @@ function abrirModalArticulo(){
   const distintos=(k)=>[...new Set(filas.map(x=>norm(x[k])))].filter(Boolean).length>1;
   const aviso=(k,txt)=> distintos(k)
     ? `<div class="cf-detalle" style="color:var(--ocre);font-weight:700;">Las filas tienen ${txt} distintos: si escribes algo aquí se aplica a todas.</div>` : "";
+  const stdTot=filas.reduce((a,f)=>a+(Number(f.std)||0),0);
+  const mods=[...new Set(filas.map(f=>norm(f.modulo)).filter(Boolean))];
   MODART={area:$("areaBase").value, articulo:filas[0].articulo, ids:filas.map(x=>x.id)};
   abrirModal(`
     <h2>Editar artículo</h2>
-    <div class="sub" style="margin-bottom:12px;">${esc(MODART.area)} · ${filas.length} operación(es)</div>
-    <div class="modal-2col">
+    <div class="sub" style="margin-bottom:14px;">${esc(MODART.area)} · ${filas.length} operación(es)
+      · ${mods.length} módulo(s) · STD total ${Math.round(stdTot*100)/100} min</div>
+    <div class="ma-cab">
       <div class="modal-campo"><label>Artículo</label>
         <input id="maArt" value="${esc(filas[0].articulo)}" maxlength="80"></div>
       <div class="modal-campo"><label>Prenda <span class="cf-detalle">(todas las filas)</span></label>
         <input id="maPrenda" value="${esc(p0.prenda||"")}" maxlength="80"></div>
+      <div class="modal-campo"><label>Cliente <span class="cf-detalle">(todas las filas)</span></label>
+        <input id="maCliente" value="${esc(c0.cliente||"")}" maxlength="80"></div>
     </div>
-    ${aviso("prenda","prendas")}
-    <div class="modal-campo"><label>Cliente <span class="cf-detalle">(todas las filas)</span></label>
-      <input id="maCliente" value="${esc(c0.cliente||"")}" maxlength="80"></div>
-    ${aviso("cliente","clientes")}
-    <div class="contenedor-ancho tabla-scroll" style="max-height:44vh;margin-top:10px;">
-      <table class="tabla ma-tabla"><thead><tr><th>N°OP</th><th class="izq">Módulo</th>
-        <th class="izq">Operación</th><th>STD</th></tr></thead>
-      <tbody>${filas.map(f=>`<tr>
-        <td><input id="maN_${f.id}" type="number" min="1" value="${esc(f.n_op)}"></td>
-        <td class="izq"><input id="maM_${f.id}" value="${esc(f.modulo||"")}" maxlength="80"></td>
-        <td class="izq"><input id="maO_${f.id}" value="${esc(f.operacion||"")}" maxlength="120"></td>
-        <td><input id="maS_${f.id}" inputmode="decimal" value="${esc(f.std)}"></td>
-      </tr>`).join("")}</tbody></table>
+    <div class="ma-avisos">${aviso("prenda","prendas")}${aviso("cliente","clientes")}</div>
+    <div class="ma-scroll">
+      <table class="ma-tabla">
+        <colgroup><col class="col-n"><col class="col-mod"><col><col class="col-std"></colgroup>
+        <thead><tr><th>N°OP</th><th class="izq">Módulo</th>
+          <th class="izq">Operación</th><th>STD</th></tr></thead>
+        <tbody>${filas.map(f=>`<tr>
+          <td class="col-n" data-l="N°OP"><input id="maN_${f.id}" type="number" min="1" value="${esc(f.n_op)}"></td>
+          <td class="col-mod" data-l="Módulo"><input id="maM_${f.id}" value="${esc(f.modulo||"")}" maxlength="80"></td>
+          <td class="col-op" data-l="Operación"><input id="maO_${f.id}" value="${esc(f.operacion||"")}" maxlength="120"></td>
+          <td class="col-std" data-l="STD"><input id="maS_${f.id}" inputmode="decimal" value="${esc(f.std)}"></td>
+        </tr>`).join("")}</tbody>
+      </table>
     </div>
-    <div class="cf-detalle" style="margin-top:6px;">Renombrar una operación aquí <b>conserva su identidad</b>,
-      así que los tickets ya reclamados siguen casando. Al guardar se reordena el N°OP y se sincronizan los reclamos.</div>
+    <div class="ma-pie">
+      <span class="cf-detalle">Renombrar una operación aquí <b>conserva su identidad</b>,
+        así que los tickets ya reclamados siguen casando. Al guardar se reordena el N°OP
+        y se sincronizan los reclamos.</span>
+      <span><b>${filas.length}</b> operación(es) · <b>${Math.round(stdTot*100)/100}</b> min</span>
+    </div>
     <div class="modal-msg" id="maMsg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" onclick="guardarModalArticulo()">GUARDAR</button>
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
-    </div>`);
+    </div>`, "modal-ancho");
 }
 let MODART=null;
 async function guardarModalArticulo(){
