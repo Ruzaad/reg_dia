@@ -782,8 +782,8 @@ function mapResidual(r){
 
 /* ================= ACABADO: registro por cantidad =================
    Sin almacén y sin código: OF (artículo · color) → operación → cantidad,
-   con techo en el corte real de la OF. `fn_of_resumen` ignora los registros
-   sin OF, así que el trabajo de reproceso no ensucia el resumen. */
+   con techo en el corte real de la OF. `fn_of_trazabilidad` parte de `ofs`,
+   así que el trabajo sin OF no ensucia el resumen. */
 let ACAB={ofs:[], extra:[], of:null, op:null, tipo:null, prenda:null};
 let CAUSAS=[];
 /* El operario elige una causa (auditoría, falta de vapor…); los minutos que

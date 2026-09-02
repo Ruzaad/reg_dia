@@ -37,7 +37,6 @@
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
         <a class="nav-item" data-tab="pasoOfs" href="#pasoOfs">OFs registradas</a>
         <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Resumen de OF</a>
-        <a class="nav-item" data-tab="pasoFlujo" href="#pasoFlujo">Entradas y salidas</a>
         <a class="nav-item" data-tab="pasoOrigen" href="#pasoOrigen">Origen de tickets</a>
       </details>
       <details class="nav-group" open>
@@ -672,54 +671,23 @@
     <!-- ===================== RESUMEN DE OF ===================== -->
     <section class="pantalla" id="pasoAvOF">
       <div class="seccion-cab"><h1>Resumen de OF</h1>
-        <p class="seccion-sub">Acumulado de toda la historia de cada OF (sin rango de fechas): qué está listo, qué sigue en proceso, en qué módulo va y cuándo entró/salió de cada área. Un módulo cerrado cuenta como completado. Toca ▾ para el detalle.</p></div>
+        <p class="seccion-sub">Acumulado de toda la historia de cada OF registrada (sin rango de fechas), con <b>entrada y salida por módulo</b>.
+        <b>Entrada</b> = primer ticket reclamado de ese módulo en esa área. <b>Salida</b> = cuando la operación elegida alcanzó el corte real;
+        si el módulo se cerró sin llegar, la fecha de su último ticket. La OF pasa a <b>TERMINADA</b> cuando todos sus módulos tienen salida.
+        Toca ▾ para el detalle por módulo, con Acabado en su propio cuadro.</p></div>
       <div class="barra-control">
         <label class="campo"><span>Operación</span>
-          <select id="avofNivel" onchange="avofPintar()">
-            <option value="penultima" selected>Penúltima operación</option>
-            <option value="ultima">Última operación</option>
+          <select id="avofNivel" onchange="cargarAvof()">
+            <option value="PENULTIMA" selected>Penúltima del módulo</option>
+            <option value="ULTIMA">Última del módulo</option>
           </select></label>
-        <label class="campo"><span>Área</span>
-          <select id="avofArea" onchange="avofPintar()"><option value="">Todas las áreas</option></select></label>
         <label class="campo"><span>Buscar</span><input type="text" id="avofBuscar" placeholder="Artículo / OF…" oninput="avofPintar()"></label>
-        <label class="chk-inline" title="Prendido: solo las OF completadas. Apagado: solo las que siguen en proceso."><input type="checkbox" class="sw" id="avofSoloCompl" onchange="avofPintar()"> Solo completados</label>
+        <label class="chk-inline" title="Prendido: solo las OF terminadas. Apagado: solo las que siguen en proceso."><input type="checkbox" class="sw" id="avofSoloCompl" onchange="avofPintar()"> Solo terminadas</label>
         <button class="btn-mini" onclick="cargarAvof()">Cargar</button>
         <button class="btn-mini verde" onclick="descargarAvof()">⬇ Descargar</button>
       </div>
       <div class="sub" id="avofResumen"></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="avofTabla"></table></div>
-    </section>
-
-    <!-- ===================== ENTRADAS Y SALIDAS POR ÁREA ===================== -->
-    <section class="pantalla" id="pasoFlujo">
-      <div class="seccion-cab"><h1>Entradas y salidas por área</h1>
-        <p class="seccion-sub">Qué entró y qué salió de cada área en un rango.
-        <b>Entró</b> = tiene al menos una operación registrada. <b>Salió</b> = su operación de
-        referencia alcanzó la cantidad programada. El Resumen de OF sigue siendo acumulativo.</p></div>
-      <div class="barra-control">
-        <label class="campo"><span>Desde</span><input type="date" id="fjDesde"></label>
-        <label class="campo"><span>Hasta</span><input type="date" id="fjHasta"></label>
-        <label class="campo"><span>Operación de referencia</span>
-          <select id="fjRef">
-            <option value="ULTIMA">Última de la ruta</option>
-            <option value="PENULTIMA">Penúltima de la ruta</option>
-          </select></label>
-        <label class="campo"><span>Ver</span>
-          <select id="fjVista" onchange="pintarFlujo()">
-            <option value="salio">Lo que salió</option>
-            <option value="entro">Lo que entró</option>
-            <option value="proceso">En proceso</option>
-            <option value="todo">Todo</option>
-          </select></label>
-        <label class="campo"><span>Área</span><select id="fjArea" onchange="pintarFlujo()"></select></label>
-        <button class="btn-mini" onclick="cargarFlujo()">↻ CARGAR</button>
-        <button class="btn-mini" onclick="fjRango(0)">Hoy</button>
-        <button class="btn-mini" onclick="fjRango(7)">Últimos 7 días</button>
-        <button class="btn-mini" onclick="fjRango(30)">Últimos 30</button>
-        <button class="btn-mini verde" onclick="descargarFlujo()">DESCARGAR XLSX</button>
-      </div>
-      <div class="sub" id="fjResumen"></div>
-      <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;"><table class="tabla" id="fjTabla"></table></div>
     </section>
 
     <!-- ===================== ORIGEN DE TICKETS ===================== -->
