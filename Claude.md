@@ -1,6 +1,21 @@
 
 PROYECTO: SAMITEX Tickets (PWA estática HTML/CSS/JS + Supabase RPC + Sheets).
-Código real en `Areas-planta` (no en `code`). Deploy: frontend push GitHub→Netlify (estático, sin build); BD = parches SQL manuales en Supabase.
+El código vive en la raíz de este repo (`app.js`, `ingenieria.js`, `*.html`).
+BD = parches SQL manuales en Supabase, proyecto `lmlwomurgbbzolgbkwtp`
+(samitex-cost-acab). Frontend: estático, sin build.
+
+DÓNDE ESTÁ PUBLICADO (verificado en los logs de Supabase, 13-set-2026):
+hay TRES despliegues del mismo repo apuntando a la MISMA base de producción.
+  · https://registro-planta.netlify.app  ← el que usa el personal (119 req/24h)
+  · https://planta-blue.vercel.app       ← 15 req/24h
+  · https://ruzaad.github.io             ← 12 req/24h
+Antes de dar por publicado un cambio, confirma en CUÁL de los tres entró: un
+push a `main` no garantiza que los tres se actualicen a la vez, y mientras no
+lo hagan conviven versiones distintas del frontend contra la misma BD. Por eso,
+al cambiar una RPC que el front ya usa, NO se rompe la vieja: se crea una nueva
+y se deja la anterior hasta confirmar que ya nadie la llama (ver parche 67).
+
+Para verificar que el front y Supabase siguen calzando: `verificar_enlace.py`.
 
 CÓMO TRABAJAR (obligatorio):
 
