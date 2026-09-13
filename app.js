@@ -742,6 +742,12 @@ async function cargarTodo(s){
     // no están en el Sheet. Las anteriores siguen saliendo del almacén, así que
     // ambas conviven y el Sheet se vacía solo conforme entren OF nuevas.
     // parche 45: si el área ya no usa el Sheet, ni se pide.
+    /* El flag usa_almacen vive en la BD (areas_config), NO en la constante
+       AREAS de este archivo. Hay que hidratar ANTES de leerlo: al entrar a
+       operario.html la página se recarga entera, así que AREAS vuelve a su
+       valor local —sin usaAlmacen— y sin esto el área leía el Sheet igual
+       aunque estuviera apagado. */
+    await hidratarAreas();
     const usaAlm = (AREAS[area] && AREAS[area].usaAlmacen !== false);
     const [alm, recl, dia, res, ofs, mp] = await Promise.all([
       usaAlm ? cargarAlmacen(area).catch(e=>({tickets:[],duplicados:[],_err:e.message}))
@@ -1259,6 +1265,7 @@ async function recargarMiEficiencia(){
          recargar la app. Ahora se recarga TODO —almacén (si el área lo usa),
          derivados, residuales y reclamos— conservando dónde está el operario. */
       const area = AREA_ESTAJERO || s.area;
+      await hidratarAreas();            // mismo motivo que en cargarTodo
       const usaAlm = (AREAS[area] && AREAS[area].usaAlmacen !== false);
       const [alm, recl, dia, res, ofs, mp] = await Promise.all([
         usaAlm ? cargarAlmacen(area).catch(e=>({tickets:[],duplicados:[],_err:e.message}))

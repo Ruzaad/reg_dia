@@ -80,6 +80,35 @@ Arreglo: las variables nuevas de `app.js` pasaron a llamarse `OF_LISTA` y
 exactamente cómo las carga `ingenieria.html` y detecta la colisión al instante.
 Hoy pasa limpio.
 
+## Segunda corrección: CAMISA seguía mostrando OF del Sheet
+
+Reportado al probar: entrando con un usuario de CAMISA COSTURA seguían
+apareciendo las OF del Sheet, aunque `areas_config.usa_almacen` ya estaba en
+`false` para esa área.
+
+Causa (bug **anterior** a este parche, no introducido por él): el flag
+`usa_almacen` vive en la BD, pero `cargarTodo()` lo leía de la constante
+`AREAS` de `app.js`, que **no tiene** la propiedad `usaAlmacen`. Como
+`undefined !== false` da `true`, el área terminaba leyendo el Sheet igual.
+
+Funcionaba solo por casualidad en algunos caminos: en el login y en el modal
+de cambio de área sí se hacía `await hidratarAreas()` antes. Pero al entrar a
+`operario.html` la página se recarga entera, `AREAS` vuelve a su valor local y
+`initOperario` llama a `cargarTodo()` sin hidratar. Por eso el flag nunca tuvo
+efecto en la entrada normal del operario.
+
+Arreglo: `await hidratarAreas()` antes de calcular `usaAlm`, en `cargarTodo()`
+y en `recargarMiEficiencia()`. No agrega llamadas: `fn_areas_config_listar` ya
+se pedía igual (la hacía `cargarAlmacen` por dentro), solo se adelanta.
+
+Verificado que `fn_areas_config_listar` sí devuelve `usa_almacen` — el backend
+estaba bien, el problema era solo de orden en el frontend.
+
+**Consecuencia a confirmar:** a partir de ahora CAMISA COSTURA deja de mostrar
+de verdad las OF del Sheet. Si quedara trabajo real que solo vive en esa hoja,
+desaparece de la vista del operario. Es lo que implica el flag que ya estaba
+puesto, pero conviene revisarlo antes del próximo turno.
+
 ## Pendiente / a vigilar
 - El conteo "X de Y libres" del buscador no incluye residuales (7 filas en toda
   la base). Al abrir la OF sí aparecen. Diferencia cosmética.
