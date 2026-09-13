@@ -490,6 +490,10 @@ function initLogin(){
 }
 
 let ALM=null, RECL={}, sel={of:null,modulo:null,op:null,ticket:null};
+/* parche 67: el área ya NO se baja entera (eran 7-15MB y tumbaban el login de
+   todos en el cambio de turno). OFS es la lista liviana de OF con su conteo;
+   los tickets de una OF se bajan recién al elegirla. */
+let OFS=[], OFS_CARGADAS=new Set();
 let AREA_ESTAJERO = null;   // área elegida por el estajero para este reclamo (no persiste en operarios.area_actual)
 
 const VOLVER_OPERARIO = {
@@ -568,9 +572,12 @@ async function enviarSolicitudAjuste(){
 }
 /* Artículo de una OF, desde los tickets ya cargados. */
 function artDeOF(of){
-  if(!of || !ALM || !ALM.tickets) return "";
-  const t=ALM.tickets.find(x=>x.of===of && norm(x.articulo));
-  return t ? norm(t.articulo) : "";
+  if(!of) return "";
+  const t=(ALM && ALM.tickets) ? ALM.tickets.find(x=>x.of===of && norm(x.articulo)) : null;
+  if(t) return norm(t.articulo);
+  // La OF puede no estar cargada todavía (parche 67): el artículo está en OFS.
+  const o=OFS.find(x=>normKey(x.of)===normKey(of));
+  return o ? norm(o.articulo) : "";
 }
 function pintarCrumb(id){
   const el=$("crumbOF"); if(!el) return;
@@ -736,26 +743,24 @@ async function cargarTodo(s){
     // ambas conviven y el Sheet se vacía solo conforme entren OF nuevas.
     // parche 45: si el área ya no usa el Sheet, ni se pide.
     const usaAlm = (AREAS[area] && AREAS[area].usaAlmacen !== false);
-    const [alm, recl, dia, res, der, mp] = await Promise.all([
+    const [alm, recl, dia, res, ofs, mp] = await Promise.all([
       usaAlm ? cargarAlmacen(area).catch(e=>({tickets:[],duplicados:[],_err:e.message}))
              : Promise.resolve({tickets:[],duplicados:[]}),
-      rpc("fn_reclamados", {p_dni:s.dni, p_token:s.token, p_area:area}),
+      usaAlm ? rpc("fn_reclamados", {p_dni:s.dni, p_token:s.token, p_area:area})
+             : Promise.resolve([]),   // sin Sheet, el reclamo viene por OF (parche 67)
       rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token}),
       rpc("fn_residuales", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
-      rpc("fn_tickets_area", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
+      rpc("fn_ofs_area", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
       rpc("fn_mis_paquetes", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[])
     ]);
     MISPAQ = Array.isArray(mp) ? mp : [];
     aplicarBotonMisPaq();
     ALM = alm;
-    if(Array.isArray(der) && der.length){
-      const propias=new Set(der.map(t=>normKey(t.of)));
-      // Si una OF ya se sirve del sistema, se ignora lo que quede de ella en el Sheet.
-      ALM.tickets = ALM.tickets.filter(t=>!propias.has(normKey(t.of))).concat(der.map(mapDerivado));
-    }
-    if(alm._err && !ALM.tickets.length) throw new Error(alm._err);
-    if(Array.isArray(res) && res.length) ALM.tickets = ALM.tickets.concat(res.map(mapResidual));
     RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
+    OFS_CARGADAS = new Set();
+    OFS = armarOFS(alm.tickets, ofs);
+    if(alm._err && !OFS.length) throw new Error(alm._err);
+    if(Array.isArray(res) && res.length) ALM.tickets = ALM.tickets.concat(res.map(mapResidual));
     setAvance(dia);
     if(alm.duplicados.length) console.warn("Códigos duplicados en almacén:", alm.duplicados);
     irA("pasoOF");
@@ -771,6 +776,26 @@ function mapDerivado(t){
     op:norm(t.op), talla:norm(t.talla), color:norm(t.color), corte:norm(t.corte),
     num:norm(t.num), articulo:norm(t.articulo), minutos:Math.round(std*cant*10)/10};
 }
+/* Lista de OF para el buscador (parche 67). Une las que aún viven en el Sheet
+   con las del sistema; si una está en los dos lados manda la del sistema, igual
+   que antes hacía el filtro `propias` sobre los tickets. */
+function armarOFS(ticketsSheet, ofsSistema){
+  const m=new Map();
+  (ticketsSheet||[]).forEach(t=>{
+    const k=normKey(t.of); if(!k) return;
+    let e=m.get(k);
+    if(!e){ e={of:norm(t.of), articulo:norm(t.articulo), total:0, libres:0, sys:false}; m.set(k,e); }
+    if(!e.articulo) e.articulo=norm(t.articulo);
+    e.total++; if(!RECL[t.codigo]) e.libres++;
+  });
+  (Array.isArray(ofsSistema)?ofsSistema:[]).forEach(o=>{
+    const k=normKey(o.of); if(!k) return;
+    m.set(k, {of:norm(o.of), articulo:norm(o.articulo),
+              total:Number(o.total)||0, libres:Number(o.libres)||0, sys:true});
+  });
+  return [...m.values()].sort((a,b)=>String(a.of).localeCompare(String(b.of),"es",{numeric:true}));
+}
+
 /* Un residual (-R1, -R2…) se comporta como un paquete más del almacén. */
 function mapResidual(r){
   const std=Number(r.std)||0, cant=Number(r.cant)||0;
@@ -1235,24 +1260,25 @@ async function recargarMiEficiencia(){
          derivados, residuales y reclamos— conservando dónde está el operario. */
       const area = AREA_ESTAJERO || s.area;
       const usaAlm = (AREAS[area] && AREAS[area].usaAlmacen !== false);
-      const [alm, recl, dia, res, der, mp] = await Promise.all([
+      const [alm, recl, dia, res, ofs, mp] = await Promise.all([
         usaAlm ? cargarAlmacen(area).catch(e=>({tickets:[],duplicados:[],_err:e.message}))
                : Promise.resolve({tickets:[],duplicados:[]}),
-        rpc("fn_reclamados", {p_dni:s.dni, p_token:s.token, p_area:area}),
+        usaAlm ? rpc("fn_reclamados", {p_dni:s.dni, p_token:s.token, p_area:area})
+               : Promise.resolve([]),   // sin Sheet, el reclamo viene por OF (parche 67)
         rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token}),
         rpc("fn_residuales", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
-        rpc("fn_tickets_area", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
+        rpc("fn_ofs_area", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
         rpc("fn_mis_paquetes", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[])
       ]);
       const prev = ALM;
       ALM = alm;
-      if(Array.isArray(der) && der.length){
-        const propias=new Set(der.map(t=>normKey(t.of)));
-        ALM.tickets = ALM.tickets.filter(t=>!propias.has(normKey(t.of))).concat(der.map(mapDerivado));
-      }
-      if(alm._err && !ALM.tickets.length) ALM = prev || ALM;   // no perder lo que ya había
-      if(Array.isArray(res) && res.length) ALM.tickets = ALM.tickets.concat(res.map(mapResidual));
+      if(alm._err && !alm.tickets.length && prev) ALM = prev;   // no perder lo que ya había
       RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
+      OFS = armarOFS(alm.tickets, ofs);
+      OFS_CARGADAS = new Set();
+      if(Array.isArray(res) && res.length) ALM.tickets = ALM.tickets.concat(res.map(mapResidual));
+      // Solo se vuelve a bajar la OF que el operario está mirando (parche 67).
+      if(sel.of){ try{ await cargarTicketsDeOF(sel.of); }catch(e){ mostrarError(e.message); } }
       MISPAQ = Array.isArray(mp) ? mp : [];
       aplicarBotonMisPaq();
       setAvance(dia);
@@ -1278,22 +1304,48 @@ function pintarSugerencias(){
   $("inputOF").value = q;
   const z = $("sugerenciasOF"); z.innerHTML="";
   if(!q){ return; }
-  const ofs = {};
-  ALM.tickets.forEach(t=>{
-    if(t.of.includes(q)){
-      if(!ofs[t.of]) ofs[t.of]={total:0,libres:0,art:norm(t.articulo)};
-      if(!ofs[t.of].art) ofs[t.of].art=norm(t.articulo);
-      ofs[t.of].total++; if(libre(t)) ofs[t.of].libres++;
-    }
-  });
-  Object.keys(ofs).sort().slice(0,8).forEach(of=>{
+  /* parche 67: el conteo ya viene calculado del servidor (OFS), no se recorren
+     decenas de miles de tickets en el celular por cada tecla. */
+  const hits = OFS.filter(o=>String(o.of).includes(q)).slice(0,8);
+  hits.forEach(o=>{
     const d=document.createElement("div");
     d.className="sug";
-    d.innerHTML=`<span>${ofs[of].art?esc(ofs[of].art)+" · ":""}OF ${esc(of)}</span><small>${ofs[of].libres} de ${ofs[of].total} libres</small>`;
-    d.onclick=()=>{ sel.of=of; sel.modulo=null; sel.op=null; pintarModulos(); irA("pasoModulos"); };
+    d.innerHTML=`<span>${o.articulo?esc(o.articulo)+" · ":""}OF ${esc(o.of)}</span><small>${o.libres} de ${o.total} libres</small>`;
+    d.onclick=()=>abrirOF(o.of);
     z.appendChild(d);
   });
-  if(!Object.keys(ofs).length) z.innerHTML=`<div class="vacio-msg">Ninguna OF contiene "${esc(q)}"</div>`;
+  if(!hits.length) z.innerHTML=`<div class="vacio-msg">Ninguna OF contiene "${esc(q)}"</div>`;
+}
+
+/* Baja los tickets de UNA OF (parche 67). Las OF que todavía viven en el Sheet
+   ya están en memoria: solo se piden las del sistema, y una sola vez. */
+async function cargarTicketsDeOF(of, forzar){
+  const k=normKey(of);
+  const info=OFS.find(o=>normKey(o.of)===k);
+  if(!info || !info.sys) return;               // OF del Sheet: ya está en memoria
+  if(!forzar && OFS_CARGADAS.has(k)) return;
+  const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  const area=AREA_ESTAJERO || s.area;
+  const r=await rpc("fn_tickets_of",{p_dni:s.dni,p_token:s.token,p_area:area,p_of:info.of});
+  if(!r || r.ok===false || !Array.isArray(r.tickets))
+    throw new Error((r && r.error) || "No se pudo cargar la OF");
+  // Los residuales del área se conservan: no vienen de esta RPC.
+  ALM.tickets = ALM.tickets.filter(x=>x.residual || normKey(x.of)!==k).concat(r.tickets.map(mapDerivado));
+  // Estado de reclamo de ESTA OF: se limpia lo viejo (pudieron liberar) y se
+  // reemplaza por lo que dice el servidor.
+  r.tickets.forEach(t=>{ delete RECL[t.codigo]; });
+  (r.reclamados||[]).forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
+  NOPS_FIN={};
+  OFS_CARGADAS.add(k);
+}
+async function abrirOF(of){
+  const z=$("sugerenciasOF"); const antes=z.innerHTML;
+  z.innerHTML=cargandoHTML("Cargando OF "+of+"…");
+  try{ await cargarTicketsDeOF(of); }
+  catch(e){ z.innerHTML=antes; mostrarError(e.message); return; }
+  z.innerHTML=antes;
+  sel.of=of; sel.modulo=null; sel.op=null;
+  pintarModulos(); irA("pasoModulos");
 }
 
 /* --- paso módulos --- */
@@ -1550,6 +1602,10 @@ async function registrar(){
 }
 async function refrescarReclamos(s){
   try{
+    /* parche 67: si la OF es del sistema se refresca solo ella; pedir el área
+       entera eran 41 mil filas en CAMISA. El Sheet sí necesita el área. */
+    const info = sel.of ? OFS.find(o=>normKey(o.of)===normKey(sel.of)) : null;
+    if(info && info.sys){ await cargarTicketsDeOF(sel.of, true); return; }
     const area = AREA_ESTAJERO || s.area;
     const recl = await rpc("fn_reclamados",{p_dni:s.dni,p_token:s.token,p_area:area});
     RECL={}; recl.forEach(x=>{RECL[x.codigo]={nombre:x.nombre,hora:x.hora};});
