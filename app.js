@@ -491,9 +491,9 @@ function initLogin(){
 
 let ALM=null, RECL={}, sel={of:null,modulo:null,op:null,ticket:null};
 /* parche 67: el área ya NO se baja entera (eran 7-15MB y tumbaban el login de
-   todos en el cambio de turno). OFS es la lista liviana de OF con su conteo;
+   todos en el cambio de turno). OF_LISTA es la lista liviana de OF con su conteo;
    los tickets de una OF se bajan recién al elegirla. */
-let OFS=[], OFS_CARGADAS=new Set();
+let OF_LISTA=[], OF_CARGADAS=new Set();
 let AREA_ESTAJERO = null;   // área elegida por el estajero para este reclamo (no persiste en operarios.area_actual)
 
 const VOLVER_OPERARIO = {
@@ -575,8 +575,8 @@ function artDeOF(of){
   if(!of) return "";
   const t=(ALM && ALM.tickets) ? ALM.tickets.find(x=>x.of===of && norm(x.articulo)) : null;
   if(t) return norm(t.articulo);
-  // La OF puede no estar cargada todavía (parche 67): el artículo está en OFS.
-  const o=OFS.find(x=>normKey(x.of)===normKey(of));
+  // La OF puede no estar cargada todavía (parche 67): el artículo está en OF_LISTA.
+  const o=OF_LISTA.find(x=>normKey(x.of)===normKey(of));
   return o ? norm(o.articulo) : "";
 }
 function pintarCrumb(id){
@@ -757,9 +757,9 @@ async function cargarTodo(s){
     aplicarBotonMisPaq();
     ALM = alm;
     RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
-    OFS_CARGADAS = new Set();
-    OFS = armarOFS(alm.tickets, ofs);
-    if(alm._err && !OFS.length) throw new Error(alm._err);
+    OF_CARGADAS = new Set();
+    OF_LISTA = armarOFS(alm.tickets, ofs);
+    if(alm._err && !OF_LISTA.length) throw new Error(alm._err);
     if(Array.isArray(res) && res.length) ALM.tickets = ALM.tickets.concat(res.map(mapResidual));
     setAvance(dia);
     if(alm.duplicados.length) console.warn("Códigos duplicados en almacén:", alm.duplicados);
@@ -1274,8 +1274,8 @@ async function recargarMiEficiencia(){
       ALM = alm;
       if(alm._err && !alm.tickets.length && prev) ALM = prev;   // no perder lo que ya había
       RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
-      OFS = armarOFS(alm.tickets, ofs);
-      OFS_CARGADAS = new Set();
+      OF_LISTA = armarOFS(alm.tickets, ofs);
+      OF_CARGADAS = new Set();
       if(Array.isArray(res) && res.length) ALM.tickets = ALM.tickets.concat(res.map(mapResidual));
       // Solo se vuelve a bajar la OF que el operario está mirando (parche 67).
       if(sel.of){ try{ await cargarTicketsDeOF(sel.of); }catch(e){ mostrarError(e.message); } }
@@ -1304,9 +1304,9 @@ function pintarSugerencias(){
   $("inputOF").value = q;
   const z = $("sugerenciasOF"); z.innerHTML="";
   if(!q){ return; }
-  /* parche 67: el conteo ya viene calculado del servidor (OFS), no se recorren
+  /* parche 67: el conteo ya viene calculado del servidor (OF_LISTA), no se recorren
      decenas de miles de tickets en el celular por cada tecla. */
-  const hits = OFS.filter(o=>String(o.of).includes(q)).slice(0,8);
+  const hits = OF_LISTA.filter(o=>String(o.of).includes(q)).slice(0,8);
   hits.forEach(o=>{
     const d=document.createElement("div");
     d.className="sug";
@@ -1321,9 +1321,9 @@ function pintarSugerencias(){
    ya están en memoria: solo se piden las del sistema, y una sola vez. */
 async function cargarTicketsDeOF(of, forzar){
   const k=normKey(of);
-  const info=OFS.find(o=>normKey(o.of)===k);
+  const info=OF_LISTA.find(o=>normKey(o.of)===k);
   if(!info || !info.sys) return;               // OF del Sheet: ya está en memoria
-  if(!forzar && OFS_CARGADAS.has(k)) return;
+  if(!forzar && OF_CARGADAS.has(k)) return;
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   const area=AREA_ESTAJERO || s.area;
   const r=await rpc("fn_tickets_of",{p_dni:s.dni,p_token:s.token,p_area:area,p_of:info.of});
@@ -1336,7 +1336,7 @@ async function cargarTicketsDeOF(of, forzar){
   r.tickets.forEach(t=>{ delete RECL[t.codigo]; });
   (r.reclamados||[]).forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
   NOPS_FIN={};
-  OFS_CARGADAS.add(k);
+  OF_CARGADAS.add(k);
 }
 async function abrirOF(of){
   const z=$("sugerenciasOF"); const antes=z.innerHTML;
@@ -1604,7 +1604,7 @@ async function refrescarReclamos(s){
   try{
     /* parche 67: si la OF es del sistema se refresca solo ella; pedir el área
        entera eran 41 mil filas en CAMISA. El Sheet sí necesita el área. */
-    const info = sel.of ? OFS.find(o=>normKey(o.of)===normKey(sel.of)) : null;
+    const info = sel.of ? OF_LISTA.find(o=>normKey(o.of)===normKey(sel.of)) : null;
     if(info && info.sys){ await cargarTicketsDeOF(sel.of, true); return; }
     const area = AREA_ESTAJERO || s.area;
     const recl = await rpc("fn_reclamados",{p_dni:s.dni,p_token:s.token,p_area:area});

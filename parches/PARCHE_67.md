@@ -60,6 +60,26 @@ ve exactamente como "Failed to fetch": el pedido nunca llegó a responder.
 Carga inicial del operario: de **7-15 MB** a **~2 KB**. Al abrir una OF se bajan
 unas decenas de KB.
 
+## Corrección posterior (mismo día): ingeniería quedaba en blanco
+
+Al publicar el parche, ingeniería dejó de cargar: entraba con su sesión y la
+pantalla se quedaba estática, sin ninguna función.
+
+Causa: `ingenieria.html` carga **los dos** archivos (`app.js` y luego
+`ingenieria.js`), que comparten el ámbito global. El parche 67 declaró
+`let OFS` en `app.js`, y `ingenieria.js` ya tenía `let OFS` en su línea 2201.
+Dos `let` con el mismo nombre en el mismo ámbito es **SyntaxError**:
+`ingenieria.js` no se parseaba y ninguna de sus funciones llegaba a existir.
+El login seguía funcionando porque eso vive en `app.js`.
+
+Arreglo: las variables nuevas de `app.js` pasaron a llamarse `OF_LISTA` y
+`OF_CARGADAS`. No se tocó nada de `ingenieria.js`.
+
+**Cómo no repetirlo:** antes de agregar una variable global a `app.js`, correr
+`cat app.js ingenieria.js > /tmp/x.js && node --check /tmp/x.js`. Eso reproduce
+exactamente cómo las carga `ingenieria.html` y detecta la colisión al instante.
+Hoy pasa limpio.
+
 ## Pendiente / a vigilar
 - El conteo "X de Y libres" del buscador no incluye residuales (7 filas en toda
   la base). Al abrir la OF sí aparecen. Diferencia cosmética.
