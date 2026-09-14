@@ -383,12 +383,14 @@
     <section class="pantalla" id="pasoBases">
       <div class="fila-filtros">
         <select id="areaBase" onchange="cargarBases()"></select>
+        <input type="text" id="fPrenda" placeholder="Filtrar prenda…" oninput="filtrarBases()">
         <input type="text" id="fArt" placeholder="Filtrar artículo…" oninput="filtrarBases()">
         <input type="text" id="fOp" placeholder="Filtrar operación…" oninput="filtrarBases()">
         <input type="text" id="fCli" placeholder="Filtrar cliente…" oninput="filtrarBases()">
         <input type="text" id="fMod" placeholder="Filtrar módulo…" oninput="filtrarBases()">
         <button class="btn-mini" onclick="cargarBases()">↻ CARGAR</button>
         <button class="btn-mini verde" onclick="descargarBase()">DESCARGAR XLSX</button>
+        <button class="btn-mini" id="btnEditLote" onclick="basesModoEdicion()">✎ EDITAR EN LOTE</button>
         <button class="btn-mini" onclick="abrirModalBaseOp(null)">+ AGREGAR OPERACIÓN</button>
         <button class="btn-mini" id="btnEditArt" onclick="abrirModalArticulo()" hidden>EDITAR ARTÍCULO</button>
         <button class="btn-mini rojo" onclick="abrirModalBorrarArt()">BORRAR ARTÍCULO</button>
@@ -396,6 +398,14 @@
           SUBIR EXCEL
           <input type="file" accept=".xlsx,.xls" style="display:none" onchange="leerExcelBase(this)">
         </label>
+      </div>
+      <!-- Solo visible en modo edición: los cambios viven en el navegador hasta
+           que se pulsa GUARDAR, así que la barra tiene que estar siempre a la
+           vista mientras haya algo pendiente. -->
+      <div class="contenedor-ancho base-edit-bar" id="basesEditBar" hidden>
+        <span id="basesEditInfo"></span>
+        <button class="btn-mini verde" id="btnGuardarLote" onclick="guardarBasesLote()">GUARDAR CAMBIOS</button>
+        <button class="btn-mini gris" onclick="basesModoEdicion(false)">CANCELAR</button>
       </div>
       <div class="sub" id="resumenBases"></div>
       <div class="contenedor-ancho" id="zonaDiff" style="display:none;margin-bottom:14px;"></div>

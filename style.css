@@ -418,6 +418,16 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .pill.PROCESO{background:#fdf3e4;color:#8a5f18;}
 .pill.CERRADO{background:#e9eefa;color:var(--azul);}
 .contenedor-ancho{max-width:1100px;margin:0 auto;width:100%;}
+/* Ingeniería es vista de escritorio: el tope de 1100px dejaba ~590px muertos a
+   los lados en una pantalla de 1920, y además la barra de filtros (sin tope)
+   salía más ancha que la tabla de abajo, que sí lo tenía. Un solo ancho para
+   las tres cosas: se aprovecha la pantalla y todo queda alineado. El texto
+   corrido NO entra aquí: sigue con su tope de 70ch, que es lo legible. */
+body[data-pagina="ingenieria"]{--ancho-ing:1600px;}
+body[data-pagina="ingenieria"] .contenedor-ancho,
+body[data-pagina="ingenieria"] .fila-filtros,
+body[data-pagina="ingenieria"] .barra-control{max-width:var(--ancho-ing);
+  margin-left:auto;margin-right:auto;}
 .diff-box{background:var(--blanco);border-radius:12px;padding:14px;margin-bottom:10px;
   box-shadow:0 2px 6px rgba(13,59,133,.10);}
 .diff-box h3{font-size:17px;color:var(--azul);margin-bottom:6px;}
@@ -536,6 +546,27 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 
 /* Fila de acciones CRUD en BASE */
 .btn-mini.azul{background:var(--azul);color:#fff;}
+/* --- Bases · edición en lote --- */
+.base-edit-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 auto 12px;
+  background:#fff8ef;border:2px solid var(--ocre);border-radius:12px;padding:10px 14px;
+  position:sticky;top:0;z-index:20;}
+.base-edit-bar #basesEditInfo{margin-right:auto;font-size:13px;font-weight:800;color:#8a5f18;}
+.base-edit-bar .btn-mini[disabled]{opacity:.45;cursor:not-allowed;}
+.btn-mini.ocre{background:var(--ocre);}
+/* El input ocupa la celda entera: la tabla no cambia de ancho al entrar y salir
+   del modo edición. */
+.base-in{width:100%;min-width:60px;box-sizing:border-box;background:var(--blanco);
+  border:1px solid #cfd8e6;border-radius:7px;padding:5px 7px;font:inherit;font-size:13px;
+  color:var(--texto);text-align:center;}
+.base-in.num{max-width:88px;}
+/* La estrella de operación final va al lado del input, no encima: si no, la
+   celda parte en dos líneas y la fila crece al doble. */
+.base-op-cell{display:flex;align-items:center;gap:4px;}
+.base-op-cell .estrella{flex:0 0 auto;}
+.base-in:focus{outline:none;border-color:var(--enlace);box-shadow:0 0 0 2px rgba(26,86,180,.18);}
+/* Sin guardar: ámbar en la celda tocada y en toda su fila. */
+.base-in.cambiada{border-color:var(--ocre);background:#fff8ef;font-weight:800;}
+.tabla tr.fila-cambiada>td{background:#fffaf2;}
 .tabla .acc-base{display:flex;gap:6px;justify-content:center;}
 /* Estilo autónomo (también fuera de .acc-base, p.ej. columna Editar del CRUD). */
 .acc-editar,.acc-borrar,.tabla .acc-base button{border:none;border-radius:7px;font-size:12px;
