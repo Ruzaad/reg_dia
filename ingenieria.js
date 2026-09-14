@@ -2454,11 +2454,37 @@ function ofsToggle(i){
    porcentaje. La RPC conserva su tercer argumento `p_nivel` (con valor por
    defecto) solo para los despliegues que aún no tengan esta versión; desde aquí
    no se manda. El corte real viene en la respuesta: aquí no se consulta la
-   hoja "OF". */
+   hoja "OF".
+   El periodo elige QUÉ OF se listan, no recorta el cálculo, y una OF sale tanto
+   en el mes en que empezó como en aquel en que terminó (la regla la resuelve la
+   RPC). Sin él la respuesta crece sin techo: son ~100 OF nuevas al mes y cada
+   una pesa ~12 kB con su detalle. */
+/* Por defecto, este mes y los dos anteriores: suficiente para ver lo que está
+   en planta sin arrastrar toda la historia. `new Date(y, m-3, 1)` resuelve solo
+   el salto de año. */
+function avofMesesDefecto(){
+  const [y,m]=hoyISO().split("-").map(Number);
+  const p=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  return {desde:p(new Date(y,m-3,1)), hasta:p(new Date(y,m-1,1))};
+}
+/* Los <input type="month"> dan "YYYY-MM"; la RPC espera fechas. El "hasta" se
+   estira al último día de ese mes. En blanco = sin límite por ese lado. */
+function avofRango(){
+  const d=$("avofDesde")?$("avofDesde").value:"", h=$("avofHasta")?$("avofHasta").value:"";
+  let hasta=null;
+  if(h){ const [y,m]=h.split("-").map(Number);
+         hasta=`${h}-${String(new Date(y,m,0).getDate()).padStart(2,"0")}`; }
+  return {desde:d?d+"-01":null, hasta};
+}
 async function cargarAvof(){
+  if($("avofDesde") && !$("avofDesde").value && !$("avofHasta").value){
+    const d=avofMesesDefecto(); $("avofDesde").value=d.desde; $("avofHasta").value=d.hasta;
+  }
+  const rg=avofRango();
   $("avofTabla").innerHTML=cargandoHTML("Cargando resumen…"); $("avofResumen").textContent="";
   try{
-    const r=await rpc("fn_of_trazabilidad",{p_dni:ING.dni,p_token:ING.token});
+    const r=await rpc("fn_of_trazabilidad",
+      {p_dni:ING.dni,p_token:ING.token,p_desde:rg.desde,p_hasta:rg.hasta});
     if(!r.ok){ mostrarError(r.error||"Error"); $("avofTabla").innerHTML=""; return; }
     AVOF={items:r.items||[], _rows:[]};
     avofPintar();
@@ -2503,7 +2529,12 @@ function avofPintar(){
   const nFin=rows.filter(r=>r.estado==="TERMINADA").length;
   if(avofSort.col){ const c=avofSort.col; rows=rows.slice().sort((a,b)=>cmpVal(a[c],b[c])*avofSort.dir); }
   AVOF._rows=rows;
-  $("avofResumen").textContent=`${rows.length} OF · ${nFin} terminada(s) · ${rows.length-nFin} en proceso`;
+  const rg=avofRango();
+  const per = rg.desde||rg.hasta
+    ? ` · ${rg.desde?rg.desde.slice(0,7):"inicio"} a ${rg.hasta?rg.hasta.slice(0,7):"hoy"}`
+    : " · toda la historia";
+  $("avofResumen").textContent=`${rows.length} OF · ${nFin} terminada(s) · `
+    + `${rows.length-nFin} en proceso${per} · se descarga lo listado`;
   const fl=k=>avofSort.col===k?(avofSort.dir===1?" ▲":" ▼"):"";
   const C=[["articulo","Artículo"],["of","OF"],["cant_prog","Corte real"],
     ["entrada","Entrada"],["salida","Salida"],["estado","Estado"]];

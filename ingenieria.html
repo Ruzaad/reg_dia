@@ -672,11 +672,17 @@
     <section class="pantalla" id="pasoAvOF">
       <div class="seccion-cab"><h1>Resumen de OF</h1>
         <p class="seccion-sub">Acumulado de toda la historia de cada OF registrada (sin rango de fechas), con <b>entrada y salida por módulo</b>.
-        Salen <b>todas las OF</b>: terminadas y en proceso. <b>Entrada</b> = primer ticket reclamado de ese módulo en esa área.
+        Salen <b>todas las OF</b> del periodo, terminadas y en proceso. Una OF aparece en el mes en que <b>empezó</b> y también en el mes en que
+        <b>terminó</b>: si arrancó en agosto y cerró en setiembre, sale en los dos, siempre con sus fechas reales.
+        El periodo solo elige <b>qué OF</b> se listan — lo producido, el porcentaje y el estado se siguen acumulando sobre toda la historia.
+        Deja los meses en blanco para traerlas todas (pesa más y demora más).
+        <b>Entrada</b> = primer ticket reclamado de ese módulo en esa área.
         <b>Salida</b> = cuando la <b>operación final del módulo</b> alcanzó el corte real; si el módulo se cerró sin llegar, la fecha de su último ticket.
         La OF pasa a <b>TERMINADA</b> cuando todos sus módulos tienen salida.
         Toca ▾ para el detalle: área, módulo y <b>todas las operaciones del balance</b> con lo producido y su porcentaje, con Acabado en su propio cuadro.</p></div>
       <div class="barra-control">
+        <label class="campo"><span>Desde</span><input type="month" id="avofDesde" onchange="cargarAvof()"></label>
+        <label class="campo"><span>Hasta</span><input type="month" id="avofHasta" onchange="cargarAvof()"></label>
         <label class="campo"><span>Buscar</span><input type="text" id="avofBuscar" placeholder="Artículo / OF…" oninput="avofPintar()"></label>
         <button class="btn-mini" onclick="cargarAvof()">Cargar</button>
         <button class="btn-mini verde" onclick="descargarAvof()">⬇ Descargar</button>
