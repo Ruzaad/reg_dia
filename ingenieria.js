@@ -3510,6 +3510,58 @@ const BASE_COLS=[
 ];
 let BASE=[], baseSort={col:null,dir:1};
 let basePag=1; const BASE_PAGE=100;
+let BASE_MAP={};                 // id -> fila original, para comparar al editar
+/* --- Edición en lote ---
+   Sirve para corregir varios STD de una sentada (la misma operación en 15
+   artículos, p. ej.). Los cambios viven en BASE_DIRTY hasta GUARDAR: teclear en
+   una celda NO repinta la tabla ni toca la BD. Como el mapa va por id, los
+   cambios sobreviven a ordenar, filtrar y cambiar de página. */
+let baseEdit=false, BASE_DIRTY={};
+const BASE_EDIT_COLS=["prenda","cliente","modulo","articulo","operacion","std","n_op"];
+const BASE_NUM_COLS=["std","n_op"];
+function baseValor(b,k){
+  const d=BASE_DIRTY[b.id];
+  return (d && k in d) ? d[k] : (b[k]==null?"":b[k]);
+}
+function baseSucia(b,k){ const d=BASE_DIRTY[b.id]; return !!(d && k in d); }
+function baseNCambios(){
+  return Object.keys(BASE_DIRTY).reduce((n,id)=>n+Object.keys(BASE_DIRTY[id]).length,0);
+}
+/* Escribir en una celda solo toca el mapa y el contador: sin repintar. */
+function baseCampo(el){
+  const id=el.dataset.id, k=el.dataset.k, orig=BASE_MAP[id];
+  if(!orig) return;
+  const num=BASE_NUM_COLS.includes(k);
+  const igual = num ? Number(el.value)===Number(orig[k])
+                    : String(el.value).trim()===String(orig[k]==null?"":orig[k]).trim();
+  const d = BASE_DIRTY[id] = BASE_DIRTY[id] || {};
+  if(igual) delete d[k]; else d[k] = num ? Number(el.value) : el.value;
+  if(!Object.keys(d).length) delete BASE_DIRTY[id];
+  el.classList.toggle("cambiada", !igual);
+  const tr=el.closest("tr"); if(tr) tr.classList.toggle("fila-cambiada", !!BASE_DIRTY[id]);
+  baseBarraEdicion();
+}
+function baseBarraEdicion(){
+  const bar=$("basesEditBar"); if(!bar) return;
+  bar.hidden=!baseEdit;
+  const n=baseNCambios(), f=Object.keys(BASE_DIRTY).length;
+  const inf=$("basesEditInfo");
+  if(inf) inf.textContent = n
+    ? `${n} cambio(s) sin guardar en ${f} fila(s)`
+    : "Edita las celdas y pulsa GUARDAR. Nada se envía hasta entonces.";
+  const btn=$("btnGuardarLote"); if(btn) btn.disabled=!n;
+  const be=$("btnEditLote");
+  if(be){ be.textContent = baseEdit ? "✎ SALIR DE EDICIÓN" : "✎ EDITAR EN LOTE";
+          be.classList.toggle("ocre", baseEdit); }
+}
+function basesModoEdicion(on){
+  if(on===undefined) on=!baseEdit;
+  if(!on && baseNCambios() &&
+     !confirm(`Hay ${baseNCambios()} cambio(s) sin guardar. ¿Descartarlos?`)) return;
+  baseEdit=on; if(!on) BASE_DIRTY={};
+  pintarBases();
+}
+function baseRevertir(id){ delete BASE_DIRTY[id]; pintarBases(); }
 function filtrarBases(){ basePag=1; pintarBases(); }
 function basePagina(d){ basePag+=d; pintarBases(); }
 
@@ -3519,13 +3571,16 @@ async function cargarBases(){
   try{
     BASE = await rpc("fn_bases_listar",{p_dni:ING.dni,p_token:ING.token,p_area:$("areaBase").value});
     BASES_CACHE[$("areaBase").value] = BASE;
+    BASE_MAP={}; BASE.forEach(b=>BASE_MAP[b.id]=b);
     pintarBases();
   }catch(e){ $("tablaBases").innerHTML=""; mostrarError(e.message); }
 }
 function basesFiltradas(){
   const fa=normKey($("fArt").value), fo=normKey($("fOp").value), fc=normKey($("fCli").value);
   const fm=normKey(($("fMod")||{}).value||"");
+  const fp=normKey(($("fPrenda")||{}).value||"");
   return BASE.filter(b=>
+    (!fp||normKey(b.prenda).includes(fp)) &&
     (!fa||normKey(b.articulo).includes(fa)) &&
     (!fo||normKey(b.operacion).includes(fo)) &&
     (!fc||normKey(b.cliente).includes(fc)) &&
@@ -3579,6 +3634,15 @@ function pintarBases(){
         : (f.n2!=null && n===f.n2)
           ? `<span class="estrella estrella-pen" title="Penúltima operación">★</span> `
           : "";
+      if(baseEdit) return `<tr${BASE_DIRTY[b.id]?' class="fila-cambiada"':""}>
+      ${["prenda","cliente","modulo","articulo"].map(k=>`<td>${baseInput(b,k)}</td>`).join("")}
+      <td class="izq"><div class="base-op-cell">${estrella}${baseInput(b,"operacion")}</div></td>
+      <td>${baseInput(b,"std")}</td>
+      <td>${b.max_op}</td><td>${baseInput(b,"n_op")}</td>
+      <td><div class="acc-base">
+        <button class="acc-editar" title="Deshacer los cambios de esta fila"
+          onclick="baseRevertir('${b.id}')">↺</button>
+      </div></td></tr>`;
       return `<tr><td>${esc(b.prenda)}</td><td>${esc(b.cliente)}</td><td>${esc(b.modulo)}</td>
       <td><b>${esc(b.articulo)}</b></td><td class="izq">${estrella}${esc(b.operacion)}</td><td>${b.std}</td>
       <td>${b.max_op}</td><td>${b.n_op}</td>
@@ -3587,6 +3651,7 @@ function pintarBases(){
         <button class="acc-borrar" onclick="eliminarBaseOp(${b.id},'${esc((b.operacion||"").replace(/'/g,""))}','${esc((b.articulo||"").replace(/'/g,""))}')">Borrar</button>
       </div></td></tr>`;
     }).join("")+"</tbody>";
+  baseBarraEdicion();
   const pg=$("basesPager");
   if(pg) pg.innerHTML = totPag>1
     ? `<button class="btn-mini" ${basePag<=1?"disabled":""} onclick="basePagina(-1)">‹ Anterior</button>
@@ -3604,6 +3669,55 @@ function calcularFinalesBase(filas){
     res[k]={ n1: nops.length?nops[0]:null, n2: nops.length>1?nops[1]:null };
   });
   return res;
+}
+/* MAX OP. no lleva input a propósito: lo recalcula `_base_resecuenciar` en la
+   BD a partir del número de operaciones del artículo. */
+function baseInput(b,k){
+  const num=BASE_NUM_COLS.includes(k);
+  return `<input class="base-in${num?" num":""}${baseSucia(b,k)?" cambiada":""}"
+    data-id="${b.id}" data-k="${k}" oninput="baseCampo(this)"
+    ${num?`type="number" step="${k==="std"?"0.01":"1"}" min="0"`:'type="text"'}
+    value="${esc(baseValor(b,k))}">`;
+}
+/* Un solo viaje a la BD con todos los cambios: la RPC los aplica en una
+   transacción y resecuencia/sincroniza UNA vez por artículo. La sincronización
+   del Sheet sí es por artículo (la edge function recibe uno), por eso va con
+   contador a la vista. */
+async function guardarBasesLote(){
+  const ids=Object.keys(BASE_DIRTY);
+  if(!ids.length){ mostrarError("No hay cambios que guardar"); return; }
+  const area=$("areaBase").value;
+  const cambios=ids.map(id=>{
+    const b=BASE_MAP[id];
+    const o={id:Number(id)};
+    BASE_EDIT_COLS.forEach(k=>o[k]=baseValor(b,k));
+    return o;
+  });
+  const faltan=cambios.filter(c=>!String(c.articulo).trim()||!String(c.operacion).trim());
+  if(faltan.length){ mostrarError("Artículo y operación son obligatorios: revisa las filas marcadas"); return; }
+  const arts=[...new Set(cambios.map(c=>String(c.articulo).trim().toUpperCase()))];
+  if(!confirm(`Se guardarán ${baseNCambios()} cambio(s) en ${cambios.length} fila(s) `
+    +`de ${arts.length} artículo(s).\nSe reescribirán sus tickets en ALMACÉN y Supabase. ¿Continuar?`)) return;
+
+  const btn=$("btnGuardarLote"), inf=$("basesEditInfo");
+  if(btn) btn.disabled=true;
+  try{
+    if(inf) inf.textContent="Guardando…";
+    const r=await rpc("fn_base_ops_editar_lote",{p_dni:ING.dni,p_token:ING.token,p_cambios:cambios});
+    if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); if(btn) btn.disabled=false; return; }
+    if(r.reclamos_actualizados>0)
+      mostrarOk(`${r.filas} fila(s) guardadas · ${r.reclamos_actualizados} reclamo(s) sincronizados`);
+    else mostrarOk(`${r.filas} fila(s) guardadas`);
+    const sync=Array.isArray(r.articulos)&&r.articulos.length?r.articulos:arts;
+    for(let i=0;i<sync.length;i++){
+      if(inf) inf.textContent=`Sincronizando ALMACÉN ${i+1}/${sync.length}…`;
+      await sincronizarAlmacen(area, sync[i]);
+    }
+    baseEdit=false; BASE_DIRTY={};
+    delete BASES_CACHE[area]; delete BASE_VALORES[area];
+    await cargarBases();
+  }catch(e){ mostrarError(e.message); if(btn) btn.disabled=false; }
+  finally{ baseBarraEdicion(); }
 }
 function descargarBase(){
   const lista = basesFiltradas();
