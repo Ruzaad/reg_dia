@@ -1,6 +1,6 @@
 -- PARCHE 68 — Resumen de OF: todas las operaciones del balance, sin filtro de nivel
 --
--- QUÉ PEDÍA EL CAMBIO
+-- QUÉ CAMBIA EN LA VISTA
 --   · La tabla principal queda en: Artículo · OF · Corte real · Entrada · Salida · Estado
 --     (se quita la columna "Módulos listos").
 --   · El detalle ▾ pasa a mostrar, por módulo, TODAS las operaciones del balance
@@ -9,33 +9,39 @@
 --   · Desaparece el selector "última / penúltima del módulo": la referencia del
 --     módulo es SIEMPRE su operación final. El único filtro que queda es el buscador
 --     y se listan TODAS las OF (terminadas y en proceso) en una sola tabla.
+--   · Se añade `of_cod`: el código de 10 dígitos del ERP (4 + la OF rellenada con
+--     ceros, 10136 → 4000010136). Solo se usa en el Excel; en pantalla la OF se
+--     sigue leyendo corta.
 --
--- POR QUÉ UNA FUNCIÓN NUEVA Y NO UN REEMPLAZO
---   El mismo repo está publicado en Netlify, Vercel y GitHub Pages contra ESTA base.
---   Un push a `main` no actualiza los tres a la vez, así que `fn_of_trazabilidad`
---   (con p_nivel) se queda intacta mientras siga habiendo frontends viejos
---   llamándola. Una vez que los tres despliegues sirvan esta versión y los logs no
---   registren llamadas a la vieja, se puede borrar — pedir confirmación antes.
+-- POR QUÉ SE ACTUALIZA LA FUNCIÓN EN VEZ DE CREAR OTRA
+--   El mismo repo está publicado en Netlify, Vercel y GitHub Pages contra ESTA base
+--   y un push a `main` no actualiza los tres a la vez, así que la FIRMA se mantiene
+--   igual: `fn_of_trazabilidad(p_dni, p_token, p_nivel default 'PENULTIMA')`. Los
+--   frontends que todavía manden `p_nivel` siguen resolviendo en PostgREST y siguen
+--   recibiendo los campos que pintan (`nivel`, `n_mods`, `n_listos`, y en cada módulo
+--   `operacion`, `nop`, `producida`, `cant_prog`, `ruta_base`, `es_acabado`).
+--   `p_nivel` se acepta y se ignora: la referencia es siempre la operación final.
+--   Único detalle cosmético en un frontend viejo: el estado del módulo llega como
+--   'COMPLETADO' en vez de 'TERMINADO', y su pastilla se pinta ámbar en vez de verde
+--   hasta que ese despliegue se actualice.
 --
--- CAMBIOS DE CÁLCULO RESPECTO DE fn_of_trazabilidad
+-- CAMBIOS DE CÁLCULO
 --   · `ruta` ya no recorta a la última/penúltima: trae TODAS las operaciones del
 --     balance del módulo. `ops` le suma los N°OP reclamados que la BASE no tiene,
 --     para que un módulo sin ruta no salga vacío.
---   · La referencia del módulo (entrada/salida/estado) es la operación de mayor
---     N°OP, ya no depende de p_nivel.
+--   · La referencia del módulo (salida/estado) es la operación de mayor N°OP.
 --   · `pct` = producida / corte real de la OF, por operación y por módulo.
 --   · Estado de módulo y de operación: COMPLETADO / EN PROCESO.
 --
 -- RENDIMIENTO (medido en producción, 149 OF · 910 módulos · 9.595 operaciones)
---   fn_of_trazabilidad     → 4,3 s · 281 kB
---   fn_of_trazabilidad_v2  → 4,6 s · 1,7 MB
+--   antes → 4,3 s · 281 kB      después → 5,5 s · 1,7 MB
 --   El JSON de módulos y el de operaciones se arman AGRUPANDO (`opsjson`/`modjson`),
 --   no con subconsultas correlacionadas por módulo: con el correlacionado la misma
 --   respuesta tardaba 7,4 s porque recorría las 9.595 operaciones una vez por módulo.
---   Es una vista solo de ingeniería (escritorio) y se pide a mano con "Cargar".
+--   Es una vista solo de ingeniería (escritorio) y se pide a mano con "Cargar", así
+--   que no entra en la carga del cambio de turno (ver parche 67).
 
-
-create or replace function public.fn_of_trazabilidad_v2(p_dni text, p_token uuid)
+create or replace function public.fn_of_trazabilidad(p_dni text, p_token uuid, p_nivel text default 'PENULTIMA')
 returns json
 language plpgsql
 security definer
@@ -45,6 +51,8 @@ as $function$
 declare v json;
 begin
   perform _ing(p_dni, p_token);
+  /* p_nivel queda solo por compatibilidad: los frontends aún no actualizados lo
+     siguen mandando. La referencia del módulo es SIEMPRE su operación final. */
 
   with rec as materialized (
     /* Reclamos activos de cada OF. `_nk` en el o_f porque la grafía de la OF
@@ -111,8 +119,6 @@ begin
                          and pp.modulo = o.modulo and pp.nop = o.n_op
   ),
   fin as (
-    /* Operación FINAL del módulo: la referencia con la que se decide salida y
-       estado del módulo (ya no hay selector última/penúltima). */
     select o_f, area, modulo, n_op ref_nop, operacion ref_op, en_base ruta_base,
            producida ref_prod
       from opsf where rn_fin = 1
@@ -199,7 +205,11 @@ begin
      group by x.o_f
   )
   select coalesce(json_agg(json_build_object(
-      'of', f.o_f, 'articulo', f.articulo,
+      'of', f.o_f,
+      /* Código de 10 dígitos que usa el ERP: 4 + la OF rellenada con ceros
+         (10136 → 4000010136). Va junto a la OF corta, no en su lugar. */
+      'of_cod', '4' || lpad(f.o_f, 9, '0'),
+      'articulo', f.articulo,
       'cant_prog', round(f.cant_prog,0),
       'entrada', to_char(a.entrada at time zone 'America/Lima','YYYY-MM-DD HH24:MI'),
       'salida',  to_char(a.salida  at time zone 'America/Lima','YYYY-MM-DD HH24:MI'),
@@ -214,15 +224,15 @@ begin
     left join porof a   on a.o_f  = f.o_f
     left join modjson mj on mj.o_f = f.o_f;
 
-  return json_build_object('ok', true, 'items', v);
+  /* `nivel` se sigue devolviendo para los frontends viejos, que lo pintan. */
+  return json_build_object('ok', true, 'nivel', 'ULTIMA', 'items', v);
 exception when others then
   if SQLERRM like '%SESION_INVALIDA%' or SQLERRM like '%NO_AUTORIZADA%' then raise; end if;
   return json_build_object('ok', false, 'error', SQLERRM);
 end $function$;
 
--- Los permisos salen iguales a los de fn_of_trazabilidad (anon ejecuta vía PostgREST).
-notify pgrst, 'reload schema';
+-- La v2 fue un paso intermedio de este mismo parche: nunca llegó a producción
+-- (ningún despliegue publicado la llamó) y se borra.
+drop function if exists public.fn_of_trazabilidad_v2(text, uuid);
 
--- NO se borra fn_of_trazabilidad(p_dni, p_token, p_nivel): la siguen llamando los
--- despliegues que aún no tengan esta versión del frontend. Borrarla es un paso
--- aparte, con confirmación, cuando los logs no registren más llamadas.
+notify pgrst, 'reload schema';

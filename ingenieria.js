@@ -2451,12 +2451,14 @@ function ofsToggle(i){
    meses salía EN PROCESO porque las unidades anteriores quedaban fuera.
    Ya no hay selector última/penúltima: la referencia del módulo es SIEMPRE su
    operación final, y el detalle trae TODAS las operaciones del balance con su
-   porcentaje. El corte real viene en la respuesta: aquí no se consulta la
+   porcentaje. La RPC conserva su tercer argumento `p_nivel` (con valor por
+   defecto) solo para los despliegues que aún no tengan esta versión; desde aquí
+   no se manda. El corte real viene en la respuesta: aquí no se consulta la
    hoja "OF". */
 async function cargarAvof(){
   $("avofTabla").innerHTML=cargandoHTML("Cargando resumen…"); $("avofResumen").textContent="";
   try{
-    const r=await rpc("fn_of_trazabilidad_v2",{p_dni:ING.dni,p_token:ING.token});
+    const r=await rpc("fn_of_trazabilidad",{p_dni:ING.dni,p_token:ING.token});
     if(!r.ok){ mostrarError(r.error||"Error"); $("avofTabla").innerHTML=""; return; }
     AVOF={items:r.items||[], _rows:[]};
     avofPintar();
@@ -2562,25 +2564,37 @@ function avofCuadro(titulo, mods){
       <th class="izq">Operación</th><th>Producida</th><th>%</th><th>Estado</th></tr></thead>
       <tbody>${body}</tbody></table>`;
 }
-/* Tres hojas, en el orden en que se lee el avance: la OF completa, el detalle
-   operación por operación, y el resumen de la operación final de cada módulo. */
+/* Código de OF del ERP: 4 + la OF rellenada con ceros hasta 10 dígitos
+   (10136 → 4000010136). Lo manda la RPC; se recalcula aquí por si la respuesta
+   viene de una versión anterior. Solo se usa en el Excel: en pantalla la OF se
+   sigue leyendo corta. */
+function avofOfCod(r){
+  if(r.of_cod) return r.of_cod;
+  const of=String(r.of||"");
+  return /^\d+$/.test(of) ? "4"+of.padStart(9,"0") : of;
+}
+/* Tres hojas con el mismo criterio de columnas: la OF completa, el detalle
+   operación por operación, y el cierre de cada módulo. */
 function descargarAvof(){
   const rows=AVOF._rows||[]; if(!rows.length){ mostrarError("No hay datos para descargar"); return; }
-  const gen=[["Artículo","OF","Corte real","Entrada","Salida","Estado"]];
-  rows.forEach(r=>gen.push([r.articulo,r.of,r.cant_prog,r.entrada||"",r.salida||"",r.estado]));
+  const gen=[["OF","Artículo","Cantidad X OF","Estado","Entrada","Salida"]];
+  rows.forEach(r=>gen.push([avofOfCod(r),r.articulo,r.cant_prog,r.estado,r.entrada||"",r.salida||""]));
 
-  const mod=[["OF","Artículo","Área","Módulo","N°OP","Operación","Producida",
-              "Corte real","% avance","Estado"]];
-  const fin=[["OF","Artículo","Área","Módulo","N°OP","Operación final","Producida",
-              "Corte real","% avance","Entrada","Salida","Estado"]];
-  rows.forEach(r=>(r.modulos||[]).forEach(m=>{
-    ((m.operaciones&&m.operaciones.length)?m.operaciones:[{nop:m.nop,operacion:m.operacion,
-      producida:m.producida,cant_prog:m.cant_prog,pct:m.pct,estado:m.estado}])
-      .forEach(o=>mod.push([r.of,r.articulo,m.area,m.modulo,o.nop,o.operacion,
-        o.producida,o.cant_prog,o.pct,o.estado]));
-    fin.push([r.of,r.articulo,m.area,m.modulo,m.nop,m.operacion,m.producida,m.cant_prog,
-      m.pct,m.entrada||"",m.salida||"",m.estado]);
-  }));
+  const mod=[["OF","Artículo","Área","Módulo","N°OP","Operación","Cantidad X OF",
+              "Producida","% avance","Estado"]];
+  const fin=[["OF","Artículo","Área","Módulo","N°OP","Operación final","Cantidad X OF",
+              "Producida","% avance","Estado","Entrada","Salida"]];
+  rows.forEach(r=>{
+    const cod=avofOfCod(r);
+    (r.modulos||[]).forEach(m=>{
+      ((m.operaciones&&m.operaciones.length)?m.operaciones:[{nop:m.nop,operacion:m.operacion,
+        producida:m.producida,cant_prog:m.cant_prog,pct:m.pct,estado:m.estado}])
+        .forEach(o=>mod.push([cod,r.articulo,m.area,m.modulo,o.nop,o.operacion,
+          o.cant_prog,o.producida,o.pct,o.estado]));
+      fin.push([cod,r.articulo,m.area,m.modulo,m.nop,m.operacion,m.cant_prog,m.producida,
+        m.pct,m.estado,m.entrada||"",m.salida||""]);
+    });
+  });
 
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(gen), "GENERAL");
