@@ -12,15 +12,36 @@
 --   · Se añade `of_cod`: el código de 10 dígitos del ERP (4 + la OF rellenada con
 --     ceros, 10136 → 4000010136). Solo se usa en el Excel; en pantalla la OF se
 --     sigue leyendo corta.
+--   · Los módulos se ordenan por el N°OP de su operación final (el orden de la
+--     ruta) y no por el nombre del módulo. Acabado sigue yendo al final.
+--   · Filtro de periodo por meses (`p_desde` / `p_hasta`, ambos opcionales).
+--
+-- LA REGLA DEL PERIODO
+--   Una OF aparece en el periodo si su ventana de actividad lo toca, así que sale
+--   tanto en el mes en que EMPEZÓ como en el mes en que TERMINÓ: una que arrancó
+--   en agosto y cerró en setiembre se ve en los dos, con sus fechas reales sin
+--   recortar. El filtro elige QUÉ OF se devuelven; el cálculo (producida, %,
+--   entrada, salida, estado) sigue siendo acumulativo sobre toda la historia.
+--   Con los dos parámetros en null salen todas, que es lo que había hasta ahora.
+--   Efecto de borde: una OF en proceso sin ningún ticket dentro del rango no sale;
+--   se la ve ampliando el rango hasta el mes en que sí tuvo movimiento.
+--
+-- POR QUÉ HAY QUE BORRAR LA FUNCIÓN DE 3 ARGUMENTOS
+--   `create or replace` con otra lista de argumentos no reemplaza: SOBRECARGA. Si
+--   convivieran las dos, PostgREST no sabría cuál elegir al recibir
+--   {p_dni, p_token, p_nivel} y devolvería 300 Multiple Choices. Con UNA sola
+--   función de 5 argumentos y defaults resuelven las dos llamadas: la del frontend
+--   viejo ({p_dni,p_token,p_nivel}) y la del nuevo ({p_dni,p_token,p_desde,p_hasta}).
 --
 -- POR QUÉ SE ACTUALIZA LA FUNCIÓN EN VEZ DE CREAR OTRA
 --   El mismo repo está publicado en Netlify, Vercel y GitHub Pages contra ESTA base
---   y un push a `main` no actualiza los tres a la vez, así que la FIRMA se mantiene
---   igual: `fn_of_trazabilidad(p_dni, p_token, p_nivel default 'PENULTIMA')`. Los
---   frontends que todavía manden `p_nivel` siguen resolviendo en PostgREST y siguen
---   recibiendo los campos que pintan (`nivel`, `n_mods`, `n_listos`, y en cada módulo
---   `operacion`, `nop`, `producida`, `cant_prog`, `ruta_base`, `es_acabado`).
---   `p_nivel` se acepta y se ignora: la referencia es siempre la operación final.
+--   y un push a `main` no actualiza los tres a la vez, así que `p_nivel` SE CONSERVA
+--   como primer parámetro opcional: un frontend que todavía lo mande sigue
+--   resolviendo en PostgREST y sigue recibiendo los campos que pinta (`nivel`,
+--   `n_mods`, `n_listos`, y en cada módulo `operacion`, `nop`, `producida`,
+--   `cant_prog`, `ruta_base`, `es_acabado`). Se acepta y se ignora: la referencia es
+--   siempre la operación final. Y como no manda `p_desde`/`p_hasta`, recibe todas
+--   las OF, igual que antes.
 --   Único detalle cosmético en un frontend viejo: el estado del módulo llega como
 --   'COMPLETADO' en vez de 'TERMINADO', y su pastilla se pinta ámbar en vez de verde
 --   hasta que ese despliegue se actualice.
@@ -34,14 +55,23 @@
 --   · Estado de módulo y de operación: COMPLETADO / EN PROCESO.
 --
 -- RENDIMIENTO (medido en producción, 149 OF · 910 módulos · 9.595 operaciones)
---   antes → 4,3 s · 281 kB      después → 5,5 s · 1,7 MB
+--   antes → 4,3 s · 281 kB      después → 4,3 s · 1,7 MB (sin filtro, todas)
+--   con el periodo en un mes → 3,7 s · 1,2 MB para 89 OF: la respuesta baja con
+--   las OF seleccionadas. El piso de ~3,5 s es el recorrido de `reclamos`, que
+--   crece con la historia aunque se filtre; lo que el filtro acota —y es lo que
+--   revienta el gateway y la descarga— es el tamaño de la respuesta. A ~100 OF
+--   nuevas al mes y ~12 kB por OF, sin filtro esto llegaría a ~8 MB y ~30 s
+--   alrededor de los 6 meses.
 --   El JSON de módulos y el de operaciones se arman AGRUPANDO (`opsjson`/`modjson`),
 --   no con subconsultas correlacionadas por módulo: con el correlacionado la misma
 --   respuesta tardaba 7,4 s porque recorría las 9.595 operaciones una vez por módulo.
 --   Es una vista solo de ingeniería (escritorio) y se pide a mano con "Cargar", así
 --   que no entra en la carga del cambio de turno (ver parche 67).
 
-create or replace function public.fn_of_trazabilidad(p_dni text, p_token uuid, p_nivel text default 'PENULTIMA')
+drop function if exists public.fn_of_trazabilidad(text, uuid, text);
+
+create function public.fn_of_trazabilidad(p_dni text, p_token uuid, p_nivel text default 'PENULTIMA',
+                                          p_desde date default null, p_hasta date default null)
 returns json
 language plpgsql
 security definer
@@ -54,9 +84,10 @@ begin
   /* p_nivel queda solo por compatibilidad: los frontends aún no actualizados lo
      siguen mandando. La referencia del módulo es SIEMPRE su operación final. */
 
-  with rec as materialized (
+  with recall as materialized (
     /* Reclamos activos de cada OF. `_nk` en el o_f porque la grafía de la OF
-       no es uniforme en los reclamos anteriores al parche 26. */
+       no es uniforme en los reclamos anteriores al parche 26. Se recorre UNA
+       vez: de aquí salen tanto la ventana del filtro como el detalle. */
     select f.o_f, f.cant_prog,
            r.area,
            coalesce(nullif(trim(r.modulo),''),'(sin módulo)') modulo,
@@ -65,6 +96,35 @@ begin
       from ofs f
       join reclamos r on _nk(r.o_f) = _nk(f.o_f)
      where r.estado = 'ACTIVO'
+  ),
+  ventana as (
+    /* Ventana de actividad de cada OF: primer y último ticket, o la fecha de
+       carga si todavía no tiene ninguno. Contiene por construcción su inicio y
+       su final reales, así que filtrar por aquí nunca deja fuera una OF que
+       empezó o terminó dentro del periodo. */
+    select f.o_f,
+           coalesce(v.ent0, f.fecha_carga) ent0,
+           coalesce(v.ult,  f.fecha_carga) ult
+      from ofs f
+      left join (select o_f, min(creado) ent0, max(creado) ult
+                   from recall group by o_f) v on v.o_f = f.o_f
+  ),
+  sel as (
+    /* El periodo recorta QUÉ OF se devuelven, nunca el cálculo: producida, %,
+       entrada, salida y estado se siguen acumulando sobre TODA la historia. Esa
+       es la trampa del parche 61: si el rango recortara los reclamos, una OF a
+       caballo entre dos meses saldría EN PROCESO porque las unidades del mes
+       anterior quedarían fuera.
+       Una OF entra si su ventana toca el periodo, así que sale tanto en el mes
+       en que empezó como en el mes en que terminó, y sus columnas Entrada y
+       Salida siguen mostrando las fechas reales, no recortadas al rango.
+       Con p_desde/p_hasta en null salen todas. */
+    select o_f from ventana
+     where (p_desde is null or (ult  at time zone 'America/Lima')::date >= p_desde)
+       and (p_hasta is null or (ent0 at time zone 'America/Lima')::date <= p_hasta)
+  ),
+  rec as materialized (
+    select r.* from recall r where r.o_f in (select o_f from sel)
   ),
   mods as materialized (
     select o_f, cant_prog, area, modulo,
@@ -199,7 +259,11 @@ begin
            añadirla en los dos sitios. */
         'es_acabado', (x.area = 'ACABADO'),
         'operaciones', coalesce(oj.ops, '[]'::json))
-        order by (x.area = 'ACABADO'), x.area, x.modulo) mods
+        /* Por N°OP de la operación final, que es el orden de la ruta: así el
+           módulo se lee en el orden en que la prenda lo recorre y no por el
+           nombre del módulo. Acabado va al final, en su propio cuadro, y
+           ordenado por su propia secuencia. */
+        order by (x.area = 'ACABADO'), x.area, x.ref_nop nulls last, x.modulo) mods
       from fila x
       left join opsjson oj on oj.o_f = x.o_f and oj.area = x.area and oj.modulo = x.modulo
      group by x.o_f
@@ -221,6 +285,7 @@ begin
       order by a.entrada desc nulls last, f.o_f), '[]'::json)
     into v
     from ofs f
+    join sel s on s.o_f = f.o_f
     left join porof a   on a.o_f  = f.o_f
     left join modjson mj on mj.o_f = f.o_f;
 
