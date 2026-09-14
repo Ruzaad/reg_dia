@@ -1931,7 +1931,7 @@ function dashTab(t){
 }
 let DBCH={};                 // instancias Chart por id de canvas
 let DB={fpReady:false, efSel:{}, cantSel:{}, modSel:{}, efModo:"ef", efData:null};
-let AVOF={items:[], _rows:[], nivel:"PENULTIMA"};
+let AVOF={items:[], _rows:[]};
 let avofSort={col:null,dir:1};
 function ordenarAvof(col){ if(avofSort.col===col) avofSort.dir*=-1; else avofSort={col,dir:1}; avofPintar(); }
 function DBCOL(i){ const c=["#0D3B85","#D49D53","#1E7B3C","#1A56B4","#8e6bb5","#B3261E","#5e548e","#3a6ea5","#b0722a","#2e8b8b"]; return c[i%c.length]; }
@@ -2446,19 +2446,21 @@ function ofsToggle(i){
   el.hidden=!el.hidden;
 }
 
-/* --- Resumen de OF: entrada y salida por MÓDULO (parche 61) ---
+/* --- Resumen de OF: entrada y salida por MÓDULO (parche 61, ampliado en 68) ---
    Acumulativo, sin rango: con fechas, una OF terminada a caballo entre dos
    meses salía EN PROCESO porque las unidades anteriores quedaban fuera.
-   El filtro última/penúltima se resuelve en la RPC (cambia el cálculo, no
-   solo lo que se pinta), así que cambiarlo recarga. El corte real viene en
-   la respuesta: aquí ya no se consulta la hoja "OF". */
+   Ya no hay selector última/penúltima: la referencia del módulo es SIEMPRE su
+   operación final, y el detalle trae TODAS las operaciones del balance con su
+   porcentaje. La RPC conserva su tercer argumento `p_nivel` (con valor por
+   defecto) solo para los despliegues que aún no tengan esta versión; desde aquí
+   no se manda. El corte real viene en la respuesta: aquí no se consulta la
+   hoja "OF". */
 async function cargarAvof(){
   $("avofTabla").innerHTML=cargandoHTML("Cargando resumen…"); $("avofResumen").textContent="";
-  const nivel=$("avofNivel")?$("avofNivel").value:"PENULTIMA";
   try{
-    const r=await rpc("fn_of_trazabilidad",{p_dni:ING.dni,p_token:ING.token,p_nivel:nivel});
+    const r=await rpc("fn_of_trazabilidad",{p_dni:ING.dni,p_token:ING.token});
     if(!r.ok){ mostrarError(r.error||"Error"); $("avofTabla").innerHTML=""; return; }
-    AVOF={items:r.items||[], _rows:[], nivel:r.nivel||nivel};
+    AVOF={items:r.items||[], _rows:[]};
     avofPintar();
   }catch(e){ $("avofTabla").innerHTML=""; mostrarError(e.message); }
 }
@@ -2479,36 +2481,42 @@ async function metasOF(areas){
   }catch(e){}
   return m;
 }
-/* Estado del módulo/OF → clase del pill. "EN PROCESO" son dos palabras, así
-   que no se puede usar el estado como clase directamente. */
+/* Estado del módulo/OF/operación → clase del pill. "EN PROCESO" son dos
+   palabras, así que no se puede usar el estado como clase directamente. */
 function avofPill(estado){
-  const ok = estado==="TERMINADA" || estado==="TERMINADO";
+  const ok = estado==="TERMINADA" || estado==="TERMINADO" || estado==="COMPLETADO";
   return `<span class="pill ${ok?"ACTIVO":"PROCESO"}">${esc(estado||"—")}</span>`;
 }
+/* % de avance = producida / corte real. Barra + número, para leer de un golpe
+   qué operación del balance va retrasada. */
+function avofPct(p){
+  if(p==null) return `<span class="sub">—</span>`;
+  const v=Math.min(100,Math.max(0,+p||0)), cls=v>=100?"alto":(v<50?"bajo":"");
+  return `<div class="avof-pct"><div class="avof-pct-fill ${cls}" style="width:${v}%"></div>
+    <span class="avof-pct-lbl">${(+p).toFixed(1)}%</span></div>`;
+}
+/* Se listan TODAS las OF (terminadas y en proceso) en una sola tabla: el único
+   filtro que queda es el buscador. */
 function avofPintar(){
-  const soloFin=$("avofSoloCompl")?$("avofSoloCompl").checked:false;
   const q=normKey($("avofBuscar")?$("avofBuscar").value:"");
-  const todas=(AVOF.items||[]).filter(r=>!q||normKey((r.articulo||"")+" "+(r.of||"")).includes(q));
-  const nFin=todas.filter(r=>r.estado==="TERMINADA").length;
-  let rows=todas.filter(r=>r.estado===(soloFin?"TERMINADA":"EN PROCESO"));
+  let rows=(AVOF.items||[]).filter(r=>!q||normKey((r.articulo||"")+" "+(r.of||"")).includes(q));
+  const nFin=rows.filter(r=>r.estado==="TERMINADA").length;
   if(avofSort.col){ const c=avofSort.col; rows=rows.slice().sort((a,b)=>cmpVal(a[c],b[c])*avofSort.dir); }
   AVOF._rows=rows;
-  $("avofResumen").textContent=`${nFin} terminada(s) · ${todas.length-nFin} en proceso`
-    + ` · operación ${AVOF.nivel==="ULTIMA"?"última":"penúltima"} de cada módulo`;
+  $("avofResumen").textContent=`${rows.length} OF · ${nFin} terminada(s) · ${rows.length-nFin} en proceso`;
   const fl=k=>avofSort.col===k?(avofSort.dir===1?" ▲":" ▼"):"";
   const C=[["articulo","Artículo"],["of","OF"],["cant_prog","Corte real"],
-    ["n_listos","Módulos listos"],["entrada","Entrada"],["salida","Salida"],["estado","Estado"]];
+    ["entrada","Entrada"],["salida","Salida"],["estado","Estado"]];
   const thead=`<thead><tr><th></th>${C.map(c=>
     `<th class="ord${c[0]==="articulo"?" izq":""}" onclick="ordenarAvof('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}</tr></thead>`;
   const body=rows.length? rows.map((r,i)=>`<tr>
       <td><button class="btn-mini gris" onclick="avofToggle(${i})">▾</button></td>
       <td class="izq"><b>${esc(r.articulo||"—")}</b></td><td>${esc(r.of)}</td>
       <td>${r.cant_prog!=null?r.cant_prog:"—"}</td>
-      <td>${r.n_listos}/${r.n_mods}</td>
       <td>${esc(r.entrada||"—")}</td><td>${esc(r.salida||"—")}</td>
       <td>${avofPill(r.estado)}</td></tr>
-      <tr class="avof-det" id="avofDet${i}" hidden><td></td><td colspan="7"></td></tr>`).join("")
-    : `<tr><td colspan="8"><div class="vacio-msg">Sin OF ${soloFin?"terminadas":"en proceso"} con este filtro</div></td></tr>`;
+      <tr class="avof-det" id="avofDet${i}" hidden><td></td><td colspan="6"></td></tr>`).join("")
+    : `<tr><td colspan="7"><div class="vacio-msg">Sin OF con este filtro</div></td></tr>`;
   $("avofTabla").innerHTML=thead+"<tbody>"+body+"</tbody>";
 }
 /* El detalle se arma al abrirlo: la vista es acumulativa y trae muchas OF. */
@@ -2529,30 +2537,69 @@ function avofDetalle(r){
     + (aca.length ? avofCuadro("Acabado — por módulo", aca) : "")
     + `</div>`;
 }
+/* Una fila por OPERACIÓN del balance; área y módulo se agrupan con rowspan
+   para no repetirlos en cada renglón. La última operación va marcada: es la
+   que decide la salida y el estado del módulo. */
 function avofCuadro(titulo, mods){
   const sinRuta=`<span class="avof-aviso" title="Este módulo no tiene ruta en BASE: se usa el mayor N°OP reclamado.">*</span>`;
-  const body=mods.length? mods.map(m=>`<tr>
-      <td>${esc(m.area)}</td><td class="izq">${esc(m.modulo)}</td>
-      <td class="izq">${esc(m.operacion||"—")}${m.ruta_base===false?sinRuta:""}</td>
-      <td><b>${m.producida}</b></td><td>${m.cant_prog}</td>
-      <td>${esc(m.entrada||"—")}</td><td>${esc(m.salida||"—")}</td>
-      <td>${avofPill(m.estado)}</td></tr>`).join("")
-    : `<tr><td colspan="8"><div class="vacio-msg">Sin módulos</div></td></tr>`;
+  const body=mods.length? mods.map(m=>{
+    const ops=(m.operaciones&&m.operaciones.length)? m.operaciones
+      : [{nop:m.nop, operacion:m.operacion, producida:m.producida,
+          cant_prog:m.cant_prog, pct:m.pct, estado:m.estado, en_base:m.ruta_base}];
+    const n=ops.length;
+    const cab=`<td rowspan="${n}">${esc(m.area)}</td>
+      <td rowspan="${n}" class="izq"><b>${esc(m.modulo)}</b>${m.ruta_base===false?sinRuta:""}
+        <div class="sub">${esc(m.entrada||"—")} → ${esc(m.salida||"—")}</div>
+        <div>${avofPill(m.estado)}</div></td>`;
+    return ops.map((o,j)=>`<tr${o.nop===m.nop?' class="avof-op-fin"':""}>
+      ${j===0?cab:""}
+      <td class="izq">${o.nop!=null?`<span class="avof-nop">${o.nop}</span> `:""}${esc(o.operacion||"—")}${o.en_base===false?sinRuta:""}</td>
+      <td><b>${o.producida}</b> <span class="sub">/ ${o.cant_prog}</span></td>
+      <td class="avof-pct-td">${avofPct(o.pct)}</td>
+      <td>${avofPill(o.estado)}</td></tr>`).join("");
+  }).join("")
+    : `<tr><td colspan="6"><div class="vacio-msg">Sin módulos</div></td></tr>`;
   return `<div class="tk-ops-title">${titulo}</div>
-    <table class="tabla"><thead><tr><th>Área</th><th class="izq">Módulo</th>
-      <th class="izq">Operación</th><th>Producida</th><th>Corte real</th>
-      <th>Entrada</th><th>Salida</th><th>Estado</th></tr></thead><tbody>${body}</tbody></table>`;
+    <table class="tabla avof-ops"><thead><tr><th>Área</th><th class="izq">Módulo</th>
+      <th class="izq">Operación</th><th>Producida</th><th>%</th><th>Estado</th></tr></thead>
+      <tbody>${body}</tbody></table>`;
 }
+/* Código de OF del ERP: 4 + la OF rellenada con ceros hasta 10 dígitos
+   (10136 → 4000010136). Lo manda la RPC; se recalcula aquí por si la respuesta
+   viene de una versión anterior. Solo se usa en el Excel: en pantalla la OF se
+   sigue leyendo corta. */
+function avofOfCod(r){
+  if(r.of_cod) return r.of_cod;
+  const of=String(r.of||"");
+  return /^\d+$/.test(of) ? "4"+of.padStart(9,"0") : of;
+}
+/* Tres hojas con el mismo criterio de columnas: la OF completa, el detalle
+   operación por operación, y el cierre de cada módulo. */
 function descargarAvof(){
   const rows=AVOF._rows||[]; if(!rows.length){ mostrarError("No hay datos para descargar"); return; }
-  const CAB=["Artículo","OF","Corte real","Módulos listos","Total módulos","Entrada","Salida","Estado"];
-  const filas=rows.map(r=>[r.articulo,r.of,r.cant_prog,r.n_listos,r.n_mods,r.entrada||"",r.salida||"",r.estado]);
-  const det=[["OF","Artículo","Área","Módulo","Operación","N°OP","Producida","Corte real","Entrada","Salida","Estado"]];
-  rows.forEach(r=>(r.modulos||[]).forEach(m=>det.push([r.of,r.articulo,m.area,m.modulo,m.operacion,
-    m.nop,m.producida,m.cant_prog,m.entrada||"",m.salida||"",m.estado])));
+  const gen=[["OF","Artículo","Cantidad X OF","Estado","Entrada","Salida"]];
+  rows.forEach(r=>gen.push([avofOfCod(r),r.articulo,r.cant_prog,r.estado,r.entrada||"",r.salida||""]));
+
+  const mod=[["OF","Artículo","Área","Módulo","N°OP","Operación","Cantidad X OF",
+              "Producida","% avance","Estado"]];
+  const fin=[["OF","Artículo","Área","Módulo","N°OP","Operación final","Cantidad X OF",
+              "Producida","% avance","Estado","Entrada","Salida"]];
+  rows.forEach(r=>{
+    const cod=avofOfCod(r);
+    (r.modulos||[]).forEach(m=>{
+      ((m.operaciones&&m.operaciones.length)?m.operaciones:[{nop:m.nop,operacion:m.operacion,
+        producida:m.producida,cant_prog:m.cant_prog,pct:m.pct,estado:m.estado}])
+        .forEach(o=>mod.push([cod,r.articulo,m.area,m.modulo,o.nop,o.operacion,
+          o.cant_prog,o.producida,o.pct,o.estado]));
+      fin.push([cod,r.articulo,m.area,m.modulo,m.nop,m.operacion,m.cant_prog,m.producida,
+        m.pct,m.estado,m.entrada||"",m.salida||""]);
+    });
+  });
+
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "ResumenOF");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(det), "PorModulo");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(gen), "GENERAL");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mod), "MODULO");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(fin), "OPERACION FINAL");
   XLSX.writeFile(wb,"RESUMEN_OF.xlsx");
 }
 

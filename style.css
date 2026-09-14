@@ -900,6 +900,24 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .avof-det td[colspan]{padding:0;}
 /* Módulo sin ruta en BASE: el N°OP máx es el mayor reclamado, no el planificado. */
 .avof-aviso{color:var(--alerta);font-weight:800;cursor:help;margin-left:2px;}
+/* Detalle: una fila por operación del balance, agrupadas por módulo (rowspan). */
+.avof-ops td{vertical-align:middle;}
+/* `.sub` global trae margin-bottom y centrado: dentro de la tabla estorban. */
+.avof-ops .sub{font-size:11px;font-weight:700;margin:0;text-align:inherit;}
+.avof-nop{display:inline-block;min-width:24px;background:var(--gris-fondo);color:#5a6270;
+  border-radius:6px;padding:1px 5px;font-size:11px;font-weight:800;text-align:center;
+  font-family:"Fira Code",monospace;}
+/* La operación final es la que decide salida y estado del módulo. */
+.avof-ops tr.avof-op-fin>td{background:#f4f7fd;font-weight:800;box-shadow:inset 0 -2px 0 var(--azul);}
+.avof-pct-td{min-width:110px;}
+.avof-pct{position:relative;height:18px;background:var(--gris-fondo);border-radius:6px;overflow:hidden;}
+/* Tintes, no los colores plenos: el número va encima de la barra y tiene que
+   leerse igual con la barra al 3% que al 100%. */
+.avof-pct-fill{height:100%;background:#cfe0f7;}
+.avof-pct-fill.alto{background:#cfe9d7;}
+.avof-pct-fill.bajo{background:#f7d9d5;}
+.avof-pct-lbl{position:absolute;inset:0;line-height:18px;font-size:11px;font-weight:800;
+  color:var(--texto);font-family:"Fira Code",monospace;text-align:center;}
 .ing-main{flex:1;min-width:0;overflow-y:auto;padding:18px;position:relative;}
 .ing-main .pantalla{padding:0;overflow:visible;}
 
