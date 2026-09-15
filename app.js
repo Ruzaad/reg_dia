@@ -815,15 +815,15 @@ function mapResidual(r){
    Sin almacén y sin código: OF (artículo · color) → operación → cantidad,
    con techo en el corte real de la OF. `fn_of_trazabilidad` parte de `ofs`,
    así que el trabajo sin OF no ensucia el resumen. */
-let ACAB={ofs:[], extra:[], of:null, op:null, tipo:null, prenda:null};
+let ACAB={ofs:[], extra:[], of:null, op:null, tipo:null, prenda:null, ver:false};
 let CAUSAS=[];
 /* El operario elige una causa (auditoría, falta de vapor…); los minutos que
    suma los pone la BD desde `causas_std`. Nunca ve el número. */
 function pintarCausas(){
   const card=$("acabCausaCard"), sel=$("acabCausa");
   if(!card || !sel) return;
-  // No aplica al trabajo sin OF: ese ya tiene su propio STD.
-  const aplica = CAUSAS.length && !ACAB.tipo;
+  // No aplica al trabajo sin OF (ese ya tiene su propio STD) ni en solo lectura.
+  const aplica = CAUSAS.length && !ACAB.tipo && !ACAB.ver;
   card.hidden = !aplica;
   sel.innerHTML = `<option value="">No, como siempre</option>`
     + (aplica ? CAUSAS.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("") : "");
@@ -848,7 +848,13 @@ async function cargarAcabHist(){
 }
 function pintarAcabHist(items){
   const card=$("acabHistCard"), z=$("acabHist");
-  if(!items.length){ card.hidden=true; return; }
+  if(!items.length){
+    /* En solo lectura el histórico ES la pantalla: ocultarlo dejaría un cuadro
+       vacío sin explicación. */
+    if(ACAB.ver){ z.innerHTML=`<div class="vacio-msg">Sin registros en esta operación</div>`; card.hidden=false; }
+    else card.hidden=true;
+    return;
+  }
   const total=items.reduce((a,x)=>a+(Number(x.cant)||0),0);
   const hoy=new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"});
   const cuando=f=> f===hoy ? "hoy" : f;
@@ -974,8 +980,10 @@ function pintarAcabOps(){
         <div class="avance-bar"><div class="avance-fill ${pct>=80?'alto':pct<40?'bajo':''}" style="width:${pct}%"></div>
           <span class="avance-lbl">${pct}%</span></div>
       </div>
-      <div class="badge-disp ${queda?"":"vacio"}">${queda?qty(queda)+" und":"completa"}</div>`;
-    if(queda) c.onclick=()=>{ ACAB.op=lista[i]; ACAB.tipo=null; acabPedirCant(); };
+      <div class="badge-disp ${queda?"":"vacio"}">${queda?qty(queda)+" und":"completa · ver"}</div>`;
+    /* Completa también se abre, pero en SOLO LECTURA: es la única forma de ver
+       quién registró las cantidades de una operación ya cerrada. */
+    c.onclick=()=>{ ACAB.op=lista[i]; ACAB.tipo=null; acabPedirCant(!queda); };
     l.appendChild(c);
   });
 }
@@ -1000,15 +1008,23 @@ function acabDetalle(){
   $("tituloAcabCant").textContent = e ? e.operacion : x.operacion;
   $("acabDet").innerHTML = e
     ? `${esc(e.tipo)} · STD ${Number(e.std).toFixed(2)} min`
-    : `OF ${esc(o.of)} · ${esc(o.articulo)}<br>Quedan <b>${qty(Math.max(0,Number(o.cant_prog)-Number(x.hecho)))}</b> und de ${qty(o.cant_prog)}`;
+    : ACAB.ver
+      ? `OF ${esc(o.of)} · ${esc(o.articulo)}<br>Completa: <b>${qty(x.hecho)}</b> de ${qty(o.cant_prog)} und`
+      : `OF ${esc(o.of)} · ${esc(o.articulo)}<br>Quedan <b>${qty(Math.max(0,Number(o.cant_prog)-Number(x.hecho)))}</b> und de ${qty(o.cant_prog)}`;
 }
-function acabPedirCant(){
+/* `solo` = la operación ya llegó al corte: se entra igual, pero sin capturar.
+   Se ocultan cantidad, causa y REGISTRAR, y queda el histórico de quién
+   registró qué. */
+function acabPedirCant(solo){
+  ACAB.ver=!!solo;
   acabDetalle();
   $("acabCant").value="";
+  { const z=$("acabCantZona"); if(z) z.hidden=ACAB.ver; }
+  { const b=$("acabBtnReg");  if(b) b.hidden=ACAB.ver; }
   pintarCausas();
   cargarAcabHist();
   irA("pasoAcabCant");
-  setTimeout(()=>$("acabCant").focus(),150);
+  if(!ACAB.ver) setTimeout(()=>$("acabCant").focus(),150);
 }
 async function acabRegistrar(){
   const cant=parseFloat(String($("acabCant").value).replace(/[^\d.]/g,""));
@@ -1735,7 +1751,85 @@ function bindSupervisoraUI(){
   $("tabAvance").onclick  = ()=>{ marcarTab("tabAvance"); irA("pasoAvance"); cargarAvance(); timerAvance=setInterval(cargarAvance, 60000); };
   $("tabIncidencias").onclick = ()=>{ pararAvance(); marcarTab("tabIncidencias"); irA("pasoIncidencias"); cargarIncidencias(); };
   { const te=$("tabEfPersonal"); if(te) te.onclick = ()=>{ pararAvance(); marcarTab("tabEfPersonal"); irA("pasoEfPersonal"); cargarEfPersonal(); }; }
+  { const tr=$("tabReclamos"); if(tr) tr.onclick = ()=>{ pararAvance(); marcarTab("tabReclamos"); irA("pasoSupRec"); cargarSupRec(); }; }
   cargarEstadosSup();
+}
+
+/* --- Supervisión: quién reclamó (OF → módulo → operación) ---
+   Cada cambio de filtro es UNA llamada: la RPC devuelve a la vez las opciones
+   del siguiente filtro y las filas que ya calzan, así que la lista se va
+   acotando sola. Sin OF la RPC no devuelve detalle: es la regla de la pantalla.
+   En ACABADO no hay numeración (no pasa por el almacén), así que ahí la
+   columna de la derecha es la CANTIDAD. */
+let SR={of:"",mod:"",nop:"",acab:false};
+function srCambio(cual){
+  if(cual==="of"){ SR.of=$("srOF").value; SR.mod=""; SR.nop=""; }
+  if(cual==="mod"){ SR.mod=$("srMod").value; SR.nop=""; }
+  if(cual==="op"){ SR.nop=$("srOp").value; }
+  cargarSupRec(true);
+}
+/* `mantener` conserva lo elegido; sin él (entrar a la pestaña o ↻) se parte de cero. */
+async function cargarSupRec(mantener){
+  const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  if(!mantener){ SR={of:"",mod:"",nop:"",acab:false}; }
+  $("srLista").innerHTML=cargandoHTML("Cargando…");
+  $("srResumen").textContent="";
+  try{
+    const r=await rpc("fn_sup_reclamos_of",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),
+      p_of:SR.of||null, p_modulo:SR.mod||null, p_nop:SR.nop?Number(SR.nop):null});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("srLista").innerHTML=""; return; }
+    SR.acab=!!r.es_acabado;
+    srPintar(r);
+  }catch(e){ $("srLista").innerHTML=""; mostrarError(e.message); }
+}
+function srOpciones(sel, lista, valor, clave, etiqueta, todos){
+  const el=$(sel); if(!el) return;
+  el.innerHTML=`<option value="">${todos}</option>`
+    + (lista||[]).map(x=>`<option value="${esc(x[clave])}">${esc(etiqueta(x))}</option>`).join("");
+  el.value=valor||"";
+}
+function srPintar(r){
+  srOpciones("srOF", r.ofs, SR.of, "of", x=>`OF ${x.of}${x.articulo?" · "+x.articulo:""} (${x.n})`,
+    "Elige una OF…");
+  srOpciones("srMod", r.modulos, SR.mod, "modulo",
+    x=>`${x.modulo||"(sin módulo)"} (${x.n})`, "Todos los módulos");
+  srOpciones("srOp", r.operaciones, SR.nop, "nop",
+    x=>`${x.nop!=null?x.nop+" · ":""}${x.operacion||"(sin operación)"} (${x.n})`, "Todas las operaciones");
+  /* Los filtros aparecen según se va acotando: sin OF no hay nada que afinar. */
+  $("srCampoMod").hidden = !SR.of;
+  $("srCampoOp").hidden  = !SR.of;
+
+  const z=$("srLista");
+  if(!SR.of){
+    z.innerHTML=`<div class="vacio-msg">Elige una OF para ver quién reclamó.</div>`;
+    $("srResumen").textContent="";
+    return;
+  }
+  const items=r.items||[], total=Number(r.total)||0;
+  $("srResumen").textContent = total
+    ? (items.length<total
+        ? `${items.length} de ${total} registro(s) · afina por módulo u operación para verlos todos`
+        : `${total} registro(s)`)
+    : "";
+  if(!items.length){
+    z.innerHTML=`<div class="vacio-msg">Nadie ha reclamado con estos filtros.</div>`;
+    return;
+  }
+  /* Módulo y operación solo se repiten en cada fila cuando NO están fijados por
+     el filtro: si ya elegiste la operación, verla en cada renglón es ruido. */
+  const verCtx = !SR.nop;
+  z.innerHTML=`<div class="conf-card acab-hist" style="padding:10px 12px;">
+    <div class="acab-hist-lista" style="max-height:none;">${items.map(x=>`
+      <div class="acab-hist-fila">
+        <div>
+          <div class="acab-hist-quien">${esc(soloApellidos(x.nombre)||x.dni)}</div>
+          <div class="acab-hist-cuando">${esc(x.fecha)} · ${esc(x.hora)}</div>
+          ${verCtx?`<div class="acab-hist-causa">${esc(x.modulo||"—")}${x.operacion?" · "+esc(x.operacion):""}</div>`:""}
+        </div>
+        <div class="acab-hist-cant">${SR.acab
+          ? qty(x.cant)+" und"
+          : esc(x.numeracion||"—")}</div>
+      </div>`).join("")}</div></div>`;
 }
 
 /* --- Supervisión: Eficiencias del Personal (por fecha) --- */
@@ -2035,7 +2129,7 @@ async function asisGuardar(){
   }catch(e){ mostrarError(e.message); }
 }
 function marcarTab(id){
-  ["tabAsistencia","tabPersonal","tabAvance","tabIncidencias","tabEfPersonal"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });
+  ["tabAsistencia","tabPersonal","tabAvance","tabIncidencias","tabEfPersonal","tabReclamos"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });
 }
 function pararAvance(){ clearInterval(timerAvance); timerAvance=null; }
 
