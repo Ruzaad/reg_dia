@@ -209,6 +209,9 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .acab-hist-cant{font-weight:800;font-size:18px;white-space:nowrap;}
 .acab-hist-causa{font-size:13px;font-weight:700;color:var(--ocre);}
 .acab-hist-total{margin-top:10px;font-size:14px;font-weight:700;text-align:center;color:#5a6270;}
+/* Operación de ACABADO ya completa: se ve apagada, pero SÍ se abre — en solo
+   lectura, que es la única forma de ver quién registró esas cantidades. */
+.card-fila.off{opacity:.72;}
 
 /* OFs registradas · estado por área (parche 44) */
 .of-area{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;
@@ -375,6 +378,15 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
   border-radius:12px 12px 0 0;font-size:16px;font-weight:800;padding:12px 6px;cursor:pointer;
   line-height:1.15;overflow-wrap:break-word;}
 .tab.activo{background:var(--azul);color:#fff;}
+/* Con SEIS pestañas, repartir el ancho en celular parte las palabras letra a
+   letra ("ASI/STE/NCI/A"). A partir de ahí la fila se desliza en horizontal y
+   cada pestaña conserva su texto en una línea. */
+@media (max-width:620px){
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+    gap:6px;padding-bottom:2px;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tabs .tab{flex:0 0 auto;white-space:nowrap;font-size:14px;padding:11px 14px;}
+}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;
   max-width:760px;margin:0 auto;width:100%;}
 .kpi{background:var(--blanco);border-radius:14px;padding:14px;text-align:center;
@@ -654,7 +666,10 @@ body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",mono
 /* Ingeniería: más aire entre la barra de filtros y el contenido (ritmo de zonas).
    Sin selector de tipo `body` para no ganarle al override compacto de .gen-job. */
 [data-pagina="ingenieria"] .barra-control{margin-bottom:26px;}
-.barra-control .campo{display:flex;flex-direction:column;gap:5px;}
+.barra-control .campo{display:flex;flex-direction:column;gap:5px;min-width:0;max-width:100%;}
+/* Una opción larga ("4 · PLANCHAR MANGAS+CANESU+CUELLO") estiraba el select por
+   encima de su tarjeta: el ancho lo manda el contenedor, no la opción. */
+.barra-control select{max-width:100%;}
 .barra-control .campo>span{font-size:11px;font-weight:800;text-transform:uppercase;
   letter-spacing:.5px;color:#5a6270;}
 .barra-control select,.barra-control input[type=text],.barra-control input[type=date]{

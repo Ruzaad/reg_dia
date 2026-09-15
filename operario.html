@@ -103,9 +103,14 @@
     <div class="zona-conf">
       <h1 id="tituloAcabCant"></h1>
       <div class="conf-card">
-        <div class="tk-label">Cantidad que hiciste</div>
-        <input class="input-grande" id="acabCant" inputmode="numeric" placeholder="0" autocomplete="off"
-          style="max-width:220px;margin:6px auto;text-align:center;">
+        <!-- En una operación ya completa se entra en SOLO LECTURA (para ver quién
+             registró las cantidades), así que la zona de captura se oculta y
+             queda el detalle. -->
+        <div id="acabCantZona">
+          <div class="tk-label">Cantidad que hiciste</div>
+          <input class="input-grande" id="acabCant" inputmode="numeric" placeholder="0" autocomplete="off"
+            style="max-width:220px;margin:6px auto;text-align:center;">
+        </div>
         <div class="conf-det" id="acabDet"></div>
       </div>
       <!-- Variación del método (parche 36): el operario elige la causa, nunca minutos. -->
@@ -121,7 +126,7 @@
         <div class="tk-label">Ya registrado en esta operación</div>
         <div id="acabHist"></div>
       </div>
-      <button class="btn-principal" onclick="acabRegistrar()">REGISTRAR</button>
+      <button class="btn-principal" id="acabBtnReg" onclick="acabRegistrar()">REGISTRAR</button>
       <button class="btn-secundario" onclick="irA('pasoAcabOp')">VOLVER</button>
     </div>
   </section>

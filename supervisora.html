@@ -25,6 +25,7 @@
     <button id="tabAsistencia" class="tab activo">ASISTENCIA</button>
     <button id="tabPersonal" class="tab">PERSONAL</button>
     <button id="tabAvance" class="tab">AVANCE DEL DÍA</button>
+    <button id="tabReclamos" class="tab">TICKETS POR OF</button>
     <button id="tabEfPersonal" class="tab">EFICIENCIAS</button>
     <button id="tabIncidencias" class="tab">INCIDENCIAS</button>
   </div>
@@ -200,6 +201,24 @@
     </div>
     <div class="kpis" id="avResumen" style="margin-top:14px;"></div>
     <div class="lista-cards" id="avItems" style="margin-top:14px;"></div>
+  </section>
+
+  <!-- Quién reclamó: OF → módulo → operación. Los filtros van apareciendo en
+       ese orden para ir acotando; sin OF no se muestra nada. -->
+  <section class="pantalla" id="pasoSupRec">
+    <h1>Quién reclamó</h1>
+    <div class="sub">Elige la OF y ve afinando por módulo y operación.</div>
+    <div class="barra-control" style="justify-content:center;">
+      <label class="campo"><span>OF</span>
+        <select id="srOF" onchange="srCambio('of')"><option value="">Elige una OF…</option></select></label>
+      <label class="campo" id="srCampoMod" hidden><span>Módulo</span>
+        <select id="srMod" onchange="srCambio('mod')"><option value="">Todos los módulos</option></select></label>
+      <label class="campo" id="srCampoOp" hidden><span>Operación</span>
+        <select id="srOp" onchange="srCambio('op')"><option value="">Todas las operaciones</option></select></label>
+      <button type="button" class="btn-mini" onclick="cargarSupRec()">↻ Recargar</button>
+    </div>
+    <div class="sub" id="srResumen"></div>
+    <div class="lista-cards" id="srLista"></div>
   </section>
 
   <!-- Eficiencias del personal -->
