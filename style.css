@@ -940,6 +940,37 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .asis-chip{border:2px solid #cfd8e6;background:var(--gris-fondo);color:var(--texto);
   border-radius:999px;padding:9px 16px;font-size:15px;font-weight:800;cursor:pointer;}
 .asis-chip.sel{background:var(--azul);color:#fff;border-color:var(--azul);}
+/* ---- Incentivos · rejillas de bono modular y eficiencia manual ----
+   Misma pieza en los dos sitios: celda con un número editable y, debajo, lo que
+   ese número produce (soles o el porcentaje resultante). */
+.mod-mes{font-size:9px;font-weight:700;opacity:.65;}
+.mod-celda,.efm-celda{padding:4px 5px;min-width:74px;}
+.mod-in,.efm-in{width:100%;box-sizing:border-box;background:var(--blanco);
+  border:1px solid #cfd8e6;border-radius:7px;padding:5px 4px;font:inherit;font-size:13px;
+  font-weight:700;color:var(--texto);text-align:center;
+  font-variant-numeric:tabular-nums;-moz-appearance:textfield;}
+.mod-in::-webkit-outer-spin-button,.mod-in::-webkit-inner-spin-button,
+.efm-in::-webkit-outer-spin-button,.efm-in::-webkit-inner-spin-button{
+  -webkit-appearance:none;margin:0;}
+.mod-in:focus,.efm-in:focus{outline:none;border-color:var(--enlace);
+  box-shadow:0 0 0 2px rgba(26,86,180,.18);}
+.mod-in.cambiada,.efm-in.cambiada{border-color:var(--ocre);background:#fff8ef;}
+.mod-soles,.efm-res{font-size:10px;font-weight:800;color:#5a6270;margin-top:2px;
+  white-space:nowrap;font-variant-numeric:tabular-nums;}
+.mod-soles{color:var(--exito);}
+.efm-nom{min-width:190px;}
+.efm-nom .sub{font-size:11px;margin:0;text-align:left;}
+/* La celda enfocada se ve desde lejos: se llena columna a columna. */
+.tabla-efm tbody tr:focus-within>td:first-child{background:#eef2f8;}
+/* El bono que lleva modular dentro, y el modular que no se llegó a pagar. */
+.inc-con-mod{box-shadow:inset 0 -2px 0 var(--ocre);}
+.inc-mod-no{color:#9aa3b0;text-decoration:line-through;}
+/* Asistencia confirmada por ticket: estuvo en planta, lo dice su propio trabajo. */
+.asis-der{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.asis-tk{background:#eef7f0;color:var(--exito);border-radius:999px;padding:3px 9px;
+  font-size:12px;font-weight:800;white-space:nowrap;}
+.asis-aviso-tk{background:#eef7f0;color:var(--exito);border-radius:10px;padding:9px 12px;
+  font-size:14px;font-weight:700;margin-bottom:10px;}
 /* Resumen de OF · fila de detalle expandible */
 .avof-det-wrap{background:var(--gris-fondo);border-radius:12px;padding:12px 14px;margin:4px 0;}
 .avof-det-wrap .tabla{background:var(--blanco);}
