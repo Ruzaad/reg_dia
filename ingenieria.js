@@ -3057,12 +3057,37 @@ let INC=null, INC_TABLA=[];
 const LETRA_BONO = n => String.fromCharCode(64 + Number(n));   // 1 -> A
 const soles = v => (Math.round((+v||0)*100)/100).toFixed(2);
 
+/* Cinco vistas dentro de Incentivos. La de quincena es la que manda; las otras
+   cuatro son lo que la alimenta (modular, tabla de tramos, eficiencia escrita a
+   mano y minutos de consideración). */
+const INC_VISTAS={mod:"incModView", q:"incQView", tabla:"incTablaView",
+                  efm:"incEfmView", cons:"incConsView"};
+const INC_TABS  ={mod:"incTabMod",  q:"incTabQ",  tabla:"incTabTab",
+                  efm:"incTabEfm",  cons:"incTabCons"};
 function incVista(v){
-  const t = v==="tabla";
-  $("incQView").hidden=t; $("incTablaView").hidden=!t;
-  $("incTabQ").classList.toggle("activo",!t);
-  $("incTabTab").classList.toggle("activo",t);
-  if(t) cargarIncTabla();
+  if(!INC_VISTAS[v]) v="q";
+  Object.keys(INC_VISTAS).forEach(k=>{
+    const vw=$(INC_VISTAS[k]); if(vw) vw.hidden = (k!==v);
+    const tb=$(INC_TABS[k]);   if(tb) tb.classList.toggle("activo", k===v);
+  });
+  if(v==="tabla") cargarIncTabla();
+  if(v==="mod")   incAreaSel("modArea",  cargarModular);
+  if(v==="efm")   incAreaSel("efmArea",  cargarEfManual);
+  if(v==="cons")  incAreaSel("consArea", cargarCons);
+}
+/* Los tres selectores de área comparten relleno: el primero que se abre carga. */
+function incAreaSel(id, cargar){
+  const sel=$(id); if(!sel) return;
+  if(sel.options.length<=1){
+    sel.innerHTML='<option value="">Todas las áreas</option>'
+      +(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+  }
+  cargar();
+}
+/* El rango sale de la misma quincena elegida arriba: una sola fuente de fechas. */
+function incRango(){
+  const d=$("incDesde"), h=$("incHasta");
+  return {desde:(d&&d.value)||"", hasta:(h&&h.value)||""};
 }
 function incInit(){
   if($("incDesde") && !$("incDesde").value){
@@ -3109,7 +3134,337 @@ function incPintarTabla(){
     + pcts.map(p=>`<tr><td><b>${p}%</b></td>`
         + cats.map(c=>`<td class="rep-num">S/ ${soles(m[c+"|"+p])}</td>`).join("")+"</tr>").join("")
     + "</tbody>";
+  incPintarModTramos();
 }
+/* La tabla del modular vive al lado de la de categorías: son las dos que deciden
+   cuánto se paga, y conviene leerlas juntas. */
+async function incPintarModTramos(){
+  const z=$("tablaModTramos"); if(!z) return;
+  if(!MOD_TRAMOS.length){
+    try{
+      const t=await rpc("fn_bono_modular_tabla_listar",{p_dni:ING.dni,p_token:ING.token});
+      if(t&&t.ok) MOD_TRAMOS=t.items||[];
+    }catch(e){}
+  }
+  z.innerHTML = "<thead><tr><th>% del área</th><th>Soles por día</th></tr></thead><tbody>"
+    + (MOD_TRAMOS.length
+        ? MOD_TRAMOS.map(x=>`<tr><td><b>${x.pct}%</b></td><td class="rep-num">S/ ${soles(x.soles)}</td></tr>`).join("")
+        : `<tr><td colspan="2"><div class="vacio-msg">Sin tramos cargados</div></td></tr>`)
+    + "</tbody>";
+}
+/* ================= BONO MODULAR (área × día) ================= */
+let MOD={dias:[], filas:{}, area:""}, MOD_DIRTY={}, MOD_TRAMOS=[];
+/* Los soles se resuelven en el cliente con la misma tabla que usa la BD, para
+   que el cuadro responda al teclear sin ir y volver del servidor. */
+function modSoles(pct){
+  if(pct==null || pct==="") return null;
+  const p=Math.min(100, Math.round(Number(pct)));
+  if(!isFinite(p)) return null;
+  const t=MOD_TRAMOS.find(x=>Number(x.pct)===p);
+  return t ? Number(t.soles) : 0;
+}
+async function cargarModular(){
+  const {desde,hasta}=incRango();
+  if(!desde||!hasta){ mostrarError("Elige el rango de la quincena"); return; }
+  MOD.area=($("modArea")||{}).value||"";
+  $("tablaModular").innerHTML=cargandoHTML("Cargando…");
+  try{
+    if(!MOD_TRAMOS.length){
+      const t=await rpc("fn_bono_modular_tabla_listar",{p_dni:ING.dni,p_token:ING.token});
+      if(t&&t.ok) MOD_TRAMOS=t.items||[];
+    }
+    const r=await rpc("fn_bono_modular_listar",{p_dni:ING.dni,p_token:ING.token,
+      p_desde:desde, p_hasta:hasta, p_area:MOD.area||null});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("tablaModular").innerHTML=""; return; }
+    MOD.filas={}; (r.items||[]).forEach(x=>{ MOD.filas[x.area+"|"+x.fecha]=x; });
+    MOD.dias=modDiasRango(desde,hasta);
+    MOD_DIRTY={};
+    modPintar();
+  }catch(e){ $("tablaModular").innerHTML=""; mostrarError(e.message); }
+}
+/* Solo días laborables: el modular es de jornada, y el sábado y el domingo no
+   entran en ningún bono. */
+function modDiasRango(desde,hasta){
+  const out=[]; const d=new Date(desde+"T12:00:00"), f=new Date(hasta+"T12:00:00");
+  while(d<=f){
+    const dow=d.getDay();
+    if(dow>=1 && dow<=5) out.push(d.toLocaleDateString("sv-SE"));
+    d.setDate(d.getDate()+1);
+  }
+  return out;
+}
+function modAreas(){
+  return MOD.area ? [MOD.area] : (AREAS_LISTA||[]);
+}
+function modValor(area,fecha){
+  const k=area+"|"+fecha;
+  if(k in MOD_DIRTY) return MOD_DIRTY[k];
+  const f=MOD.filas[k];
+  return f && f.pct!=null ? String(f.pct) : "";
+}
+function modCampo(el){
+  const k=el.dataset.area+"|"+el.dataset.fecha;
+  const f=MOD.filas[k];
+  const orig = f && f.pct!=null ? String(f.pct) : "";
+  const val = el.value.trim();
+  if(val===orig) delete MOD_DIRTY[k]; else MOD_DIRTY[k]=val;
+  el.classList.toggle("cambiada", val!==orig);
+  /* El importe de la celda se recalcula solo: nada de repintar la tabla. */
+  const celda=el.closest("td"); const lbl=celda&&celda.querySelector(".mod-soles");
+  if(lbl){ const sv=modSoles(val); lbl.textContent = sv==null?"—":("S/ "+soles(sv)); }
+  modTotales(); modBarra();
+}
+/* Total por área en el pie, con lo que haya sin guardar ya incluido. */
+function modTotales(){
+  modAreas().forEach(a=>{
+    const tot=MOD.dias.reduce((acc,f)=>acc+(modSoles(modValor(a,f))||0),0);
+    const el=$("modTot_"+modId(a)); if(el) el.textContent="S/ "+soles(tot);
+  });
+}
+const modId = a => String(a).replace(/[^A-Za-z0-9]/g,"_");
+function modBarra(){
+  const n=Object.keys(MOD_DIRTY).length;
+  const b=$("btnModGuardar"); if(b) b.disabled=!n;
+  const p=$("modPend"); if(p) p.textContent = n ? `${n} cambio(s) sin guardar` : "";
+}
+function modPintar(){
+  const areas=modAreas();
+  if(!areas.length){ $("tablaModular").innerHTML=`<tr><td><div class="vacio-msg">Sin áreas</div></td></tr>`; return; }
+  const cab="<thead><tr><th class='izq'>Área</th>"
+    + MOD.dias.map(f=>`<th title="${esc(f)}">${esc(f.slice(8))}<div class="mod-mes">${esc(f.slice(5,7))}</div></th>`).join("")
+    + "<th>Total</th></tr></thead>";
+  const cuerpo=areas.map(a=>`<tr><td class="izq"><b>${esc(a)}</b></td>`
+    + MOD.dias.map(f=>{
+        const v=modValor(a,f), sv=modSoles(v);
+        return `<td class="mod-celda"><input class="mod-in${(a+"|"+f) in MOD_DIRTY?" cambiada":""}"
+          type="number" min="0" step="1" value="${esc(v)}" placeholder="—"
+          data-area="${esc(a)}" data-fecha="${esc(f)}" oninput="modCampo(this)">
+          <div class="mod-soles">${sv==null?"—":"S/ "+soles(sv)}</div></td>`;
+      }).join("")
+    + `<td class="rep-num"><b id="modTot_${modId(a)}">S/ 0.00</b></td></tr>`).join("");
+  $("tablaModular").innerHTML=cab+"<tbody>"+cuerpo+"</tbody>";
+  $("modResumen").textContent=`${areas.length} área(s) · ${MOD.dias.length} día(s) laborable(s)`;
+  modTotales(); modBarra();
+}
+async function guardarModular(){
+  const ks=Object.keys(MOD_DIRTY);
+  if(!ks.length){ mostrarError("No hay cambios que guardar"); return; }
+  const cambios=ks.map(k=>{ const [area,fecha]=k.split("|");
+    return {area, fecha, pct:MOD_DIRTY[k]}; });
+  const btn=$("btnModGuardar"); if(btn) btn.disabled=true;
+  try{
+    const r=await rpc("fn_bono_modular_guardar",{p_dni:ING.dni,p_token:ING.token,p_cambios:cambios});
+    if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); if(btn) btn.disabled=false; return; }
+    mostrarOk(`Modular guardado (${r.guardados} día(s), ${r.borrados} quitado(s))`);
+    INC=null;                       // la quincena cambia: obliga a recalcularla
+    await cargarModular();
+  }catch(e){ mostrarError(e.message); if(btn) btn.disabled=false; }
+}
+
+/* ================= EFICIENCIA MANUAL (rejilla tipo hoja de cálculo) =================
+   Filas = personas, columnas = días. Se avanza por COLUMNA porque así se llena
+   en la práctica: un día, todas las personas. Escribir NO repinta la tabla; los
+   cambios viven en EFM_DIRTY hasta GUARDAR. */
+let EFM={dias:[], personas:[], manual:{}, tk:{}, area:""}, EFM_DIRTY={};
+async function cargarEfManual(){
+  const {desde,hasta}=incRango();
+  if(!desde||!hasta){ mostrarError("Elige el rango de la quincena"); return; }
+  EFM.area=($("efmArea")||{}).value||"";
+  $("tablaEfm").innerHTML=cargandoHTML("Cargando…");
+  try{
+    const [r,t]=await Promise.all([
+      rpc("fn_ef_manual_listar",{p_dni:ING.dni,p_token:ING.token,
+        p_area:EFM.area||null, p_desde:desde, p_hasta:hasta}),
+      rpc("fn_ef_tickets_rango",{p_dni:ING.dni,p_token:ING.token,
+        p_area:EFM.area||null, p_desde:desde, p_hasta:hasta})
+    ]);
+    if(!r.ok){ mostrarError(r.error||"Error"); $("tablaEfm").innerHTML=""; return; }
+    EFM.personas=r.personas||[];
+    EFM.manual={}; (r.celdas||[]).forEach(c=>{ EFM.manual[c.dni+"|"+c.fecha]=c.manual; });
+    EFM.tk={}; if(t&&t.ok) (t.items||[]).forEach(c=>{ EFM.tk[c.dni+"|"+c.fecha]=c.ef; });
+    EFM.dias=modDiasRango(desde,hasta);
+    EFM_DIRTY={};
+    efmPintar();
+  }catch(e){ $("tablaEfm").innerHTML=""; mostrarError(e.message); }
+}
+function efmValor(dni,f){
+  const k=dni+"|"+f;
+  if(k in EFM_DIRTY) return EFM_DIRTY[k];
+  const v=EFM.manual[k];
+  return v==null ? "" : String(v);
+}
+function efmOrig(dni,f){ const v=EFM.manual[dni+"|"+f]; return v==null?"":String(v); }
+function efmFiltradas(){
+  const q=normKey(($("efmBuscar")||{}).value||"");
+  return EFM.personas.filter(p=>!q||normKey((p.nombre||"")+" "+(p.dni||"")).includes(q));
+}
+function efmCampo(el){
+  const k=el.dataset.dni+"|"+el.dataset.fecha;
+  const val=el.value.trim(), orig=efmOrig(el.dataset.dni, el.dataset.fecha);
+  if(val===orig) delete EFM_DIRTY[k]; else EFM_DIRTY[k]=val;
+  el.classList.toggle("cambiada", val!==orig);
+  const td=el.closest("td"), lbl=td&&td.querySelector(".efm-res");
+  if(lbl) lbl.textContent=efmResultado(el.dataset.dni, el.dataset.fecha, val);
+  efmBarra();
+}
+/* El aviso de la celda: lo escrito SE SUMA a la eficiencia por tickets. */
+function efmResultado(dni,f,val){
+  const tk=EFM.tk[dni+"|"+f];
+  if(val==="") return tk==null ? "" : Math.round(tk)+"%";
+  const suma=(tk==null?0:Number(tk))+Number(val||0);
+  return (tk==null? "" : Math.round(tk)+"+")+(val||0)+" = "+Math.round(suma)+"%";
+}
+function efmBarra(){
+  const n=Object.keys(EFM_DIRTY).length;
+  const b=$("btnEfmGuardar"); if(b) b.disabled=!n;
+  const p=$("efmPend"); if(p) p.textContent = n ? `${n} celda(s) sin guardar` : "";
+}
+/* Atajos de hoja de cálculo. El movimiento por defecto es VERTICAL (misma
+   columna, siguiente persona); Tab salta de día. */
+function efmTecla(ev, el){
+  const f=Number(el.dataset.fi), c=Number(el.dataset.ci);
+  const ir=(df,dc)=>{
+    const t=document.querySelector(`#tablaEfm .efm-in[data-fi="${f+df}"][data-ci="${c+dc}"]`);
+    if(t){ t.focus(); t.select(); ev.preventDefault(); }
+  };
+  if(ev.key==="Enter" && (ev.ctrlKey||ev.metaKey)){
+    /* Ctrl+Enter: el valor de esta celda baja a toda la columna. Es lo que evita
+       teclear el mismo porcentaje veinte veces. */
+    ev.preventDefault();
+    document.querySelectorAll(`#tablaEfm .efm-in[data-ci="${c}"]`).forEach(o=>{
+      if(o!==el){ o.value=el.value; efmCampo(o); }
+    });
+    return;
+  }
+  if(ev.key==="Enter"||ev.key==="ArrowDown") return ir(1,0);
+  if(ev.key==="ArrowUp") return ir(-1,0);
+  if(ev.key==="ArrowRight" && el.selectionStart>=el.value.length) return ir(0,1);
+  if(ev.key==="ArrowLeft"  && el.selectionStart<=0) return ir(0,-1);
+  if(ev.key==="Delete"||ev.key==="Backspace"){
+    if(el.value!=="" && (ev.ctrlKey||ev.key==="Delete")){ el.value=""; efmCampo(el); ev.preventDefault(); }
+  }
+}
+function efmPintar(){
+  const gente=efmFiltradas();
+  if(!gente.length){
+    $("tablaEfm").innerHTML=`<tr><td><div class="vacio-msg">Sin personal para este filtro</div></td></tr>`;
+    $("efmResumen").textContent=""; efmBarra(); return;
+  }
+  const cab="<thead><tr><th class='izq'>Personal</th>"
+    + EFM.dias.map(f=>`<th title="${esc(f)}">${esc(f.slice(8))}<div class="mod-mes">${esc(f.slice(5,7))}</div></th>`).join("")
+    + "</tr></thead>";
+  const cuerpo=gente.map((p,fi)=>`<tr><td class="izq efm-nom">${esc(p.nombre)}
+      <div class="sub">${esc(p.dni)}${p.categoria?" · "+esc(p.categoria):""}</div></td>`
+    + EFM.dias.map((f,ci)=>{
+        const v=efmValor(p.dni,f);
+        return `<td class="efm-celda"><input class="efm-in${(p.dni+"|"+f) in EFM_DIRTY?" cambiada":""}"
+          type="number" step="0.1" value="${esc(v)}" placeholder="—"
+          data-dni="${esc(p.dni)}" data-fecha="${esc(f)}" data-fi="${fi}" data-ci="${ci}"
+          oninput="efmCampo(this)" onkeydown="efmTecla(event,this)">
+          <div class="efm-res">${esc(efmResultado(p.dni,f,v))}</div></td>`;
+      }).join("")
+    + "</tr>").join("");
+  $("tablaEfm").innerHTML=cab+"<tbody>"+cuerpo+"</tbody>";
+  $("efmResumen").textContent=`${gente.length} persona(s) · ${EFM.dias.length} día(s)`;
+  efmBarra();
+}
+async function guardarEfManual(){
+  const ks=Object.keys(EFM_DIRTY);
+  if(!ks.length){ mostrarError("No hay cambios que guardar"); return; }
+  /* El aviso pedido: antes de escribir nada se enseña en qué queda cada persona. */
+  const det=ks.slice(0,12).map(k=>{
+    const [dni,f]=k.split("|");
+    const p=EFM.personas.find(x=>x.dni===dni);
+    return `· ${(p&&p.nombre)||dni} ${f.slice(5)}: ${efmResultado(dni,f,EFM_DIRTY[k])||"(se borra)"}`;
+  }).join("\n");
+  if(!confirm(`Se guardarán ${ks.length} celda(s). Lo escrito SE SUMA a la eficiencia por tickets:\n\n`
+     + det + (ks.length>12?`\n… y ${ks.length-12} más`:"") + `\n\n¿Aceptar?`)) return;
+  const cambios=ks.map(k=>{ const [dni,fecha]=k.split("|"); return {dni, fecha, pct:EFM_DIRTY[k]}; });
+  const btn=$("btnEfmGuardar"); if(btn) btn.disabled=true;
+  try{
+    const r=await rpc("fn_ef_manual_guardar",{p_dni:ING.dni,p_token:ING.token,p_cambios:cambios});
+    if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); if(btn) btn.disabled=false; return; }
+    mostrarOk(`Eficiencia manual guardada (${r.guardados} celda(s), ${r.borrados} borrada(s))`);
+    INC=null;
+    await cargarEfManual();
+  }catch(e){ mostrarError(e.message); if(btn) btn.disabled=false; }
+}
+
+/* ================= MINUTOS DE CONSIDERACIÓN (CRUD) ================= */
+let CONS=[];
+async function cargarCons(){
+  const {desde,hasta}=incRango();
+  if(!desde||!hasta){ mostrarError("Elige el rango de la quincena"); return; }
+  $("tablaCons").innerHTML=cargandoHTML("Cargando…");
+  try{
+    const r=await rpc("fn_consideracion_listar",{p_dni:ING.dni,p_token:ING.token,
+      p_desde:desde, p_hasta:hasta, p_area:(($("consArea")||{}).value||null)});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("tablaCons").innerHTML=""; return; }
+    CONS=r.items||[]; consPintar();
+  }catch(e){ $("tablaCons").innerHTML=""; mostrarError(e.message); }
+}
+function consPintar(){
+  const q=normKey(($("consBuscar")||{}).value||"");
+  const filas=CONS.filter(c=>!q||normKey((c.nombre||"")+" "+(c.dni||"")+" "+(c.motivo||"")).includes(q));
+  const tot=filas.reduce((a,c)=>a+(Number(c.minutos)||0),0);
+  $("consResumen").textContent=`${filas.length} línea(s) · ${Math.round(tot*10)/10} min`;
+  $("tablaCons").innerHTML =
+    "<thead><tr><th class='izq'>Personal</th><th>DNI</th><th>Área</th><th>Fecha</th>"
+    + "<th>Minutos</th><th class='izq'>Motivo</th><th>Registró</th><th></th></tr></thead><tbody>"
+    + (filas.length ? filas.map(c=>`<tr>
+        <td class="izq">${esc(c.nombre||"—")}</td><td>${esc(c.dni)}</td>
+        <td>${esc(c.area||"—")}</td><td>${esc(c.fecha)}</td>
+        <td class="rep-num ${Number(c.minutos)<0?"inc-pen":""}">${c.minutos}</td>
+        <td class="izq">${esc(c.motivo||"—")}</td>
+        <td class="sub">${esc(c.registrado_por||"")}</td>
+        <td><div class="acc-base">
+          <button class="acc-editar" onclick="consModal(${c.id})">Editar</button>
+          <button class="acc-borrar" onclick="consEliminar(${c.id})">Borrar</button>
+        </div></td></tr>`).join("")
+      : `<tr><td colspan="8"><div class="vacio-msg">Sin minutos de consideración en este rango</div></td></tr>`)
+    + "</tbody>";
+}
+function consModal(id){
+  const c = id!=null ? CONS.find(x=>Number(x.id)===Number(id)) : null;
+  const {desde}=incRango();
+  abrirModal(`<h2>${c?"Editar":"Agregar"} minutos de consideración</h2>
+    <div class="sub" style="margin-bottom:12px;">Minutos <b>producidos</b> que no vienen de un ticket. Suman al día de esa persona.</div>
+    <label class="campo"><span>DNI de la persona</span>
+      <input type="text" id="coDni" value="${c?esc(c.dni):""}" placeholder="Ej: 80054180"></label>
+    <label class="campo"><span>Fecha</span>
+      <input type="date" id="coFecha" value="${c?esc(c.fecha):esc(desde)}"></label>
+    <label class="campo"><span>Minutos (negativo para descontar)</span>
+      <input type="number" step="0.1" id="coMin" value="${c?esc(c.minutos):""}" placeholder="Ej: 45"></label>
+    <label class="campo"><span>Motivo</span>
+      <input type="text" id="coMotivo" value="${c?esc(c.motivo||""):""}" placeholder="Apoyo a otra área, muestra…"></label>
+    <div class="sub" id="coMsg" style="color:var(--alerta);"></div>
+    <div class="modal-acciones">
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+      <button class="btn-mini verde" onclick="consGuardar(${c?c.id:"null"})">GUARDAR</button>
+    </div>`);
+}
+async function consGuardar(id){
+  const dni=($("coDni").value||"").trim(), fecha=$("coFecha").value,
+        min=parseFloat($("coMin").value), motivo=($("coMotivo").value||"").trim();
+  if(!dni||!fecha){ $("coMsg").textContent="DNI y fecha son obligatorios"; return; }
+  if(!min){ $("coMsg").textContent="Los minutos no pueden ser cero"; return; }
+  try{
+    const r=await rpc("fn_consideracion_guardar",{p_dni:ING.dni,p_token:ING.token,
+      p_id:id, p_dni_op:dni, p_fecha:fecha, p_minutos:min, p_motivo:motivo});
+    if(!r.ok){ $("coMsg").textContent=r.error||"No se pudo guardar"; return; }
+    cerrarModal(); INC=null; mostrarOk("Guardado"); await cargarCons();
+  }catch(e){ $("coMsg").textContent=e.message; }
+}
+async function consEliminar(id){
+  const c=CONS.find(x=>Number(x.id)===Number(id));
+  if(!confirm(`¿Borrar ${c?c.minutos+" min de "+(c.nombre||c.dni):"esta línea"}?`)) return;
+  try{
+    const r=await rpc("fn_consideracion_eliminar",{p_dni:ING.dni,p_token:ING.token,p_id:id});
+    if(!r.ok){ mostrarError(r.error||"No se pudo borrar"); return; }
+    INC=null; mostrarOk("Borrado"); await cargarCons();
+  }catch(e){ mostrarError(e.message); }
+}
+
 /* Lista filtrada. El filtro NO cambia el cálculo: solo qué filas se pintan. */
 function incFilas(){
   if(!INC) return [];
@@ -3138,6 +3493,7 @@ function incPintar(){
     kpi("A pagar (S/)", soles(tot), "var(--exito)")+
     kpi("Antes de penalidad (S/)", soles(totBruto), "var(--azul)")+
     kpi("Anulados por penalidad", penal, "var(--alerta)")+
+    kpi("Modular pagado (S/)", soles(filas.reduce((a,p)=>a+(+p.modular||0),0)), "var(--ocre)")+
     (sinCat?kpi("Sin categoría", sinCat, "var(--alerta)", "no ganan hasta asignarla"):"")+
     (ces?kpi("Cesados", ces, "var(--ocre)", "trabajaron en el rango"):"");
   $("incAviso").textContent = sinCat
@@ -3149,7 +3505,7 @@ function incPintar(){
     return `<th class="${d.laborable?"":"inc-finde"}" title="${esc(d.fecha)}">${dd}</th>`;
   }).join("");
   const cabBonos = bonos.map(b=>`<th>BONO ${LETRA_BONO(b.n)}</th>`).join("");
-  const NCOLS = 4 + dias.length + bonos.length + 5;   // 4 fijas + días + bonos + 5 de cierre
+  const NCOLS = 4 + dias.length + bonos.length + 7;   // 4 fijas + días + bonos + 7 de cierre
   /* Los días y los bonos no ordenan (son la matriz); el resto sí. `boleta` son
      los días NO ENTREGO: derivada, no se digita. CALIDAD se retiró. */
   const om=ordEstado("tablaInc"); om.pintar=incPintar;
@@ -3158,6 +3514,7 @@ function incPintar(){
   const thead = "<thead><tr>"
     + th("nombre","Personal","izq") + th("dni","DNI") + th("area","Área") + th("categoria","Cat.")
     + cabDias + cabBonos
+    + th("prom_ef","Prom. ef.") + th("modular","Modular")
     + th("bono_total","Bono total") + th("faltas","Falta") + th("tardanzas","Tard.")
     + th("boleta","Boleta") + th("final","Bonificación final")
     + "</tr></thead>";
@@ -3181,7 +3538,19 @@ function incPintar(){
       return `<td class="${pct>=80?"inc-gana":""}${multi?" inc-multi-dia":""}" `
         + `title="${pct}% · ${c.prod}/${c.disp} min${esc(ar)}">${pct}</td>`;
     }).join("");
-    const cb = bonos.map(b=>`<td class="rep-num">${soles((p.bonos||{})[b.n])}</td>`).join("");
+    /* El modular ya está sumado dentro del ÚLTIMO bono: la columna Modular es
+       informativa, para poder auditar de dónde sale ese bono. */
+    const cb = bonos.map(b=>`<td class="rep-num${b.ultimo&&+p.modular>0?" inc-con-mod":""}"`
+      + (b.ultimo&&+p.modular>0?` title="Incluye S/ ${soles(p.modular)} de bono modular"`:"")
+      + `>${soles((p.bonos||{})[b.n])}</td>`).join("");
+    const prom=Math.round(Number(p.prom_ef)||0);
+    /* Con promedio < 70% el modular no se paga; se muestra tachado lo que habría
+       sido, que es la pregunta que siempre sigue. */
+    const tdMod = (+p.modular>0)
+      ? `<td class="rep-num ef-alta">${soles(p.modular)}</td>`
+      : ((+p.modular_bruto>0)
+          ? `<td class="rep-num inc-mod-no" title="Promedio ${prom}%: por debajo de 70% no se paga el modular">${soles(p.modular_bruto)}</td>`
+          : `<td>·</td>`);
     const pen = v => (+v>0) ? `<td class="inc-pen">${v}</td>` : "<td>·</td>";
     return `<tr class="${p.penalizado?"inc-anulado":""}">`
       + `<td class="izq">${esc(p.nombre)}`
@@ -3189,6 +3558,8 @@ function incPintar(){
       + `</td><td>${esc(p.dni)}</td><td>${esc(p.area||"")}</td>`
       + `<td>${p.categoria?esc(p.categoria):'<span class="inc-pen">—</span>'}</td>`
       + celdas + cb
+      + `<td class="rep-num ${prom>=70?"ef-alta":"inc-pen"}">${prom}%</td>`
+      + tdMod
       + `<td class="rep-num">${soles(p.bono_total)}</td>`
       + pen(p.faltas) + pen(p.tardanzas) + pen(p.boleta)
       + `<td class="rep-num ${(+p.final>0)?"ef-alta":""}">${soles(p.final)}</td></tr>`;

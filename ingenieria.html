@@ -130,11 +130,76 @@
     <section class="pantalla" id="pasoInc">
       <div class="seccion-cab">
         <h1>Incentivos</h1>
-        <p class="seccion-sub">Bonificación por eficiencia diaria, de quincena a quincena. Se gana el día que llega a <b>80%</b> o más, según la <b>categoría</b> de la persona; el porcentaje se topa en 100%. Los bonos (A, B, C…) son las semanas laborables del rango. Cualquier penalidad anula la quincena.</p>
+        <p class="seccion-sub">Bonificación por eficiencia diaria, de quincena a quincena. Se gana el día que llega a <b>80%</b> o más, según la <b>categoría</b> de la persona; el porcentaje se topa en 100%. Los bonos (A, B, C…) son las semanas laborables del rango. Cualquier penalidad anula la quincena.
+        Aparte va el <b>bono modular</b>, que es del área y no mira categorías: se suma al último bono y solo a quien tenga promedio de eficiencia <b>≥ 70%</b>.
+        El área que agrupa es la de <b>origen</b>, no donde esté prestada la persona.</p>
       </div>
       <div class="tabs sup-subtabs">
+        <button id="incTabMod" class="tab" onclick="incVista('mod')">BONO MODULAR</button>
         <button id="incTabQ" class="tab activo" onclick="incVista('q')">QUINCENA</button>
         <button id="incTabTab" class="tab" onclick="incVista('tabla')">TABLA DE INC.</button>
+        <button id="incTabEfm" class="tab" onclick="incVista('efm')">EFICIENCIA MANUAL</button>
+        <button id="incTabCons" class="tab" onclick="incVista('cons')">MIN. CONSIDERACIÓN</button>
+      </div>
+
+      <!-- BONO MODULAR: del ÁREA y del DÍA, sin categorías. Se escribe el % que
+           alcanzó el área y la tabla pone los soles. -->
+      <div id="incModView" hidden>
+        <p class="seccion-sub" style="margin-bottom:14px;">Esfuerzo del <b>área</b> en el día, no de cada persona: no distingue categorías.
+        Escribe el % que alcanzó el área cada día y la <b>tabla modular</b> pone los soles.
+        Se suma al <b>último bono</b> de la quincena, y solo a quien tenga <b>promedio de eficiencia ≥ 70%</b>.
+        Si esa persona ese día no tuvo porcentaje (falta, licencia, no entregó), se le descuenta el modular de ese día.</p>
+        <div class="barra-control">
+          <label class="campo"><span>Área</span><select id="modArea" onchange="cargarModular()"></select></label>
+          <button class="btn-mini" onclick="cargarModular()">↻ Cargar</button>
+          <span class="sub" id="modResumen" style="align-self:flex-end;margin:0;"></span>
+        </div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;">
+          <table class="tabla" id="tablaModular"></table>
+        </div>
+        <div class="fila-acciones-der" style="margin-top:12px;">
+          <span class="sub" id="modPend"></span>
+          <button class="btn-mini verde" id="btnModGuardar" onclick="guardarModular()" disabled>GUARDAR</button>
+        </div>
+      </div>
+
+      <!-- EFICIENCIA MANUAL: rejilla estilo hoja de cálculo. Se avanza por COLUMNA
+           (un día para todos), que es como se llena en la práctica. -->
+      <div id="incEfmView" hidden>
+        <p class="seccion-sub" style="margin-bottom:14px;">Para las áreas que <b>no llevan tickets</b>. Lo que escribas aquí <b>se suma</b> a la eficiencia que salga de los tickets;
+        al guardar se te avisa del porcentaje resultante. Solo pesa en Incentivos.
+        Se mueve como una hoja de cálculo: <b>Enter</b> y <b>↓</b> bajan por la misma columna, <b>Tab</b> pasa al día siguiente,
+        <b>Ctrl+Enter</b> copia el valor a toda la columna y <b>Supr</b> borra.</p>
+        <div class="barra-control">
+          <label class="campo"><span>Área</span><select id="efmArea" onchange="cargarEfManual()"></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="efmBuscar" placeholder="Nombre / DNI…" oninput="efmPintar()"></label>
+          <button class="btn-mini" onclick="cargarEfManual()">↻ Cargar</button>
+          <span class="sub" id="efmResumen" style="align-self:flex-end;margin:0;"></span>
+        </div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;">
+          <table class="tabla tabla-efm" id="tablaEfm"></table>
+        </div>
+        <div class="fila-acciones-der" style="margin-top:12px;">
+          <span class="sub" id="efmPend"></span>
+          <button class="btn-mini verde" id="btnEfmGuardar" onclick="guardarEfManual()" disabled>GUARDAR</button>
+        </div>
+      </div>
+
+      <!-- MINUTOS DE CONSIDERACIÓN: minutos producidos que no vienen de un ticket. -->
+      <div id="incConsView" hidden>
+        <p class="seccion-sub" style="margin-bottom:14px;">Minutos <b>producidos</b> que no salen de ningún ticket. Es la vía para subirle la eficiencia
+        a quien <b>ya tiene tickets</b>: suman al numerador del día, así que el porcentaje sube solo.
+        Pueden ser negativos para descontar algo cargado de más. Solo pesan en Incentivos.</p>
+        <div class="barra-control">
+          <label class="campo"><span>Área</span><select id="consArea" onchange="cargarCons()"></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="consBuscar" placeholder="Nombre / DNI / motivo…" oninput="consPintar()"></label>
+          <button class="btn-mini" onclick="cargarCons()">↻ Cargar</button>
+          <button class="btn-mini verde" onclick="consModal(null)">+ AGREGAR</button>
+          <span class="sub" id="consResumen" style="align-self:flex-end;margin:0;"></span>
+        </div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;">
+          <table class="tabla" id="tablaCons"></table>
+        </div>
       </div>
 
       <div id="incQView">
@@ -157,8 +222,13 @@
 
       <div id="incTablaView" hidden>
         <p class="seccion-sub" style="margin-bottom:14px;">Soles por día según categoría y porcentaje alcanzado. Es la <b>TABLA DE INC.</b> del formato de bonificaciones, guardada en la base (<code>incentivos_tabla</code>): se puede corregir un tramo sin tocar código.</p>
-        <div class="contenedor-ancho tabla-scroll" style="max-height:70vh;">
+        <div class="contenedor-ancho tabla-scroll" style="max-height:44vh;">
           <table class="tabla" id="tablaIncCat"></table>
+        </div>
+        <h2 class="tk-ops-title" style="margin-top:22px;">Tabla del bono modular</h2>
+        <p class="seccion-sub" style="margin-bottom:14px;">Esta <b>no distingue categorías</b>: es el esfuerzo del área en el día. Solo se suma cuando el promedio de eficiencia de la persona es <b>≥ 70%</b>.</p>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:44vh;">
+          <table class="tabla" id="tablaModTramos"></table>
         </div>
       </div>
     </section>

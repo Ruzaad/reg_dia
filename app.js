@@ -2096,9 +2096,13 @@ function asisPintar(){
   if(!lista.length){ g.innerHTML=`<div class="vacio-msg">Sin personal</div>`; return; }
   g.innerHTML=lista.map(p=>{
     const est=ASIS.dec[p.dni]||"ACTIVO", m=est!=="ACTIVO";
+    /* Con al menos un ticket del día estuvo en planta: se marca para que no se
+       le ponga ausente por descuido (una FALTA anula su quincena entera). */
+    const tk=Number(p.tickets)||0;
     return `<div class="asis-fila${m?" marcada":""}" onclick="asisElegir('${esc(p.dni)}')">
       <div class="asis-nom">${esc(p.nombre)}<div class="asis-dni">DNI ${esc(p.dni)}</div></div>
-      <span class="pill ${esc(est)}">${esc(est)}</span></div>`;
+      <div class="asis-der">${tk?`<span class="asis-tk" title="${tk} ticket(s) reclamado(s) hoy: asistió">🎫 ${tk}</span>`:""}
+        <span class="pill ${esc(est)}">${esc(est)}</span></div></div>`;
   }).join("");
 }
 function asisElegir(dni){
@@ -2106,12 +2110,20 @@ function asisElegir(dni){
   const cur=ASIS.dec[dni]||"ACTIVO";
   const ests=["ACTIVO",...(ESTADOS_SUP||[]).filter(e=>e!=="ACTIVO")];
   const chips=ests.map(e=>`<button class="asis-chip ${e===cur?"sel":""}" onclick="asisSet('${esc(dni)}','${esc(e)}')">${esc(e)}</button>`).join("");
+  const tk=Number(p.tickets)||0;
   abrirModal(`<h2>${esc(p.nombre)}</h2>
     <div class="sub" style="margin-bottom:10px;">Estado del ${ASIS.fecha}</div>
+    ${tk?`<div class="asis-aviso-tk">Reclamó <b>${tk}</b> ticket(s) hoy: asistió.</div>`:""}
     <div class="asis-chips">${chips}</div>
     <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`);
 }
 function asisSet(dni,est){
+  /* Ponerle ausencia a quien sí reclamó tickets suele ser un descuido, y cuesta
+     caro: cualquier penalidad anula su quincena. Se avisa, no se impide. */
+  const p=ASIS.list.find(x=>x.dni===dni), tk=p?Number(p.tickets)||0:0;
+  if(est!=="ACTIVO" && tk>0 &&
+     !confirm(`${p.nombre} reclamó ${tk} ticket(s) hoy, así que sí estuvo en planta.\n`
+       +`Marcarlo como ${est} le anula la quincena completa. ¿Seguro?`)) return;
   if(est==="ACTIVO") delete ASIS.dec[dni]; else ASIS.dec[dni]=est;
   cerrarModal(); asisPintar();
 }
