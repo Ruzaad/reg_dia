@@ -3429,15 +3429,17 @@ function consModal(id){
   const {desde}=incRango();
   abrirModal(`<h2>${c?"Editar":"Agregar"} minutos de consideración</h2>
     <div class="sub" style="margin-bottom:12px;">Minutos <b>producidos</b> que no vienen de un ticket. Suman al día de esa persona.</div>
-    <label class="campo"><span>DNI de la persona</span>
-      <input type="text" id="coDni" value="${c?esc(c.dni):""}" placeholder="Ej: 80054180"></label>
-    <label class="campo"><span>Fecha</span>
-      <input type="date" id="coFecha" value="${c?esc(c.fecha):esc(desde)}"></label>
-    <label class="campo"><span>Minutos (negativo para descontar)</span>
-      <input type="number" step="0.1" id="coMin" value="${c?esc(c.minutos):""}" placeholder="Ej: 45"></label>
-    <label class="campo"><span>Motivo</span>
-      <input type="text" id="coMotivo" value="${c?esc(c.motivo||""):""}" placeholder="Apoyo a otra área, muestra…"></label>
-    <div class="sub" id="coMsg" style="color:var(--alerta);"></div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>DNI de la persona</label>
+        <input type="text" id="coDni" value="${c?esc(c.dni):""}" placeholder="Ej: 80054180"></div>
+      <div class="modal-campo"><label>Fecha</label>
+        <input type="date" id="coFecha" value="${c?esc(c.fecha):esc(desde)}"></div>
+    </div>
+    <div class="modal-campo"><label>Minutos (negativo para descontar)</label>
+      <input type="number" step="0.1" id="coMin" value="${c?esc(c.minutos):""}" placeholder="Ej: 45"></div>
+    <div class="modal-campo"><label>Motivo</label>
+      <input type="text" id="coMotivo" value="${c?esc(c.motivo||""):""}" placeholder="Apoyo a otra área, muestra…"></div>
+    <div class="modal-msg" id="coMsg"></div>
     <div class="modal-acciones">
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
       <button class="btn-mini verde" onclick="consGuardar(${c?c.id:"null"})">GUARDAR</button>
@@ -3462,6 +3464,34 @@ async function consEliminar(id){
     const r=await rpc("fn_consideracion_eliminar",{p_dni:ING.dni,p_token:ING.token,p_id:id});
     if(!r.ok){ mostrarError(r.error||"No se pudo borrar"); return; }
     INC=null; mostrarOk("Borrado"); await cargarCons();
+  }catch(e){ mostrarError(e.message); }
+}
+
+/* Override manual del modular, por persona y quincena. Tres estados: sin marca
+   manda la regla del 70%; forzado sí lo paga igual; forzado no lo anula.
+   Forzarlo levanta esa puerta, NO el descuento por día: se siguen pagando solo
+   los días en que la persona tuvo porcentaje. */
+const MOD_OVR = [
+  {v:null,  ico:"\u25E6", cls:"auto", txt:"Modular automático: lo decide el promedio ≥ 70%"},
+  {v:true,  ico:"\u2713", cls:"si",   txt:"Modular FORZADO: se paga aunque no llegue al 70%"},
+  {v:false, ico:"\u2715", cls:"no",   txt:"Modular ANULADO a mano: no se paga"}
+];
+function modOvrIdx(v){ return v===true?1 : v===false?2 : 0; }
+function modOvrBtn(p){
+  const e=MOD_OVR[modOvrIdx(p.modular_forzado)];
+  return `<button class="inc-ovr ${e.cls}" title="${esc(e.txt)} · clic para cambiar"
+    onclick="incOvrCiclar('${esc(p.dni)}')">${e.ico}</button>`;
+}
+async function incOvrCiclar(dni){
+  const p=(INC&&INC.personas||[]).find(x=>x.dni===dni); if(!p) return;
+  const sig=MOD_OVR[(modOvrIdx(p.modular_forzado)+1)%3].v;
+  const {desde,hasta}=incRango();
+  try{
+    const r=await rpc("fn_bono_modular_override",{p_dni:ING.dni,p_token:ING.token,
+      p_dni_op:dni, p_desde:desde, p_hasta:hasta, p_forzar:sig});
+    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+    /* Cambia el bono total y el final, así que se recalcula la quincena. */
+    await cargarInc();
   }catch(e){ mostrarError(e.message); }
 }
 
@@ -3547,13 +3577,14 @@ function incPintar(){
     /* Con promedio < 70% el modular no se paga; se muestra tachado lo que habría
        sido, que es la pregunta que siempre sigue. */
     const tdMod = (+p.modular>0)
-      ? `<td class="rep-num ef-alta">${soles(p.modular)}</td>`
+      ? `<td class="rep-num ef-alta"${p.modular_forzado===true?' title="Forzado a mano"':""}>${soles(p.modular)}</td>`
       : ((+p.modular_bruto>0)
-          ? `<td class="rep-num inc-mod-no" title="Promedio ${prom}%: por debajo de 70% no se paga el modular">${soles(p.modular_bruto)}</td>`
+          ? `<td class="rep-num inc-mod-no" title="${p.modular_forzado===false
+                ? "Anulado a mano" : "Promedio "+prom+"%: por debajo de 70% no se paga el modular"}">${soles(p.modular_bruto)}</td>`
           : `<td>·</td>`);
     const pen = v => (+v>0) ? `<td class="inc-pen">${v}</td>` : "<td>·</td>";
     return `<tr class="${p.penalizado?"inc-anulado":""}">`
-      + `<td class="izq">${esc(p.nombre)}`
+      + `<td class="izq">${modOvrBtn(p)} ${esc(p.nombre)}`
       + (p.cesado?' <span class="inc-cesado" title="Ya no está activo en el maestro: aparece porque trabajó en este rango">CESADO</span>':"")
       + `</td><td>${esc(p.dni)}</td><td>${esc(p.area||"")}</td>`
       + `<td>${p.categoria?esc(p.categoria):'<span class="inc-pen">—</span>'}</td>`
