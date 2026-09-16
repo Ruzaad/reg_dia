@@ -962,6 +962,14 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .efm-nom .sub{font-size:11px;margin:0;text-align:left;}
 /* La celda enfocada se ve desde lejos: se llena columna a columna. */
 .tabla-efm tbody tr:focus-within>td:first-child{background:#eef2f8;}
+/* Botón de override del modular, pegado al nombre en la quincena. Tres estados:
+   automático (gris), forzado (verde) y anulado a mano (rojo). */
+.inc-ovr{border:1px solid #cfd8e6;background:var(--blanco);color:#9aa3b0;
+  border-radius:6px;width:20px;height:20px;line-height:1;padding:0;font-size:12px;
+  font-weight:800;cursor:pointer;vertical-align:middle;margin-right:2px;flex:0 0 auto;}
+.inc-ovr:hover{border-color:var(--enlace);}
+.inc-ovr.si{background:#eef7f0;color:var(--exito);border-color:var(--exito);}
+.inc-ovr.no{background:#fdecea;color:var(--alerta);border-color:var(--alerta);}
 /* El bono que lleva modular dentro, y el modular que no se llegó a pagar. */
 .inc-con-mod{box-shadow:inset 0 -2px 0 var(--ocre);}
 .inc-mod-no{color:#9aa3b0;text-decoration:line-through;}
