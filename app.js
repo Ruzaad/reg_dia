@@ -45,7 +45,8 @@ const AREAS = {
   },
   "SACO COSTURA":     { habilitada:false }
 };
-const SESION_HORAS = 4;
+const SESION_HORAS = 4;        // horas SIN actividad antes de cerrar (deslizante)
+const SESION_MAX_HORAS = 18;   // tope duro desde el login, pase lo que pase
 
 /* ---------------- UTILIDADES ---------------- */
 const $ = id => document.getElementById(id);
@@ -225,8 +226,16 @@ function cargandoHTML(txt){ return `<div class="cargando"><div class="spinner"><
 function abrirModal(html){ const o=$("modalOverlay"); if(!o) return; $("modalBox").innerHTML=html; o.classList.add("visible"); }
 function cerrarModal(){ const o=$("modalOverlay"); if(!o) return; o.classList.remove("visible"); $("modalBox").innerHTML=""; }
 
-/* ---------------- SESIÓN (localStorage, 4h) ---------------- */
-function guardarSesion(s){ s.exp = Date.now() + SESION_HORAS*3600*1000; localStorage.setItem("stx_sesion", JSON.stringify(s)); }
+/* ---------------- SESIÓN (localStorage, deslizante) ----------------
+   parche 74: la sesión ya no muere a las 4h de haber entrado, sino a las 4h
+   SIN USAR la app (ventana deslizante), con un tope duro de SESION_MAX_HORAS
+   por si alguien deja el equipo abierto. El mismo criterio vive en `_auth`
+   del lado de la BD; este lado solo evita mandar RPC que ya sabemos muertas. */
+function guardarSesion(s){
+  s.ini = s.ini || Date.now();
+  s.exp = Math.min(Date.now() + SESION_HORAS*3600*1000, s.ini + SESION_MAX_HORAS*3600*1000);
+  localStorage.setItem("stx_sesion", JSON.stringify(s));
+}
 function sesionActual(){
   try{
     const s = JSON.parse(localStorage.getItem("stx_sesion")||"null");
@@ -234,7 +243,33 @@ function sesionActual(){
     return s;
   }catch(e){ return null; }
 }
-function cerrarSesion(){ localStorage.removeItem("stx_sesion"); try{ sessionStorage.removeItem("stx_volver_ing"); }catch(e){} location.href = "index.html"; }
+/* Renueva al usar. Solo escribe cuando queda menos de media ventana, para no
+   tocar localStorage en cada una de las 6 RPC que dispara una pantalla. */
+function renovarSesion(){
+  try{
+    const s = JSON.parse(localStorage.getItem("stx_sesion")||"null");
+    if(!s || !s.exp || Date.now() > s.exp) return;
+    if(s.exp - Date.now() > SESION_HORAS*3600*1000/2) return;
+    guardarSesion(s);
+  }catch(e){}
+}
+let _cerrandoSesion = false;
+function cerrarSesion(){
+  if(_cerrandoSesion) return; _cerrandoSesion = true;
+  localStorage.removeItem("stx_sesion");
+  try{ sessionStorage.removeItem("stx_volver_ing"); }catch(e){}
+  location.href = "index.html";
+}
+/* La sesión venció en el servidor. Una pantalla dispara varias RPC a la vez y
+   todas devuelven SESION_INVALIDA: sin este guard se llamaba a cerrarSesion()
+   6 veces y se encadenaban 6 redirecciones (las ráfagas de los logs). */
+function sesionVencida(){
+  if(_cerrandoSesion) return;
+  try{ localStorage.removeItem("stx_sesion"); }catch(e){}
+  try{ mostrarError("Tu sesión venció. Vuelve a ingresar."); }catch(e){}
+  setTimeout(cerrarSesion, 1200);
+  _cerrandoSesion = true;
+}
 /* Si se entró como operario o como supervisora DESDE ingeniería, botón de vuelta.
    Restaura la sesión original de ingeniería, que se guardó al salir. */
 function botonVolverIng(){
@@ -252,6 +287,7 @@ function botonVolverIng(){
 }
 
 /* ---------------- SUPABASE (RPC) ---------------- */
+const MSG_FUERA_HORARIO = "El sistema está fuera de horario. Vuelve dentro del horario de trabajo.";
 async function rpc(fn, args){
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
     method:"POST",
@@ -262,10 +298,12 @@ async function rpc(fn, args){
   if(!r.ok){
     let detalle = "";
     try{ const j = await r.json(); detalle = j.message || j.hint || ""; }catch(e){}
-    if(detalle.includes("SESION_INVALIDA")){ cerrarSesion(); throw new Error("Sesión vencida"); }
+    if(detalle.includes("SESION_INVALIDA")){ sesionVencida(); throw new Error("Sesión vencida"); }
+    if(detalle.includes("FUERA_DE_HORARIO")) throw new Error(MSG_FUERA_HORARIO);
     if(detalle.includes("NO_AUTORIZADA")) throw new Error("No autorizada para esta acción");
     throw new Error("Servidor: " + (detalle || ("error " + r.status)));
   }
+  renovarSesion();
   return await r.json();
 }
 
@@ -729,7 +767,25 @@ function pintarAreasEstajero(s){
   });
 }
 
+/* parche 74: al cambiar de área quedaba viva la selección y los buscadores de
+   la anterior (sel/ACAB/MISREG/marcados y el texto de OF), así que la pantalla
+   nueva se pintaba filtrada por una OF que no existe en el área elegida y
+   parecía "no actualizarse". Todo el estado que depende del área se borra
+   ANTES de cargar la nueva. */
+function resetEstadoArea(){
+  sel = {of:null, modulo:null, op:null, ticket:null};
+  ALM = null; RECL = {}; OF_LISTA = []; OF_CARGADAS = new Set();
+  ACAB = {ofs:[], extra:[], of:null, op:null, tipo:null, prenda:null, ver:false};
+  CAUSAS = []; CANT_HOY_ACABADO = 0;
+  MISREG = {ofs:[]}; MISREG_ABIERTA = ""; MISPAQ = [];
+  NOPS_FIN = {}; modoSel = false; marcados = {};
+  SR = {of:"", mod:"", nop:"", acab:false};
+  ["inputOF","acabBuscaOF"].forEach(id=>{ const e=$(id); if(e) e.value=""; });
+  ["listaAcabOF","listaTickets","listaModulos","listaOps","listaMisPaq","listaMisReg","sugerenciasOF"].forEach(id=>{ const e=$(id); if(e) e.innerHTML=""; });
+}
+
 async function cargarTodo(s){
+  resetEstadoArea();
   irA("pasoCarga");
   const area = AREA_ESTAJERO || s.area;
   ES_ACABADO = (area === "ACABADO");
