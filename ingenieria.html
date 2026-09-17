@@ -37,6 +37,7 @@
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
         <a class="nav-item" data-tab="pasoOfs" href="#pasoOfs">OFs registradas</a>
         <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Resumen de OF</a>
+        <a class="nav-item" data-tab="pasoVista" href="#pasoVista">Vista del personal</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Eficiencia</summary>
@@ -311,7 +312,7 @@
         <button class="btn-mini" id="btnModoLiberar" onclick="toggleModoLiberar()">Liberar en lote</button>
         <button class="btn-mini gris" id="btnMarcarVisibles" style="display:none;" onclick="marcarVisiblesLib()">Marcar visibles</button>
         <button class="btn-mini rojo" id="btnLiberarSel" style="display:none;" onclick="liberarLote()">Liberar selección (0)</button>
-        <label class="chk-inline"><input type="checkbox" class="sw" id="chkOcultarLib" onchange="toggleOcultarLib()"> Ocultar liberados</label>
+        <label class="chk-inline"><input type="checkbox" class="sw" id="chkOcultarLib" checked onchange="toggleOcultarLib()"> Ocultar liberados</label>
       </div>
       <div class="sub" id="resumenTk"></div>
       <div class="kpis" id="resumenUltimas" style="margin-bottom:14px;"></div>
@@ -724,6 +725,21 @@
       </div>
       <div class="sub" id="avofResumen"></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="avofTabla"></table></div>
+    </section>
+
+    <!-- ===================== VISTA DEL PERSONAL (parche 76) ===================== -->
+    <section class="pantalla" id="pasoVista">
+      <div class="seccion-cab">
+        <h1>Vista del personal</h1>
+        <p class="seccion-sub">Qué datos ve el personal de <b>COSTURA</b> en la tarjeta de cada ticket.
+        Numeración y Cantidad son permanentes y no se pueden apagar. El STD no se muestra nunca.
+        ACABADO no usa esta configuración: su tarjeta va aparte.</p>
+      </div>
+      <div class="barra-control">
+        <button class="btn-mini" onclick="cargarVista()">↻ Cargar</button>
+      </div>
+      <div class="sub" id="vistaAviso"></div>
+      <div id="vistaZona" class="mod-grid"></div>
     </section>
 
     <!-- ===================== INCIDENCIAS (ajustes) ===================== -->

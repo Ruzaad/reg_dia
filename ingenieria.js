@@ -92,7 +92,7 @@ function cmpVal(va, vb){
 }
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases",
+const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
@@ -124,6 +124,7 @@ function activarTab(tab){
   else if(tab==='pasoInc') incInit();
   else if(tab==='pasoExtra') cargarExtra();
   else if(tab==='pasoCausas') cargarCausas();
+  else if(tab==='pasoVista') cargarVista();
 }
 /* Eficiencia = una sola entrada del menú con dos vistas (parche 75). Son dos
    `section.pantalla` distintas, así que se cambia con irA(); lo que no puede
@@ -1424,6 +1425,45 @@ async function cargarEstadosAsis(){
   }catch(e){ ESTADOS_ASIS = []; }
 }
 
+
+/* ================= VISTA DEL PERSONAL (parche 76) =================
+   Ingeniería decide qué campos muestra la tarjeta de ticket en COSTURA.
+   Numeración y Cantidad no están en la tabla, así que no se pueden apagar. */
+let VISTA=[];
+async function cargarVista(){
+  $("vistaZona").innerHTML=cargandoHTML("Cargando…"); $("vistaAviso").textContent="";
+  try{
+    const r=await rpc("fn_tickets_visibilidad_listar",{p_dni:ING.dni,p_token:ING.token});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("vistaZona").innerHTML=""; return; }
+    VISTA=r.items||[]; pintarVista();
+  }catch(e){ $("vistaZona").innerHTML=""; mostrarError(e.message); }
+}
+function pintarVista(){
+  const fijos=["Numeración","Cantidad"];
+  $("vistaAviso").innerHTML = `Siempre visibles: ${fijos.map(f=>`<b>${esc(f)}</b>`).join(" · ")}`;
+  $("vistaZona").innerHTML = VISTA.map(c=>`
+    <div class="gen-job">
+      <div class="gen-job-head">
+        <div class="gen-job-name">${esc(c.etiqueta)}</div>
+        <label class="chk-inline">
+          <input type="checkbox" class="sw"${c.visible?" checked":""}
+                 onchange="guardarVista('${esc(c.campo)}', this.checked)">
+          ${c.visible?"Visible":"Oculto"}
+        </label>
+      </div>
+    </div>`).join("") || `<div class="vacio-msg">Sin campos configurables</div>`;
+}
+async function guardarVista(campo, visible){
+  try{
+    const r=await rpc("fn_tickets_visibilidad_guardar",
+      {p_dni:ING.dni,p_token:ING.token,p_campo:campo,p_visible:visible});
+    if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); cargarVista(); return; }
+    const c=VISTA.find(x=>x.campo===campo); if(c) c.visible=visible;
+    pintarVista();
+    mostrarOk(`${campo.toUpperCase()} ahora está ${visible?"visible":"oculto"} para costura`);
+  }catch(e){ mostrarError(e.message); cargarVista(); }
+}
+
 /* ================= MODAL genérico ================= */
 /* `cls` deja pedir una caja distinta a la de 520px (ver .modal-ancho): un
    modal con tabla de operaciones no cabe en el ancho de un formulario. */
@@ -2625,7 +2665,7 @@ async function liberarLote(){
     await cargarTk();
   }catch(e){ mostrarError(e.message); }
 }
-let tkOcultarLib=false;
+let tkOcultarLib=true;   // parche 76: los liberados no estorban por defecto
 function toggleOcultarLib(){ tkOcultarLib = !!($("chkOcultarLib") && $("chkOcultarLib").checked); pintarTk(); }
 function pintarTk(){
   // Búsqueda por tokens: se separa el texto por espacios y "/" y cada término
