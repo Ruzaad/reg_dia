@@ -2587,6 +2587,124 @@ function descargarAvof(){
   XLSX.writeFile(wb,"RESUMEN_OF.xlsx");
 }
 
+
+/* ============ EXPORTAR "OPERACION FINAL" A CARPETAS (parche 79) ============
+   Se elige la carpeta RAÍZ; dentro deben existir "Acabado" y "Costura". La hoja
+   OPERACION FINAL se parte por área (ACABADO → Acabado; lo que tenga COSTURA →
+   Costura) y se FUSIONA con el archivo que ya esté ahí: la fila cuya
+   OF+Área+Módulo vuelve a salir se refresca, la que no vuelve a salir se
+   respeta, y lo nuevo se agrega al final.
+   Necesita la File System Access API (Chrome/Edge). En los demás navegadores
+   cae a dos descargas normales, avisando que ahí no hay fusión. */
+const AVOF_FIN_CAB=["OF","Artículo","Área","Módulo","N°OP","Operación final","Cantidad X OF",
+                    "Producida","% avance","Estado","Entrada","Salida"];
+const AVOF_ARCHIVO="OPERACION_FINAL.xlsx";
+/* Clave de identidad de la fila: OF + Área + Módulo. */
+function avofClave(f){ return [f[0],f[2],f[3]].map(v=>normKey(v==null?"":v)).join("|"); }
+function avofDestino(area){
+  const a=normKey(area);
+  if(a==="ACABADO") return "Acabado";
+  return a.includes("COSTURA") ? "Costura" : null;
+}
+/* Filas de OPERACION FINAL (sin cabecera) a partir de lo que está en pantalla. */
+function avofFilasFinales(){
+  const out=[];
+  (AVOF._rows||[]).forEach(r=>{
+    const cod=avofOfCod(r);
+    (r.modulos||[]).forEach(m=>out.push([cod,r.articulo,m.area,m.modulo,m.nop,m.operacion,
+      m.cant_prog,m.producida,m.pct,m.estado,m.entrada||"",m.salida||""]));
+  });
+  return out;
+}
+function avofLibro(filas){
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([AVOF_FIN_CAB,...filas]), "OPERACION FINAL");
+  return wb;
+}
+/* Lee el archivo que ya está en la carpeta; si no hay, devuelve []. */
+async function avofLeerExistente(dir){
+  let fh; try{ fh=await dir.getFileHandle(AVOF_ARCHIVO); }catch(e){ return []; }
+  try{
+    const buf=await (await fh.getFile()).arrayBuffer();
+    const wb=XLSX.read(buf,{type:"array"});
+    const hoja=wb.Sheets["OPERACION FINAL"] || wb.Sheets[wb.SheetNames[0]];
+    if(!hoja) return [];
+    const filas=XLSX.utils.sheet_to_json(hoja,{header:1,blankrows:false});
+    return filas.slice(1).filter(f=>f && f.length && String(f[0]||"").trim()!=="");
+  }catch(e){ throw new Error("No se pudo leer el "+AVOF_ARCHIVO+" que ya estaba: "+e.message); }
+}
+/* Fusión: el orden del archivo viejo manda; lo nuevo que no existía va al final. */
+function avofFusionar(viejas, nuevas){
+  const idx=new Map(); viejas.forEach((f,i)=>idx.set(avofClave(f), i));
+  const out=viejas.map(f=>f.slice());
+  let act=0, add=0;
+  nuevas.forEach(f=>{
+    const k=avofClave(f), i=idx.get(k);
+    if(i===undefined){ idx.set(k, out.length); out.push(f); add++; }
+    else { out[i]=f; act++; }
+  });
+  return {filas:out, actualizadas:act, agregadas:add};
+}
+async function avofSubcarpeta(root, nombre){
+  const buscado=normKey(nombre);
+  for await (const [n,h] of root.entries()){
+    if(h.kind==="directory" && normKey(n)===buscado) return h;
+  }
+  return null;
+}
+async function avofEscribir(dir, wb){
+  const fh=await dir.getFileHandle(AVOF_ARCHIVO,{create:true});
+  const w=await fh.createWritable();
+  await w.write(new Blob([XLSX.write(wb,{bookType:"xlsx",type:"array"})],
+    {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  await w.close();
+}
+async function exportarAvofCarpetas(){
+  const filas=avofFilasFinales();
+  if(!filas.length){ mostrarError("No hay datos para exportar"); return; }
+
+  const grupos={Acabado:[], Costura:[]}, sinDestino=[];
+  filas.forEach(f=>{
+    const d=avofDestino(f[2]);
+    if(d) grupos[d].push(f); else sinDestino.push(f[2]);
+  });
+  if(sinDestino.length){
+    const areas=[...new Set(sinDestino.map(a=>norm(a)||"(sin área)"))];
+    mostrarError(`${sinDestino.length} fila(s) sin carpeta (no son ACABADO ni COSTURA): ${areas.join(", ")}`);
+  }
+
+  if(!window.showDirectoryPicker){
+    // Sin File System Access API no hay forma de leer la carpeta: dos descargas sueltas.
+    Object.keys(grupos).forEach(g=>{
+      if(grupos[g].length) XLSX.writeFile(avofLibro(grupos[g]), g.toUpperCase()+"_"+AVOF_ARCHIVO);
+    });
+    mostrarError("Este navegador no deja elegir carpeta (usa Chrome o Edge). "
+      + "Se descargaron los dos archivos sueltos, SIN fusionar con los que ya tengas.");
+    return;
+  }
+
+  let root;
+  try{ root=await window.showDirectoryPicker({mode:"readwrite"}); }
+  catch(e){ return; }   // el usuario canceló
+
+  try{
+    const dirs={};
+    for(const g of ["Acabado","Costura"]){
+      dirs[g]=await avofSubcarpeta(root,g);
+      if(!dirs[g]){ mostrarError(`La carpeta elegida no tiene una subcarpeta "${g}".`); return; }
+    }
+    const resumen=[];
+    for(const g of ["Acabado","Costura"]){
+      if(!grupos[g].length){ resumen.push(`${g}: sin filas`); continue; }
+      const viejas=await avofLeerExistente(dirs[g]);
+      const f=avofFusionar(viejas, grupos[g]);
+      await avofEscribir(dirs[g], avofLibro(f.filas));
+      resumen.push(`${g}: ${f.filas.length} fila(s) (${f.actualizadas} actualizada(s), ${f.agregadas} nueva(s))`);
+    }
+    mostrarOk(resumen.join(" · "));
+  }catch(e){ mostrarError(e.message); }
+}
+
 /* ================= TICKETS DEL DÍA ================= */
 let TK=[], TK_VISTA=[], BASES_CACHE={};
 let tkSort={col:null,dir:1};
