@@ -499,7 +499,8 @@ function initLogin(){
     try{
       const r = await rpc("fn_login", {p_dni:dni, p_pin:pin});
       if(!r.ok){ $("msgLogin").textContent=r.error; pin=""; pintar(); return; }
-      guardarSesion({dni:r.dni, nombre:r.nombre, cargo:r.cargo, token:r.token, area:null});
+      guardarSesion({dni:r.dni, nombre:r.nombre, cargo:r.cargo, token:r.token, area:null,
+                     admin:r.es_admin===true});
       if(r.cargo==="INGENIERIA"){ location.href="ingenieria.html"; return; }
       $("nombreSaludo").textContent = "Hola, " + r.nombre.split(" ")[0];
       await hidratarAreas();
