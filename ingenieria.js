@@ -92,7 +92,7 @@ function cmpVal(va, vb){
 }
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoModEf","pasoBases",
+const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
@@ -107,6 +107,7 @@ function activarTab(tab){
   { const st=$("supTabs"); if(st) st.style.display="none"; }
   try{ history.replaceState(null,"","#"+tab); }catch(e){}
   if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
+  if(tab==='pasoEf' || tab==='pasoDia'){ efVista(tab==='pasoDia'?'dia':'area'); TABS_VISTAS.add(tab); return; }
   irA(tab);
   if(TABS_VISTAS.has(tab)) return;      // reentrada: conserva filtros y datos
   TABS_VISTAS.add(tab);
@@ -115,7 +116,6 @@ function activarTab(tab){
   else if(tab==='pasoMod') cargarMod();
   else if(tab==='pasoOpsOF') opfInit();
   else if(tab==='pasoAsis') perInit();
-  else if(tab==='pasoModEf'){ const f=$("fechaModEf"); if(f&&!f.value) f.value=hoyLima(); if($("areaModEf")&&$("areaModEf").value) cargarModEf(); }
   else if(tab==='pasoOpArea') cargarOpArea();
   else if(tab==='pasoFechas') initFechas();
   else if(tab==='pasoGen') genInit();
@@ -124,7 +124,21 @@ function activarTab(tab){
   else if(tab==='pasoInc') incInit();
   else if(tab==='pasoExtra') cargarExtra();
   else if(tab==='pasoCausas') cargarCausas();
-  else if(tab==='pasoOrigen') cargarOrigen();
+}
+/* Eficiencia = una sola entrada del menú con dos vistas (parche 75). Son dos
+   `section.pantalla` distintas, así que se cambia con irA(); lo que no puede
+   cambiar es el resaltado del menú, que se queda en "Eficiencia" (pasoEf). */
+function efVista(v){
+  const dia = v==="dia";
+  irA(dia ? "pasoDia" : "pasoEf");
+  document.querySelectorAll(".nav-item[data-tab]").forEach(x=>x.classList.toggle("activo", x.dataset.tab==="pasoEf"));
+  try{ history.replaceState(null,"","#"+(dia?"pasoDia":"pasoEf")); }catch(e){}
+  ["A","D"].forEach(sfx=>{
+    const a=$("efTabArea"+sfx), d=$("efTabDia"+sfx);
+    if(a) a.classList.toggle("activo",!dia);
+    if(d) d.classList.toggle("activo",dia);
+  });
+  if(dia && !TABS_VISTAS.has("pasoDia")){ TABS_VISTAS.add("pasoDia"); }
 }
 function toggleSidebar(){ document.body.classList.toggle("sidebar-cerrada"); }
 function cerrarSidebarMovil(){ if(window.innerWidth<=900) document.body.classList.add("sidebar-cerrada"); }
@@ -149,7 +163,6 @@ function poblarSelectsArea(){
   if($("areaOp"))  $("areaOp").innerHTML  = elige + AREAS_LISTA.map(op).join("");
   if($("areaFec")) $("areaFec").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("areaInci")) $("areaInci").innerHTML = todas + AREAS_LISTA.map(op).join("");
-  if($("areaModEf")) $("areaModEf").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("exArea")) $("exArea").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("movArea")) $("movArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
   // Operaciones por OF y Generar tickets: solo áreas con Sheet en areas_config.
@@ -164,7 +177,6 @@ function recargarIngenieria(){
   const act = id => $(id) && $(id).classList.contains("activa");
   if(act("pasoEf")) cargarEf();
   else if(act("pasoDia")){ if(EFR.personal.length) cargarEfRango(); }
-  else if(act("pasoModEf")){ if($("areaModEf")&&$("areaModEf").value) cargarModEf(); }
   else if(act("pasoTk")) cargarTk();
   else if(act("pasoMod")) cargarMod();
   else if(act("pasoBases")) cargarBases();
@@ -1405,49 +1417,6 @@ async function descargarEfRango(){
   XLSX.writeFile(wb, `EFICIENCIA_${efRangoSel.desde}_a_${efRangoSel.hasta}.xlsx`);
 }
 
-/* ================= EFICIENCIA · MÓDULOS DEL DÍA (visión) ================= */
-let MODEF={items:[],personas:0,total:0,ef:0}, modEfSort={col:"minutos",dir:-1};
-function ordenarModEf(col){ if(modEfSort.col===col) modEfSort.dir*=-1; else modEfSort={col,dir:1}; pintarModEf(); }
-async function cargarModEf(){
-  const area=$("areaModEf")?$("areaModEf").value:"";
-  const gate=$("modEfGate"), cont=$("modEfContenido");
-  if(!area){ if(gate) gate.style.display="block"; if(cont) cont.hidden=true; return; }
-  if(gate) gate.style.display="none"; if(cont) cont.hidden=false;
-  const f=$("fechaModEf"); if(f&&!f.value) f.value=hoyLima();
-  $("tablaModEf").innerHTML=cargandoHTML("Calculando módulos…");
-  try{
-    const r=await rpc("fn_avance_modulos",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_fecha:(f?f.value:null)});
-    if(!r.ok){ mostrarError(r.error||"Error"); $("tablaModEf").innerHTML=""; return; }
-    MODEF={items:r.items||[],personas:r.personas||0,total:r.total_min||0,ef:r.eficiencia||0};
-    pintarModEf();
-  }catch(e){ $("tablaModEf").innerHTML=""; mostrarError(e.message); }
-}
-function pintarModEf(){
-  const kpi=(t,v)=>`<div class="kpi"><div class="kpi-num">${v}</div><div class="kpi-lbl">${t}</div></div>`;
-  $("modEfResumen").innerHTML =
-    kpi("Personas del área", MODEF.personas)+
-    kpi("Minutaje total", Math.round(MODEF.total))+
-    kpi("Eficiencia del área", censEf(MODEF.ef+"%"))+
-    kpi("Módulos", MODEF.items.length);
-  let lista=[...MODEF.items];
-  if(modEfSort.col){
-    lista.sort((a,b)=>{
-      const va=a[modEfSort.col], vb=b[modEfSort.col];
-      const c=cmpVal(va,vb);
-      return c*modEfSort.dir;
-    });
-  }
-  const flecha=k=>modEfSort.col===k?(modEfSort.dir===1?" ▲":" ▼"):"";
-  const thead=`<thead><tr>
-    <th class="ord izq" onclick="ordenarModEf('modulo')">Módulo${flecha('modulo')}</th>
-    <th class="ord" onclick="ordenarModEf('minutos')">Minutaje total${flecha('minutos')}</th>
-    <th class="ord" onclick="ordenarModEf('eficiencia')">Eficiencia${flecha('eficiencia')}</th></tr></thead>`;
-  const body = lista.length
-    ? lista.map(o=>`<tr><td class="izq">${esc(o.modulo)}</td><td><b>${Math.round(o.minutos)}</b></td>
-        <td class="${efClase(o.eficiencia)}">${censEf(o.eficiencia+"%")}</td></tr>`).join("")
-    : `<tr><td colspan="3"><div class="vacio-msg">Sin módulos trabajados ese día</div></td></tr>`;
-  $("tablaModEf").innerHTML=thead+"<tbody>"+body+"</tbody>";
-}
 
 async function cargarEstadosAsis(){
   try{
@@ -2065,78 +2034,6 @@ async function toggleExtra(i){
     cargarExtra();
   }catch(e2){ mostrarError(e2.message); }
 }
-
-/* --- Origen de tickets (parche 47) ---
-   Qué se está reclamando y de dónde viene. El almacén del Sheet solo se puede
-   apagar cuando al área no le cuelga ninguna OF sin generar; si cuelga algo,
-   la BD lo rechaza y hay que confirmarlo a sabiendas. */
-let ORIGEN=[];
-async function cargarOrigen(){
-  $("orZona").innerHTML=cargandoHTML("Revisando…"); $("orResumen").textContent="";
-  try{
-    const r=await rpc("fn_origen_reclamos",{p_dni:ING.dni,p_token:ING.token});
-    if(!r.ok){ mostrarError(r.error||"Error"); $("orZona").innerHTML=""; return; }
-    ORIGEN=r.areas||[]; pintarOrigen();
-  }catch(e){ $("orZona").innerHTML=""; mostrarError(e.message); }
-}
-function pintarOrigen(){
-  const conSheet=ORIGEN.filter(a=>a.usa_almacen).length;
-  const listas=ORIGEN.filter(a=>a.usa_almacen && a.listo_para_apagar).length;
-  $("orResumen").innerHTML=`${ORIGEN.length} área(s) · <b>${conSheet}</b> siguen leyendo el Sheet`
-    + (listas?` · <b>${listas}</b> ya se pueden desconectar`:"");
-  $("orZona").innerHTML = ORIGEN.map(a=>{
-    const pend=a.pendientes||[];
-    const estado = !a.usa_almacen
-      ? `<span class="of-area lista">desconectada del Sheet</span>`
-      : (a.listo_para_apagar
-          ? `<span class="of-area lista">lista para desconectar</span>`
-          : `<span class="of-area pendiente">${a.ofs_sheet} OF colgando del Sheet</span>`);
-    const btn = a.usa_almacen
-      ? `<button class="btn-mini ${a.listo_para_apagar?"verde":"rojo"}" onclick="apagarAlmacen('${esc(a.area)}')">Desconectar del Sheet</button>`
-      : `<button class="btn-mini" onclick="prenderAlmacen('${esc(a.area)}')">Volver a conectar</button>`;
-    const tabla = pend.length ? `
-      <div class="contenedor-ancho tabla-scroll" style="max-height:26vh;margin-top:8px;">
-        <table class="tabla"><thead><tr><th>OF</th><th>Tickets</th><th>Personas</th>
-          <th>Und.</th><th>Último reclamo</th><th>¿Registrada?</th></tr></thead><tbody>${
-          pend.map(x=>`<tr><td>${esc(x.of)}</td><td><b>${x.tickets}</b></td><td>${x.personas}</td>
-            <td>${x.und}</td><td>${esc(x.ultima||"—")}</td>
-            <td>${x.registrada
-              ? `<span class="of-area pendiente">sí · falta generar</span>`
-              : `<span class="of-area sin-base">no está en el sistema</span>`}</td></tr>`).join("")
-        }</tbody></table></div>` : "";
-    return `<div class="gen-job">
-      <div class="gen-job-head">
-        <div class="gen-job-name">${esc(a.area)} &nbsp; ${estado}</div>
-        ${btn}
-      </div>
-      <div class="cf-detalle">Del sistema: <b>${a.ofs_sistema}</b> OF · ${a.tickets_sistema} ticket(s)
-        &nbsp;·&nbsp; Del Sheet: <b>${a.ofs_sheet}</b> OF · ${a.tickets_sheet} ticket(s)</div>
-      ${tabla}</div>`;
-  }).join("") || `<div class="vacio-msg">Sin áreas configuradas</div>`;
-}
-async function apagarAlmacen(area){
-  try{
-    let r=await rpc("fn_area_almacen",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_usar:false,p_confirmar:false});
-    if(!r.ok && r.requiere_confirmacion){
-      if(!confirm(`${r.error}
-
-¿Desconectar de todos modos?`)) return;
-      r=await rpc("fn_area_almacen",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_usar:false,p_confirmar:true});
-    }
-    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
-    mostrarOk(`${area} ya no lee el almacén del Sheet`);
-    cargarOrigen();
-  }catch(e){ mostrarError(e.message); }
-}
-async function prenderAlmacen(area){
-  try{
-    const r=await rpc("fn_area_almacen",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_usar:true,p_confirmar:true});
-    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
-    mostrarOk(`${area} vuelve a leer el almacén del Sheet`);
-    cargarOrigen();
-  }catch(e){ mostrarError(e.message); }
-}
-
 
 /* --- Causas de variación del STD (parche 36) --- */
 let CAUSAS_ING=[];
@@ -2814,7 +2711,29 @@ function renderTkOpsPanel(activo){
     </details>`;
   }).join("")
   + `<div class="tk-ops-title" style="margin-top:14px;">Resumen por operación</div>`
-  + ops2.map(op=>`<div class="tk-ops-row"><span>${esc(op)}</span><span>${Math.round(byOpTot[op])}</span></div>`).join("");
+  + ops2.map(op=>`<div class="tk-ops-row"><span>${esc(op)}</span><span>${Math.round(byOpTot[op])}</span></div>`).join("")
+  + resumenPorPersonal();
+}
+
+/* Resumen por personal (parche 75): cuánto lleva hecho cada persona en lo que
+   está filtrado. Misma base que el resto del panel: solo tickets ACTIVOS.
+   Ordena por cantidad desc, que es como se lee de un vistazo. */
+function resumenPorPersonal(){
+  const byP={};
+  TK_VISTA.forEach(t=>{
+    if(t.estado!=='ACTIVO') return;
+    const k=norm(t.nombre)||"(sin nombre)";
+    const e=(byP[k]=byP[k]||{cant:0,min:0,tk:0});
+    e.cant+=Number(t.cant)||0; e.min+=Number(t.minutos)||0; e.tk++;
+  });
+  const nombres=Object.keys(byP);
+  if(!nombres.length) return "";
+  nombres.sort((a,b)=>byP[b].cant-byP[a].cant || a.localeCompare(b,"es"));
+  return `<div class="tk-ops-title" style="margin-top:14px;">Resumen por personal</div>`
+    + nombres.map(n=>`<div class="tk-ops-row">
+        <span>${esc(soloApellidos(n))}</span>
+        <span>${Math.round(byP[n].cant)} und · ${Math.round(byP[n].min)} min</span>
+      </div>`).join("");
 }
 
 /* Retiro de tickets desde la app: SOLO el usuario ALOPEZ.
@@ -2845,17 +2764,15 @@ async function liberarTicket(i){
 let TKOP={items:[],of:"",area:"",_rows:[]}, tkOpSort={col:null,dir:1}, tkOpMarc={}, tkOpPag=1;
 const TKOP_PAGE=10;
 function tkVista(v){
-  const op=v==="op", rep=v==="rep", lib=v==="lib", act=!op&&!rep&&!lib;
+  const op=v==="op", rep=v==="rep", act=!op&&!rep;
   $("tkActualView").hidden=!act; $("tkOpView").hidden=!op;
-  $("tkRepView").hidden=!rep;   $("tkLibView").hidden=!lib;
+  $("tkRepView").hidden=!rep;
   $("tkTabActual").classList.toggle("activo",act);
   $("tkTabOp").classList.toggle("activo",op);
   $("tkTabRep").classList.toggle("activo",rep);
-  $("tkTabLib").classList.toggle("activo",lib);
   if(op){ const s=$("tkOpArea"); if(s && !s.value && s.options.length<=1)
     s.innerHTML=`<option value="">— Elige área —</option>`+(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join(""); }
   if(rep) repInit();
-  if(lib) libInit();
 }
 async function cargarTkOp(){
   const area=$("tkOpArea").value, of=$("tkOpOf").value.trim();
@@ -3650,156 +3567,6 @@ async function descargarInc(){
       "TABLA DE INC.");
   }
   XLSX.writeFile(wb, "BONIFICACION_"+INC.desde+"_"+INC.hasta+".xlsx");
-}
-
-/* ================= TICKETS LIBRES (parche 58) =================
-   Lo que falta reclamar en un área: el dato completo del ticket, agrupado
-   arriba por módulo y operación, y la posibilidad de asignárselos a un
-   operario. Solo cubre las OF derivadas (`of_generada`, parche 29); las
-   anteriores viven en el Sheet del ALMACÉN y el servidor no las ve. */
-let LIB={items:[],resumen:[]}, libSelCodes={}, libPag=1;
-const LIB_PAGE=100;
-
-function libInit(){
-  const sa=$("libArea");
-  if(sa && sa.options.length<=1){
-    sa.innerHTML=`<option value="">— Elige área —</option>`
-      +(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
-    sa.onchange=()=>{ LIB={items:[],resumen:[]}; libSelCodes={}; cargarLibresPersonal(); pintarLibres(); };
-  }
-}
-/* El select de destino se llena con el personal del área elegida: asignar a
-   alguien de otra área lo movería de área (trigger del parche 58) y eso no
-   debería pasar por descuido. */
-async function cargarLibresPersonal(){
-  const sel=$("libDni"); if(!sel) return;
-  const area=($("libArea")||{}).value||"";
-  if(!area){ sel.innerHTML=`<option value="">— Elige área —</option>`; return; }
-  sel.innerHTML=`<option value="">Cargando…</option>`;
-  try{
-    const r=await rpc("fn_personal",{p_dni:ING.dni,p_token:ING.token,p_area:area});
-    const lista=Array.isArray(r)?r:[];
-    sel.innerHTML=`<option value="">— Elige persona —</option>`
-      + lista.map(p=>`<option value="${esc(p.dni)}"${p.ausente?" disabled":""}>`
-          + `${esc(soloApellidos(p.nombre))}${p.ausente?" · "+esc(p.estado_dia||"no activo"):""}</option>`).join("");
-  }catch(e){ sel.innerHTML=`<option value="">Error al cargar</option>`; }
-}
-async function cargarLibres(){
-  const area=($("libArea")||{}).value||"";
-  if(!area){ mostrarError("Elige el área"); return; }
-  $("tablaLib").innerHTML=cargandoHTML("Buscando lo que falta reclamar…");
-  $("libResumen").innerHTML=""; $("libPorOp").innerHTML="";
-  libSelCodes={}; libPag=1;
-  try{
-    const r=await rpc("fn_tickets_libres",{p_dni:ING.dni,p_token:ING.token,
-      p_area:area, p_of:(($("libOf")||{}).value||"").trim(),
-      p_articulo:(($("libArt")||{}).value||"").trim()});
-    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); LIB={items:[],resumen:[]}; }
-    else LIB={items:r.items||[], resumen:r.resumen||[]};
-    await cargarLibresPersonal();
-    pintarLibres();
-  }catch(e){ $("tablaLib").innerHTML=""; mostrarError(e.message); }
-}
-function libFiltrados(){
-  const q=normKey(($("libBuscar")||{}).value||"");
-  const ocultar=!!($("libOcultarCerrados")||{}).checked;
-  return (LIB.items||[]).filter(t=>
-    (!ocultar || !t.cerrado) &&
-    (!q || normKey(`${t.modulo} ${t.op} ${t.of} ${t.articulo} ${t.num} ${t.codigo}`).includes(q)));
-}
-function libNSelUpd(){
-  const n=Object.keys(libSelCodes).length;
-  const e=$("libNSel"); if(e) e.textContent=n;
-}
-function libToggle(cod){
-  if(libSelCodes[cod]) delete libSelCodes[cod]; else libSelCodes[cod]=true;
-  libNSelUpd(); pintarLibres();
-}
-/* Marca lo VISIBLE, no todo: con un filtro puesto, marcar los 900 tickets del
-   área sería la clase de sorpresa que asigna trabajo a quien no debía. */
-function libMarcarVisibles(){
-  const vis=libFiltrados().filter(t=>!t.cerrado);
-  const faltan=vis.some(t=>!libSelCodes[t.codigo]);
-  vis.forEach(t=>{ if(faltan) libSelCodes[t.codigo]=true; else delete libSelCodes[t.codigo]; });
-  libNSelUpd(); pintarLibres();
-}
-function libLimpiar(){ libSelCodes={}; libNSelUpd(); pintarLibres(); }
-function libPagina(d){ libPag+=d; pintarLibres(); }
-
-function pintarLibres(){
-  const lista=libFiltrados();
-  const cerrados=(LIB.items||[]).filter(t=>t.cerrado).length;
-  const und=lista.reduce((a,t)=>a+(+t.cant||0),0);
-  const min=lista.reduce((a,t)=>a+(+t.minutos||0),0);
-  const kpi=(t,v,c,sub)=>`<div class="kpi"><div class="kpi-num" style="color:${c}">${v}</div>`
-    +`<div class="kpi-lbl">${t}${sub?"<b>"+esc(sub)+"</b>":""}</div></div>`;
-  $("libResumen").innerHTML =
-    kpi("Tickets libres", lista.length, "var(--azul)")+
-    kpi("Unidades", qty(und), "var(--azul)")+
-    kpi("Minutos", Math.round(min), "var(--azul)")+
-    kpi("Operaciones", (LIB.resumen||[]).length, "var(--azul)")+
-    (cerrados?kpi("En módulo cerrado", cerrados, "var(--alerta)", "no se pueden reclamar"):"");
-  $("libAviso").textContent = (LIB.items||[]).length
-    ? "Solo se listan las OF generadas por el sistema; las anteriores viven en el ALMACÉN del Sheet."
-    : "";
-
-  /* Resumen por módulo y operación: es la lectura que pide el analista antes de
-     bajar al ticket suelto. */
-  const res=(LIB.resumen||[]);
-  $("libPorOp").innerHTML = res.length ? `<div class="mot-caja">
-      <div class="tk-ops-title">Falta reclamar · por módulo y operación</div>
-      <div class="mot-chips">${res.map(x=>`<span class="mot-chip neg">
-        <b>${esc(x.modulo)} · ${esc(x.op)}</b>
-        <span class="mot-n">${x.tickets}</span>
-        <span class="mot-min">${qty(x.cant)} und</span></span>`).join("")}</div></div>` : "";
-
-  const COLS=[{t:""},{k:"of",t:"OF"},{k:"articulo",t:"Artículo",cls:"izq"},
-    {k:"modulo",t:"Módulo",cls:"izq"},{k:"nop",t:"N°OP"},{k:"op",t:"Operación",cls:"izq"},
-    {k:"num",t:"Numeración"},{k:"corte",t:"Paq."},{k:"talla",t:"Talla"},{k:"color",t:"Color"},
-    {k:"cant",t:"Cant"},{k:"std",t:"STD"},{k:"minutos",t:"Min"},{k:"codigo",t:"Código"}];
-  const orden=ordAplicar("tablaLib", lista);
-  const tot=Math.max(1, Math.ceil(orden.length/LIB_PAGE));
-  libPag=Math.min(Math.max(1,libPag),tot);
-  const pag=orden.slice((libPag-1)*LIB_PAGE, libPag*LIB_PAGE);
-  const body = pag.length ? pag.map(t=>`<tr class="${t.cerrado?"lib-cerrado":""}">
-      <td>${t.cerrado
-        ? '<span class="lib-lock" title="Módulo cerrado por ingeniería">🔒</span>'
-        : `<input type="checkbox" class="lib-chk"${libSelCodes[t.codigo]?" checked":""} onchange="libToggle(&quot;${esc(t.codigo)}&quot;)">`}</td>
-      <td>${esc(t.of)}</td><td class="izq">${esc(t.articulo||"")}</td>
-      <td class="izq">${esc(t.modulo||"")}</td><td>${t.nop==null?"—":t.nop}</td>
-      <td class="izq">${esc(t.op||"")}</td>
-      <td>${esc(t.num||"")}</td><td>${esc(t.corte||"")}</td>
-      <td>${esc(t.talla||"")}</td><td>${esc(t.color||"")}</td>
-      <td><b>${qty(t.cant)}</b></td><td>${Number(t.std||0).toFixed(2)}</td>
-      <td>${Math.round(t.minutos||0)}</td>
-      <td class="lib-cod">${esc(t.codigo)}</td></tr>`).join("")
-    : `<tr><td colspan="${COLS.length}"><div class="vacio-msg">${(LIB.items||[]).length?"Nada con ese filtro":"No hay tickets libres con estos filtros"}</div></td></tr>`;
-  $("tablaLib").innerHTML = ordThead("tablaLib", COLS, pintarLibres) + "<tbody>"+body+"</tbody>";
-  $("libPager").innerHTML = orden.length>LIB_PAGE
-    ? `<button class="btn-mini" ${libPag<=1?"disabled":""} onclick="libPagina(-1)">‹ Anterior</button>
-       <span class="sub" style="margin:0 8px;">${libPag}/${tot} · ${orden.length} ticket(s)</span>
-       <button class="btn-mini" ${libPag>=tot?"disabled":""} onclick="libPagina(1)">Siguiente ›</button>` : "";
-  libNSelUpd();
-}
-async function asignarLibres(){
-  const area=($("libArea")||{}).value||"", dni=($("libDni")||{}).value||"";
-  const codigos=Object.keys(libSelCodes);
-  if(!area){ mostrarError("Elige el área"); return; }
-  if(!dni){ mostrarError("Elige a quién asignarle"); return; }
-  if(!codigos.length){ mostrarError("No hay tickets seleccionados"); return; }
-  const nom=(($("libDni").selectedOptions||[])[0]||{}).textContent||dni;
-  if(!confirm(`¿Asignar ${codigos.length} ticket(s) a ${nom.trim()}?\n`
-    + `Quedan reclamados a su nombre. Si es de otra área, pasará a ${area} y se notificará.`)) return;
-  try{
-    const r=await rpc("fn_asignar_tickets",{p_dni:ING.dni,p_token:ING.token,
-      p_area:area, p_dni_op:dni, p_codigos:codigos});
-    if(!r.ok){ mostrarError(r.error||"No se pudo asignar"); return; }
-    const om=(r.omitidos||[]);
-    mostrarOk(`${r.asignados} ticket(s) asignados a ${nom.trim()}`
-      + (om.length?` · no se pudo con ${om.length}: ${om.join(", ")}`:""));
-    libSelCodes={};
-    await cargarLibres();
-  }catch(e){ mostrarError(e.message); }
 }
 
 /* ================= REPORTE DE HOY =================

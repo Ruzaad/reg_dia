@@ -37,13 +37,10 @@
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
         <a class="nav-item" data-tab="pasoOfs" href="#pasoOfs">OFs registradas</a>
         <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Resumen de OF</a>
-        <a class="nav-item" data-tab="pasoOrigen" href="#pasoOrigen">Origen de tickets</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Eficiencia</summary>
-        <a class="nav-item" data-tab="pasoEf" href="#pasoEf">Por área</a>
-        <a class="nav-item" data-tab="pasoDia" href="#pasoDia">Por día</a>
-        <a class="nav-item" data-tab="pasoModEf" href="#pasoModEf">Módulos (día)</a>
+        <a class="nav-item" data-tab="pasoEf" href="#pasoEf">Eficiencia</a>
         <a class="nav-item" data-tab="pasoInc" href="#pasoInc">Incentivos</a>
       </details>
       <details class="nav-group" open>
@@ -83,8 +80,12 @@
     <!-- ===================== EFICIENCIA POR ÁREA ===================== -->
     <section class="pantalla" id="pasoEf">
       <div class="seccion-cab">
-        <h1>Eficiencia por área</h1>
+        <h1>Eficiencia</h1>
         <p class="seccion-sub">Elige un área para ver la eficiencia de todo su personal ese día.</p>
+      </div>
+      <div class="tabs sup-subtabs">
+        <button id="efTabAreaA" class="tab activo" onclick="efVista('area')">ÁREA</button>
+        <button id="efTabDiaA" class="tab" onclick="efVista('dia')">DÍA</button>
       </div>
       <div class="barra-control">
         <label class="campo"><span>Área</span>
@@ -107,8 +108,12 @@
     <!-- ===================== EFICIENCIA POR DÍA ===================== -->
     <section class="pantalla" id="pasoDia">
       <div class="seccion-cab">
-        <h1>Eficiencia día × día</h1>
+        <h1>Eficiencia</h1>
         <p class="seccion-sub">Rango de fechas por persona. Aparece todo el personal; si un día no estuvo activo, se muestra su estado.</p>
+      </div>
+      <div class="tabs sup-subtabs">
+        <button id="efTabAreaD" class="tab" onclick="efVista('area')">ÁREA</button>
+        <button id="efTabDiaD" class="tab activo" onclick="efVista('dia')">DÍA</button>
       </div>
       <div class="barra-control">
         <label class="campo"><span>Rango</span>
@@ -233,29 +238,6 @@
       </div>
     </section>
 
-    <!-- ===================== EFICIENCIA · MÓDULOS DEL DÍA (visión) ===================== -->
-    <section class="pantalla" id="pasoModEf">
-      <div class="seccion-cab">
-        <h1>Módulos del día</h1>
-        <p class="seccion-sub">Solo visión. Módulos trabajados ese día con su minutaje total y su eficiencia = minutaje / (personas actuales del área × 575).</p>
-      </div>
-      <div class="barra-control">
-        <label class="campo"><span>Área</span>
-          <select id="areaModEf" onchange="cargarModEf()"></select></label>
-        <label class="campo"><span>Fecha</span>
-          <input type="date" id="fechaModEf" onchange="cargarModEf()"></label>
-        <button class="btn-mini" onclick="cargarModEf()">Cargar</button>
-        <button class="btn-mini gris" id="btnCensModEf" onclick="toggleCensuraEf()" aria-pressed="false">Censurar %</button>
-      </div>
-      <div id="modEfGate" class="estado-vacio">Selecciona un área para ver sus módulos del día.</div>
-      <div id="modEfContenido" hidden>
-        <div class="kpis" id="modEfResumen"></div>
-        <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;margin-top:14px;">
-          <table class="tabla" id="tablaModEf"></table>
-        </div>
-      </div>
-    </section>
-
     <!-- ===================== OPERACIONES POR OF (agregar / quitar en ALMACÉN) ===================== -->
     <section class="pantalla" id="pasoOpsOF">
       <div class="seccion-cab">
@@ -314,7 +296,6 @@
         <button id="tkTabActual" class="tab activo" onclick="tkVista('actual')">ACTUAL</button>
         <button id="tkTabOp" class="tab" onclick="tkVista('op')">RECLAMADOS X OPERACIÓN</button>
         <button id="tkTabRep" class="tab" onclick="tkVista('rep')">REPORTE DE HOY</button>
-        <button id="tkTabLib" class="tab" onclick="tkVista('lib')">TICKETS LIBRES</button>
       </div>
 
       <div id="tkActualView">
@@ -397,32 +378,6 @@
         </div>
       </div>
 
-      <!-- Tickets libres: lo que falta reclamar, y asignación (parche 58) -->
-      <div id="tkLibView" hidden>
-        <div class="barra-control">
-          <label class="campo"><span>Área</span><select id="libArea"></select></label>
-          <label class="campo"><span>OF</span><input type="text" id="libOf" placeholder="Nº OF…"></label>
-          <label class="campo"><span>Artículo</span><input type="text" id="libArt" placeholder="Artículo…"></label>
-          <button class="btn-mini" onclick="cargarLibres()">Cargar</button>
-          <label class="campo"><span>Buscar</span>
-            <input type="text" id="libBuscar" placeholder="Módulo / operación / numeración…" oninput="pintarLibres()"></label>
-          <label class="campo-check"><input type="checkbox" class="sw" id="libOcultarCerrados" onchange="pintarLibres()"> Ocultar módulos cerrados</label>
-        </div>
-        <div class="kpis" id="libResumen" style="margin-bottom:14px;"></div>
-        <div id="libPorOp" style="margin-bottom:14px;"></div>
-        <div class="barra-control">
-          <span class="sub" style="margin:0;">Seleccionados: <b id="libNSel">0</b></span>
-          <button class="btn-mini gris" onclick="libMarcarVisibles()">Marcar visibles</button>
-          <button class="btn-mini gris" onclick="libLimpiar()">Limpiar</button>
-          <label class="campo"><span>Asignar a</span><select id="libDni"></select></label>
-          <button class="btn-mini verde" onclick="asignarLibres()">Asignar selección</button>
-        </div>
-        <div class="sub rep-pie" id="libAviso"></div>
-        <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;">
-          <table class="tabla" id="tablaLib"></table>
-        </div>
-        <div class="pager" id="libPager" style="margin-top:8px;"></div>
-      </div>
     </section>
 
     <!-- ===================== POR MÓDULO ===================== -->
@@ -769,20 +724,6 @@
       </div>
       <div class="sub" id="avofResumen"></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="avofTabla"></table></div>
-    </section>
-
-    <!-- ===================== ORIGEN DE TICKETS ===================== -->
-    <section class="pantalla" id="pasoOrigen">
-      <div class="seccion-cab"><h1>Origen de tickets</h1>
-        <p class="seccion-sub">De dónde viene lo que se está reclamando ahora mismo: de las OF
-        generadas en el sistema, o del almacén del Sheet. Un área se puede desconectar del Sheet
-        cuando ya no le cuelga nada.</p></div>
-      <div class="barra-control">
-        <button class="btn-mini" onclick="cargarOrigen()">↻ CARGAR</button>
-        <span class="sub" style="align-self:flex-end;">ACABADO no usa almacén: registra por cantidad.</span>
-      </div>
-      <div class="sub" id="orResumen"></div>
-      <div id="orZona"></div>
     </section>
 
     <!-- ===================== INCIDENCIAS (ajustes) ===================== -->

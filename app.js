@@ -1051,7 +1051,7 @@ function pintarAcabExtra(){
     const c=document.createElement("div");
     c.className="card-fila";
     c.innerHTML=`<div><div class="cf-titulo">${esc(e.operacion)}</div>
-      <div class="cf-detalle">${esc(e.tipo)} · STD ${Number(e.std).toFixed(2)} min</div></div>`;
+      <div class="cf-detalle">${esc(e.tipo)}</div></div>`;
     c.onclick=()=>{ ACAB.tipo=ACAB.extra[i]; ACAB.op=null; acabPedirCant(); };
     l.appendChild(c);
   });
@@ -1063,7 +1063,7 @@ function acabDetalle(){
   if(!e && (!x || !o)) return;
   $("tituloAcabCant").textContent = e ? e.operacion : x.operacion;
   $("acabDet").innerHTML = e
-    ? `${esc(e.tipo)} · STD ${Number(e.std).toFixed(2)} min`
+    ? `${esc(e.tipo)}`
     : ACAB.ver
       ? `OF ${esc(o.of)} · ${esc(o.articulo)}<br>Completa: <b>${qty(x.hecho)}</b> de ${qty(o.cant_prog)} und`
       : `OF ${esc(o.of)} · ${esc(o.articulo)}<br>Quedan <b>${qty(Math.max(0,Number(o.cant_prog)-Number(x.hecho)))}</b> und de ${qty(o.cant_prog)}`;
@@ -1447,7 +1447,7 @@ function pintarModulos(){
   });
 }
 
-/* --- paso operaciones (con STD visible) --- */
+/* --- paso operaciones (el STD no se muestra al personal, parche 75) --- */
 function pintarOperaciones(){
   $("tituloOps").textContent = sel.modulo + " · OF " + sel.of;
   const l=$("listaOps"); l.innerHTML="";
@@ -1479,7 +1479,6 @@ function pintarOperaciones(){
     } else {
       c.innerHTML=`<div>
           <div class="cf-titulo">${esc(op)}</div>
-          <div class="cf-detalle">STD <b>${o.std.toFixed(2)}</b> min</div>
         </div>
         <div class="badge-disp ${o.libres===0?'vacio':''}">${o.libres} de ${o.total} libres</div>`;
     }
@@ -1520,7 +1519,7 @@ function pintarTickets(){
     c.className="card-ticket"+(r?" tomado":"")+(marcado?" marcada":"");
     const pph = t.std>0 ? Math.round(60/t.std) : "—";
     // En el módulo final la numeración ya está tapada por la costura: manda la
-    // cantidad, con STD y color debajo. El nº de paquete no se muestra nunca.
+    // cantidad, con el color debajo. El nº de paquete y el STD no se muestran nunca.
     const fin = esTicketFinal(t);
     const cab = fin
       ? `<div class="tk-label">Cantidad</div>
@@ -1536,12 +1535,10 @@ function pintarTickets(){
     // talla "T": son marcadores, no datos. Solo se muestran si son reales.
     const col = norm(t.color), tal = norm(t.talla);
     const fila = fin
-      ? `<div>STD <b>${t.std.toFixed(2)}</b> min</div>
-         ${tal && normKey(tal)!=="T" ? `<div>Talla <b>${esc(tal)}</b></div>` : ""}
+      ? `${tal && normKey(tal)!=="T" ? `<div>Talla <b>${esc(tal)}</b></div>` : ""}
          ${t.residual?`<div class="tk-cant">resto de ${esc(t.num)}</div>`:""}`
       : `<div>Talla <b>${esc(t.talla)}</b></div>
          <div class="tk-cant"><b>${t.cant}</b> und</div>
-         <div>STD <b>${t.std.toFixed(2)}</b> min</div>
          <div>N°OP <b>${t.nop ?? "—"}</b></div>`;
     c.innerHTML=`
       ${cab}
@@ -1567,7 +1564,7 @@ function pintarTickets(){
             $("confNum").textContent=t.num;
             $("confDet").innerHTML=
               `${esc(sel.op)}<br>OF ${esc(t.of)} · ${esc(t.color)} · Talla ${esc(t.talla)} · <b>${t.cant} und</b><br>`+
-              `<span style="color:#5a6270">STD ${t.std.toFixed(2)} min · vale <b>${t.minutos} min</b></span>`;
+              `<span style="color:#5a6270">vale <b>${t.minutos} min</b></span>`;
           }
           $("btnRegistrar").disabled=false;
           irA("pasoConf");
