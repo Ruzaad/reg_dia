@@ -722,6 +722,8 @@
         <label class="campo"><span>Buscar</span><input type="text" id="avofBuscar" placeholder="Artículo / OF…" oninput="avofPintar()"></label>
         <button class="btn-mini" onclick="cargarAvof()">Cargar</button>
         <button class="btn-mini verde" onclick="descargarAvof()">⬇ Descargar</button>
+        <button class="btn-mini" onclick="exportarAvofCarpetas()"
+          title="Elige la carpeta raíz que contiene Acabado y Costura. La hoja OPERACION FINAL se reparte por área y se fusiona con lo que ya haya.">📁 Exportar a carpetas</button>
       </div>
       <div class="sub" id="avofResumen"></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="avofTabla"></table></div>
