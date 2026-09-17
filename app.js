@@ -499,7 +499,8 @@ function initLogin(){
     try{
       const r = await rpc("fn_login", {p_dni:dni, p_pin:pin});
       if(!r.ok){ $("msgLogin").textContent=r.error; pin=""; pintar(); return; }
-      guardarSesion({dni:r.dni, nombre:r.nombre, cargo:r.cargo, token:r.token, area:null});
+      guardarSesion({dni:r.dni, nombre:r.nombre, cargo:r.cargo, token:r.token, area:null,
+                     admin:r.es_admin===true});
       if(r.cargo==="INGENIERIA"){ location.href="ingenieria.html"; return; }
       $("nombreSaludo").textContent = "Hola, " + r.nombre.split(" ")[0];
       await hidratarAreas();
@@ -634,7 +635,7 @@ let EF_CENSURADA = false;   // operario: ojo para censurar su propia eficiencia
    ingeniería desde su panel; Numeración y Cantidad no son configurables y
    ACABADO no usa esto: su tarjeta va aparte. Si la RPC falla, todo visible:
    nunca se le esconde información al operario por un error de red. */
-let TK_VIS = {pph:true, minutos:true, talla:true, nop:true, color:true};
+let TK_VIS = {std:false, pph:true, minutos:true, talla:true, nop:true, color:true};
 async function cargarVisibilidad(s){
   try{
     const r = await rpc("fn_tickets_visibilidad",{p_dni:s.dni,p_token:s.token});
@@ -1065,7 +1066,7 @@ function pintarAcabExtra(){
     const c=document.createElement("div");
     c.className="card-fila";
     c.innerHTML=`<div><div class="cf-titulo">${esc(e.operacion)}</div>
-      <div class="cf-detalle">${esc(e.tipo)}</div></div>`;
+      <div class="cf-detalle">${esc(e.tipo)}${tkVer("std")?` · STD ${Number(e.std).toFixed(2)} min`:""}</div></div>`;
     c.onclick=()=>{ ACAB.tipo=ACAB.extra[i]; ACAB.op=null; acabPedirCant(); };
     l.appendChild(c);
   });
@@ -1077,7 +1078,7 @@ function acabDetalle(){
   if(!e && (!x || !o)) return;
   $("tituloAcabCant").textContent = e ? e.operacion : x.operacion;
   $("acabDet").innerHTML = e
-    ? `${esc(e.tipo)}`
+    ? `${esc(e.tipo)}${tkVer("std")?` · STD ${Number(e.std).toFixed(2)} min`:""}`
     : ACAB.ver
       ? `OF ${esc(o.of)} · ${esc(o.articulo)}<br>Completa: <b>${qty(x.hecho)}</b> de ${qty(o.cant_prog)} und`
       : `OF ${esc(o.of)} · ${esc(o.articulo)}<br>Quedan <b>${qty(Math.max(0,Number(o.cant_prog)-Number(x.hecho)))}</b> und de ${qty(o.cant_prog)}`;
@@ -1461,7 +1462,7 @@ function pintarModulos(){
   });
 }
 
-/* --- paso operaciones (el STD no se muestra al personal, parche 75) --- */
+/* --- paso operaciones (el STD lo decide ingeniería, parche 77) --- */
 function pintarOperaciones(){
   $("tituloOps").textContent = sel.modulo + " · OF " + sel.of;
   const l=$("listaOps"); l.innerHTML="";
@@ -1493,6 +1494,7 @@ function pintarOperaciones(){
     } else {
       c.innerHTML=`<div>
           <div class="cf-titulo">${esc(op)}</div>
+          ${tkVer("std")?`<div class="cf-detalle">STD <b>${o.std.toFixed(2)}</b> min</div>`:""}
         </div>
         <div class="badge-disp ${o.libres===0?'vacio':''}">${o.libres} de ${o.total} libres</div>`;
     }
@@ -1533,7 +1535,7 @@ function pintarTickets(){
     c.className="card-ticket"+(r?" tomado":"")+(marcado?" marcada":"");
     const pph = t.std>0 ? Math.round(60/t.std) : "—";
     // En el módulo final la numeración ya está tapada por la costura: manda la
-    // cantidad, con el color debajo. El nº de paquete y el STD no se muestran nunca.
+    // cantidad, con el color debajo. El nº de paquete no se muestra nunca.
     const fin = esTicketFinal(t);
     const cab = fin
       ? `<div class="tk-label">Cantidad</div>
@@ -1549,10 +1551,12 @@ function pintarTickets(){
     // talla "T": son marcadores, no datos. Solo se muestran si son reales.
     const col = norm(t.color), tal = norm(t.talla);
     const fila = fin
-      ? `${tal && normKey(tal)!=="T" && tkVer("talla") ? `<div>Talla <b>${esc(tal)}</b></div>` : ""}
+      ? `${tkVer("std")?`<div>STD <b>${t.std.toFixed(2)}</b> min</div>`:""}
+         ${tal && normKey(tal)!=="T" && tkVer("talla") ? `<div>Talla <b>${esc(tal)}</b></div>` : ""}
          ${t.residual?`<div class="tk-cant">resto de ${esc(t.num)}</div>`:""}`
       : `${tkVer("talla")?`<div>Talla <b>${esc(t.talla)}</b></div>`:""}
          <div class="tk-cant"><b>${t.cant}</b> und</div>
+         ${tkVer("std")?`<div>STD <b>${t.std.toFixed(2)}</b> min</div>`:""}
          ${tkVer("nop")?`<div>N°OP <b>${t.nop ?? "—"}</b></div>`:""}`;
     c.innerHTML=`
       ${cab}
@@ -1581,7 +1585,13 @@ function pintarTickets(){
               + (tkVer("color")?` · ${esc(t.color)}`:"")
               + (tkVer("talla")?` · Talla ${esc(t.talla)}`:"")
               + ` · <b>${t.cant} und</b><br>`
-              + (tkVer("minutos")?`<span style="color:#5a6270">vale <b>${t.minutos} min</b></span>`:"");
+              + ((tkVer("std")||tkVer("minutos"))
+                  ? `<span style="color:#5a6270">`
+                    + (tkVer("std")?`STD ${t.std.toFixed(2)} min`:"")
+                    + (tkVer("std")&&tkVer("minutos")?" · ":"")
+                    + (tkVer("minutos")?`vale <b>${t.minutos} min</b>`:"")
+                    + `</span>`
+                  : "");
           }
           $("btnRegistrar").disabled=false;
           irA("pasoConf");

@@ -15,6 +15,10 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   ING = sesionActual();
   if(!ING){ location.href="index.html"; return; }
   if(ING.cargo!=="INGENIERIA"){ location.href = destinoPorCargo(ING.cargo); return; }
+  /* INCENTIVOS es del administrador maestro (parche 78). Esto solo quita la
+     pestaña de la vista: quien la tenga en caché o escriba la RPC a mano recibe
+     NO_AUTORIZADA igual, porque las 12 funciones validan con _admin. */
+  if(!ES_ADMIN()) quitarIncentivos();
   $("quienBadge").textContent = ING.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
@@ -106,6 +110,7 @@ function activarTab(tab){
   pararAvance();
   { const st=$("supTabs"); if(st) st.style.display="none"; }
   try{ history.replaceState(null,"","#"+tab); }catch(e){}
+  if(TABS_ADMIN.includes(tab) && !ES_ADMIN()){ activarTab("pasoTk"); return; }
   if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
   if(tab==='pasoEf' || tab==='pasoDia'){ efVista(tab==='pasoDia'?'dia':'area'); TABS_VISTAS.add(tab); return; }
   irA(tab);
@@ -140,6 +145,17 @@ function efVista(v){
     if(d) d.classList.toggle("activo",dia);
   });
   if(dia && !TABS_VISTAS.has("pasoDia")){ TABS_VISTAS.add("pasoDia"); }
+}
+/* Administrador maestro: hoy solo ALOPEZ, y lo decide `operarios.es_admin`,
+   no el DNI escrito en el código. La sesión lo trae desde fn_login. */
+function ES_ADMIN(){ return (ING && ING.admin===true); }
+const TABS_ADMIN=["pasoInc"];
+function quitarIncentivos(){
+  TABS_ADMIN.forEach(t=>{
+    const it=document.querySelector('.nav-item[data-tab="'+t+'"]'); if(it) it.remove();
+    const sec=$(t); if(sec) sec.remove();
+    const i=NAV_TABS.indexOf(t); if(i>=0) NAV_TABS.splice(i,1);
+  });
 }
 function toggleSidebar(){ document.body.classList.toggle("sidebar-cerrada"); }
 function cerrarSidebarMovil(){ if(window.innerWidth<=900) document.body.classList.add("sidebar-cerrada"); }
