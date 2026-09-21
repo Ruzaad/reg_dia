@@ -96,7 +96,7 @@ function cmpVal(va, vb){
 }
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista",
+const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
@@ -130,6 +130,7 @@ function activarTab(tab){
   else if(tab==='pasoExtra') cargarExtra();
   else if(tab==='pasoCausas') cargarCausas();
   else if(tab==='pasoVista') cargarVista();
+  else if(tab==='pasoAudit') audInit();
 }
 /* Eficiencia = una sola entrada del menú con dos vistas (parche 75). Son dos
    `section.pantalla` distintas, así que se cambia con irA(); lo que no puede
@@ -149,7 +150,7 @@ function efVista(v){
 /* Administrador maestro: hoy solo ALOPEZ, y lo decide `operarios.es_admin`,
    no el DNI escrito en el código. La sesión lo trae desde fn_login. */
 function ES_ADMIN(){ return (ING && ING.admin===true); }
-const TABS_ADMIN=["pasoInc"];
+const TABS_ADMIN=["pasoInc","pasoAudit"];
 function quitarIncentivos(){
   TABS_ADMIN.forEach(t=>{
     const it=document.querySelector('.nav-item[data-tab="'+t+'"]'); if(it) it.remove();
@@ -201,6 +202,7 @@ function recargarIngenieria(){
   else if(act("pasoDash")) dashTab(DASH_TAB||'asis');
   else if(act("pasoAvOF")){ if(AVOF.items.length) cargarAvof(); }
   else if(act("pasoIncid")) cargarIncidI();
+  else if(act("pasoAudit")) cargarAudit();
   else if(act("pasoPersonal")||act("pasoAvance")||act("pasoIncidencias")||act("pasoEfPersonal")) recargarSupervisora();
 }
 /* Censura de eficiencia: reemplaza los % por **** en toda la pestaña. */
@@ -2703,6 +2705,339 @@ async function exportarAvofCarpetas(){
     }
     mostrarOk(resumen.join(" · "));
   }catch(e){ mostrarError(e.message); }
+}
+
+
+/* ================= AUDITORÍA DE EFICIENCIA (parche 80) =================
+   Solo administrador maestro. Días-persona por encima del umbral, con el
+   panel lateral para simular qué pasaría al corregir o quitar la incidencia
+   que infló el porcentaje, y aplicarlo si corresponde.
+
+   La eficiencia es la misma de la pantalla Eficiencia:
+       ef = producido / (575 + minutos de incidencias) * 100
+   Casi toda incidencia trae minutos NEGATIVOS, así que achica el denominador
+   y sube el porcentaje. Por eso la simulación se hace sobre el denominador y
+   nunca sobre lo producido: los tickets no se tocan desde aquí. */
+let AUD={items:[], umbral:90, marcados:0, evaluados:0}, AUD_VISTA=[], audPag=1;
+const AUD_PAGE=50;
+const AUD_COLS=[
+  {k:"fecha",   t:"Fecha"},
+  {k:"nombre",  t:"Persona", cls:"izq"},
+  {k:"area",    t:"Área", cls:"izq"},
+  {k:"ef",      t:"Eficiencia"},
+  {k:"prod",    t:"Producido"},
+  {k:"disp",    t:"Disponible"},
+  {k:"tk",      t:"Tickets"},
+  {k:"n_inci",  t:"Inci."},
+  {k:"min_inci",t:"Min. inci."},
+  {k:"ef_sin_inci", t:"Sin incidencia"}
+];
+function audHoy(){ return new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"}); }
+function audInit(){
+  const d=$("audDesde"), h=$("audHasta");
+  if(d && !d.value){
+    const hoy=new Date();
+    const hace=new Date(hoy.getTime()-29*86400000);
+    d.value=hace.toLocaleDateString("sv-SE"); h.value=audHoy();
+  }
+  const sa=$("audArea");
+  if(sa && sa.options.length<=1)
+    sa.innerHTML='<option value="">Todas las áreas</option>'
+      +(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+  if(!AUD.items.length) cargarAudit();
+}
+async function cargarAudit(){
+  const d=$("audDesde").value, h=$("audHasta").value;
+  if(!d||!h){ mostrarError("Elige el rango de fechas"); return; }
+  const u=Number($("audUmbral").value);
+  if(!(u>0)){ mostrarError("El umbral debe ser un número mayor que 0"); return; }
+  $("tablaAudit").innerHTML=cargandoHTML("Revisando…"); $("audResumen").innerHTML="";
+  audPag=1;
+  try{
+    const r=await rpc("fn_ef_auditoria",{p_dni:ING.dni,p_token:ING.token,
+      p_desde:d, p_hasta:h, p_area:$("audArea").value, p_umbral:u});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("tablaAudit").innerHTML=""; return; }
+    AUD={items:r.items||[], umbral:r.umbral, marcados:r.marcados, evaluados:r.evaluados};
+    audPintar();
+  }catch(e){ $("tablaAudit").innerHTML=""; mostrarError(e.message); }
+}
+function audFilas(){
+  const q=normKey($("audBuscar")?$("audBuscar").value:"");
+  const soloI=!!($("audSoloInci") && $("audSoloInci").checked);
+  return (AUD.items||[]).filter(x=>{
+    if(soloI && !(x.n_inci>0)) return false;
+    if(!q) return true;
+    return normKey(x.nombre+" "+x.dni+" "+x.area+" "+x.fecha).includes(q);
+  });
+}
+function audClaseEf(v){ return v>=100 ? "alarma" : (v>=AUD.umbral ? "aviso" : ""); }
+/* Barra de % como la de Resumen de OF, tope visual en 100. */
+function audBarra(v){
+  if(v==null) return "—";
+  const w=Math.max(0, Math.min(100, Number(v)));
+  const cls=v>=100 ? "bajo" : "alto";
+  return `<div class="avof-pct"><div class="avof-pct-fill ${cls}" style="width:${w}%"></div>
+    <span class="avof-pct-lbl">${(+v).toFixed(1)}%</span></div>`;
+}
+function audPintar(){
+  const todas=audFilas();
+  AUD_VISTA=ordAplicar("tablaAudit", todas, (a,b)=>(b.ef-a.ef)||String(a.fecha).localeCompare(b.fecha));
+  const conInci=todas.filter(x=>x.n_inci>0).length;
+  const sobre100=todas.filter(x=>x.ef>=100).length;
+  const kpi=(t,v,c)=>`<div class="kpi"><div class="kpi-num" style="color:${c}">${v}</div>`
+    +`<div class="kpi-lbl">${t}</div></div>`;
+  $("audResumen").innerHTML =
+    kpi("Días marcados", todas.length, "var(--alerta)")+
+    kpi("Sobre 100%", sobre100, "var(--alerta)")+
+    kpi("Con incidencia", conInci, "var(--ocre)")+
+    kpi("Días evaluados", AUD.evaluados, "var(--azul)")+
+    kpi("Umbral", AUD.umbral+"%", "var(--azul)");
+
+  const totalP=Math.max(1, Math.ceil(AUD_VISTA.length/AUD_PAGE));
+  if(audPag>totalP) audPag=totalP; if(audPag<1) audPag=1;
+  const ini=(audPag-1)*AUD_PAGE, pagina=AUD_VISTA.slice(ini, ini+AUD_PAGE);
+
+  const body = pagina.length ? pagina.map((x,idx)=>{
+    const i=ini+idx;
+    return `<tr class="aud-fila" onclick="audAbrir(${i})">
+      <td>${esc(x.fecha)}</td>
+      <td class="izq">${esc(x.nombre)}</td>
+      <td class="izq">${esc(x.area||"")}</td>
+      <td class="avof-pct-td"><span class="aud-ef ${audClaseEf(x.ef)}">${(+x.ef).toFixed(1)}%</span></td>
+      <td>${x.prod}</td>
+      <td>${x.disp}</td>
+      <td>${x.tk}</td>
+      <td>${x.n_inci||"·"}</td>
+      <td class="${x.min_inci<0?"inc-pen":""}">${x.min_inci||"·"}</td>
+      <td class="avof-pct-td">${audBarra(x.ef_sin_inci)}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="${AUD_COLS.length}"><div class="vacio-msg">Nadie pasa el umbral con estos filtros</div></td></tr>`;
+
+  $("tablaAudit").innerHTML = ordThead("tablaAudit", AUD_COLS, audPintar) + "<tbody>"+body+"</tbody>";
+  const pg=$("audPager");
+  if(pg) pg.innerHTML = totalP<=1 ? "" :
+      `<button class="btn-mini" ${audPag<=1?"disabled":""} onclick="audPagina(-1)">‹ Anterior</button>`
+    + `<span class="pg-info">Página ${audPag} de ${totalP} · ${AUD_VISTA.length} fila(s)</span>`
+    + `<button class="btn-mini" ${audPag>=totalP?"disabled":""} onclick="audPagina(1)">Siguiente ›</button>`;
+}
+function audPagina(d){ audPag=Math.max(1, audPag+d); audPintar(); }
+function descargarAudit(){
+  if(!AUD_VISTA.length){ mostrarError("No hay datos para descargar"); return; }
+  const CAB=["Fecha","DNI","Persona","Área","Eficiencia %","Producido","Disponible",
+             "Tickets","N° incidencias","Min. incidencias","Eficiencia sin incidencia %"];
+  const filas=AUD_VISTA.map(x=>[x.fecha,x.dni,x.nombre,x.area,x.ef,x.prod,x.disp,
+                                x.tk,x.n_inci,x.min_inci,x.ef_sin_inci]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "AUDITORIA");
+  XLSX.writeFile(wb, `AUDITORIA_EF_${$("audDesde").value}_a_${$("audHasta").value}.xlsx`);
+}
+
+/* ---------- Panel lateral de la persona observada ---------- */
+let AUDD=null;          // detalle abierto
+let AUDD_SIM={};        // id de incidencia -> {minutos, quitada}
+function audIniciales(n){
+  const p=String(n||"").replace(/,/g," ").trim().split(/\s+/).filter(Boolean);
+  return ((p[0]||"")[0]||"" ).toUpperCase() + ((p[1]||"")[0]||"").toUpperCase();
+}
+function audCerrar(){
+  $("audDrawer").classList.remove("visible");
+  $("audBackdrop").classList.remove("visible");
+  AUDD=null; AUDD_SIM={};
+}
+async function audAbrir(i){
+  const f=AUD_VISTA[i]; if(!f) return;
+  const dr=$("audDrawer"), bd=$("audBackdrop");
+  dr.innerHTML=cargandoHTML("Cargando el día…");
+  dr.classList.add("visible"); bd.classList.add("visible");
+  try{
+    const r=await rpc("fn_ef_auditoria_detalle",{p_dni:ING.dni,p_token:ING.token,
+      p_dni_op:f.dni, p_fecha:f.fecha});
+    if(!r.ok){ mostrarError(r.error||"Error"); audCerrar(); return; }
+    AUDD=r; AUDD_SIM={};
+    (r.incidencias||[]).forEach(x=>{ AUDD_SIM[x.id]={minutos:Number(x.minutos), quitada:false}; });
+    audPintarDrawer();
+  }catch(e){ mostrarError(e.message); audCerrar(); }
+}
+/* El disponible simulado: 575 más las incidencias que quedan, con sus minutos
+   posiblemente editados. Nunca toca lo producido. */
+function audSimDisp(){
+  let m=0;
+  (AUDD.incidencias||[]).forEach(x=>{
+    const s=AUDD_SIM[x.id]; if(!s || s.quitada) return;
+    m += Number(s.minutos)||0;
+  });
+  return 575+m;
+}
+function audSimEf(){
+  const d=audSimDisp();
+  return d>0 ? Math.round(AUDD.prod/d*1000)/10 : null;
+}
+function audPintarDrawer(){
+  if(!AUDD) return;
+  const dr=$("audDrawer"); if(!dr) return;
+  const d=AUDD;
+  const efAct = d.disp>0 ? Math.round(d.prod/d.disp*1000)/10 : null;
+  const efSim = audSimEf(), dispSim = audSimDisp();
+  const cambio = dispSim !== Number(d.disp);
+  const inci=(d.incidencias||[]), tks=(d.tickets||[]);
+
+  const fmtMin=v=>(v>0?"+":"")+v+" min";
+  const filaInci = x=>{
+    const s=AUDD_SIM[x.id]||{minutos:Number(x.minutos),quitada:false};
+    const orig=Number(x.minutos);
+    return `<div class="aud-item">
+      <div class="aud-item-fila">
+        <div>
+          <div class="aud-item-tit">${esc(x.tipo)} <span class="aud-chip">${esc(x.area||"")}</span></div>
+          <div class="aud-item-sub">${esc(x.detalle||"sin detalle")}</div>
+          <div class="aud-item-sub">Registró ${esc(soloApellidos(x.registrado_por||"—"))} · ${esc(x.hora||"")}</div>
+        </div>
+        <div class="aud-min ${orig<0?"resta":"suma"}">${fmtMin(orig)}</div>
+      </div>
+      <div class="aud-sim">
+        <div class="aud-sim-fila">
+          <label class="aud-campo" style="flex:1;">
+            <div class="k">Minutos corregidos</div>
+            <input type="number" step="1" value="${s.quitada?orig:s.minutos}"
+              ${s.quitada?"disabled":""} oninput="audSimMin(${x.id}, this.value)">
+          </label>
+          <button class="btn-mini ${s.quitada?"":"gris"}" onclick="audSimQuitar(${x.id})">
+            ${s.quitada?"Devolver":"Quitar"}</button>
+        </div>
+        <div class="aud-sim-fila" style="margin-top:8px;">
+          <button class="btn-mini verde" onclick="audAplicarEditar(${x.id})"
+            ${s.quitada?"disabled":""}>Guardar minutos</button>
+          <button class="btn-mini rojo" onclick="audAplicarEliminar(${x.id})">Eliminar incidencia</button>
+        </div>
+      </div>
+    </div>`;
+  };
+
+  dr.innerHTML = `
+    <div class="aud-cab">
+      <div class="aud-ini">${esc(audIniciales(d.nombre))}</div>
+      <div>
+        <div class="aud-nom">${esc(d.nombre)}</div>
+        <div class="aud-sub">${esc(d.dni)} · ${esc(d.area||"")} · ${esc(d.fecha)}</div>
+      </div>
+      <button class="aud-x" onclick="audCerrar()" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div class="aud-kpis">
+      <div class="aud-kpi"><div class="aud-kpi-lbl">Eficiencia</div>
+        <div class="aud-kpi-num aud-ef ${audClaseEf(efAct)}">${efAct==null?"—":efAct.toFixed(1)+"%"}</div></div>
+      <div class="aud-kpi"><div class="aud-kpi-lbl">Producido</div>
+        <div class="aud-kpi-num">${d.prod}</div></div>
+      <div class="aud-kpi"><div class="aud-kpi-lbl">Disponible</div>
+        <div class="aud-kpi-num">${d.disp}</div></div>
+    </div>
+
+    ${inci.length ? `<div class="aud-sim" id="audSimCaja" style="background:#eef3fb;">
+      <div class="aud-kpi-lbl">Simulación</div>
+      <div class="aud-sim-res" id="audSimRes">
+        Disponible <b>${dispSim}</b> min ${cambio?`(antes ${d.disp})`:""} →
+        eficiencia <b class="aud-ef ${audClaseEf(efSim)}">${efSim==null?"—":efSim.toFixed(1)+"%"}</b>
+      </div>
+      <div class="aud-sim-res">Lo producido no se toca: ${d.prod} min en ${d.tk} ticket(s).</div>
+    </div>` : ""}
+
+    <div class="aud-tit">Detalle del día</div>
+    <div class="aud-grid">
+      <div class="aud-campo"><div class="k">Estado</div><div class="v">${esc(d.estado)}</div></div>
+      <div class="aud-campo"><div class="k">Categoría</div><div class="v">${esc(d.categoria||"—")}</div></div>
+      <div class="aud-campo"><div class="k">Área origen</div><div class="v">${esc(d.area_origen||"—")}</div></div>
+      <div class="aud-campo"><div class="k">Tickets</div><div class="v">${d.tk}</div></div>
+      <div class="aud-campo"><div class="k">Min. incidencias</div><div class="v">${d.min_inci}</div></div>
+      <div class="aud-campo"><div class="k">Ef. manual</div>
+        <div class="v">${d.ef_manual==null?"—":d.ef_manual}</div></div>
+    </div>
+
+    <div class="aud-tit">Incidencias del día (${inci.length})</div>
+    ${inci.length ? inci.map(filaInci).join("")
+      : `<div class="vacio-msg">Sin incidencias. El porcentaje no viene de ahí: revisa los tickets.</div>`}
+
+    <div class="aud-tit">Tickets del día (${tks.length})</div>
+    ${tks.length ? tks.slice(0,40).map(t=>`<div class="aud-item">
+        <div class="aud-item-fila">
+          <div>
+            <div class="aud-item-tit">OF ${esc(t.of||"—")} · ${esc(t.op||"")}</div>
+            <div class="aud-item-sub">${esc(t.hora)} · ${esc(t.area||"")} · ${t.cant} und${t.num?" · "+esc(t.num):""}</div>
+          </div>
+          <div class="aud-min">${t.minutos} min</div>
+        </div></div>`).join("")
+      + (tks.length>40?`<div class="aud-sim-res">…y ${tks.length-40} ticket(s) más.</div>`:"")
+      : `<div class="vacio-msg">Sin tickets</div>`}
+  `;
+}
+function audSimMin(id, v){
+  if(!AUDD_SIM[id]) return;
+  AUDD_SIM[id].minutos = Number(v)||0;
+  audPintarDrawerSoloSim();
+}
+function audSimQuitar(id){
+  if(!AUDD_SIM[id]) return;
+  AUDD_SIM[id].quitada = !AUDD_SIM[id].quitada;
+  audPintarDrawer();
+}
+/* Repinta solo el cuadro de simulación: volver a dibujar todo el panel en cada
+   tecla haría perder el foco del input que se está escribiendo. */
+function audPintarDrawerSoloSim(){
+  const res=$("audSimRes"); if(!res || !AUDD) return;
+  const efSim=audSimEf(), dispSim=audSimDisp(), cambio=dispSim!==Number(AUDD.disp);
+  res.innerHTML = `Disponible <b>${dispSim}</b> min ${cambio?`(antes ${AUDD.disp})`:""} →
+    eficiencia <b class="aud-ef ${audClaseEf(efSim)}">${efSim==null?"—":efSim.toFixed(1)+"%"}</b>`;
+}
+/* Un disponible de 0 o negativo (incidencias que se comen el turno entero) no
+   tiene porcentaje: se dice, no se divide. */
+function audEfDe(disp){
+  return disp>0 ? (AUDD.prod/disp*100).toFixed(1)+"%" : "sin tiempo disponible";
+}
+/* ---- Aplicar de verdad. Reutiliza las RPC que ya existen en Incidencias. ---- */
+async function audAplicarEditar(id){
+  const x=(AUDD.incidencias||[]).find(y=>y.id===id); if(!x) return;
+  const s=AUDD_SIM[id]; if(!s) return;
+  const min=Number(s.minutos);
+  if(!min){ mostrarError("Los minutos no pueden ser 0. Si sobra la incidencia, elimínala."); return; }
+  if(min===Number(x.minutos)){ mostrarError("No cambiaste los minutos"); return; }
+  if(!confirm(`Cambiar la incidencia "${x.tipo}" de ${x.minutos} a ${min} minutos.\n`
+    + `${AUDD.nombre} · ${AUDD.fecha}\n\nSu eficiencia pasaría de `
+    + `${audEfDe(AUDD.disp)} a ${audEfDe(audSimDisp())}.`)) return;
+  try{
+    const r=await rpc("fn_ocurrencia_editar",{p_dni:ING.dni,p_token:ING.token,
+      p_id:id, p_dni_op:AUDD.dni, p_tipo:x.tipo, p_minutos:min,
+      p_fecha:AUDD.fecha, p_detalle:x.detalle});
+    if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); return; }
+    mostrarOk("Incidencia actualizada");
+    await audRecargar();
+  }catch(e){ mostrarError(e.message); }
+}
+async function audAplicarEliminar(id){
+  const x=(AUDD.incidencias||[]).find(y=>y.id===id); if(!x) return;
+  const sinEsta = 575 + (AUDD.incidencias||[]).reduce((a,y)=>a+(y.id===id?0:Number(y.minutos)||0),0);
+  const efSin = audEfDe(sinEsta);
+  if(!confirm(`ELIMINAR la incidencia "${x.tipo}" de ${x.minutos} minutos.\n`
+    + `${AUDD.nombre} · ${AUDD.fecha}\n\nSu eficiencia pasaría de `
+    + `${audEfDe(AUDD.disp)} a ${efSin}.\n\nEsto no se puede deshacer.`)) return;
+  try{
+    const r=await rpc("fn_ocurrencia_eliminar",{p_dni:ING.dni,p_token:ING.token,p_id:id});
+    if(!r.ok){ mostrarError(r.error||"No se pudo eliminar"); return; }
+    mostrarOk("Incidencia eliminada");
+    await audRecargar();
+  }catch(e){ mostrarError(e.message); }
+}
+/* Tras aplicar: refresca el panel y la tabla, que el día ya cambió. */
+async function audRecargar(){
+  const dni=AUDD.dni, fecha=AUDD.fecha;
+  try{
+    const r=await rpc("fn_ef_auditoria_detalle",{p_dni:ING.dni,p_token:ING.token,
+      p_dni_op:dni, p_fecha:fecha});
+    if(r.ok){
+      AUDD=r; AUDD_SIM={};
+      (r.incidencias||[]).forEach(x=>{ AUDD_SIM[x.id]={minutos:Number(x.minutos),quitada:false}; });
+      audPintarDrawer();
+    }
+  }catch(e){}
+  cargarAudit();
 }
 
 /* ================= TICKETS DEL DÍA ================= */

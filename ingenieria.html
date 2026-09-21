@@ -42,6 +42,7 @@
       <details class="nav-group" open>
         <summary class="nav-sep">Eficiencia</summary>
         <a class="nav-item" data-tab="pasoEf" href="#pasoEf">Eficiencia</a>
+        <a class="nav-item" data-tab="pasoAudit" href="#pasoAudit">Auditoría</a>
         <a class="nav-item" data-tab="pasoInc" href="#pasoInc">Incentivos</a>
       </details>
       <details class="nav-group" open>
@@ -727,6 +728,39 @@
       </div>
       <div class="sub" id="avofResumen"></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="avofTabla"></table></div>
+    </section>
+
+    <!-- ===================== AUDITORÍA DE EFICIENCIA (parche 80) ===================== -->
+    <section class="pantalla" id="pasoAudit">
+      <div class="seccion-cab">
+        <h1>Auditoría de eficiencia</h1>
+        <p class="seccion-sub">Días-persona por encima del umbral. Un operario no debería pasar de ~90%:
+        o su tiempo está mal tomado, o está reclamando tickets de más. Como casi toda incidencia
+        <b>resta</b> minutos disponibles, una incidencia grande <b>infla</b> el porcentaje.
+        Toca una fila para ver su día y simular qué pasaría al corregir o quitar la incidencia.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="audArea"></select></label>
+        <label class="campo"><span>Desde</span><input type="date" id="audDesde"></label>
+        <label class="campo"><span>Hasta</span><input type="date" id="audHasta"></label>
+        <label class="campo"><span>Umbral %</span>
+          <input type="number" id="audUmbral" value="90" min="50" max="300" step="5" style="width:90px;"></label>
+        <button class="btn-mini" onclick="cargarAudit()">Cargar</button>
+        <button class="btn-mini verde" onclick="descargarAudit()">⬇ Descargar XLSX</button>
+        <label class="campo"><span>Buscar</span>
+          <input type="text" id="audBuscar" placeholder="Nombre / DNI / área…" oninput="audPintar()"></label>
+        <label class="chk-inline"><input type="checkbox" class="sw" id="audSoloInci" onchange="audPintar()">
+          Solo con incidencia</label>
+      </div>
+      <div class="kpis" id="audResumen" style="margin-bottom:14px;"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;">
+        <table class="tabla" id="tablaAudit"></table>
+      </div>
+      <div class="pager" id="audPager"></div>
+
+      <!-- Panel de la persona observada -->
+      <div class="aud-backdrop" id="audBackdrop" onclick="audCerrar()"></div>
+      <aside class="aud-drawer" id="audDrawer" aria-label="Detalle de la persona observada"></aside>
     </section>
 
     <!-- ===================== VISTA DEL PERSONAL (parche 76) ===================== -->
