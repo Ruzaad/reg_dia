@@ -1,6 +1,10 @@
-# PARCHE 81 — Limpieza de la base: permisos, índices e higiene de tickets_cache
+# PARCHE 81 — Limpieza de la base: permisos, funciones sin uso e índices
 
 **Estado: sin aplicar.** Nada de esto está en producción.
+
+**Vuelta atrás:** `sql/parche_81_rollback.sql` reconstruye las siete funciones
+tal cual estaban. Las definiciones se sacaron de producción con
+`pg_get_functiondef` antes de borrar nada.
 
 ## Por qué existe
 
@@ -13,8 +17,30 @@ ninguna tabla está sin uso. El espacio no es el problema. Lo que sí apareció:
    almacén de tickets de un área entera.
 2. `fn_tickets_area` se llevó el **46 % de todo el tiempo de CPU de la base**
    desde julio (4 h 22 min) y dejó de llamarse el 15 de setiembre.
-3. Dos índices que ya no aportan, y `tickets_cache` arrastrando la basura de
+3. Otras seis funciones sin una sola llamada en la ventana que las cubre.
+4. Dos índices que ya no aportan, y `tickets_cache` arrastrando la basura de
    817 000 borrados.
+
+## Cómo se decidió qué borrar
+
+Ninguna función entró en el parche sin cumplir **las tres condiciones a la vez**:
+
+| Comprobación | Fuente | Alcance |
+|---|---|---|
+| Cero llamadas desde el frontend | `pg_stat_statements` | 74 días, desde el 10-jul. `dealloc = 0`: no descartó ninguna entrada, así que el cero es real |
+| Cero llamadas día a día | Logs de borde de Supabase | 22 días, del 1 al 22 de setiembre, una ventana por día |
+| Nadie la llama por dentro | Búsqueda del nombre en el cuerpo de las otras 136 funciones | Total |
+| Cero menciones en el código | `app.js`, `ingenieria.js`, los `.html` y todo el historial de `git log -S` | Total |
+
+**Por qué el cero de los logs vale para los tres despliegues:** Netlify, Vercel
+y GitHub Pages apuntan a esta misma base, así que los logs de Supabase los ven a
+los tres a la vez. Un cero no es "el despliegue nuevo no la llama": es que
+ninguno la llama.
+
+**Por qué no hay riesgo de una PWA vieja en caché:** `sw.js` es *network-first*
+— `fetch(e.request).catch(() => caches.match(...))`. Va siempre a la red y solo
+tira de caché si no hay señal. Un celular con la app vieja toma el `app.js`
+nuevo apenas tiene internet. Además solo cachea GET, y las RPC son POST.
 
 ## A1 — Los tres internos dejan de ser alcanzables desde afuera
 
@@ -68,6 +94,30 @@ Ninguna otra función la llama.
 
 **Si prefieres un paso reversible:** el `.sql` trae comentada la alternativa de
 quitarle el `EXECUTE` en vez de borrarla. Se deshace en segundos con un `grant`.
+
+## B2 a B6 y C — Las otras seis bajas
+
+| # | Función | Llamadas REST en 74 días | En setiembre | Qué la reemplazó |
+|---|---|---:|---:|---|
+| B2 | `fn_asistencia_dia` | 22, la última en julio | 0 | `fn_asistencia_marcar_lista` |
+| B3 | `fn_asistencia_mes` | 672 | 0 | `fn_asistencia_matriz` |
+| B4 | `fn_marcar_asistencia` | 4, la última el 11-jul | 0 | `fn_asistencia_marcar_guardar` |
+| B5 | `fn_liberar_registro` | **0** | 0 | `fn_liberar_ticket`, `fn_liberar_ids` |
+| B6 | `fn_min_incidencia` | **0** | 0 | `_min_salida` |
+| C | `fn_asignar_tickets` | ver nota | 3 el 11-set | Salió del frontend en el parche 75 |
+
+Ninguna de las seis es llamada por otra función ni aparece en el código.
+
+**`fn_asistencia_mes` es la que más merece un ojo puesto.** 672 llamadas desde
+el 11 de julio no es una función que nunca sirvió: es una que se usaba y dejó de
+usarse. Y en los 22 días observados no hubo un cierre de mes. Si el 30 de
+setiembre alguien echa en falta la asistencia mensual, el rollback la devuelve
+tal cual.
+
+**`fn_asignar_tickets`** se da de baja por decisión de Ruzaad (22-set): ya no se
+usa para nada. Queda anotada una diferencia entre las dos fuentes que no supe
+explicar — los logs le ven 3 llamadas el 11 de setiembre (2 con error 500 y 1
+con 200) y `pg_stat_statements` ninguna.
 
 ## A2 y A3 — Dos índices que ya no aportan
 
@@ -145,6 +195,9 @@ Al final del `.sql` están las consultas de comprobación.
   ~1.1 MB y es el único rastro de cuándo se escribió una fila de la cache.
 - **Las sobrecargas viejas** de `fn_acabado_registrar`, `fn_base_op_eliminar`,
   `fn_movimiento_hora`, `fn_personal_crear` y `fn_personal_editar`: todas
-  **siguen recibiendo llamadas**. Ver el informe del 22-set.
-- **`fn_asistencia_mes`**: 672 llamadas desde julio, ninguna en setiembre.
-  Se decide después del cierre de mes.
+  **siguen recibiendo llamadas** (148, 6, 14, 6 y 37 respectivamente). Son la
+  versión que llaman los despliegues que aún no migraron. Se quedan como están.
+- **Las cinco del grupo C que siguen vivas**: `fn_tickets_libres`,
+  `fn_origen_reclamos`, `fn_avance_modulos`, `fn_area_almacen` y
+  `fn_liberar_lote`. La última llamada de las tres primeras es del 17 de
+  setiembre.
