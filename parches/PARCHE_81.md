@@ -1,6 +1,19 @@
 # PARCHE 81 — Limpieza de la base: permisos, funciones sin uso e índices
 
-**Estado: sin aplicar.** Nada de esto está en producción.
+**Estado: aplicado el 22-set-2026, salvo el reindex.**
+
+| Bloque | Estado |
+|---|---|
+| A1 · los tres `revoke` | Aplicado 22-set |
+| B1 a B6 y C · las siete bajas | Aplicado 22-set |
+| A2 · `reclamos_motivo_fecha_idx` | Borrado 22-set |
+| A3 · `tickets_cache_area_idx` | Borrado 22-set |
+| A4 · los dos `reindex` de `tickets_cache` | **Pendiente**, agendado para las 20:30 de Lima, fuera de turno |
+
+Estado después de aplicar: las siete funciones devuelven 0 filas, los tres
+internos quedaron sin `EXECUTE` para `anon` ni `authenticated`, ningún índice
+quedó inválido y las 16 funciones vivas siguen en su sitio. La base pasó de
+132 MB a 129 MB y `tickets_cache` de 57 MB a 55 MB.
 
 **Vuelta atrás:** `sql/parche_81_rollback.sql` reconstruye las siete funciones
 tal cual estaban. Las definiciones se sacaron de producción con
@@ -178,10 +191,11 @@ filas, cuando lo esperable serían ~16 MB.
 
 **En dos partes. La parte 2 no corre dentro de una transacción.**
 
-1. **Parte 1** (A1 + B1), en cualquier momento. Va dentro de `begin … commit`.
-2. **Parte 2** (A2, A3, A4), fuera de turno, **cada sentencia por separado**.
+1. **Parte 1** (A1 + B1 a C), en cualquier momento. Va dentro de `begin … commit`.
+2. **Parte 2** (A2, A3, A4), **cada sentencia por separado**.
    `DROP INDEX CONCURRENTLY` y `REINDEX CONCURRENTLY` fallan si los metes en una
-   transacción.
+   transacción. Los dos borrados de índice se pueden hacer en cualquier momento;
+   los dos `reindex` van fuera de turno, por el I/O sobre `tickets_cache`.
 
 Al final del `.sql` están las consultas de comprobación.
 
