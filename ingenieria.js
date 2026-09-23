@@ -3291,12 +3291,14 @@ async function liberarTicket(i){
 let TKOP={items:[],of:"",area:"",_rows:[]}, tkOpSort={col:null,dir:1}, tkOpMarc={}, tkOpPag=1;
 const TKOP_PAGE=10;
 function tkVista(v){
-  const op=v==="op", rep=v==="rep", act=!op&&!rep;
+  const op=v==="op", rep=v==="rep", ope=v==="ope", act=!op&&!rep&&!ope;
   $("tkActualView").hidden=!act; $("tkOpView").hidden=!op;
-  $("tkRepView").hidden=!rep;
+  $("tkRepView").hidden=!rep; $("tkOpeView").hidden=!ope;
   $("tkTabActual").classList.toggle("activo",act);
   $("tkTabOp").classList.toggle("activo",op);
   $("tkTabRep").classList.toggle("activo",rep);
+  $("tkTabOpe").classList.toggle("activo",ope);
+  if(ope) opeInit();
   if(op){ const s=$("tkOpArea"); if(s && !s.value && s.options.length<=1)
     s.innerHTML=`<option value="">— Elige área —</option>`+(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join(""); }
   if(rep) repInit();
@@ -4195,6 +4197,123 @@ function pintarRep(){
     + `</tbody>`;
   $("repResInci").textContent = inci.length
     ? `${inci.length} incidencia(s) · ${min>0?"+":""}${Math.round(min)} min` : "";
+}
+
+/* ================= RESUMEN X OPERARIO (parche 84) =================
+   Qué hace cada operario en el rango: sus operaciones sumadas en unidades,
+   sin distinguir OF. Por defecto, los 5 últimos días laborales hasta hoy.
+   El servidor ya manda todo sumado; operario, orden y comparación se
+   resuelven aquí sin volver a pedir datos.
+   vs meta: eficiencia de la operación (su parte del turno, repartida según lo
+   producido en cada una). vs promedio: sus und/día en la operación contra las
+   de todos los que la hicieron en el rango. */
+let OPE=null, OPE_CMP="meta", OPE_PAG=1;
+const OPE_PAGE=25;
+const OPE_DIAS=["DO","LU","MA","MI","JU","VI","SA"];
+function opeDiaSem(f){ return new Date(f+"T12:00:00").getDay(); }
+/* 5 días laborales (lun–vie) que terminan hoy: si hoy es miércoles, desde el
+   jueves anterior. */
+function opeRangoDef(){
+  const h=hoyLima(), d=new Date(h+"T12:00:00"); let n=0;
+  for(;;){ const w=d.getDay(); if(w>0&&w<6) n++; if(n>=5) break; d.setDate(d.getDate()-1); }
+  return {desde:d.toLocaleDateString("sv-SE"), hasta:h};
+}
+function opeInit(){
+  if($("opeDesde").value) return;
+  const r=opeRangoDef(); $("opeDesde").value=r.desde; $("opeHasta").value=r.hasta;
+  $("opeArea").innerHTML=`<option value="">Todas las áreas</option>`
+    + (AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+  cargarOpe();
+}
+async function cargarOpe(){
+  const desde=$("opeDesde").value, hasta=$("opeHasta").value;
+  if(!desde||!hasta){ mostrarError("Indica el rango de fechas"); return; }
+  $("opeLista2").innerHTML=cargandoHTML("Cargando…"); $("opeKpis").innerHTML=""; $("opeNota").textContent="";
+  try{
+    const r=await rpc("fn_resumen_operario",{p_dni:ING.dni,p_token:ING.token,
+      p_desde:desde,p_hasta:hasta,p_area:$("opeArea").value});
+    if(!r||!r.ok){ $("opeLista2").innerHTML=""; mostrarError((r&&r.error)||"No se pudo cargar"); return; }
+    const prom={}; (r.prom||[]).forEach(x=>{ prom[x.area+"|"+x.op]=x; });
+    // Columnas: días lun–vie del rango, más sábado/domingo solo si alguien trabajó.
+    const conDato=new Set(); (r.personal||[]).forEach(p=>(p.ops||[]).forEach(o=>Object.keys(o.por_dia||{}).forEach(f=>conDato.add(f))));
+    const dias=(r.dias||[]).filter(f=>{ const w=opeDiaSem(f); return (w>0&&w<6)||conDato.has(f); });
+    OPE={personal:r.personal||[], prom, dias};
+    $("opeLista").innerHTML=OPE.personal.map(p=>`<option value="${esc(p.nombre)}">${esc(p.dni)}</option>`).join("");
+    OPE_PAG=1; pintarOpe();
+  }catch(e){ $("opeLista2").innerHTML=""; mostrarError(e.message); }
+}
+function opeComparar(c){
+  OPE_CMP=c;
+  $("opeCmpMeta").classList.toggle("activo",c==="meta");
+  $("opeCmpProm").classList.toggle("activo",c==="prom");
+  pintarOpe();
+}
+/* Valor de comparación de una operación: % (100 = en la meta / en el promedio). */
+function opeValor(o){
+  if(OPE_CMP==="meta") return o.ef==null?null:Number(o.ef);
+  const pr=OPE.prom[o.area+"|"+o.op];
+  if(!pr || pr.n<2 || !(pr.und_dia>0)) return null;   // solo él la hizo: no hay con quién comparar
+  return Math.round((o.und/o.dias)/pr.und_dia*1000)/10;
+}
+function opeClase(v){
+  if(v==null) return "";
+  return OPE_CMP==="meta" ? efClase(v) : (v>=110?"ef-alta":v<90?"ef-baja":"");
+}
+function opeBarra(v){
+  if(v==null) return `<span class="ope-sd" title="${OPE_CMP==="prom"?"Nadie más la hizo en el rango":"Sin tiempo repartido"}">—</span>`;
+  const w=Math.max(2,Math.min(100,v/ (OPE_CMP==="meta"?120:200)*100));
+  return `<span class="ope-bar"><i class="${opeClase(v)}" style="width:${w}%"></i></span><b class="${opeClase(v)}">${OPE_CMP==="meta"?censEf(Math.round(v)+"%"):Math.round(v)+"%"}</b>`;
+}
+function pintarOpe(){
+  if(!OPE) return;
+  const toks=String($("opeBuscar").value).split(/[\s/,]+/).map(normKey).filter(Boolean);
+  let lista=OPE.personal.filter(p=>{
+    if(!toks.length) return true;
+    const hay=normKey(p.nombre+" "+p.dni); return toks.every(t=>hay.includes(t));
+  });
+  const und=p=>(p.ops||[]).reduce((a,o)=>a+Number(o.und||0),0);
+  const ord=$("opeOrden").value;
+  lista=[...lista].sort((a,b)=> ord==="nom" ? String(a.nombre).localeCompare(b.nombre,"es")
+    : ord==="ef" ? (Number(b.ef)||0)-(Number(a.ef)||0)
+    : ord==="efa" ? (Number(a.ef)||0)-(Number(b.ef)||0)
+    : und(b)-und(a));
+  const tU=lista.reduce((a,p)=>a+und(p),0), tP=lista.reduce((a,p)=>a+Number(p.prod||0),0),
+        tD=lista.reduce((a,p)=>a+Number(p.disp||0),0);
+  $("opeKpis").innerHTML=[
+    [lista.length,"Operarios"],[qty(Math.round(tU)),"Unidades"],
+    [tD>0?censEf(Math.round(tP/tD*100)+"%"):"—","Eficiencia del rango"],[OPE.dias.length,"Días"]]
+    .map(([n,l])=>`<div class="kpi"><div class="kpi-num">${n}</div><div class="kpi-lbl">${l}</div></div>`).join("");
+  $("opeNota").textContent = OPE_CMP==="meta"
+    ? "vs meta: eficiencia en cada operación (el turno del día se reparte entre sus operaciones según lo producido en cada una)."
+    : "vs promedio: sus unidades por día en la operación contra el promedio de todos los que la hicieron en el rango (100% = igual al promedio).";
+  const totalP=Math.max(1,Math.ceil(lista.length/OPE_PAGE));
+  if(OPE_PAG>totalP) OPE_PAG=totalP;
+  const ini=(OPE_PAG-1)*OPE_PAGE, pag=lista.slice(ini,ini+OPE_PAGE);
+  const abrir=lista.length===1;
+  const cabDias=OPE.dias.map(f=>`<th title="${f}">${OPE_DIAS[opeDiaSem(f)]} ${f.slice(8)}</th>`).join("");
+  $("opeLista2").innerHTML = pag.length ? pag.map(p=>{
+    const ops=p.ops||[], vals=ops.map(opeValor), conV=vals.filter(v=>v!=null);
+    const mx=conV.length>1?Math.max(...conV):null, mn=conV.length>1?Math.min(...conV):null;
+    const filas=ops.map((o,i)=>{ const v=vals[i];
+      const marca = v!=null&&mx!==mn ? (v===mx?` <span class="ope-tag alta">▲ rinde más</span>`:v===mn?` <span class="ope-tag baja">▼ rinde menos</span>`:"") : "";
+      return `<tr><td class="izq">${esc(o.op)}${marca}${$("opeArea").value?"":`<div class="ope-area">${esc(o.area)}</div>`}</td>`
+        + OPE.dias.map(f=>{ const c=(o.por_dia||{})[f]; return `<td class="ope-dia">${c!=null?qty(c):""}</td>`; }).join("")
+        + `<td class="rep-num">${qty(o.und)}</td><td>${o.dias}</td><td>${qty(Math.round(o.und/o.dias*10)/10)}</td>`
+        + `<td class="ope-cmp">${opeBarra(v)}</td></tr>`;
+    }).join("");
+    return `<details class="ope-card"${abrir?" open":""}>
+      <summary><span class="ope-nom">${esc(p.nombre)}<small>${esc(p.area||"")} · ${esc(p.dni)}</small></span>
+        <span class="ope-res">${qty(Math.round(und(p)))} und · ${ops.length} op. · ${p.dias} día(s)
+          · <b class="${p.ef!=null?efClase(p.ef):""}">${p.ef!=null?censEf(Math.round(p.ef)+"%"):"—"}</b></span></summary>
+      <div class="tabla-scroll"><table class="tabla ope-tabla"><thead><tr><th class="izq">Operación</th>${cabDias}
+        <th>Total und</th><th>Días</th><th>Und/día</th><th>${OPE_CMP==="meta"?"vs meta":"vs promedio"}</th></tr></thead>
+        <tbody>${filas}</tbody></table></div>
+    </details>`;
+  }).join("") : `<div class="vacio-msg">Nadie con tickets activos en ese rango${toks.length?" para ese operario":""}</div>`;
+  $("opePager").innerHTML = totalP<=1 ? "" :
+    `<button class="btn-mini" ${OPE_PAG<=1?"disabled":""} onclick="OPE_PAG--;pintarOpe()">‹ Anterior</button>`
+    + `<span class="pg-info">Página ${OPE_PAG} de ${totalP} · ${lista.length} operarios</span>`
+    + `<button class="btn-mini" ${OPE_PAG>=totalP?"disabled":""} onclick="OPE_PAG++;pintarOpe()">Siguiente ›</button>`;
 }
 
 /* ================= BASES ================= */

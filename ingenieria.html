@@ -298,6 +298,7 @@
         <button id="tkTabActual" class="tab activo" onclick="tkVista('actual')">ACTUAL</button>
         <button id="tkTabOp" class="tab" onclick="tkVista('op')">RECLAMADOS X OPERACIÓN</button>
         <button id="tkTabRep" class="tab" onclick="tkVista('rep')">REPORTE DE HOY</button>
+        <button id="tkTabOpe" class="tab" onclick="tkVista('ope')">RESUMEN X OPERARIO</button>
       </div>
 
       <div id="tkActualView">
@@ -378,6 +379,34 @@
             <div class="sub rep-pie" id="repResInci"></div>
           </div>
         </div>
+      </div>
+
+      <!-- Resumen x Operario (parche 84): qué hace cada operario en el rango, sin distinguir OF -->
+      <div id="tkOpeView" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Desde</span><input type="date" id="opeDesde"></label>
+          <label class="campo"><span>Hasta</span><input type="date" id="opeHasta"></label>
+          <label class="campo"><span>Área</span><select id="opeArea"></select></label>
+          <button class="btn-mini" onclick="cargarOpe()">Cargar</button>
+          <label class="campo"><span>Operario</span>
+            <input type="text" id="opeBuscar" list="opeLista" placeholder="Nombre / DNI…" oninput="OPE_PAG=1;pintarOpe()" autocomplete="off"></label>
+          <datalist id="opeLista"></datalist>
+          <label class="campo"><span>Ordenar</span>
+            <select id="opeOrden" onchange="OPE_PAG=1;pintarOpe()">
+              <option value="und">Más unidades</option>
+              <option value="ef">Mayor eficiencia</option>
+              <option value="efa">Menor eficiencia</option>
+              <option value="nom">Nombre</option>
+            </select></label>
+          <div class="ope-seg" role="group" aria-label="Comparar contra">
+            <button id="opeCmpMeta" class="activo" onclick="opeComparar('meta')">vs meta</button>
+            <button id="opeCmpProm" onclick="opeComparar('prom')">vs promedio</button>
+          </div>
+        </div>
+        <div class="kpis" id="opeKpis" style="margin-bottom:14px;"></div>
+        <div class="sub" id="opeNota"></div>
+        <div id="opeLista2"></div>
+        <div class="pager" id="opePager"></div>
       </div>
 
     </section>
