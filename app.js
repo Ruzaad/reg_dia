@@ -804,6 +804,7 @@ function resetEstadoArea(){
   MISREG = {ofs:[]}; MISREG_ABIERTA = ""; MISPAQ = [];
   NOPS_FIN = {}; modoSel = false; marcados = {};
   SR = {of:"", mod:"", nop:"", acab:false};
+  ACAB_REFRESCO++;   // un refresco de Acabado aún en vuelo no debe pisar el área nueva
   ["inputOF","acabBuscaOF"].forEach(id=>{ const e=$(id); if(e) e.value=""; });
   ["listaAcabOF","listaTickets","listaModulos","listaOps","listaMisPaq","listaMisReg","sugerenciasOF"].forEach(id=>{ const e=$(id); if(e) e.innerHTML=""; });
 }
@@ -988,7 +989,7 @@ function pintarAcabOF(){
       window.VOLVER_MAP.pasoAcabOp="pasoAcabOF"; pintarAcabExtra(); irA("pasoAcabOp"); };
     l.appendChild(c);
   }
-  ACAB.ofs.forEach((o,i)=>{
+  ACAB.ofs.forEach(o=>{
     if(q && !normKey((o.of||"")+" "+(o.articulo||"")).includes(q)) return;
     const ops=o.operaciones||[];
     const pend=ops.filter(x=>Number(x.hecho)<Number(o.cant_prog)).length;
@@ -999,7 +1000,9 @@ function pintarAcabOF(){
         <div class="cf-detalle">${esc(o.colores||"—")} · ${qty(o.cant_prog)} und de corte</div>
       </div>
       <div class="badge-disp ${pend?"":"vacio"}">${pend} op. pendiente(s)</div>`;
-    c.onclick=()=>{ ACAB.of=ACAB.ofs[i]; abrirAcabOF(); };
+    /* Por la OF, no por la posición: fn_acabado_ofs sube arriba la última OF
+       registrada, así que tras registrar `ACAB.ofs[i]` ya era otra OF. */
+    c.onclick=()=>{ ACAB.of=ACAB.ofs.find(x=>x.of===o.of)||o; abrirAcabOF(); };
     l.appendChild(c);
   });
   if(!l.children.length) l.innerHTML=`<div class="vacio-msg">${q
@@ -1050,7 +1053,7 @@ function pintarAcabOps(){
   const lista = acabPrendas().length>1 && ACAB.prenda
     ? (o.operaciones||[]).filter(x=>x.prenda===ACAB.prenda)
     : (o.operaciones||[]);
-  lista.forEach((x,i)=>{
+  lista.forEach(x=>{
     const meta=Number(o.cant_prog)||0, hecho=Number(x.hecho)||0, queda=Math.max(0,meta-hecho);
     const pct=acabPct(hecho,meta);
     const c=document.createElement("div");
@@ -1064,7 +1067,7 @@ function pintarAcabOps(){
       <div class="badge-disp ${queda?"":"vacio"}">${queda?qty(queda)+" und":"completa · ver"}</div>`;
     /* Completa también se abre, pero en SOLO LECTURA: es la única forma de ver
        quién registró las cantidades de una operación ya cerrada. */
-    c.onclick=()=>{ ACAB.op=lista[i]; ACAB.tipo=null; acabPedirCant(!queda); };
+    c.onclick=()=>{ ACAB.op=x; ACAB.tipo=null; acabPedirCant(!queda); };
     l.appendChild(c);
   });
 }
@@ -1072,12 +1075,12 @@ function pintarAcabExtra(){
   $("tituloAcabOp").textContent = "Trabajo sin OF";
   $("subAcabOp").textContent = "Reprocesos, muestras y arreglos: no descuentan de ninguna OF";
   const l=$("listaAcabOp"); l.innerHTML="";
-  ACAB.extra.forEach((e,i)=>{
+  ACAB.extra.forEach(e=>{
     const c=document.createElement("div");
     c.className="card-fila";
     c.innerHTML=`<div><div class="cf-titulo">${esc(e.operacion)}</div>
       <div class="cf-detalle">${esc(e.tipo)}${tkVer("std")?` · STD ${Number(e.std).toFixed(2)} min`:""}</div></div>`;
-    c.onclick=()=>{ ACAB.tipo=ACAB.extra[i]; ACAB.op=null; acabPedirCant(); };
+    c.onclick=()=>{ ACAB.tipo=e; ACAB.op=null; acabPedirCant(); };
     l.appendChild(c);
   });
 }
@@ -1310,16 +1313,26 @@ async function refrescarMetasAcabado(){
 }
 /* Recarga los datos de Acabado conservando dónde estaba el operario.
    `volverA`: "ops" (lista de operaciones de la OF), "extra" (trabajo sin OF) o
-   null (se queda donde está). Lo comparten el registro y el botón ↻. */
+   null (se queda donde está). Lo comparten el registro y el botón ↻.
+   fn_acabado_ofs tarda 1-4 s: si mientras tanto el operario ya fue a otra OF u
+   operación, se respeta lo que eligió (antes se le devolvía a la OF anterior y
+   registraba ahí sin darse cuenta). */
+let ACAB_REFRESCO=0;
+const acabSelKey = ()=>[ACAB.of&&ACAB.of.of, ACAB.op&&ACAB.op.n_op, ACAB.tipo&&ACAB.tipo.id, ACAB.prenda].join("|");
 async function refrescarAcabado(s, area, volverA){
-  const ofAnt=ACAB.of&&ACAB.of.of, opAnt=ACAB.op&&ACAB.op.n_op, prAnt=ACAB.prenda;
+  const nro=++ACAB_REFRESCO, antes=acabSelKey();
   const [ofs, extra, dia, midia] = await Promise.all([
     rpc("fn_acabado_ofs",{p_dni:s.dni,p_token:s.token,p_area:area}),
     rpc("fn_extra_listar",{p_dni:s.dni,p_token:s.token,p_area:area,p_todas:false}).catch(()=>[]),
     rpc("fn_acabado_metas",{p_dni:s.dni,p_token:s.token,p_area:area}),
     rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token}).catch(()=>null)
   ]);
+  if(nro!==ACAB_REFRESCO) return;   // llegó uno más nuevo: ese manda
   if(ofs && ofs.ok===false) throw new Error(ofs.error||"No se pudieron cargar las OF");
+  const movio = acabSelKey()!==antes;
+  // Se reengancha lo que el operario tiene elegido AHORA, no lo de antes del await.
+  const ofAnt=ACAB.of&&ACAB.of.of, opAnt=ACAB.op&&ACAB.op.n_op, prAnt=ACAB.prenda,
+        tipoAnt=ACAB.tipo&&ACAB.tipo.id;
   ACAB.ofs=(ofs&&ofs.items)||[];
   ACAB.extra=Array.isArray(extra)?extra:[];
   setMetasAcabado(dia, midia);
@@ -1327,13 +1340,25 @@ async function refrescarAcabado(s, area, volverA){
   ACAB.prenda = ACAB.of && (ACAB.of.prendas||[]).includes(prAnt) ? prAnt : ACAB.prenda;
   ACAB.op = (ACAB.of && opAnt!=null)
     ? ((ACAB.of.operaciones||[]).find(x=>Number(x.n_op)===Number(opAnt)) || null) : null;
-  if(volverA==="extra"){ pintarAcabExtra(); irA("pasoAcabOp"); return; }
-  if(volverA==="ops"){
+  if(tipoAnt!=null) ACAB.tipo = ACAB.extra.find(x=>x.id===tipoAnt) || ACAB.tipo;
+  pintarAcabOF();   // la lista de OF cambia de orden al registrar: se repinta siempre
+  const act=pasoActivo();
+  if(volverA && !movio && act==="pasoAcabCant"){
+    if(volverA==="extra"){ pintarAcabExtra(); irA("pasoAcabOp"); return; }
     /* Si la OF desapareció (se completó o se dio de baja) no hay lista a la que
        volver: se cae a la de OF, que es lo honesto. */
     if(ACAB.of){ pintarAcabOps(); irA("pasoAcabOp"); }
-    else { pintarAcabOF(); irA("pasoAcabOF"); }
+    else irA("pasoAcabOF");
+    return;
   }
+  // Se movió (o es el ↻): solo se refresca la pantalla en la que está.
+  if(act==="pasoAcabPrenda" && ACAB.of) pintarAcabPrendas();
+  else if(act==="pasoAcabOp"){
+    if(ACAB.of) pintarAcabOps();
+    else if(ofAnt){ irA("pasoAcabOF"); }   // su OF ya no está (completa o de baja)
+    else pintarAcabExtra();
+  }
+  else if(act==="pasoAcabCant" && (ACAB.tipo || ACAB.op)) acabDetalle();
 }
 async function recargarMiEficiencia(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
@@ -1349,12 +1374,9 @@ async function recargarMiEficiencia(){
          recarga eso y no la ruta de OF (parche 58). */
       if(act==="pasoMisReg"){ await cargarMisRegistros(); return; }
       await refrescarAcabado(s, area, null);   // recarga y reengancha, sin mover de pantalla
-      if(act==="pasoAcabOF") pintarAcabOF();
-      else if(act==="pasoAcabPrenda") pintarAcabPrendas();
-      else if(act==="pasoAcabOp"){ if(ACAB.of) pintarAcabOps(); else pintarAcabExtra(); }
-      else if(act==="pasoAcabCant"){
-        if(ACAB.op){ acabDetalle(); await cargarAcabHist(); }
-        else { pintarAcabOF(); irA("pasoAcabOF"); }
+      if(act==="pasoAcabCant"){
+        if(ACAB.op) await cargarAcabHist();
+        else if(!ACAB.tipo) irA("pasoAcabOF");
       }
     }else{
       /* Costura: antes solo refrescaba mi día y los reclamos, así que una OF
@@ -1731,6 +1753,9 @@ function mostrarExito(){
   clearTimeout(timerReset);
   timerReset=setTimeout(()=>{
     ex.classList.remove("visible");
+    /* Acabado no tiene pantalla de tickets: ya lo deja en su lista de
+       operaciones `refrescarAcabado`. Aquí solo se cierra el aviso. */
+    if(ES_ACABADO) return;
     pintarTickets(); irA("pasoTickets");
   }, 2500);
 }
