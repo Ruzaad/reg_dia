@@ -1,7 +1,8 @@
 # PARCHE 84 — Tickets · RESUMEN X OPERARIO
 
-> **Pendiente de aplicar en producción.** Hasta que se aplique, el botón nuevo
-> muestra un error al cargar; el resto de la app no cambia.
+> **Aplicado en producción el 23-set-2026**, con autorización de Ruzaad. Después
+> de aplicarlo, `anon` y `authenticated` pueden ejecutarla, y una sesión inválida
+> recibe `SESION_INVALIDA`. Ruzaad eligió el reparto proporcional para "vs meta".
 
 ## Para qué
 
