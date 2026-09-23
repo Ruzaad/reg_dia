@@ -1509,6 +1509,11 @@ async function abrirModalPersonal(dni){
       datos = r;
     }catch(e){ mostrarError(e.message); cerrarModal(); return; }
   }
+  MP_ORIG = esEdicion ? datos : null;
+  // Igual que las áreas: el valor real siempre está entre las opciones. Si no,
+  // el select caía en la primera y GUARDAR pisaba el cargo (INGENIERIA→OPERARIO).
+  const cargosSel = [...new Set([datos.cargo, ...CARGOS_LISTA])].filter(Boolean);
+  const catsSel = [...new Set([...CATEGORIAS_LISTA, datos.categoria||""])];
   // Incluye siempre el área real del registro aunque no esté en AREAS_LISTA,
   // para que el select no caiga en la primera opción por defecto al editar.
   const areasSel = [...new Set([datos.area_origen, datos.area_actual, ...AREAS_LISTA])].filter(Boolean);
@@ -1539,12 +1544,12 @@ async function abrirModalPersonal(dni){
       </div>
       <div class="modal-campo">
         <label>Cargo</label>
-        <select id="mpCargo">${CARGOS_LISTA.map(c=>`<option ${c===datos.cargo?"selected":""}>${esc(c)}</option>`).join("")}</select>
+        <select id="mpCargo">${cargosSel.map(c=>`<option ${c===datos.cargo?"selected":""}>${esc(c)}</option>`).join("")}</select>
       </div>
     </div>
     <div class="modal-campo">
       <label>Categoría</label>
-      <select id="mpCategoria">${CATEGORIAS_LISTA.map(c=>
+      <select id="mpCategoria">${catsSel.map(c=>
         `<option value="${esc(c)}" ${c===(datos.categoria||"")?"selected":""}>${c||"— sin asignar —"}</option>`).join("")}</select>
     </div>
     <div class="modal-msg" id="mpMsg"></div>
@@ -1556,18 +1561,30 @@ async function abrirModalPersonal(dni){
   abrirModal(html);
 }
 
+let MP_ORIG = null;   // cómo estaba la persona al abrir el modal
 async function guardarPersonal(dniOriginal){
   const dni = dniOriginal || $("mpDni").value.trim();
   const nombres = $("mpNombres").value.trim();
-  const areaOrigen = $("mpAreaOrigen").value;
-  const areaActual = $("mpAreaActual").value;
-  const estado = $("mpEstado").value;
-  const cargo = $("mpCargo").value;
-  const categoria = $("mpCategoria").value;
+  let areaOrigen = $("mpAreaOrigen").value;
+  let areaActual = $("mpAreaActual").value;
+  let estado = $("mpEstado").value;
+  let cargo = $("mpCargo").value;
+  let categoria = $("mpCategoria").value;
   if(!dni || !nombres){ $("mpMsg").textContent = "DNI y nombres son obligatorios"; return; }
   try{
     let r;
     if(dniOriginal){
+      /* Un modal abierto hace rato no debe pisar lo que otro cambió mientras:
+         lo que aquí no se tocó se toma de la base tal como está ahora. */
+      const hoy = await rpc("fn_personal_detalle",{p_dni_ing:ING.dni,p_token:ING.token,p_dni:dni});
+      if(hoy && hoy.ok && MP_ORIG){
+        const igual=(k,v)=>(v||"")===(MP_ORIG[k]||"");
+        if(igual("area_origen",areaOrigen)) areaOrigen=hoy.area_origen;
+        if(igual("area_actual",areaActual)) areaActual=hoy.area_actual;
+        if(igual("estado",estado)) estado=hoy.estado;
+        if(igual("cargo",cargo)) cargo=hoy.cargo;
+        if(igual("categoria",categoria)) categoria=hoy.categoria||"";
+      }
       r = await rpc("fn_personal_editar",{p_dni_ing:ING.dni,p_token:ING.token,
         p_dni:dni,p_nombres:nombres,p_area_origen:areaOrigen,p_area_actual:areaActual,
         p_estado:estado,p_cargo:cargo,p_categoria:categoria});
@@ -1577,6 +1594,7 @@ async function guardarPersonal(dniOriginal){
         p_estado:estado,p_cargo:cargo,p_categoria:categoria});
     }
     if(!r.ok){ $("mpMsg").textContent = r.error||"No se pudo guardar"; return; }
+    if(r.pin_inicial) mostrarOk(`${nombres} creado. Clave inicial: ${r.pin_inicial}`);
     PMETA=null;   // cambió área origen o categoría: el Excel debe releerlas
     cerrarModal();
     AREAS_DB=null; AREAS_LISTA = await cargarAreasDB(); poblarSelectsArea();  // por si se creó un área nueva
