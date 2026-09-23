@@ -1,6 +1,6 @@
 # PARCHE 81 — Limpieza de la base: permisos, funciones sin uso e índices
 
-**Estado: aplicado el 22-set-2026, salvo el reindex.**
+**Estado: aplicado por completo el 22-set-2026.**
 
 | Bloque | Estado |
 |---|---|
@@ -8,12 +8,22 @@
 | B1 a B6 y C · las siete bajas | Aplicado 22-set |
 | A2 · `reclamos_motivo_fecha_idx` | Borrado 22-set |
 | A3 · `tickets_cache_area_idx` | Borrado 22-set |
-| A4 · los dos `reindex` de `tickets_cache` | **Pendiente**, agendado para las 20:30 de Lima, fuera de turno |
+| A4 · los dos `reindex` de `tickets_cache` | Aplicado 22-set, 20:30 de Lima, fuera de turno |
 
 Estado después de aplicar: las siete funciones devuelven 0 filas, los tres
 internos quedaron sin `EXECUTE` para `anon` ni `authenticated`, ningún índice
-quedó inválido y las 16 funciones vivas siguen en su sitio. La base pasó de
-132 MB a 129 MB y `tickets_cache` de 57 MB a 55 MB.
+quedó inválido y las 16 funciones vivas siguen en su sitio.
+
+| Medida | Antes | Después |
+|---|---:|---:|
+| Base de datos | 132 MB | **120 MB** |
+| `tickets_cache` (tabla + índices) | 57 MB | **45 MB** |
+| Índices de `tickets_cache` | 26 MB | **14 MB** |
+| `tickets_cache_pkey` | 12 MB | 7.1 MB |
+| `tickets_cache_area_of_idx` | 12 MB | 7.1 MB |
+| Filas en `tickets_cache` | 146 514 | 146 514 |
+
+Las filas son las mismas antes y después: el reindex no borra nada.
 
 **Vuelta atrás:** `sql/parche_81_rollback.sql` reconstruye las siete funciones
 tal cual estaban. Las definiciones se sacaron de producción con
