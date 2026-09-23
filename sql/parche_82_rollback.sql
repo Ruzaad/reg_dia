@@ -1,11 +1,6 @@
--- Vuelta atrás del PARCHE 82: fn_login y fn_personal_editar tal como estaban en
--- producción el 23-set-2026, y quita el rastro de cambios.
+-- Vuelta atrás del PARCHE 82: fn_login tal como estaba en producción el 23-set-2026.
 -- fn_personal_crear / fn_personal_resetear_pin NO se revierten: la versión
 -- anterior guardaba el PIN en texto plano y dejaba a la persona sin poder entrar.
-
-drop trigger if exists operarios_cambios_trg on public.operarios;
-drop function if exists public._operarios_cambios_log();
-drop table if exists public.operarios_cambios;
 
 create or replace function public.fn_login(p_dni text, p_pin text)
  returns json
@@ -49,63 +44,4 @@ begin
     'nombre', o.nombres_apellidos, 'cargo', o.cargo,
     'area_actual', o.area_actual, 'token', t,
     'es_admin', coalesce(o.es_admin, false));
-end $function$;
-
-create or replace function public.fn_personal_editar(p_dni_ing text, p_token text, p_dni text, p_nombres text, p_area_origen text, p_area_actual text, p_estado text, p_cargo text)
- returns json
- language plpgsql
- security definer
- set search_path to 'public'
-as $function$
-begin
-  perform fn_validar_ingenieria(p_dni_ing, p_token);
-
-  update operarios set
-    nombres_apellidos = p_nombres,
-    area_origen = p_area_origen,
-    area_actual = p_area_actual,
-    estado = p_estado,
-    cargo = p_cargo
-  where dni = p_dni;
-
-  if not found then
-    return json_build_object('ok', false, 'error', 'No existe ese DNI');
-  end if;
-
-  return json_build_object('ok', true);
-exception
-  when others then
-    if SQLERRM like '%SESION_INVALIDA%' or SQLERRM like '%NO_AUTORIZADA%' then raise; end if;
-    return json_build_object('ok', false, 'error', SQLERRM);
-end;
-$function$;
-
-create or replace function public.fn_personal_editar(p_dni_ing text, p_token text, p_dni text, p_nombres text, p_area_origen text, p_area_actual text, p_estado text, p_cargo text, p_categoria text)
- returns json
- language plpgsql
- security definer
- set search_path to 'public'
-as $function$
-declare v_cat text;
-begin
-  perform fn_validar_ingenieria(p_dni_ing, p_token);
-  v_cat := nullif(upper(trim(coalesce(p_categoria,''))), '');
-  if v_cat is not null and v_cat not in ('A','B','C','D') then
-    return json_build_object('ok', false, 'error', 'Categoría inválida: usa A, B, C o D');
-  end if;
-  update operarios set
-    nombres_apellidos = p_nombres,
-    area_origen = p_area_origen,
-    area_actual = p_area_actual,
-    estado = p_estado,
-    cargo = p_cargo,
-    categoria = v_cat
-  where dni = p_dni;
-  if not found then
-    return json_build_object('ok', false, 'error', 'No existe ese DNI');
-  end if;
-  return json_build_object('ok', true);
-exception when others then
-  if SQLERRM like '%SESION_INVALIDA%' or SQLERRM like '%NO_AUTORIZADA%' then raise; end if;
-  return json_build_object('ok', false, 'error', SQLERRM);
 end $function$;

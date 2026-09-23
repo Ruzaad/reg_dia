@@ -1,4 +1,4 @@
-# PARCHE 82 — Personal nuevo sin acceso, intentos restantes y rastro de cambios
+# PARCHE 82 — Personal nuevo sin acceso, intentos restantes y cambios que se revertían
 
 ## Qué pasaba
 
@@ -26,7 +26,6 @@ vencer un bloqueo el contador seguía en 5: el siguiente fallo volvía a bloquea
   abierto hace rato (otra pestaña, otro equipo, otra persona de ingeniería)
   pisaba lo que se había cambiado mientras, incluida el área actual que el
   operario cambia al reclamar tickets.
-- No había ningún registro de quién cambió qué, así que no se podía comprobar.
 
 ## Qué cambia
 
@@ -41,11 +40,6 @@ vencer un bloqueo el contador seguía en 5: el siguiente fallo volvía a bloquea
   - Al vencer el bloqueo el contador arranca de cero.
   - Si algún PIN llega en texto plano lo acepta y lo rehashea en ese login.
   - El DNI inexistente sigue diciendo "DNI o clave incorrectos".
-- Tabla nueva `operarios_cambios` (solo la escribe un trigger, RLS sin políticas,
-  sin permisos para `anon`). Guarda cada cambio de cargo, categoría, estado y
-  área origen con quién lo hizo y desde qué despliegue (origin del navegador).
-- Las dos firmas de `fn_personal_editar` solo agregan su huella (`samitex.editor`)
-  para ese rastro; la de 8 parámetros se mantiene para los despliegues sin migrar.
 
 **Front (`ingenieria.js`):**
 
@@ -59,17 +53,14 @@ vencer un bloqueo el contador seguía en 5: el siguiente fallo volvía a bloquea
 ```sql
 -- nadie con PIN sin hash
 select count(*) from operarios where pin !~ '^\$2[aby]\$';   -- 0
--- si vuelve a pasar "se cambió solo":
-select * from operarios_cambios where dni = '10324831' order by cuando desc;
 ```
 
 Probado en una copia local (PostgreSQL 16 + pgcrypto): creación con las dos
 firmas, reseteo, cuenta regresiva de intentos, bloqueo, vencimiento del bloqueo,
-PIN heredado en texto plano, rastro de cambios, y que el parche se puede correr
+PIN heredado en texto plano, y que el parche se puede correr
 dos veces.
 
 ## Volver atrás
 
-`sql/parche_82_rollback.sql` deja `fn_login` y `fn_personal_editar` como estaban
-en producción y quita la tabla y el trigger. No revierte la creación ni el
+`sql/parche_82_rollback.sql` deja `fn_login` como estaba en producción. No revierte la creación ni el
 reseteo de PIN: la versión anterior es justamente el error.
