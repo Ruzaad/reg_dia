@@ -1,4 +1,4 @@
-# PARCHE 82 — La división última / penúltima vuelve a verse en `ofs`
+# PARCHE 83 — La división última / penúltima vuelve a verse en `ofs`
 
 ## Qué pasaba
 
@@ -49,7 +49,7 @@ hasta que se regenere. La app no lee estas columnas: siguen siendo informativas.
 
 ## Vuelta atrás
 
-`sql/parche_82_rollback.sql` deja `_paq_div_n` como estaba y vacía las columnas.
+`sql/parche_83_rollback.sql` deja `_paq_div_n` como estaba y vacía las columnas.
 
 ## `areas_config` no se borra
 

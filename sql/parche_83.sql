@@ -1,4 +1,4 @@
--- PARCHE 82 — ofs.div_ultima_n / div_penultima_n se llenan desde el troceo real
+-- PARCHE 83 — ofs.div_ultima_n / div_penultima_n se llenan desde el troceo real
 -- Desde el parche 29 el troceo se guarda en of_troceo (por OF, área y operación)
 -- al generar la OF en Ingeniería. Las dos columnas de ofs solo las llenaba el
 -- camino viejo (HN → ALMACÉN del Sheet), así que en las OF generadas en el
@@ -100,7 +100,7 @@ begin
      where t.area = p_area and _nk(t.o_f) = _nk(p_of) and t.op_id = v_op;
     if v is not null then return v; end if;            -- OF generada en el sistema
   end if;
-  -- parche 82: si la OF se generó en el sistema (en cualquier área), ofs.div_*
+  -- parche 83: si la OF se generó en el sistema (en cualquier área), ofs.div_*
   -- es solo una copia de of_troceo de UN área. Leerla aquí repartiría ese
   -- troceo a otras operaciones u otras áreas. Solo la HN antigua cae abajo.
   if exists (select 1 from of_generada g where _nk(g.o_f) = _nk(p_of)) then

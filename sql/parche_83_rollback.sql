@@ -1,4 +1,4 @@
--- Vuelta atrás del PARCHE 82. Deja _paq_div_n como estaba en producción antes
+-- Vuelta atrás del PARCHE 83. Deja _paq_div_n como estaba en producción antes
 -- del parche (definición sacada de la base el 23-set-2026) y vacía las dos
 -- columnas en las OF generadas, que es como estaban.
 
