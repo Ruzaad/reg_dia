@@ -64,3 +64,18 @@ Se revisó si se podía borrar. Sigue viva:
 - También la leen `fn_ofs_listar` (estado por área en OFs registradas),
   `fn_origen_reclamos`, `fn_area_almacen` e Ingeniería para las hojas `OF` de
   metas y para el desplegable de Generar tickets.
+
+### Que la app no dependa de `areas_config` para funcionar
+
+`app.js` trae una copia local de las áreas (`AREAS`) que se usa si
+`fn_areas_config_listar` falla. Esa copia estaba vieja: SACO COSTURA estaba
+apagada y ninguna área traía `usaAlmacen`, así que ante un fallo de la RPC la app
+volvía a leer el ALMACÉN del Sheet sin avisar.
+
+Ahora la copia es igual a la tabla: las 4 áreas están habilitadas, todas con
+`usaAlmacen: false` y cada una con su `hojaOF`. Además, si falta el dato, el
+Sheet queda **apagado** por defecto (antes quedaba prendido). Un fallo de
+`areas_config` ya no cambia lo que ve el operario.
+
+Si mañana se agrega un área, hay que darle fila en `areas_config` **y** copiarla
+en `AREAS` de `app.js`.

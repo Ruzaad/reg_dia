@@ -23,27 +23,37 @@ const MAPA_ACABADO = {                          // cabecera normalizada -> campo
   "STD":"std","OF":"of","TALLA":"talla","COLOR":"color","NCORTE":"corte",
   "CANT":"cant","CODIGO":"codigo","NOP":"nop","NOMBRE":"nombre"
 };
+/* Respaldo de areas_config: se usa solo si fn_areas_config_listar falla.
+   Tiene que ser COPIA FIEL de la tabla (parche 83): antes SACO salía apagada y
+   las demás, sin usaAlmacen, volvían a leer el ALMACÉN del Sheet si la RPC
+   fallaba. Los tickets se generan en Supabase; el Sheet (sheetId + hojaOF)
+   queda solo para las metas por OF y los desplegables de Ingeniería. */
 const AREAS = {
   "CAMISA COSTURA": {
-    habilitada: true,
+    habilitada: true, usaAlmacen: false,
     sheetId: "1fuqMApXsZg-0PW4ugqtnye6zysVtoSAS_o4hhN1WDlo",
     hoja: "ALMACEN",
     hojaOF: "OF",                 // hoja con la meta por OF (cols: ARTICULO, OF, CANT PROG)
     mapa: MAPA_ESTANDAR
   },
   "ACABADO": {
-    habilitada: true,               // PENDIENTE: compartir libro como lector + confirmar cabeceras
+    habilitada: true, usaAlmacen: false,
     sheetId: "1R2FqLRZpFjdA7rzUk6dsTyj898yUYO0aKU_OYG4e0Xc",
-    hoja: "ALMACEN",
-    mapa: MAPA_ACABADO              // ajustar cuando se vean sus columnas reales
+    hoja: "ALMACEN", hojaOF: "OF",
+    mapa: MAPA_ACABADO
   },
   "PANTALON COSTURA": {
-    habilitada: true,
+    habilitada: true, usaAlmacen: false,
     sheetId: "1Or0seuSsiqmHSPAQ39RAfh1nWhpUtGi_ugFu4C4XCns",
-    hoja: "ALMACEN",              // pestaña gid=0 del libro de PANTALONES
+    hoja: "ALMACEN", hojaOF: "OF", // pestaña gid=0 del libro de PANTALONES
     mapa: MAPA_ESTANDAR           // GRUPO queda sin mapear (no se usa en el flujo)
   },
-  "SACO COSTURA":     { habilitada:false }
+  "SACO COSTURA": {
+    habilitada: true, usaAlmacen: false,
+    sheetId: "1xInuKimRC9l-RNiQNK4VX-uG7RMLJYkeVeZtpEC7tLc",
+    hoja: "ALMACEN", hojaOF: "OF",
+    mapa: MAPA_ESTANDAR
+  }
 };
 const SESION_HORAS = 4;        // horas SIN actividad antes de cerrar (deslizante)
 const SESION_MAX_HORAS = 18;   // tope duro desde el login, pase lo que pase
@@ -357,7 +367,7 @@ async function hidratarAreas(){
       AREAS[a] = {habilitada:true, sheetId:norm(c.sheet_id),
         hoja: norm(c.hoja_almacen)||"ALMACEN", hojaOF: norm(c.hoja_of)||null,
         // parche 45: false = esta área ya no lee el ALMACEN del Sheet.
-        usaAlmacen: (c.usa_almacen===undefined ? true : !!c.usa_almacen),
+        usaAlmacen: (c.usa_almacen===undefined ? false : !!c.usa_almacen),
         mapa: normKey(a)==="ACABADO" ? MAPA_ACABADO : MAPA_ESTANDAR};
     });
     AREAS_HIDRATADAS = true;
@@ -819,7 +829,7 @@ async function cargarTodo(s){
        aunque estuviera apagado. */
     await hidratarAreas();
     await cargarVisibilidad(s);
-    const usaAlm = (AREAS[area] && AREAS[area].usaAlmacen !== false);
+    const usaAlm = !!(AREAS[area] && AREAS[area].usaAlmacen === true);
     const [alm, recl, dia, res, ofs, mp] = await Promise.all([
       usaAlm ? cargarAlmacen(area).catch(e=>({tickets:[],duplicados:[],_err:e.message}))
              : Promise.resolve({tickets:[],duplicados:[]}),
@@ -1353,7 +1363,7 @@ async function recargarMiEficiencia(){
          derivados, residuales y reclamos— conservando dónde está el operario. */
       const area = AREA_ESTAJERO || s.area;
       await hidratarAreas();            // mismo motivo que en cargarTodo
-      const usaAlm = (AREAS[area] && AREAS[area].usaAlmacen !== false);
+      const usaAlm = !!(AREAS[area] && AREAS[area].usaAlmacen === true);
       const [alm, recl, dia, res, ofs, mp] = await Promise.all([
         usaAlm ? cargarAlmacen(area).catch(e=>({tickets:[],duplicados:[],_err:e.message}))
                : Promise.resolve({tickets:[],duplicados:[]}),
