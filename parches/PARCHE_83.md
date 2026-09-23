@@ -1,5 +1,7 @@
 # PARCHE 83 — La división última / penúltima vuelve a verse en `ofs`
 
+> **Aplicado en producción el 23-set-2026**, con autorización de Ruzaad. Después de aplicarlo, `_paq_div_n` da el mismo hash en los 12 780 pares (área, OF, operación), 97 OF quedan con la división llena, y ni `anon` puede leer la vista ni ejecutar `_ofs_div_sync`.
+
 ## Qué pasaba
 
 En la tabla `ofs`, `div_ultima_n` y `div_penultima_n` estaban en NULL en las
