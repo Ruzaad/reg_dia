@@ -1187,3 +1187,32 @@ details.mod-op[open]>summary.mod-op-head::before{content:"▾ ";}
 tr.aud-fila{cursor:pointer;}
 tr.aud-fila:hover{background:#eef3fb;}
 @media(max-width:560px){ .aud-drawer{width:100%;padding:14px;} .aud-grid{grid-template-columns:1fr;} }
+
+/* Tickets · Resumen x Operario (parche 84) */
+.ope-seg{display:inline-flex;border:2px solid var(--azul);border-radius:10px;overflow:hidden;align-self:flex-end;}
+.ope-seg button{background:var(--blanco);color:var(--azul);border:0;padding:8px 14px;font-weight:800;font-size:13px;cursor:pointer;}
+.ope-seg button.activo{background:var(--azul);color:#fff;}
+.ope-card{background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;margin-bottom:10px;
+  box-shadow:0 1px 3px rgba(13,59,133,.06);overflow:hidden;}
+.ope-card>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;
+  gap:12px;flex-wrap:wrap;padding:12px 16px;user-select:none;}
+.ope-card>summary::-webkit-details-marker{display:none;}
+.ope-card>summary::before{content:"▸";color:var(--azul);font-weight:800;}
+.ope-card[open]>summary::before{content:"▾";}
+.ope-card[open]>summary{border-bottom:1px solid var(--gris-fondo);}
+.ope-nom{flex:1;min-width:200px;font-weight:800;color:var(--azul);}
+.ope-nom small{display:block;font-size:12px;font-weight:600;color:#5a6270;}
+.ope-res{font-family:"Fira Code",monospace;font-size:13px;font-weight:700;white-space:nowrap;}
+.ope-card .tabla-scroll{padding:0 8px 8px;}
+.ope-tabla td.ope-dia{color:#5a6270;font-variant-numeric:tabular-nums;}
+.ope-area{font-size:11px;color:#5a6270;}
+.ope-tag{display:inline-block;font-size:11px;font-weight:800;border-radius:6px;padding:1px 6px;margin-left:6px;white-space:nowrap;}
+.ope-tag.alta{background:#eef7f0;color:var(--exito);}
+.ope-tag.baja{background:#fdecea;color:var(--alerta);}
+.ope-cmp{white-space:nowrap;min-width:150px;text-align:left;}
+.ope-bar{display:inline-block;vertical-align:middle;width:80px;height:8px;background:var(--gris-fondo);
+  border-radius:4px;overflow:hidden;margin-right:8px;}
+.ope-bar i{display:block;height:100%;background:var(--enlace);}
+.ope-bar i.ef-alta{background:var(--exito);}
+.ope-bar i.ef-baja{background:var(--alerta);}
+.ope-sd{color:#9aa4b1;}
