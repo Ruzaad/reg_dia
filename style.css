@@ -1216,3 +1216,80 @@ tr.aud-fila:hover{background:#eef3fb;}
 .ope-bar i.ef-alta{background:var(--exito);}
 .ope-bar i.ef-baja{background:var(--alerta);}
 .ope-sd{color:#9aa4b1;}
+
+/* Supervisora · Avance OF y Bases (parche 85). Pensado para celular: nada de
+   ancho fijo, los textos largos se parten y los números no. */
+.sv-buscar{display:block;width:100%;box-sizing:border-box;max-width:760px;margin:10px auto 8px;font-size:17px;font-weight:700;
+  padding:11px 12px;border:3px solid var(--azul);border-radius:13px;background:var(--blanco);color:var(--texto);}
+.sv-res{font-size:13px;color:#5a6270;text-align:center;margin-bottom:10px;min-height:1em;}
+#aoLista,#bsLista{max-width:760px;margin:0 auto;width:100%;}
+.sv-card{background:var(--blanco);border-left:8px solid var(--ocre);border-radius:14px;margin-bottom:10px;
+  box-shadow:0 1px 3px rgba(13,59,133,.08);overflow:hidden;}
+.sv-card.ok{border-left-color:var(--exito);}
+.sv-card>summary,.sv-mod>summary{list-style:none;cursor:pointer;user-select:none;}
+.sv-card>summary::-webkit-details-marker,.sv-mod>summary::-webkit-details-marker{display:none;}
+.sv-card>summary{padding:12px 14px;}
+.sv-cab{display:flex;justify-content:space-between;align-items:baseline;gap:8px;min-width:0;}
+.sv-t{font-size:18px;font-weight:800;color:var(--azul);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sv-t::before,.sv-mt::before{content:"▸ ";color:var(--azul);}
+details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content:"▾ ";}
+.sv-pct{font-size:18px;font-weight:800;font-family:"Fira Code",monospace;flex:none;white-space:nowrap;}
+.sv-sub{font-size:13px;color:#5a6270;margin:3px 0 7px;overflow-wrap:anywhere;}
+.sv-bar{height:8px;background:var(--gris-fondo);border-radius:5px;overflow:hidden;}
+.sv-bar i{display:block;height:100%;background:var(--ocre);}
+.sv-bar i.ok{background:var(--exito);}
+.sv-mod{border-top:1px solid var(--gris-fondo);}
+.sv-mod>summary{padding:10px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;align-items:center;}
+.sv-mt{font-weight:800;font-size:15px;min-width:0;overflow-wrap:anywhere;}
+.sv-mr{display:flex;gap:6px;align-items:center;flex:none;}
+.sv-mr .pill{font-size:11px;padding:3px 7px;white-space:nowrap;}
+.pill.COMPLETADO{background:#eef7f0;color:var(--exito);}
+.sv-mpct{font-weight:800;font-family:"Fira Code",monospace;font-size:14px;white-space:nowrap;}
+.sv-mod>summary .sv-bar{grid-column:1/3;height:6px;}
+.sv-mod>summary .sv-f{grid-column:1/3;}
+.sv-f{font-size:12px;color:#5a6270;overflow-wrap:anywhere;}
+.sv-cargando{padding:6px 0 10px;}
+.sv-ops{padding:0 14px 6px;}
+.sv-op{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:2px 8px;align-items:center;padding:6px 0;border-top:1px dashed #e6eaf0;}
+.sv-n{font-size:11px;font-weight:800;color:#5a6270;background:var(--gris-fondo);border-radius:6px;text-align:center;padding:2px 0;}
+.sv-op-t{font-size:13.5px;overflow-wrap:anywhere;min-width:0;}
+.sv-op-c{font-size:13px;font-weight:800;font-family:"Fira Code",monospace;white-space:nowrap;}
+/* Avance: el nombre ocupa todo el ancho y debajo van la barra y la cantidad,
+   así una operación larga no queda en una columna angosta. */
+.sv-op.av .sv-n{align-self:start;margin-top:2px;}
+.sv-op.av .sv-op-t{grid-column:2/4;}
+.sv-op.av .sv-bar{grid-column:2/3;grid-row:2;height:5px;}
+.sv-op.av .sv-op-c{grid-column:3/4;grid-row:2;font-size:12.5px;}
+.sv-mas{display:block;width:100%;background:none;border:0;font-size:13px;color:var(--enlace);font-weight:800;padding:8px 0 10px;cursor:pointer;}
+.sv-std{color:var(--azul);}
+
+/* Ingeniería · Horas extras en lote (parche 87) */
+.he-def{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:#fff8e6;border:1px solid var(--ocre);
+  border-radius:12px;padding:6px 10px;font-weight:700;font-size:13px;align-self:flex-end;}
+.he-step{display:inline-flex;align-items:center;border:2px solid var(--azul);border-radius:10px;overflow:hidden;background:var(--blanco);}
+.he-step button{border:0;background:var(--blanco);color:var(--azul);font-weight:800;width:30px;height:30px;font-size:16px;cursor:pointer;}
+.he-step button:disabled{cursor:default;}
+.he-step b{min-width:50px;text-align:center;font-family:"Fira Code",monospace;font-size:14px;white-space:nowrap;}
+.he-step.off{opacity:.4;}
+.he-tabla td,.he-tabla th{white-space:nowrap;}
+.he-tabla td.izq{white-space:normal;}
+.he-tabla tr.he-off td{color:#9aa4b1;}
+.he-min{font-family:"Fira Code",monospace;font-weight:800;}
+.he-ya{font-size:12px;color:#8a5f18;background:#fdf3e4;border-radius:8px;padding:2px 7px;font-weight:700;}
+.he-aus{font-size:12px;color:var(--alerta);background:#fdecea;border-radius:8px;padding:2px 7px;font-weight:700;}
+.he-pie{position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+  background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;padding:12px 16px;margin-top:12px;
+  box-shadow:0 -2px 10px rgba(13,59,133,.08);}
+.he-pie .kn{font-family:"Fira Code",monospace;font-weight:800;color:var(--azul);font-size:18px;}
+.he-pie-acc{display:flex;gap:8px;flex-wrap:wrap;}
+.he-pie-acc button:disabled{opacity:.5;cursor:default;}
+
+/* Ingeniería · Historial de tiempos de BASE (parche 86) */
+.solo-admin{font-size:12px;font-weight:800;color:#fff;background:var(--azul);border-radius:8px;padding:2px 8px;
+  margin-left:8px;vertical-align:middle;white-space:nowrap;}
+.lg-d{font-family:"Fira Code",monospace;font-weight:800;}
+.lg-up{color:var(--alerta);} .lg-dn{color:var(--exito);}
+.lg-tag{font-size:11px;font-weight:800;border-radius:6px;padding:2px 6px;white-space:nowrap;}
+.lg-tag.ed{background:#e9eefa;color:var(--azul);} .lg-tag.nu{background:#eef7f0;color:var(--exito);}
+.lg-tag.bo{background:#fdecea;color:var(--alerta);}
+.nw{white-space:nowrap;}

@@ -97,7 +97,8 @@ function cmpVal(va, vb){
 
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
-  "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra"];
+  "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
+  "pasoBaseLog"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -131,6 +132,7 @@ function activarTab(tab){
   else if(tab==='pasoCausas') cargarCausas();
   else if(tab==='pasoVista') cargarVista();
   else if(tab==='pasoAudit') audInit();
+  else if(tab==='pasoBaseLog') blInit();
 }
 /* Eficiencia = una sola entrada del menú con dos vistas (parche 75). Son dos
    `section.pantalla` distintas, así que se cambia con irA(); lo que no puede
@@ -150,7 +152,7 @@ function efVista(v){
 /* Administrador maestro: hoy solo ALOPEZ, y lo decide `operarios.es_admin`,
    no el DNI escrito en el código. La sesión lo trae desde fn_login. */
 function ES_ADMIN(){ return (ING && ING.admin===true); }
-const TABS_ADMIN=["pasoInc","pasoAudit"];
+const TABS_ADMIN=["pasoInc","pasoAudit","pasoBaseLog"];
 function quitarIncentivos(){
   TABS_ADMIN.forEach(t=>{
     const it=document.querySelector('.nav-item[data-tab="'+t+'"]'); if(it) it.remove();
@@ -201,7 +203,8 @@ function recargarIngenieria(){
   else if(act("pasoAsis")) perReload();
   else if(act("pasoDash")) dashTab(DASH_TAB||'asis');
   else if(act("pasoAvOF")){ if(AVOF.items.length) cargarAvof(); }
-  else if(act("pasoIncid")) cargarIncidI();
+  else if(act("pasoIncid")){ if($("inciHE") && !$("inciHE").hidden) heCargar(); else cargarIncidI(); }
+  else if(act("pasoBaseLog")) cargarBaseLog();
   else if(act("pasoAudit")) cargarAudit();
   else if(act("pasoPersonal")||act("pasoAvance")||act("pasoIncidencias")||act("pasoEfPersonal")) recargarSupervisora();
 }
@@ -4913,10 +4916,177 @@ const hoyLima = ()=> new Date().toLocaleDateString("sv-SE",{timeZone:"America/Li
 let OCURR=[], inciSort={col:"fecha",dir:-1}, INCI_PERSONAL=[];
 
 function inciVista(v){
-  const apl=v!=="pend";
-  $("inciAplicadas").hidden=!apl; $("inciPendientes").hidden=apl;
-  $("inciTabApl").classList.toggle("activo",apl); $("inciTabPend").classList.toggle("activo",!apl);
-  if(apl) cargarOcurrencias(); else cargarPendientesInci();
+  const apl=v==="apl", he=v==="he", pend=!apl&&!he;
+  $("inciAplicadas").hidden=!apl; $("inciPendientes").hidden=!pend; $("inciHE").hidden=!he;
+  $("inciTabApl").classList.toggle("activo",apl); $("inciTabPend").classList.toggle("activo",pend);
+  $("inciTabHE").classList.toggle("activo",he);
+  if(apl) cargarOcurrencias(); else if(pend) cargarPendientesInci(); else heInit();
+}
+
+/* ---- Horas extras en lote (parche 87) ----
+   Un día y un área: se marcan las personas, cada una con sus horas (por
+   defecto 2). Se registra con fn_ocurrencia tipo HORA_EXTRA, una llamada por
+   cada cantidad distinta de minutos; quien no estuvo activo ese día no se
+   puede marcar y, si igual llegara, fn_ocurrencia lo salta. */
+const HE={items:[],marcados:new Set(),horas:{},def:2,guardando:false};
+const heFmt=h=>String(Math.round(h*10)/10)+" h";
+function heInit(){
+  if(!$("heFecha").value) $("heFecha").value=hoyLima();
+  const sa=$("heArea");
+  if(sa && !sa.options.length){
+    sa.innerHTML=(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+    const ai=$("areaInci"); if(ai && ai.value) sa.value=ai.value;
+  }
+  heCargar();
+}
+async function heCargar(){
+  const fecha=$("heFecha").value, area=$("heArea").value;
+  if(!fecha||!area){ $("heTabla").innerHTML=""; heResumen(); return; }
+  $("heTabla").innerHTML=`<tbody><tr><td>${cargandoHTML("Cargando personal…")}</td></tr></tbody>`;
+  HE.marcados.clear(); HE.horas={};
+  try{
+    const r=await rpc("fn_he_lote_personal",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_fecha:fecha});
+    if(!r.ok){ mostrarError(r.error||"Error"); HE.items=[]; }
+    else HE.items=r.items||[];
+  }catch(e){ mostrarError(e.message); HE.items=[]; }
+  hePintar();
+}
+const heHoras=dni=>HE.horas[dni]!=null?HE.horas[dni]:HE.def;
+function hePintar(){
+  const q=normKey($("heBuscar").value);
+  const lista=HE.items.filter(p=>!q||normKey(p.nombre+" "+p.dni).includes(q));
+  const marcables=lista.filter(p=>!p.ausente);
+  const todos=marcables.length>0 && marcables.every(p=>HE.marcados.has(p.dni));
+  const head=`<thead><tr><th><input type="checkbox" class="sw" ${todos?"checked":""} ${marcables.length?"":"disabled"}
+      onchange="heMarcarTodos(this.checked)" aria-label="Marcar a todos"></th>
+    <th class="izq">Personal</th><th>DNI</th><th>Horas extra</th><th>Minutos</th><th class="izq">Nota</th></tr></thead>`;
+  const body=lista.length? lista.map(p=>{
+    const m=HE.marcados.has(p.dni), h=heHoras(p.dni), ya=(+p.he_min||0)/60;
+    const nota=p.ausente
+      ? `<span class="he-aus">${esc(p.estado)} ese día: no se registra</span>`
+      : ya>0 ? `<span class="he-ya">Ya tiene ${heFmt(ya)} ese día${m?`: quedaría con ${heFmt(ya+h)}`:""}</span>` : "";
+    const d=esc(p.dni);
+    return `<tr${p.ausente?' class="he-off"':""}>
+      <td><input type="checkbox" class="sw" ${m?"checked":""} ${p.ausente?"disabled":""} onchange="heMarcar('${d}',this.checked)"></td>
+      <td class="izq">${esc(p.nombre)}</td><td>${d}</td>
+      <td><span class="he-step${m?"":" off"}"><button type="button" onclick="heSumar('${d}',-0.5)" ${p.ausente?"disabled":""} aria-label="Menos">−</button><b>${heFmt(h)}</b><button type="button" onclick="heSumar('${d}',0.5)" ${p.ausente?"disabled":""} aria-label="Más">+</button></span></td>
+      <td class="he-min">${m?"+"+Math.round(h*60):"—"}</td>
+      <td class="izq">${nota}</td></tr>`;
+  }).join("") : `<tr><td colspan="6"><div class="vacio-msg">${HE.items.length?"Nadie coincide con la búsqueda":"Sin personal en el área"}</div></td></tr>`;
+  $("heTabla").innerHTML=head+"<tbody>"+body+"</tbody>";
+  heResumen();
+}
+function heResumen(){
+  const sel=HE.items.filter(p=>HE.marcados.has(p.dni)&&!p.ausente);
+  const h=sel.reduce((a,p)=>a+heHoras(p.dni),0);
+  const f=$("heFecha").value, fTxt=f?f.split("-").reverse().join("-"):"";
+  $("heResumen").innerHTML=`<span class="kn">${sel.length}</span> persona${sel.length===1?"":"s"} · `
+    +`<span class="kn">${heFmt(h)}</span> (${Math.round(h*60)} min) el ${esc(fTxt)} · ${esc($("heArea").value||"")}`;
+  const b=$("heGuardar");
+  b.disabled=!sel.length||HE.guardando;
+  b.textContent=HE.guardando?"Registrando…":`Registrar ${sel.length} hora${sel.length===1?"":"s"} extra`;
+}
+function heMarcar(dni,on){ on?HE.marcados.add(dni):HE.marcados.delete(dni); hePintar(); }
+function heMarcarTodos(on){
+  const q=normKey($("heBuscar").value);
+  HE.items.filter(p=>!p.ausente&&(!q||normKey(p.nombre+" "+p.dni).includes(q)))
+    .forEach(p=>on?HE.marcados.add(p.dni):HE.marcados.delete(p.dni));
+  hePintar();
+}
+function heSumar(dni,d){
+  const h=Math.min(12,Math.max(0.5,heHoras(dni)+d));
+  HE.horas[dni]=h; HE.marcados.add(dni); hePintar();
+}
+function heDefecto(d){
+  HE.def=Math.min(12,Math.max(0.5,HE.def+d));
+  $("heDef").textContent=heFmt(HE.def); hePintar();
+}
+function heAplicarTodos(){ HE.horas={}; hePintar(); }
+function heLimpiar(){ HE.marcados.clear(); HE.horas={}; hePintar(); }
+async function heRegistrar(){
+  if(HE.guardando) return;
+  const fecha=$("heFecha").value, area=$("heArea").value, motivo=$("heMotivo").value.trim();
+  const sel=HE.items.filter(p=>HE.marcados.has(p.dni)&&!p.ausente);
+  if(!sel.length){ mostrarError("Marca al menos a una persona"); return; }
+  if(!motivo){ mostrarError("Indica el motivo"); return; }
+  const h=sel.reduce((a,p)=>a+heHoras(p.dni),0);
+  if(!confirm(`Registrar horas extra a ${sel.length} persona(s) el ${fecha} en ${area}: ${heFmt(h)} en total. ¿Continuar?`)) return;
+  const grupos={};
+  sel.forEach(p=>{ const m=Math.round(heHoras(p.dni)*60); (grupos[m]=grupos[m]||[]).push(p.dni); });
+  HE.guardando=true; heResumen();
+  let ok=0; const omit=[], errs=[];
+  try{
+    for(const m of Object.keys(grupos)){
+      try{
+        const r=await rpc("fn_ocurrencia",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_tipo:"HORA_EXTRA",
+          p_minutos:+m,p_detalle:motivo,p_dnis:grupos[m],p_fecha:fecha});
+        if(r.ok) ok+=r.afectados||0; else errs.push(r.error||"No se pudo registrar");
+        (r.omitidos||[]).forEach(x=>omit.push(x));
+      }catch(e){ errs.push(e.message); }
+    }
+  }finally{ HE.guardando=false; }
+  if(ok) mostrarOk(`Horas extra registradas a ${ok} persona(s)`+(omit.length?` · no se registró a: ${omit.join(", ")}`:""));
+  if(errs.length) mostrarError(errs.join(" · "));
+  await heCargar();
+}
+
+/* ---- Historial de tiempos de BASE (parche 86, solo maestro) ---- */
+let BL=[], BL_VISTA=[];
+function blInit(){
+  if(!$("blDesde").value){
+    const h=new Date(hoyLima()+"T00:00:00"), d=new Date(h.getTime()-6*86400000);
+    $("blDesde").value=d.toLocaleDateString("sv-SE"); $("blHasta").value=hoyLima();
+  }
+  const sa=$("blArea");
+  if(sa && !sa.options.length)
+    sa.innerHTML='<option value="">Todas las áreas</option>'+(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+  cargarBaseLog();
+}
+async function cargarBaseLog(){
+  const d=$("blDesde").value, h=$("blHasta").value;
+  if(!d||!h){ mostrarError("Elige el rango de fechas"); return; }
+  $("blTabla").innerHTML=`<tbody><tr><td>${cargandoHTML("Cargando…")}</td></tr></tbody>`; $("blResumen").innerHTML="";
+  try{
+    const r=await rpc("fn_bases_log",{p_dni:ING.dni,p_token:ING.token,p_desde:d,p_hasta:h,p_area:$("blArea").value||""});
+    if(!r.ok){ mostrarError(r.error||"Error"); BL=[]; } else BL=r.items||[];
+  }catch(e){ mostrarError(e.message); BL=[]; }
+  const su=$("blUsuario"), antes=su.value, us=[...new Set(BL.map(x=>x.dni))].sort();
+  su.innerHTML='<option value="">Todos</option>'+us.map(u=>`<option${u===antes?" selected":""}>${esc(u)}</option>`).join("");
+  blPintar();
+}
+const blDif=x=>(x.std_antes!=null&&x.std_despues!=null)?(+x.std_despues)-(+x.std_antes):null;
+function blPintar(){
+  const u=$("blUsuario").value, q=normKey($("blBuscar").value);
+  BL_VISTA=BL.filter(x=>(!u||x.dni===u)&&(!q||normKey([x.articulo,x.operacion,x.modulo,x.area].join(" ")).includes(q)));
+  const bajan=BL_VISTA.filter(x=>blDif(x)<0).length, suben=BL_VISTA.filter(x=>blDif(x)>0).length;
+  const k=(n,l)=>`<div class="kpi"><div class="kpi-num">${n}</div><div class="kpi-lbl">${l}</div></div>`;
+  $("blResumen").innerHTML=k(BL_VISTA.length,"Cambios")+k(new Set(BL_VISTA.map(x=>x.dni)).size,"Usuarios")
+    +k(new Set(BL_VISTA.map(x=>x.area+"|"+x.articulo)).size,"Artículos")+k(bajan+" ▼","STD bajados")+k(suben+" ▲","STD subidos");
+  const TOPE=1000, ver=BL_VISTA.slice(0,TOPE);
+  const TAG={EDITADO:"ed",AGREGADA:"nu",BORRADA:"bo"};
+  const n2=v=>v==null?"—":(+v).toFixed(2);
+  const head=`<thead><tr><th>Fecha y hora</th><th>Usuario</th><th>Área</th><th>Artículo</th><th>Módulo</th>
+    <th class="izq">Operación</th><th>Cambio</th><th>STD antes</th><th>STD después</th><th>Diferencia</th></tr></thead>`;
+  const body=ver.length? ver.map(x=>{
+    const d=blDif(x), pc=d!=null&&+x.std_antes?Math.round(d/(+x.std_antes)*100):null;
+    const f=String(x.fecha||""), fTxt=f.slice(8,10)+"-"+f.slice(5,7)+"-"+f.slice(0,4)+" "+f.slice(11);
+    return `<tr><td class="nw">${esc(fTxt)}</td><td class="nw" title="${esc(x.nombre||"")}"><b>${esc(x.dni)}</b></td>
+      <td>${esc(x.area||"")}</td><td><b>${esc(x.articulo||"")}</b></td><td>${esc(x.modulo||"")}</td>
+      <td class="izq">${esc(x.operacion||"")}</td><td><span class="lg-tag ${TAG[x.accion]||"ed"}">${esc(x.accion)}</span></td>
+      <td class="lg-d">${n2(x.std_antes)}</td><td class="lg-d">${n2(x.std_despues)}</td>
+      <td class="nw lg-d ${d>0?"lg-up":d<0?"lg-dn":""}">${d==null||d===0?"—":(d>0?"▲ +":"▼ ")+d.toFixed(2)+(pc!=null?` (${pc>0?"+":""}${pc}%)`:"")}</td></tr>`;
+  }).join("") : `<tr><td colspan="10"><div class="vacio-msg">Sin cambios en el rango</div></td></tr>`;
+  $("blTabla").innerHTML=head+"<tbody>"+body+"</tbody>"
+    +(BL_VISTA.length>TOPE?`<caption class="sub" style="caption-side:bottom;">Se muestran ${TOPE} de ${BL_VISTA.length}; la descarga trae todos.</caption>`:"");
+}
+function descargarBaseLog(){
+  if(!BL_VISTA.length){ mostrarError("No hay datos para descargar"); return; }
+  const CAB=["Fecha y hora","Usuario","Nombre","Área","Artículo","Módulo","N° OP","Operación","Cambio","STD antes","STD después","Diferencia"];
+  const filas=BL_VISTA.map(x=>[x.fecha,x.dni,x.nombre||"",x.area,x.articulo,x.modulo,x.n_op>=999999?"":x.n_op,x.operacion,x.accion,
+    x.std_antes==null?"":+x.std_antes, x.std_despues==null?"":+x.std_despues, blDif(x)==null?"":+blDif(x).toFixed(4)]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "HISTORIAL_BASE");
+  XLSX.writeFile(wb, `HISTORIAL_BASE_${$("blDesde").value}_a_${$("blHasta").value}.xlsx`);
 }
 /* Semana del sistema en hora de Lima: lunes a domingo. `getDay()` da 0 el
    domingo, así que el lunes se calcula con ((dow+6) % 7). */

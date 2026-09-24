@@ -24,7 +24,8 @@
   <div class="tabs">
     <button id="tabAsistencia" class="tab activo">ASISTENCIA</button>
     <button id="tabPersonal" class="tab">PERSONAL</button>
-    <button id="tabAvance" class="tab">AVANCE DEL DÍA</button>
+    <button id="tabAvance" class="tab">AVANCE OF</button>
+    <button id="tabSupBases" class="tab">BASES</button>
     <button id="tabReclamos" class="tab">TICKETS POR OF</button>
     <button id="tabEfPersonal" class="tab">EFICIENCIAS</button>
     <button id="tabIncidencias" class="tab">INCIDENCIAS</button>
@@ -185,22 +186,24 @@
     <div class="lista-cards" id="listaAreasMov"></div>
   </section>
 
-  <!-- Avance del día -->
+  <!-- Avance OF (parche 85): OF abiertas del área → módulos → operaciones -->
   <section class="pantalla" id="pasoAvance">
-    <h1>Avance del área</h1>
-    <div class="sub" id="avHora">Se actualiza cada 60 segundos</div>
-    <div class="barra-control" style="justify-content:center;">
-      <label class="campo"><span>Ver</span>
-        <select id="avNivel" onchange="cargarAvance()">
-          <option value="ultima">Última operación</option>
-          <option value="penultima">Penúltima operación</option>
-        </select></label>
-      <label class="campo"><span>Módulo</span>
-        <select id="avModulo" onchange="cargarAvance()"><option value="">Todos los módulos</option></select></label>
-      <button type="button" class="btn-mini" onclick="cargarAvance()">↻ Recargar</button>
-    </div>
-    <div class="kpis" id="avResumen" style="margin-top:14px;"></div>
-    <div class="lista-cards" id="avItems" style="margin-top:14px;"></div>
+    <h1>Avance OF</h1>
+    <div class="sub" id="aoHora">OF abiertas del área · se actualiza cada 60 s</div>
+    <input class="sv-buscar" id="aoBuscar" placeholder="Buscar OF o artículo…" oninput="aoPintar()"
+           autocomplete="off" inputmode="search">
+    <div class="sv-res" id="aoRes"></div>
+    <div id="aoLista"></div>
+  </section>
+
+  <!-- Bases del área (parche 85): artículos → módulos → operaciones, solo lectura -->
+  <section class="pantalla" id="pasoSupBases">
+    <h1>Bases del área</h1>
+    <div class="sub">Artículos y tiempos STD (min por prenda) · solo lectura</div>
+    <input class="sv-buscar" id="bsBuscar" placeholder="Artículo, cliente u operación…" oninput="bsBuscar()"
+           autocomplete="off" inputmode="search">
+    <div class="sv-res" id="bsRes"></div>
+    <div id="bsLista"></div>
   </section>
 
   <!-- Quién reclamó: OF → módulo → operación. Los filtros van apareciendo en
