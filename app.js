@@ -1863,7 +1863,8 @@ function bindSupervisoraUI(){
   { const ta=$("tabAsistencia"); if(ta) ta.onclick = ()=>{ pararAvance(); marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisInit(); }; }
   { const af=$("asisFecha"); if(af) af.onchange = asisInit; }
   $("tabPersonal").onclick = ()=>{ pararAvance(); marcarTab("tabPersonal"); irA("pasoPersonal"); };
-  $("tabAvance").onclick  = ()=>{ marcarTab("tabAvance"); irA("pasoAvance"); cargarAvance(); timerAvance=setInterval(cargarAvance, 60000); };
+  $("tabAvance").onclick  = ()=>{ pararAvance(); marcarTab("tabAvance"); irA("pasoAvance"); cargarAvance(); timerAvance=setInterval(cargarAvance, 60000); };
+  { const tb=$("tabSupBases"); if(tb) tb.onclick = ()=>{ pararAvance(); marcarTab("tabSupBases"); irA("pasoSupBases"); cargarBasesSup(); }; }
   $("tabIncidencias").onclick = ()=>{ pararAvance(); marcarTab("tabIncidencias"); irA("pasoIncidencias"); cargarIncidencias(); };
   { const te=$("tabEfPersonal"); if(te) te.onclick = ()=>{ pararAvance(); marcarTab("tabEfPersonal"); irA("pasoEfPersonal"); cargarEfPersonal(); }; }
   { const tr=$("tabReclamos"); if(tr) tr.onclick = ()=>{ pararAvance(); marcarTab("tabReclamos"); irA("pasoSupRec"); cargarSupRec(); }; }
@@ -2041,6 +2042,7 @@ function recargarSupervisora(){
   const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),500); }
   if($("pasoAsistencia") && $("pasoAsistencia").classList.contains("activa")) asisInit();
   else if($("pasoAvance").classList.contains("activa")) cargarAvance();
+  else if($("pasoSupBases") && $("pasoSupBases").classList.contains("activa")) cargarBasesSup(true);
   else if($("pasoIncidencias").classList.contains("activa")) cargarIncidencias();
   else if($("pasoEfPersonal") && $("pasoEfPersonal").classList.contains("activa")) cargarEfPersonal();
   else cargarPersonal(s);
@@ -2256,11 +2258,12 @@ async function asisGuardar(){
   }catch(e){ mostrarError(e.message); }
 }
 function marcarTab(id){
-  ["tabAsistencia","tabPersonal","tabAvance","tabIncidencias","tabEfPersonal","tabReclamos"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });
+  ["tabAsistencia","tabPersonal","tabAvance","tabSupBases","tabIncidencias","tabEfPersonal","tabReclamos"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });
 }
 function pararAvance(){ clearInterval(timerAvance); timerAvance=null; }
 
 async function cargarAvance(){
+  if($("aoLista")) return cargarAvanceOF();   // supervisora.html; Ingeniería sigue con la vista anterior
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   try{
     const nivel = $("avNivel") ? $("avNivel").value : "ultima";
@@ -2306,6 +2309,195 @@ async function cargarAvance(){
     $("avHora").textContent = `Avance por ${nivelTxt} operación · actualizado ` + new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
   }catch(e){ mostrarError(e.message); }
 }
+/* --- Supervisora · AVANCE OF (parche 85) ---
+   OF abiertas del área → módulos → operaciones. La lista llega sin
+   operaciones; las de un módulo se piden al abrirlo y se refrescan con el
+   resto cada 60 s solo mientras sigue abierto. */
+const AO={items:[],area:"",of:new Set(),mod:new Set(),mas:new Set(),ops:{},pidiendo:new Set()};
+const aoKey=(of,mod)=>of+"\u00a6"+mod;
+const svPct=v=>Math.min(100,Math.max(0,+v||0));
+const svNum=v=>{ const n=+v||0; return Number.isInteger(n)?String(n):n.toFixed(1); };
+async function cargarAvanceOF(){
+  const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  const area=areaSup();
+  if(AO.area!==area){ Object.assign(AO,{items:null,area,ops:{}}); AO.of.clear(); AO.mod.clear(); AO.mas.clear(); }
+  if(!AO.items) $("aoLista").innerHTML=cargandoHTML("Cargando OF abiertas…");
+  try{
+    const r=await rpc("fn_avance_of",{p_dni:s.dni,p_token:s.token,p_area:area});
+    if(!r.ok){ aoFallo(r.error||"Error"); return; }
+    AO.items=r.items||[];
+    aoPintar();
+    AO.mod.forEach(k=>aoCargarOps(k));
+    $("aoHora").textContent="OF abiertas del área · actualizado "
+      +new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})+" · cada 60 s";
+  }catch(e){ aoFallo(e.message); }
+}
+function aoFallo(msg){
+  mostrarError(msg);
+  if(!AO.items) $("aoLista").innerHTML=`<div class="vacio-msg">${esc(msg)}</div>`;
+}
+function aoPintar(){
+  const l=$("aoLista"); if(!l || !AO.items) return;
+  const q=normKey($("aoBuscar").value);
+  const lista=AO.items.filter(o=>!q||normKey(o.of+" "+(o.articulo||"")).includes(q));
+  $("aoRes").textContent=AO.items.length
+    ? `${lista.length} de ${AO.items.length} OF abiertas` : "";
+  if(!lista.length){
+    l.innerHTML=`<div class="vacio-msg">${AO.items.length?"Ninguna OF coincide con la búsqueda":"No hay OF abiertas en el área"}</div>`;
+    return;
+  }
+  l.innerHTML=lista.map(o=>{
+    const p=svPct(o.pct);
+    return `<details class="sv-card" data-of="${esc(o.of)}"${AO.of.has(o.of)?" open":""}><summary>
+      <div class="sv-cab"><span class="sv-t">OF ${esc(o.of)}</span><span class="sv-pct">${svNum(o.pct)}%</span></div>
+      <div class="sv-sub">${esc(o.articulo||"")} · ${o.cant_prog} und · ${o.n_listos}/${o.n_mods} módulos listos</div>
+      <div class="sv-bar"><i style="width:${p}%"></i></div></summary>
+      ${(o.mods||[]).map(m=>aoModHTML(o,m)).join("")}</details>`;
+  }).join("");
+}
+function aoModHTML(o,m){
+  const k=aoKey(o.of,m.modulo), p=svPct(m.pct);
+  return `<details class="sv-mod" data-k="${esc(k)}"${AO.mod.has(k)?" open":""}><summary>
+    <span class="sv-mt">${esc(m.modulo)}</span>
+    <span class="sv-mr"><span class="pill ${m.listo?"COMPLETADO":"PROCESO"}">${m.listo?"COMPLETADO":"EN PROCESO"}</span><span class="sv-mpct">${svNum(m.pct)}%</span></span>
+    <div class="sv-bar"><i class="${m.listo?"ok":""}" style="width:${p}%"></i></div>
+    <div class="sv-f">${esc(m.entrada||"")} → ${esc(m.salida||"…")} · ${m.n_ops} operaciones</div></summary>
+    <div class="sv-ops" data-cant="${o.cant_prog}">${aoOpsHTML(k,o.cant_prog)}</div></details>`;
+}
+function aoOpsHTML(k,prog){
+  const ops=AO.ops[k];
+  if(!ops) return `<div class="sv-f sv-cargando">Cargando operaciones…</div>`;
+  if(!ops.length) return `<div class="sv-f sv-cargando">Sin operaciones</div>`;
+  const todas=AO.mas.has(k), ver=todas?ops:ops.slice(0,5);
+  return ver.map(op=>{
+    const r=prog>0?op.p/prog*100:0;
+    return `<div class="sv-op av"><span class="sv-n">${op.n>=999999?"—":op.n}</span><span class="sv-op-t">${esc(op.op||"")}</span>`
+      +`<span class="sv-op-c">${op.p}/${prog} · ${Math.round(r)}%</span>`
+      +`<div class="sv-bar"><i class="${r>=100?"ok":""}" style="width:${svPct(r)}%"></i></div></div>`;
+  }).join("")+(ops.length>5?`<button type="button" class="sv-mas" data-k="${esc(k)}">${todas?"Ver menos ▴":`Ver ${ops.length-5} más ▾`}</button>`:"");
+}
+function aoRepintarOps(k){
+  const d=[...document.querySelectorAll("#aoLista .sv-mod")].find(x=>x.dataset.k===k);
+  if(d){ const c=d.querySelector(".sv-ops"); c.innerHTML=aoOpsHTML(k,+c.dataset.cant); }
+}
+async function aoCargarOps(k){
+  if(AO.pidiendo.has(k)) return;
+  const s=sesionActual(); if(!s) return;
+  const [of,mod]=k.split("\u00a6");
+  AO.pidiendo.add(k);
+  try{
+    const r=await rpc("fn_avance_of_ops",{p_dni:s.dni,p_token:s.token,p_area:AO.area,p_of:of,p_modulo:mod});
+    if(r.ok){ AO.ops[k]=r.ops||[]; aoRepintarOps(k); }
+    else mostrarError(r.error||"Error");
+  }catch(e){ mostrarError(e.message); }
+  finally{ AO.pidiendo.delete(k); }
+}
+/* BASES del área: la lista de artículos se pide una vez; las operaciones de
+   cada artículo, al abrirlo. Buscar por operación consulta la base solo
+   desde 3 letras y cuando se deja de escribir. */
+const BS={items:null,area:"",abiertos:new Set(),mods:new Set(),mas:new Set(),ops:{},opMatch:null,timer:null};
+async function cargarBasesSup(forzar){
+  const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  const area=areaSup();
+  if(BS.area!==area || forzar){ Object.assign(BS,{items:null,area,ops:{},opMatch:null}); BS.abiertos.clear(); BS.mods.clear(); BS.mas.clear(); }
+  if(BS.items){ bsPintar(); return; }
+  $("bsLista").innerHTML=cargandoHTML("Cargando artículos…");
+  try{
+    const r=await rpc("fn_bases_area_articulos",{p_dni:s.dni,p_token:s.token,p_area:area});
+    if(!r.ok){ $("bsLista").innerHTML=`<div class="vacio-msg">${esc(r.error||"Error")}</div>`; return; }
+    BS.items=r.items||[];
+    bsPintar();
+    if($("bsBuscar").value.trim().length>=3) bsBuscar();
+  }catch(e){ $("bsLista").innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`; }
+}
+function bsBuscar(){
+  bsPintar();
+  clearTimeout(BS.timer);
+  const txt=$("bsBuscar").value.trim();
+  if(txt.length<3){ BS.opMatch=null; return; }
+  BS.timer=setTimeout(async()=>{
+    const s=sesionActual(); if(!s) return;
+    try{
+      const r=await rpc("fn_bases_area_articulos",{p_dni:s.dni,p_token:s.token,p_area:BS.area,p_buscar:txt});
+      if(r.ok && $("bsBuscar").value.trim()===txt){ BS.opMatch={txt,arts:new Set(r.articulos||[])}; bsPintar(); }
+    }catch(e){ mostrarError(e.message); }
+  },350);
+}
+function bsPintar(){
+  const l=$("bsLista"); if(!l || !BS.items) return;
+  const txt=$("bsBuscar").value.trim(), q=normKey(txt);
+  const porOp=BS.opMatch && BS.opMatch.txt===txt ? BS.opMatch.arts : null;
+  const lista=BS.items.filter(a=>!q||normKey(a.articulo+" "+(a.cliente||"")+" "+(a.prenda||"")).includes(q)||(porOp&&porOp.has(a.articulo)));
+  $("bsRes").textContent=BS.items.length?`${lista.length} de ${BS.items.length} artículos`:"";
+  if(!lista.length){
+    l.innerHTML=`<div class="vacio-msg">${BS.items.length?"Ningún artículo coincide con la búsqueda":"El área no tiene BASE cargada"}</div>`;
+    return;
+  }
+  l.innerHTML=lista.map(a=>`<details class="sv-card ok" data-art="${esc(a.articulo)}"${BS.abiertos.has(a.articulo)?" open":""}><summary>
+    <div class="sv-cab"><span class="sv-t">${esc(a.articulo)}</span><span class="sv-pct sv-std">${(+a.std||0).toFixed(2)}</span></div>
+    <div class="sv-sub">${esc(a.prenda||"")} · ${esc(a.cliente||"")} · ${a.n_ops} operaciones · ${a.n_mods} módulos</div></summary>
+    <div class="sv-art-mods">${bsModsHTML(a.articulo)}</div></details>`).join("");
+}
+function bsModsHTML(art){
+  const ops=BS.ops[art];
+  if(!ops) return `<div class="sv-f sv-cargando">Cargando operaciones…</div>`;
+  const mods=[], idx={};
+  ops.forEach(o=>{ const m=o.modulo||"(sin módulo)"; if(!(m in idx)){ idx[m]=mods.length; mods.push({m,ops:[]}); } mods[idx[m]].ops.push(o); });
+  return mods.map(md=>{
+    const k=art+"\u00a6"+md.m, tot=md.ops.reduce((x,o)=>x+(+o.std||0),0);
+    const todas=BS.mas.has(k), ver=todas?md.ops:md.ops.slice(0,5);
+    return `<details class="sv-mod" data-k="${esc(k)}"${BS.mods.has(k)?" open":""}><summary>
+      <span class="sv-mt">${esc(md.m)}</span><span class="sv-mr"><span class="sv-mpct sv-std">${tot.toFixed(2)}</span></span>
+      <div class="sv-f">${md.ops.length} operaciones · STD del módulo</div></summary>
+      <div class="sv-ops">${ver.map(o=>`<div class="sv-op"><span class="sv-n">${o.n>=999999?"—":esc(o.n??"")}</span><span class="sv-op-t">${esc(o.op||"")}</span><span class="sv-op-c sv-std">${(+o.std||0).toFixed(2)}</span></div>`).join("")}
+      ${md.ops.length>5?`<button type="button" class="sv-mas" data-k="${esc(k)}">${todas?"Ver menos ▴":`Ver ${md.ops.length-5} más ▾`}</button>`:""}</div></details>`;
+  }).join("");
+}
+async function bsCargarOps(art){
+  const s=sesionActual(); if(!s || BS.ops[art]) return;
+  try{
+    const r=await rpc("fn_bases_area_ops",{p_dni:s.dni,p_token:s.token,p_area:BS.area,p_articulo:art});
+    if(!r.ok){ mostrarError(r.error||"Error"); return; }
+    BS.ops[art]=r.ops||[];
+    const d=[...document.querySelectorAll("#bsLista .sv-card")].find(x=>x.dataset.art===art);
+    if(d) d.querySelector(".sv-art-mods").innerHTML=bsModsHTML(art);
+  }catch(e){ mostrarError(e.message); }
+}
+/* Abrir/cerrar (el evento toggle no burbujea: se escucha en captura) y los
+   botones "Ver más", delegados en cada lista. */
+document.addEventListener("DOMContentLoaded",()=>{
+  const ao=$("aoLista"), bs=$("bsLista");
+  if(ao){
+    ao.addEventListener("toggle",e=>{
+      const d=e.target;
+      if(d.classList.contains("sv-card")) d.open?AO.of.add(d.dataset.of):AO.of.delete(d.dataset.of);
+      else if(d.classList.contains("sv-mod")){
+        const k=d.dataset.k;
+        if(d.open){ AO.mod.add(k); if(!AO.ops[k]) aoCargarOps(k); } else AO.mod.delete(k);
+      }
+    },true);
+    ao.addEventListener("click",e=>{
+      const b=e.target.closest(".sv-mas"); if(!b) return;
+      const k=b.dataset.k; AO.mas.has(k)?AO.mas.delete(k):AO.mas.add(k); aoRepintarOps(k);
+    });
+  }
+  if(bs){
+    bs.addEventListener("toggle",e=>{
+      const d=e.target;
+      if(d.classList.contains("sv-card")){
+        const a=d.dataset.art;
+        if(d.open){ BS.abiertos.add(a); bsCargarOps(a); } else BS.abiertos.delete(a);
+      }else if(d.classList.contains("sv-mod")) d.open?BS.mods.add(d.dataset.k):BS.mods.delete(d.dataset.k);
+    },true);
+    bs.addEventListener("click",e=>{
+      const b=e.target.closest(".sv-mas"); if(!b) return;
+      const k=b.dataset.k, art=k.split("\u00a6")[0];
+      BS.mas.has(k)?BS.mas.delete(k):BS.mas.add(k);
+      const d=[...document.querySelectorAll("#bsLista .sv-card")].find(x=>x.dataset.art===art);
+      if(d) d.querySelector(".sv-art-mods").innerHTML=bsModsHTML(art);
+    });
+  }
+});
 async function cargarPersonal(s){
   $("gridPersonal").innerHTML = cargandoHTML("Cargando personal…");
   try{

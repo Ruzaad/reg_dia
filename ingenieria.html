@@ -53,6 +53,7 @@
         <summary class="nav-sep">Gestión</summary>
         <a class="nav-item" data-tab="pasoAsis" href="#pasoAsis">Personal</a>
         <a class="nav-item" data-tab="pasoBases" href="#pasoBases">Bases</a>
+        <a class="nav-item" data-tab="pasoBaseLog" href="#pasoBaseLog">Historial de tiempos</a>
         <a class="nav-item" data-tab="pasoIncid" href="#pasoIncid">Incidencias</a>
         <a class="nav-item" data-tab="pasoFechas" href="#pasoFechas">Corregir fechas</a>
       </details>
@@ -759,6 +760,28 @@
       <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="avofTabla"></table></div>
     </section>
 
+    <!-- ===================== HISTORIAL DE TIEMPOS DE BASE (parche 86, solo maestro) ===================== -->
+    <section class="pantalla" id="pasoBaseLog">
+      <div class="seccion-cab">
+        <h1>Historial de tiempos de BASE <span class="solo-admin">SOLO ALOPEZ</span></h1>
+        <p class="seccion-sub">Cada cambio de STD en BASE: quién lo hizo, cuándo, en qué artículo y operación,
+        y cuánto cambió. También quedan las operaciones agregadas y borradas. Registra desde el 24-09-2026.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Desde</span><input type="date" id="blDesde"></label>
+        <label class="campo"><span>Hasta</span><input type="date" id="blHasta"></label>
+        <label class="campo"><span>Área</span><select id="blArea"></select></label>
+        <label class="campo"><span>Usuario</span><select id="blUsuario" onchange="blPintar()"></select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="blBuscar" placeholder="Artículo / operación…" oninput="blPintar()"></label>
+        <button class="btn-mini" onclick="cargarBaseLog()">Cargar</button>
+        <button class="btn-mini verde" onclick="descargarBaseLog()">⬇ Descargar XLSX</button>
+      </div>
+      <div class="kpis" id="blResumen" style="margin-bottom:14px;"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;">
+        <table class="tabla" id="blTabla"></table>
+      </div>
+    </section>
+
     <!-- ===================== AUDITORÍA DE EFICIENCIA (parche 80) ===================== -->
     <section class="pantalla" id="pasoAudit">
       <div class="seccion-cab">
@@ -816,6 +839,7 @@
       <div class="tabs sup-subtabs">
         <button id="inciTabApl" class="tab activo" onclick="inciVista('apl')">APLICADAS</button>
         <button id="inciTabPend" class="tab" onclick="inciVista('pend')">PENDIENTES</button>
+        <button id="inciTabHE" class="tab" onclick="inciVista('he')">HORAS EXTRAS EN LOTE</button>
       </div>
 
       <div id="inciAplicadas">
@@ -844,6 +868,30 @@
           <span class="sub" id="resumenInciPend" style="align-self:flex-end;"></span>
         </div>
         <div class="lista-cards" id="listaIncidI" style="margin-bottom:22px;"></div>
+      </div>
+
+      <!-- Horas extras en lote (parche 87): un día, un área, varias personas -->
+      <div id="inciHE" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Día</span><input type="date" id="heFecha" onchange="heCargar()"></label>
+          <label class="campo"><span>Área</span><select id="heArea" onchange="heCargar()"></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="heBuscar" placeholder="Nombre / DNI…" oninput="hePintar()"></label>
+          <label class="campo"><span>Motivo</span><input type="text" id="heMotivo" maxlength="140" value="HORAS EXTRAS" style="min-width:180px;"></label>
+          <div class="he-def"><span>Horas por defecto</span>
+            <span class="he-step"><button type="button" onclick="heDefecto(-0.5)" aria-label="Menos">−</button><b id="heDef">2 h</b><button type="button" onclick="heDefecto(0.5)" aria-label="Más">+</button></span>
+            <button type="button" class="btn-mini" onclick="heAplicarTodos()">Aplicar a todos</button></div>
+        </div>
+        <div class="sub" style="text-align:left;">Personal del área ese día. Marca a quién le das horas extra y ajusta las horas de cada uno si no son las de por defecto.</div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:58vh;">
+          <table class="tabla he-tabla" id="heTabla"></table>
+        </div>
+        <div class="he-pie">
+          <div id="heResumen"></div>
+          <div class="he-pie-acc">
+            <button type="button" class="btn-mini gris" onclick="heLimpiar()">Cancelar</button>
+            <button type="button" class="btn-mini verde" id="heGuardar" onclick="heRegistrar()">Registrar</button>
+          </div>
+        </div>
       </div>
     </section>
 
