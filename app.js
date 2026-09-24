@@ -1464,12 +1464,18 @@ async function cargarTicketsDeOF(of, forzar){
   NOPS_FIN={};
   OF_CARGADAS.add(k);
 }
+/* Tras cargar se repinta la lista con pintarSugerencias: restaurar el innerHTML
+   de antes dejaba las tarjetas sin su onclick y, al volver al buscador, la OF
+   ya no se podía tocar hasta escribir otra vez. */
+let ABRIENDO_OF=false;
 async function abrirOF(of){
-  const z=$("sugerenciasOF"); const antes=z.innerHTML;
+  if(ABRIENDO_OF) return;
+  ABRIENDO_OF=true;
+  const z=$("sugerenciasOF");
   z.innerHTML=cargandoHTML("Cargando OF "+of+"…");
   try{ await cargarTicketsDeOF(of); }
-  catch(e){ z.innerHTML=antes; mostrarError(e.message); return; }
-  z.innerHTML=antes;
+  catch(e){ mostrarError(e.message); return; }
+  finally{ ABRIENDO_OF=false; pintarSugerencias(); }
   sel.of=of; sel.modulo=null; sel.op=null;
   pintarModulos(); irA("pasoModulos");
 }
@@ -1537,6 +1543,7 @@ function pintarOperaciones(){
 
 /* --- paso tickets (numeración protagonista + selección múltiple) --- */
 let modoSel=false, marcados={};
+const LOTE_MAX=60;   // tope de fn_reclamar_lote por llamada
 
 function ticketsActuales(){
   return ALM.tickets.filter(t=>t.of===sel.of && t.modulo===sel.modulo && t.op===sel.op);
@@ -1694,7 +1701,22 @@ async function registrar(){
       const lote=Object.values(marcados).map(t=>({codigo:t.codigo,of:t.of,modulo:t.modulo,
         op:t.op,std:t.std,cant:t.cant,num:t.num,articulo:t.articulo,color:t.color,
         talla:t.talla,corte:t.corte,nop:t.nop}));
-      r = await rpc("fn_reclamar_lote",{p_dni:s.dni,p_token:s.token,p_area:area,p_tickets:lote});
+      /* fn_reclamar_lote acepta hasta 60 por llamada: se manda en tandas y se
+         suman los resultados. Si una tanda falla, se avisa cuántos sí entraron. */
+      let reclamados=0, conflictos=[], ult=null;
+      for(let i=0;i<lote.length;i+=LOTE_MAX){
+        let x;
+        try{ x = await rpc("fn_reclamar_lote",{p_dni:s.dni,p_token:s.token,p_area:area,p_tickets:lote.slice(i,i+LOTE_MAX)}); }
+        catch(e){ x = {ok:false, error:e.message}; }
+        if(!x.ok){
+          if(!reclamados){ r=x; break; }
+          x.error = `Solo se registraron ${reclamados} de ${lote.length} paquetes. `
+            + `Los demás siguen marcados: vuelve a registrarlos. (${x.error||"error"})`;
+          r = x; r.parcial = true; break;
+        }
+        reclamados += x.reclamados||0; conflictos = conflictos.concat(x.conflictos||[]); ult = x;
+      }
+      if(!r) r = Object.assign({}, ult, {reclamados, conflictos});
     } else {
       const t=sel.ticket;
       r = await rpc("fn_reclamar", {p_dni:s.dni,p_token:s.token,p_area:area,
@@ -1704,17 +1726,23 @@ async function registrar(){
     btn.textContent="SÍ, REGISTRAR";
     if(!r.ok){
       mostrarError(r.error||"No se pudo registrar");
+      if(r.parcial){
+        await refrescarReclamos(s);
+        Object.keys(marcados).forEach(c=>{ if(RECL[c]) delete marcados[c]; });
+        pintarTickets(); irA("pasoTickets"); btn.disabled=false; return;
+      }
       if(r.conflicto){ await refrescarReclamos(s); pintarTickets(); irA("pasoTickets"); }
       btn.disabled=false; return;
     }
     const cantLote = esLote ? Object.values(marcados).reduce((a,t)=>a+(+t.cant||0),0) : 0;
     if(ES_ACABADO) await refrescarMetasAcabado(); else setAvance(r);
     if(esLote){
+      const nLote = Object.keys(marcados).length;
       Object.values(marcados).forEach(t=>{ RECL[t.codigo]={nombre:s.nombre,hora:"ahora"}; });
       const conf = (r.conflictos||[]);
       $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
       $("exDetalle").innerHTML =
-        `<b>${r.reclamados}</b> paquete(s) registrados${ES_ACABADO?` · <b>${qty(cantLote)} und</b>`:""} · ${esc(sel.op)}`+
+        `<b>${r.reclamados}</b>${r.reclamados<nLote?` de ${nLote}`:""} paquete(s) registrados${ES_ACABADO?` · <b>${qty(cantLote)} und</b>`:""} · ${esc(sel.op)}`+
         (conf.length?`<br><span style="opacity:.85">No se pudieron (ya tomados): ${esc(conf.join(", "))}</span>`:"");
       modoSel=false; marcados={};
       if(conf.length) await refrescarReclamos(s);
