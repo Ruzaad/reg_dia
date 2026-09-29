@@ -98,7 +98,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog"];
+  "pasoBaseLog","pasoOpAd"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -130,6 +130,7 @@ function activarTab(tab){
   else if(tab==='pasoInc') incInit();
   else if(tab==='pasoExtra') cargarExtra();
   else if(tab==='pasoCausas') cargarCausas();
+  else if(tab==='pasoOpAd') cargarOpad();
   else if(tab==='pasoVista') cargarVista();
   else if(tab==='pasoAudit') audInit();
   else if(tab==='pasoBaseLog') blInit();
@@ -184,6 +185,8 @@ function poblarSelectsArea(){
   if($("areaFec")) $("areaFec").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("areaInci")) $("areaInci").innerHTML = todas + AREAS_LISTA.map(op).join("");
   if($("exArea")) $("exArea").innerHTML = elige + AREAS_LISTA.map(op).join("");
+  if($("opadArea")) $("opadArea").innerHTML = elige + AREAS_LISTA.filter(a=>a!=="ACABADO").map(op).join("");
+  if($("opadOrigenLista")) $("opadOrigenLista").innerHTML = AREAS_LISTA.map(a=>`<option value="${esc(a)}">`).join("");
   if($("movArea")) $("movArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
   // Operaciones por OF y Generar tickets: solo áreas con Sheet en areas_config.
   const conSheet = Object.keys(AREAS).filter(a=>AREAS[a].habilitada && AREAS[a].sheetId).sort();
@@ -206,6 +209,7 @@ function recargarIngenieria(){
   else if(act("pasoIncid")){ if($("inciHE") && !$("inciHE").hidden) heCargar(); else cargarIncidI(); }
   else if(act("pasoBaseLog")) cargarBaseLog();
   else if(act("pasoAudit")) cargarAudit();
+  else if(act("pasoOpAd")) cargarOpad();
   else if(act("pasoPersonal")||act("pasoAvance")||act("pasoIncidencias")||act("pasoEfPersonal")) recargarSupervisora();
 }
 /* Censura de eficiencia: reemplaza los % por **** en toda la pestaña. */
@@ -2112,6 +2116,118 @@ async function toggleExtra(i){
     if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
     cargarExtra();
   }catch(e2){ mostrarError(e2.message); }
+}
+
+/* --- Operaciones adicionales por OF (parche 91) ---
+   Lo que no está en la BASE del artículo y hubo que hacer en una OF concreta.
+   Sin OF se listan las de los últimos 60 días del área; con OF, además, sale el
+   formulario de alta con los módulos de la BASE de su artículo. */
+let OPAD={items:[], of:null, articulo:null, modulos:[]};
+async function cargarOpad(){
+  const area=$("opadArea").value, of=$("opadOf").value.trim();
+  $("opadForm").hidden=true;
+  if(!area){ $("opadTabla").innerHTML=""; $("opadResumen").textContent="Elige un área"; return; }
+  $("opadTabla").innerHTML=cargandoHTML("Cargando…"); $("opadResumen").textContent="";
+  try{
+    const r=await rpc("fn_opad_listar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_of:of||null});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); $("opadTabla").innerHTML=""; return; }
+    OPAD={items:r.items||[], of:r.of||null, articulo:r.articulo||null, modulos:r.modulos||[]};
+    if(OPAD.of){
+      $("opadFormTit").innerHTML=`Agregar a la OF <b>${esc(OPAD.of)}</b>${OPAD.articulo?" · "+esc(OPAD.articulo):""}`;
+      $("opadMod").innerHTML=OPAD.modulos.length
+        ? `<option value="">— Elige —</option>`+OPAD.modulos.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join("")
+        : `<option value="">Sin BASE en esta área</option>`;
+      $("opadForm").hidden=false;
+    }
+    pintarOpad();
+  }catch(e){ $("opadTabla").innerHTML=""; mostrarError(e.message); }
+}
+function pintarOpad(){
+  const it=OPAD.items, act=it.filter(x=>x.activa).length;
+  const min=it.reduce((a,x)=>a+(+x.minutos||0),0);
+  $("opadResumen").textContent=`${it.length} operación(es) · ${act} activa(s) · ${Math.round(min*10)/10} min registrados`
+    +(OPAD.of?"":" · últimos 60 días");
+  const filas=ordAplicar("opadTabla", it.map((x,i)=>Object.assign({_i:i},x)));
+  const body=filas.length? filas.map(x=>`<tr>
+      <td>${esc(x.of)}</td><td>${esc(x.modulo)}</td>
+      <td class="izq"><b>${esc(x.operacion)}</b></td>
+      <td>${Number(x.std).toFixed(2)}</td>
+      <td>${x.tope==null?"—":qtyI(x.tope)}</td>
+      <td><b>${qtyI(x.hecho)}</b></td>
+      <td>${Number(x.minutos||0).toFixed(1)}</td>
+      <td class="izq">${esc(x.motivo)}${x.area_origen?`<br><small>Falla de ${esc(x.area_origen)}</small>`:""}</td>
+      <td class="izq"><small>${(x.personas||[]).map(p=>`${esc(p.nombre||p.dni)}: ${qtyI(p.cant)}`).join("<br>")||"—"}</small></td>
+      <td><span class="pill ${x.activa?"ACTIVO":"DM"}">${x.activa?"ACTIVA":"INACTIVA"}</span></td>
+      <td><button class="btn-mini" onclick="editarOpad(${x._i})">Editar</button></td>
+      <td><button class="btn-mini ${x.activa?"rojo":"verde"}" onclick="toggleOpad(${x._i})">${x.activa?"Desactivar":"Activar"}</button></td>
+    </tr>`).join("")
+    : `<tr><td colspan="12"><div class="vacio-msg">${OPAD.of?"Esta OF no tiene operaciones adicionales":"Sin operaciones adicionales en los últimos 60 días"}</div></td></tr>`;
+  $("opadTabla").innerHTML=ordThead("opadTabla",[
+    {k:"of",t:"OF"},{k:"modulo",t:"Módulo"},{k:"operacion",t:"Operación",cls:"izq"},{k:"std",t:"STD"},
+    {k:"tope",t:"Autorizada"},{k:"hecho",t:"Hecho"},{k:"minutos",t:"Minutos"},
+    {k:"motivo",t:"Motivo",cls:"izq"},{t:"Quién",cls:"izq"},{k:"activa",t:"Estado"},{t:""},{t:""}
+  ], pintarOpad)+`<tbody>${body}</tbody>`;
+}
+function qtyI(n){ return Math.round(Number(n)||0).toLocaleString("es-PE"); }
+function opadNum(v){ const s=String(v||"").trim(); return s===""?null:parseFloat(s); }
+async function guardarOpad(){
+  const mod=$("opadMod").value, op=norm($("opadOp").value).toUpperCase();
+  const std=parseFloat($("opadStd").value), tope=opadNum($("opadTope").value);
+  const mot=norm($("opadMotivo").value), ori=norm($("opadOrigen").value);
+  if(!OPAD.of){ mostrarError("Carga una OF primero"); return; }
+  if(!mod){ mostrarError("Elige el módulo"); return; }
+  if(!op){ mostrarError("Escribe la operación"); return; }
+  if(!std || std<=0){ mostrarError("El STD debe ser mayor que cero"); return; }
+  if(tope!=null && !(tope>0)){ mostrarError("La cantidad autorizada debe ser mayor que cero, o déjala vacía"); return; }
+  if(!mot){ mostrarError("Escribe el motivo"); return; }
+  try{
+    const r=await rpc("fn_opad_guardar",{p_dni:ING.dni,p_token:ING.token,p_id:null,
+      p_area:$("opadArea").value,p_of:OPAD.of,p_modulo:mod,p_operacion:op,p_std:std,p_tope:tope,
+      p_motivo:mot,p_area_origen:ori||null,p_activa:true});
+    if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); return; }
+    mostrarOk("Operación agregada a la OF "+OPAD.of);
+    ["opadOp","opadStd","opadTope"].forEach(id=>$(id).value="");
+    cargarOpad();
+  }catch(e){ mostrarError(e.message); }
+}
+function editarOpad(i){
+  const x=OPAD.items[i]; if(!x) return;
+  abrirModal(`
+    <h2 style="margin:0 0 4px;color:var(--azul);font-size:20px;">${esc(x.operacion)}</h2>
+    <p class="seccion-sub" style="margin:0 0 12px;">OF ${esc(x.of)} · ${esc(x.modulo)} · ya hecho: ${qtyI(x.hecho)} und.
+      Si cambias el STD, se corrige también en lo ya registrado.</p>
+    <div class="barra-control">
+      <label class="campo"><span>STD (min)</span><input type="number" id="opadEdStd" min="0.01" step="0.01" value="${esc(x.std)}"></label>
+      <label class="campo"><span>Cantidad autorizada</span><input type="number" id="opadEdTope" min="1" step="1" placeholder="Sin límite" value="${x.tope==null?"":esc(x.tope)}"></label>
+      <label class="campo"><span>Motivo</span><input type="text" id="opadEdMot" maxlength="120" value="${esc(x.motivo||"")}"></label>
+      <label class="campo"><span>Área que falló</span><input type="text" id="opadEdOri" list="opadOrigenLista" maxlength="60" value="${esc(x.area_origen||"")}"></label>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+      <button class="btn-mini gris" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn-mini verde" onclick="guardarEdOpad(${i})">Guardar</button>
+    </div>`);
+}
+async function opadActualizar(x, cambios){
+  const d=Object.assign({std:x.std, tope:x.tope, motivo:x.motivo, area_origen:x.area_origen, activa:x.activa}, cambios);
+  const r=await rpc("fn_opad_guardar",{p_dni:ING.dni,p_token:ING.token,p_id:x.id,
+    p_area:null,p_of:null,p_modulo:null,p_operacion:null,p_std:d.std,p_tope:d.tope,
+    p_motivo:d.motivo,p_area_origen:d.area_origen||null,p_activa:d.activa});
+  if(!r.ok) throw new Error(r.error||"No se pudo guardar");
+}
+async function guardarEdOpad(i){
+  const x=OPAD.items[i]; if(!x) return;
+  const std=parseFloat($("opadEdStd").value), tope=opadNum($("opadEdTope").value);
+  const mot=norm($("opadEdMot").value), ori=norm($("opadEdOri").value);
+  if(!std || std<=0){ mostrarError("El STD debe ser mayor que cero"); return; }
+  if(tope!=null && !(tope>0)){ mostrarError("La cantidad autorizada debe ser mayor que cero, o déjala vacía"); return; }
+  if(!mot){ mostrarError("Escribe el motivo"); return; }
+  try{ await opadActualizar(x,{std,tope,motivo:mot,area_origen:ori}); cerrarModal(); mostrarOk("Guardado"); cargarOpad(); }
+  catch(e){ mostrarError(e.message); }
+}
+async function toggleOpad(i){
+  const x=OPAD.items[i]; if(!x) return;
+  try{ await opadActualizar(x,{activa:!x.activa}); cargarOpad(); }
+  catch(e){ mostrarError(e.message); }
 }
 
 /* --- Causas de variación del STD (parche 36) --- */
