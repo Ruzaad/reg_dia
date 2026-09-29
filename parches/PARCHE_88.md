@@ -88,7 +88,7 @@ Código en `supabase/functions/ef-gemini/index.ts`. No lleva claves.
 3. **No pegarla en el chat, en GitHub ni en el código.** Va solo en Supabase:
    Dashboard → proyecto samitex-cost-acab → **Edge Functions → Secrets** →
    *Add new secret* → nombre `GEMINI_API_KEY`, valor la clave → Save.
-   (Opcional: `GEMINI_MODEL`, por defecto `gemini-3.8-flash`. Si Google retira un modelo y su error sugiere otro, la función reintenta sola con el sugerido.)
+   (Opcional: `GEMINI_MODEL` para forzar un modelo. Por defecto prueba `gemini-3.5-flash` y, si está saturado, sin cupo o retirado, `gemini-3.8-flash`; si el error de Google sugiere otro modelo, también lo prueba.)
 
 En la capa gratis Google puede usar lo que se le manda para mejorar sus modelos; por
 eso no se envía nada que identifique a la persona. El cupo gratis es de unas pocas
