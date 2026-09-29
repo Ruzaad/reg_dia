@@ -3126,7 +3126,7 @@ function audIAHTML(){
       </div>`).join("")}
       ${a.eficiencia_con_idoneo!=null?`<div class="aud-sim-res">Con esos tiempos el día quedaría cerca de <b>${(+a.eficiencia_con_idoneo).toFixed(1)}%</b>.</div>`:""}
       ${a.recomendacion?`<div class="aud-sim-res"><b style="font-size:13px;">Recomendación:</b> ${esc(a.recomendacion)}</div>`:""}
-      <div class="aud-item-sub" style="margin-top:6px;">Análisis de Gemini: es una sugerencia, revísala antes de cambiar la BASE.</div>
+      <div class="aud-item-sub" style="margin-top:6px;">Análisis de Gemini${a.modelo?` (${esc(a.modelo)})`:""}: es una sugerencia, revísala antes de cambiar la BASE.</div>
     </div>`;
   }
   return `<div class="aud-tit">Tiempo idóneo con Gemini</div>
@@ -3150,7 +3150,7 @@ async function audPedirIA(){
   try{
     const r=await edgeFn(FN_EF_GEMINI,{p_dni:ING.dni,p_token:ING.token,p_dni_op:dni,p_fecha:fecha,nota});
     if(!AUDD || AUDD.dni!==dni || AUDD.fecha!==fecha) return;   // cerró o cambió de fila
-    AUDD_IA = r.ok ? r.analisis : {error:r.error||"No se pudo analizar"};
+    AUDD_IA = r.ok ? Object.assign({}, r.analisis, {modelo:r.modelo}) : {error:r.error||"No se pudo analizar"};
   }catch(e){ AUDD_IA={error:e.message}; }
   audPintarDrawer();
 }

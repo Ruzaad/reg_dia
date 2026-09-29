@@ -95,7 +95,11 @@ Deno.serve(async (req) => {
     }
     const key = Deno.env.get("GEMINI_API_KEY");
     if (!key) return json({ ok: false, error: "Falta el secret GEMINI_API_KEY en Supabase" }, 500);
-    let model = Deno.env.get("GEMINI_MODEL") || "gemini-3.8-flash";
+    // Primero el del secret GEMINI_MODEL (si hay); si uno está saturado, sin
+    // cupo o retirado, se prueba el siguiente.
+    const modelos = [...new Set([Deno.env.get("GEMINI_MODEL"), "gemini-3.5-flash", "gemini-3.8-flash"]
+      .filter((m): m is string => !!m))];
+    let model = modelos[0];
 
     const [dia, det] = await Promise.all([
       rpc("fn_ef_auditoria_ops", { p_dni, p_token, p_dni_op, p_fecha }),
@@ -137,19 +141,21 @@ Deno.serve(async (req) => {
       `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,
       { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: pedido },
     );
-    let g = await llamar(model);
-    let gj = await g.json();
-    // Google retira modelos y en el error dice cuál usar ("use models/X"): se
-    // reintenta una vez con ese, para no depender de redesplegar.
-    const sug = !g.ok && String(gj?.error?.message || "").match(/use models\/([\w.-]+)/i);
-    if (sug && sug[1] !== model) {
-      model = sug[1];
+    let g!: Response, gj: any;
+    for (let i = 0; i < modelos.length; i++) {
+      model = modelos[i];
       g = await llamar(model);
-      gj = await g.json();
+      gj = await g.json().catch(() => ({}));
+      if (g.ok) break;
+      // Google retira modelos y en el error dice cuál usar ("use models/X").
+      const sug = String(gj?.error?.message || "").match(/use models\/([\w.-]+)/i);
+      if (sug && !modelos.includes(sug[1])) modelos.splice(i + 1, 0, sug[1]);
+      else if (![404, 429, 500, 503].includes(g.status)) break;
     }
     if (!g.ok) {
       const msg = gj?.error?.message || `Gemini ${g.status}`;
-      const cupo = g.status === 429 ? "Se acabó el cupo gratis de Gemini por ahora; prueba en un minuto." : msg;
+      const cupo = g.status === 429 ? "Se acabó el cupo gratis de Gemini por ahora; prueba en un minuto."
+        : g.status === 503 ? "Gemini está saturado en este momento; prueba en un minuto." : msg;
       return json({ ok: false, error: cupo }, 502);
     }
     const txt = gj?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || "").join("") || "";
