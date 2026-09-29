@@ -1653,10 +1653,14 @@ function perTab(t){
 }
 
 /* ===== Movimientos de área (parche 33) =====
-   `_disp_prorrateado` reparte los 575 min del día usando la HORA del movimiento.
+   `_disp_prorrateado` reparte los 575 min del día usando la HORA del movimiento
+   (o lo producido en cada área si esa hora no es fiable, parche 90).
    Si se movió a alguien a destiempo, esa hora era intocable y los minutos
    quedaban mal repartidos; aquí se corrige. */
 let MOVS=[];
+/* Parche 90: de dónde salió la hora. La de RECLAMO es la hora en que registró,
+   no la del cambio real, y hace que el día se reparta por producción. */
+const MOV_ORIGEN={DECLARADO:"La dijo el operario",RECLAMO:"Registro (no fiable)",MANUAL:"Supervisora / Ing.",AJUSTADO:"Corregida"};
 async function cargarMovs(){
   const area=$("movArea")?$("movArea").value:"", fecha=$("movFecha")?$("movFecha").value:"";
   if(!fecha){ $("movTabla").innerHTML=""; $("movResumen").textContent="Elige la fecha"; return; }
@@ -1668,7 +1672,10 @@ async function cargarMovs(){
   }catch(e){ $("movTabla").innerHTML=""; mostrarError(e.message); }
 }
 function pintarMovs(){
-  $("movResumen").textContent=`${MOVS.length} movimiento(s) · la hora reparte los 575 min del día entre las áreas`;
+  const sinHora=new Set(MOVS.filter(m=>m.modo==="PRODUCCION").map(m=>m.dni)).size;
+  $("movResumen").textContent=`${MOVS.length} movimiento(s)`
+    + (sinHora?` · ${sinHora} persona(s) sin hora fiable: sus 575 min se reparten según lo producido en cada área. Corrige la hora y guarda para repartir por reloj.`
+              :" · la hora reparte los 575 min del día entre las áreas");
   /* `_i` es el índice REAL en MOVS: los botones Guardar/Deshacer lo necesitan
      porque al ordenar el orden de pintado ya no coincide con el del array. */
   const filas=ordAplicar("movTabla", MOVS.map((m,i)=>Object.assign({_i:i},m)), null,
@@ -1678,16 +1685,18 @@ function pintarMovs(){
       <td>${esc(m.desde_area||"—")}</td><td>${esc(m.hacia_area)}</td>
       <td><input type="date" id="mvF${i}" value="${esc(m.fecha||"")}" style="max-width:140px;"></td>
       <td><input type="time" id="mvH${i}" value="${esc(m.hora)}" style="max-width:110px;"></td>
+      <td><span class="pill ${m.origen==="RECLAMO"?"PROCESO":"ACTIVO"}">${esc(MOV_ORIGEN[m.origen]||m.origen||"—")}</span></td>
+      <td><span class="pill ${m.modo==="PRODUCCION"?"PROCESO":"CERRADO"}">${m.modo==="PRODUCCION"?"Por producción":"Por hora"}</span></td>
       <td>${m.min_origen==null?"—":m.min_origen+" min"}</td>
       <td>${m.min_destino} min</td>
       <td class="izq">${esc(soloApellidos(m.movido_por||"—"))}</td>
       <td><button class="btn-mini verde" onclick="guardarMovHora(${i})">Guardar</button>
           <button class="btn-mini rojo" onclick="eliminarMov(${i})">Deshacer</button></td>
     </tr>`; }).join("")
-    : `<tr><td colspan="9"><div class="vacio-msg">Sin movimientos de área en esa fecha</div></td></tr>`;
+    : `<tr><td colspan="11"><div class="vacio-msg">Sin movimientos de área en esa fecha</div></td></tr>`;
   $("movTabla").innerHTML=ordThead("movTabla",[
     {k:"nombre",t:"Persona",cls:"izq"},{k:"desde_area",t:"Desde"},{k:"hacia_area",t:"Hacia"},
-    {k:"fecha",t:"Fecha"},{k:"hora",t:"Hora"},{k:"min_origen",t:"Min. origen"},
+    {k:"fecha",t:"Fecha"},{k:"hora",t:"Hora"},{k:"origen",t:"Hora de"},{k:"modo",t:"Reparto"},{k:"min_origen",t:"Min. origen"},
     {k:"min_destino",t:"Min. destino"},{k:"movido_por",t:"Movido por",cls:"izq"},{t:""}
   ], pintarMovs)+`<tbody>${body}</tbody>`;
 }
