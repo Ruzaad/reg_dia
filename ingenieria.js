@@ -427,14 +427,25 @@ function parseHN(rows){
   if(hr<0) throw new Error("No se encontró la fila de encabezados (TALLA / CANT).");
   const bloques=[]; (rows[hr]||[]).forEach((v,c)=>{ if(normKey(v)==="TALLA") bloques.push(c); });
   const tallas=[];
+  let totales=0;
   bloques.forEach(cT=>{
     for(let r=hr+1;r<rows.length;r++){
       const talla=get(r,cT);
       if(talla==null || String(talla).trim()==="") break;
+      if(normKey(talla).startsWith("TOTAL")){ totales++; continue; }
       tallas.push({ talla:celTxt(talla), cant:parseInt(get(r,cT+1))||0, color:celTxt(get(r,cT+3)) });
     }
   });
-  return { prenda, articulo, of, tallas, bloques:bloques.length };
+  return { prenda, articulo, of, tallas, bloques:bloques.length, totales, ceros:tallas.filter(t=>t.cant<=0).length };
+}
+/* La hoja se llama "HN" casi siempre; si alguien la renombró, vale la primera
+   que tenga la fila TALLA / CANT. */
+function hnHoja(wb){
+  if(wb.SheetNames.includes("HN")) return "HN";
+  return wb.SheetNames.find(n=>{
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null,raw:true});
+    return rows.slice(0,40).some(f=>{ const k=(f||[]).map(normKey); return k.includes("TALLA")&&k.includes("CANT"); });
+  })||null;
 }
 function jobById(id){ return GEN_JOBS.find(j=>j.id===id); }
 function genQuitarJob(id){
@@ -2223,7 +2234,7 @@ function ofsPintar(){
       <td>${o.paquetes}${ofsPaqDesglose(o)}</td><td class="izq">${areasTxt(o)}</td>
       <td>${esc(o.fecha_carga||"—")}</td></tr>
       <tr class="avof-det" id="ofsDet${i}" hidden><td></td><td colspan="7"></td></tr>`; }).join("")
-    : `<tr><td colspan="8"><div class="vacio-msg">Sin OF registradas todavía. Se registran al confirmar una HN en Generar tickets.</div></td></tr>`;
+    : `<tr><td colspan="8"><div class="vacio-msg">Sin OF registradas todavía. Se registran subiendo su HN en Dar de alta una OF.</div></td></tr>`;
   $("ofsTabla").innerHTML=ordThead("ofsTabla",[
     {t:""},{k:"articulo",t:"Artículo",cls:"izq"},{k:"of",t:"OF"},{k:"prenda",t:"Prenda"},
     {k:"cant_prog",t:"Cant. prog."},{k:"paquetes",t:"Paquetes"},{t:"Áreas",cls:"izq"},
@@ -2233,32 +2244,60 @@ function ofsPintar(){
 /* Alta desde la HN: mismo parseo que Generar tickets, pero SIN escribir en el
    ALMACÉN. Registra la OF con su desglose completo (talla, color, numeración).
 
-   Antes registraba en cuanto se soltaba el archivo: una HN con la cabecera
-   corrida entraba con la OF mal leída y no había vuelta atrás. Ahora se lee,
-   se muestra una tarjeta por hoja con lo detectado —editable— y solo al
-   CONFIRMAR se escribe. Las diferencias de una OF ya registrada se siguen
-   mostrando igual que siempre. */
-let OFS_JOBS=[], OFS_SEQ=0;
-function ofsLeerHN(input){
-  const files=[...input.files]; input.value="";
+   Se lee, se muestra una tarjeta por hoja con lo detectado —editable— y solo al
+   CONFIRMAR se escribe. Desde el parche 89 cada tarjeta ya se compara con lo
+   registrado ANTES de escribir: la hoja idéntica se omite sola y la que difiere
+   puede reemplazar el desglose guardado (si la OF aún no tiene reclamos). */
+let OFS_JOBS=[], OFS_SEQ=0, OFS_DRAG=0;
+function ofsDrag(e){
+  e.preventDefault();
+  const d=$("ofsAlta"); if(d) d.open=true;
+  const z=$("ofsHNDrop"); if(!z) return;
+  z.classList.add("sobre"); clearTimeout(OFS_DRAG);
+  OFS_DRAG=setTimeout(()=>z.classList.remove("sobre"),200);
+}
+function ofsSoltar(e){
+  e.preventDefault();
+  const f=[...(e.dataTransfer&&e.dataTransfer.files||[])].filter(x=>/\.xls[xm]?$/i.test(x.name));
+  if(!f.length){ mostrarError("Suelta archivos Excel (.xlsx / .xls / .xlsm)"); return; }
+  ofsLeerArchivos(f);
+}
+function ofsLeerHN(input){ const f=[...input.files]; input.value=""; ofsLeerArchivos(f); }
+function ofsLeerArchivos(files){
+  const ya=new Set(OFS_JOBS.map(j=>j.name+"|"+j.size));
+  const repetidos=files.filter(f=>ya.has(f.name+"|"+f.size)).map(f=>f.name);
+  files=files.filter(f=>!ya.has(f.name+"|"+f.size));
+  if(repetidos.length) mostrarError(`Ya cargado(s): ${repetidos.join(", ")}`);
   if(!files.length) return;
   $("ofsHNRes").innerHTML="";
+  const d=$("ofsAlta"); if(d) d.open=true;
   let leidos=0;
   files.forEach(file=>{
     const lector=new FileReader();
     lector.onload=(e)=>{
+      const job={id:++OFS_SEQ, name:file.name, size:file.size, hn:null, error:null};
       try{
         const wb=XLSX.read(e.target.result,{type:"array"});
-        if(!wb.SheetNames.includes("HN")) throw new Error("no se encontró la hoja HN");
-        const hn=parseHN(XLSX.utils.sheet_to_json(wb.Sheets["HN"],{header:1,defval:null,raw:true}));
-        OFS_JOBS.push({id:++OFS_SEQ, name:file.name, hn, error:null});
-      }catch(err){
-        OFS_JOBS.push({id:++OFS_SEQ, name:file.name, hn:null, error:err.message});
-      }
-      if(++leidos===files.length) ofsCargarPrendas().then(renderOfsJobs);
+        const h=hnHoja(wb);
+        if(!h) throw new Error("no se encontró la hoja HN (ni otra con TALLA / CANT)");
+        job.hn=parseHN(XLSX.utils.sheet_to_json(wb.Sheets[h],{header:1,defval:null,raw:true}));
+        job.hoja=h;
+      }catch(err){ job.error=err.message; }
+      OFS_JOBS.push(job);
+      if(++leidos===files.length) ofsPrepararJobs();
     };
     lector.readAsArrayBuffer(file);
   });
+}
+async function ofsPrepararJobs(){
+  $("ofsHNJobs").innerHTML=cargandoHTML("Comparando con lo registrado…"); $("ofsHNCont").hidden=false;
+  if(!OFS.length){
+    try{ const r=await rpc("fn_ofs_listar",{p_dni:ING.dni,p_token:ING.token,p_buscar:""});
+      if(Array.isArray(r)) OFS=r; }catch(e){}
+  }
+  await ofsCargarPrendas();
+  OFS_JOBS.forEach(j=>{ if(j.hn && j.pre==null) j.pre=(j.prendas||[]).length ? (j.sug||"") : norm(j.hn.prenda).toUpperCase(); });
+  renderOfsJobs();
 }
 /* La HN dice `TERNO(PANTALÓN)` y la BASE dice `PANTALON`: lo que se guarda
    tiene que ser SIEMPRE el vocabulario de la BASE, o después no cruza. Se
@@ -2282,97 +2321,165 @@ function ofsSugerirPrenda(texto, lista){
     if(k && t.includes(k) && k.length>normKey(mejor).length) mejor=p; });
   return mejor;
 }
+/* Qué pasaría al confirmar esta hoja, mirando lo que ya está en `ofs`:
+   nueva · prenda (segunda prenda o completar una OF sin desglose) · igual ·
+   difiere (con la lista de diferencias). */
+function ofsComparar(j){
+  const of=String(j.hn.of||""), o=OFS.find(x=>String(x.of)===of);
+  if(!of || !o) return {tipo:"nueva"};
+  const pre=normKey(j.pre), det=(o.detalle||[]);
+  const prendasReg=[...new Set(det.map(x=>normKey(x.prenda)))];
+  const unica=prendasReg.length<=1;
+  const mias=det.filter(x=>normKey(x.prenda)===pre);
+  if(!det.length) return {tipo:"prenda", o};
+  /* Terno: la OF ya tiene el PANTALÓN y esta hoja es el SACO. */
+  if(!mias.length && pre && (!unica || (j.prendas||[]).length>1)) return {tipo:"prenda", o};
+  const reg = mias.length ? mias : det;
+  const hn=hnDetalle(j.hn.tallas).det.filter(x=>x.cant>0);
+  const dif=[];
+  if(normKey(o.articulo)!==normKey(j.hn.articulo)) dif.push(`artículo: registrado ${o.articulo||"—"} · HN ${j.hn.articulo||"—"}`);
+  if(!mias.length) dif.push(`prenda: registrada ${reg[0].prenda||"—"} · HN ${j.pre||"—"}`);
+  const uReg=reg.reduce((a,x)=>a+(Number(x.cant)||0),0), uHn=hn.reduce((a,x)=>a+x.cant,0);
+  if(uReg!==uHn) dif.push(`unidades: registradas ${Math.round(uReg)} · HN ${uHn}`);
+  if(reg.length!==hn.length) dif.push(`paquetes: registrados ${reg.length} · HN ${hn.length}`);
+  let malas=0, primera="";
+  for(let i=0;i<Math.max(reg.length,hn.length);i++){
+    const a=reg[i], b=hn[i];
+    if(a && b && normKey(a.talla)===normKey(b.talla) && normKey(a.color)===normKey(b.color) && Number(a.cant)===b.cant) continue;
+    malas++;
+    if(!primera) primera=`paquete ${i+1}: registrado ${a?`${a.talla} · ${a.color||"—"} · ${Math.round(a.cant)}`:"—"} · HN ${b?`${b.talla} · ${b.color||"—"} · ${b.cant}`:"—"}`;
+  }
+  if(malas) dif.push(`${malas} paquete(s) distintos — ${primera}`);
+  const gen=(o.areas||[]).filter(a=>a.generada).map(a=>a.area);
+  return {tipo: dif.length?"difiere":"igual", o, dif, gen};
+}
 function ofsQuitarJob(id){ OFS_JOBS=OFS_JOBS.filter(j=>j.id!==id); renderOfsJobs(); }
 function ofsCancelarHN(){ OFS_JOBS=[]; renderOfsJobs(); }
+function ofsJobCampo(id, k, v){
+  const j=OFS_JOBS.find(x=>x.id===id); if(!j) return;
+  if(k==="of") j.hn.of=String(v||"").replace(/\D/g,"");
+  else if(k==="art") j.hn.articulo=norm(v).toUpperCase();
+  else if(k==="pre") j.pre=norm(v).toUpperCase();
+  else if(k==="rep") j.reemplazar=!!v;
+  renderOfsJobs();
+}
 function renderOfsJobs(){
   const cont=$("ofsHNCont"), z=$("ofsHNJobs"), c=$("ofsHNConteo");
   if(!cont||!z) return;
   cont.hidden = !OFS_JOBS.length;
   if(!OFS_JOBS.length){ z.innerHTML=""; if(c) c.textContent=""; return; }
-  const ok=OFS_JOBS.filter(j=>j.hn).length, mal=OFS_JOBS.length-ok;
-  c.innerHTML=`<b>${OFS_JOBS.length}</b> hoja(s) leída(s) · <b>${ok}</b> OF por registrar`
-    + (mal?` · <span style="color:var(--alerta);font-weight:700;">${mal} con problema</span>`:"")
-    + ` — revisa y corrige antes de confirmar.`;
-  z.innerHTML=OFS_JOBS.map(j=>{
+  const cmp=OFS_JOBS.map(j=>j.hn?ofsComparar(j):null);
+  const cuenta=t=>cmp.filter(x=>x&&x.tipo===t).length;
+  const mal=OFS_JOBS.filter(j=>!j.hn).length, rep=OFS_JOBS.filter((j,i)=>cmp[i]&&cmp[i].tipo==="difiere"&&j.reemplazar).length;
+  c.innerHTML=`<b>${OFS_JOBS.length}</b> hoja(s) · <b>${cuenta("nueva")+cuenta("prenda")}</b> por registrar`
+    + (rep?` · <b>${rep}</b> por reemplazar`:"")
+    + (cuenta("igual")?` · ${cuenta("igual")} ya registrada(s) igual (se omiten)`:"")
+    + (cuenta("difiere")-rep?` · <span class="hn-aviso">${cuenta("difiere")-rep} con diferencias</span>`:"")
+    + (mal?` · <span class="hn-aviso">${mal} sin leer</span>`:"");
+  z.innerHTML=OFS_JOBS.map((j,ix)=>{
     if(j.error) return `<div class="gen-job"><div class="gen-job-head">
       <div class="gen-job-name">${esc(j.name)}</div>
       <button class="btn-mini gris" onclick="ofsQuitarJob(${j.id})">Quitar</button></div>
-      <div class="diff-box"><div class="diff-del">${esc(j.error)}</div></div></div>`;
-    const {det, total}=hnDetalle(j.hn.tallas);
-    const filas=j.hn.tallas.map((t,i)=>`<tr><td>${i+1}</td><td>${esc(t.talla)}</td><td>${t.cant}</td><td class="izq">${esc(t.color)}</td></tr>`).join("");
+      <div class="hn-aviso">${esc(j.error)}</div></div>`;
+    const k=cmp[ix], {det, total}=hnDetalle(j.hn.tallas);
+    const filas=j.hn.tallas.map((t,i)=>`<tr${t.cant>0?"":` class="hn-cero"`}><td>${i+1}</td><td>${esc(t.talla)}</td><td>${t.cant}</td><td class="izq">${esc(t.color)}</td></tr>`).join("");
     const avisos=[];
     if(!j.hn.of) avisos.push("No se leyó la ORDEN (OF): escríbela a mano.");
     if(!j.hn.articulo) avisos.push("No se leyó el ARTÍCULO.");
     if(total<=0) avisos.push("La HN no trae cantidades.");
-    if((j.prendas||[]).length>1 && !j.sug)
+    if(j.hn.ceros) avisos.push(`${j.hn.ceros} fila(s) con cantidad 0: no se guardan como paquete.`);
+    if(j.hn.totales) avisos.push(`Se ignoró ${j.hn.totales} fila(s) de TOTAL.`);
+    if(j.hoja && normKey(j.hoja)!=="HN") avisos.push(`El libro no tiene hoja "HN": se leyó "${j.hoja}".`);
+    if((j.prendas||[]).length>1 && !j.pre)
       avisos.push(`El artículo tiene varias prendas en la BASE (${j.prendas.join(" · ")}) y ninguna encaja con "${j.hn.prenda||"—"}": elígela a mano.`);
     if((j.prendas||[]).length===0 && j.hn.articulo)
       avisos.push("Ese artículo no tiene BASE cargada con prenda: se guardará lo que escribas.");
+    const dupe=OFS_JOBS.some(x=>x!==j && x.hn && x.hn.of && x.hn.of===j.hn.of && normKey(x.pre)===normKey(j.pre));
+    if(dupe) avisos.push("Otra hoja cargada tiene la misma OF y prenda.");
+    const estado = !k ? "" : k.tipo==="nueva" ? `<span class="of-area lista">Nueva</span>`
+      : k.tipo==="prenda" ? `<span class="of-area lista">OF ${esc(k.o.of)} registrada · se agrega esta prenda</span>`
+      : k.tipo==="igual" ? `<span class="of-area">Ya registrada igual · se omite</span>`
+      : `<span class="of-area sin-base">Ya registrada con diferencias</span>`;
+    const bloqueDif = k && k.tipo==="difiere" ? `<div class="hn-dif">
+        <div><b>OF ${esc(k.o.of)}</b> registrada el ${esc(k.o.fecha_carga||"—")}. Diferencias con esta HN:</div>
+        <ul>${k.dif.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>
+        <label class="hn-rep"><input type="checkbox" ${j.reemplazar?"checked":""} onchange="ofsJobCampo(${j.id},'rep',this.checked)">
+          Reemplazar lo registrado con esta HN</label>
+        <div class="sub">${k.gen.length?`Ya generada en ${esc(k.gen.join(", "))}: sus tickets se recalculan. `:""}No se puede si la OF ya tiene tickets reclamados. Si no lo marcas, esta hoja se omite.</div>
+      </div>` : "";
     return `<div class="gen-job" id="ofsJob_${j.id}">
       <div class="gen-job-head">
-        <div class="gen-job-name">${esc(j.name)}</div>
+        <div class="gen-job-name">${esc(j.name)} ${estado}</div>
         <button class="btn-mini gris" onclick="ofsQuitarJob(${j.id})">Quitar</button>
       </div>
       <div class="barra-control">
-        <label class="campo"><span>OF</span><input type="text" id="ofsJofOf_${j.id}" inputmode="numeric" value="${esc(j.hn.of)}"></label>
-        <label class="campo"><span>Artículo</span><input type="text" id="ofsJofArt_${j.id}" value="${esc(j.hn.articulo)}"></label>
+        <label class="campo"><span>OF</span><input type="text" id="ofsJofOf_${j.id}" inputmode="numeric" value="${esc(j.hn.of)}" onchange="ofsJobCampo(${j.id},'of',this.value)"></label>
+        <label class="campo"><span>Artículo</span><input type="text" id="ofsJofArt_${j.id}" value="${esc(j.hn.articulo)}" onchange="ofsJobCampo(${j.id},'art',this.value)"></label>
         <label class="campo"><span>Prenda ${j.hn.prenda?`<span class="cf-detalle">(la hoja dice: ${esc(j.hn.prenda)})</span>`:""}</span>
           ${(j.prendas||[]).length
-            ? `<select id="ofsJofPre_${j.id}">
+            ? `<select id="ofsJofPre_${j.id}" onchange="ofsJobCampo(${j.id},'pre',this.value)">
                  <option value="">— elige la prenda —</option>
-                 ${j.prendas.map(pr=>`<option value="${esc(pr)}" ${pr===j.sug?"selected":""}>${esc(pr)}</option>`).join("")}
+                 ${j.prendas.map(pr=>`<option value="${esc(pr)}" ${normKey(pr)===normKey(j.pre)?"selected":""}>${esc(pr)}</option>`).join("")}
                </select>`
-            : `<input type="text" id="ofsJofPre_${j.id}" value="${esc(j.hn.prenda)}" placeholder="Sin BASE: escríbela">`}
+            : `<input type="text" id="ofsJofPre_${j.id}" value="${esc(j.pre)}" placeholder="Sin BASE: escríbela" onchange="ofsJobCampo(${j.id},'pre',this.value)">`}
         </label>
-        <span class="sub" style="align-self:flex-end;">${j.hn.bloques} bloque(s) · ${det.length} paquete(s) · <b>${Math.round(total)}</b> und</span>
+        <span class="sub" style="align-self:flex-end;">${j.hn.bloques} bloque(s) · ${det.filter(x=>x.cant>0).length} paquete(s) · <b>${Math.round(total)}</b> und</span>
       </div>
-      ${avisos.length?`<div class="diff-box"><div class="diff-del">${avisos.map(esc).join("<br>")}</div></div>`:""}
+      ${avisos.length?`<div class="hn-aviso">${avisos.map(esc).join("<br>")}</div>`:""}
+      ${bloqueDif}
+      <details><summary class="sub" style="cursor:pointer;">Ver las ${j.hn.tallas.length} filas leídas</summary>
       <div class="contenedor-ancho tabla-scroll" style="max-height:28vh;">
         <table class="tabla"><thead><tr><th>#</th><th>Talla</th><th>Cant</th><th class="izq">Color</th></tr></thead>
         <tbody>${filas}</tbody></table>
-      </div>
+      </div></details>
     </div>`;
   }).join("");
 }
 async function ofsConfirmarHN(){
   const vivos=OFS_JOBS.filter(j=>j.hn);
   if(!vivos.length){ mostrarError("No hay ninguna hoja válida para registrar"); return; }
-  // Toma lo que hay en pantalla: puede haberse corregido a mano.
-  const pend=[];
+  const pend=[], omit=[];
   for(const j of vivos){
-    const of=($("ofsJofOf_"+j.id).value||"").replace(/\D/g,"");
-    const art=($("ofsJofArt_"+j.id).value||"").trim().toUpperCase();
-    const pre=($("ofsJofPre_"+j.id).value||"").trim().toUpperCase();
+    const k=ofsComparar(j), of=j.hn.of, art=j.hn.articulo, pre=j.pre||"";
     const {det, total}=hnDetalle(j.hn.tallas);
     if(!of){ mostrarError(`${j.name}: falta la OF`); return; }
     if(!art){ mostrarError(`${j.name}: falta el artículo`); return; }
     if((j.prendas||[]).length>1 && !pre){
       mostrarError(`${j.name}: ese artículo tiene varias prendas, elige cuál es esta hoja`); return; }
     if(total<=0){ mostrarError(`${j.name}: la HN no trae cantidades`); return; }
-    pend.push({j, of, art, pre, det, total});
+    if(k.tipo==="igual" || (k.tipo==="difiere" && !j.reemplazar)){ omit.push(`OF ${of}`); continue; }
+    pend.push({j, of, art, pre, det, total, rep:k.tipo==="difiere"});
   }
-  const dupe=pend.map(p=>p.of).filter((v,i,a)=>a.indexOf(v)!==i);
-  if(dupe.length && !confirm(`Hay hojas con la misma OF (${[...new Set(dupe)].join(", ")}).
+  if(!pend.length){ mostrarError("Nada que escribir: todas las hojas ya están registradas (o no marcaste reemplazar)"); return; }
+  const dupe=pend.map(p=>p.of+"|"+normKey(p.pre)).filter((v,i,a)=>a.indexOf(v)!==i);
+  if(dupe.length && !confirm(`Hay hojas con la misma OF y prenda (${[...new Set(dupe.map(d=>d.split("|")[0]))].join(", ")}).
 Se registrarán una tras otra y la segunda saldrá como "ya registrada". ¿Sigo?`)) return;
-  const resumen=pend.map(p=>`OF ${p.of} · ${p.art} · ${Math.round(p.total)} und`).join("\n");
-  if(!confirm(`¿Registrar ${pend.length} OF?\n\n${resumen}`)) return;
+  const resumen=pend.map(p=>`${p.rep?"REEMPLAZAR":"Registrar"} OF ${p.of} · ${p.art}${p.pre?" · "+p.pre:""} · ${Math.round(p.total)} und`).join("\n");
+  if(!confirm(`¿Escribir ${pend.length} OF?\n\n${resumen}${omit.length?`\n\nSe omiten (ya registradas): ${omit.join(", ")}`:""}`)) return;
 
   const lineas=[];
   for(const p of pend){
     try{
+      if(p.rep){
+        const g=await rpc("fn_of_reemplazar",{p_dni:ING.dni,p_token:ING.token,p_of:p.of,
+          p_articulo:p.art, p_prenda:p.pre, p_cant_prog:p.total, p_detalle:p.det});
+        if(!g || g.ok===false) lineas.push(`<div class="hn-aviso">OF ${esc(p.of)}: ${esc((g&&g.error)||"error")}</div>`);
+        else lineas.push(`<div class="cf-detalle">✓ OF ${esc(g.of)} reemplazada${g.solo_prenda?" (solo "+esc(g.prenda)+")":""} · ${g.paquetes} paquete(s) · ${Math.round(p.total)} und</div>`);
+        continue;
+      }
       const g=await rpc("fn_of_registrar",{p_dni:ING.dni,p_token:ING.token,p_of:p.of,
         p_articulo:p.art, p_prenda:p.pre, p_cant_prog:p.total,
         p_div_ultima:null, p_div_penultima:null, p_detalle:p.det});
-      if(!g || g.ok===false) lineas.push(`<div class="diff-del">${esc(p.j.name)}: ${esc((g&&g.error)||"error")}</div>`);
+      if(!g || g.ok===false) lineas.push(`<div class="hn-aviso">${esc(p.j.name)}: ${esc((g&&g.error)||"error")}</div>`);
       else if(g.creada) lineas.push(`<div class="cf-detalle">✓ OF ${esc(g.of)}${g.prenda?" · "+esc(g.prenda):""}`
         + (g.prenda_nueva?" <b>(segunda prenda de una OF ya registrada)</b>":"")
         + ` · ${g.paquetes} paquete(s) · ${Math.round(p.total)} und`
         + ((g.difiere||[]).length?`<br>Aviso: ${esc((g.difiere||[]).join(" · "))}`:"")+`</div>`);
-      else if(g.completada) lineas.push(`<div class="cf-detalle">✓ OF ${esc(g.of)} completada con su desglose · ${g.paquetes} paquete(s) · ${Math.round(p.total)} und</div>`);
-      else lineas.push(`<div class="diff-del">OF ${esc(g.of)} ya registrada (${esc(g.fecha_carga||"—")}). No se escribió.`
+      else lineas.push(`<div class="hn-aviso">OF ${esc(g.of)} ya registrada (${esc(g.fecha_carga||"—")}). No se escribió.`
         + ((g.difiere||[]).length?`<br>Diferencias con esta HN: ${esc((g.difiere||[]).join(" · "))}`:"")+`</div>`);
-    }catch(err){ lineas.push(`<div class="diff-del">${esc(p.j.name)}: ${esc(err.message)}</div>`); }
+    }catch(err){ lineas.push(`<div class="hn-aviso">${esc(p.j.name)}: ${esc(err.message)}</div>`); }
   }
+  if(omit.length) lineas.push(`<div class="sub">Omitidas: ${esc(omit.join(", "))}</div>`);
   OFS_JOBS=[]; renderOfsJobs();
   $("ofsHNRes").innerHTML=`<div class="diff-box">${lineas.join("")}</div>`;
   cargarOfs();
