@@ -2377,8 +2377,8 @@ async function cargarAvance(){
       selMod.value = mods.includes(actual)?actual:"";
     }
     const nivelTxt = (r.nivel==="penultima") ? "penúltima" : "última";
+    /* Parche 88: "Eficiencia del área" (r.eficiencia) oculta por ahora. */
     $("avResumen").innerHTML = `
-      <div class="kpi"><div class="kpi-num">${r.eficiencia}%</div><div class="kpi-lbl">Eficiencia del área</div></div>
       <div class="kpi"><div class="kpi-num">${r.personas}</div><div class="kpi-lbl">Presentes</div></div>
       <div class="kpi"><div class="kpi-num">${Math.round(r.minutos_prod)}</div><div class="kpi-lbl">Min producidos</div></div>
       <div class="kpi"><div class="kpi-num">${Math.round(r.minutos_disp)}</div><div class="kpi-lbl">Min disponibles</div></div>`;
