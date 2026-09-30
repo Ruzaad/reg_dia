@@ -309,7 +309,7 @@ async function genRutaCargar(ofElegida){
   const of=ofElegida||"", area=$("areaGen").value;
   const z=$("genRuta"); GEN_RUTA=null;
   if(!of){ z.innerHTML=""; return; }
-  z.innerHTML=cargandoHTML("Cruzando con BASE…");
+  pintarCargando(z,"Cruzando con BASE…");
   try{
     const r=await rpc("fn_of_ruta",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_of:of});
     if(!r.ok){ z.innerHTML=""; mostrarError(r.error||"Error"); return; }
@@ -510,7 +510,7 @@ async function genPrepararJob(id){
   if(!prenda||!articulo||!of){ mostrarError("Completa prenda, artículo y OF"); return; }
   if(!j.hn.tallas.length){ mostrarError("La HN no tiene filas"); return; }
   j.hn.prenda=prenda; j.hn.articulo=articulo; j.hn.of=of;   // conserva lo editado
-  pv.innerHTML=cargandoHTML("Cruzando con BASE…");
+  pintarCargando(pv,"Cruzando con BASE…");
   try{
     const ops=await rpc("fn_bases_operaciones",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_prenda:prenda,p_articulo:articulo});
     if(ops && ops.ok===false) throw new Error(ops.error);
@@ -611,7 +611,7 @@ async function genSubirJob(id){
   if(!j.filas || !j.filas.length){ mostrarError("Nada que subir (previsualiza primero)"); return; }
   const area=$("areaGen").value;
   if(!confirm(`¿Escribir ${j.filas.length} filas al ALMACEN de ${area}? (OF ${j.hn.of})`)) return;
-  const pv=$("genPreview_"+id); pv.innerHTML=cargandoHTML("Escribiendo en ALMACEN…");
+  const pv=$("genPreview_"+id); pintarCargando(pv,"Escribiendo en ALMACEN…");
   try{
     const r=await edgeFn(FN_GENERAR_TICKETS,{p_dni:ING.dni,p_token:ING.token,area:area,filas:j.filas});
     if(!r.ok){ mostrarError(r.error||"No se pudo escribir"); pv.innerHTML=""; return; }
@@ -675,7 +675,7 @@ async function opfCargarOF(){
   if(!of){ mostrarError("Escribe la OF"); return; }
   const cfg=AREAS[area]; if(!cfg||!cfg.sheetId){ mostrarError("Área sin Sheet configurado"); return; }
   $("opfGate").style.display="none"; $("opfContenido").hidden=false;
-  $("opfDelList").innerHTML=cargandoHTML("Leyendo ALMACÉN…"); $("opfAddPv").innerHTML=""; $("opfDelPv").innerHTML="";
+  pintarCargando($("opfDelList"),"Leyendo ALMACÉN…"); $("opfAddPv").innerHTML=""; $("opfDelPv").innerHTML="";
   try{
     const url=`https://docs.google.com/spreadsheets/d/${cfg.sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(cfg.hoja||"ALMACEN")}`;
     const filas=parseCSV(await (await fetch(url)).text());
@@ -782,7 +782,7 @@ function opfPreviewAdd(){
 async function opfConfirmAdd(){
   if(!OPF.pendAdd||!OPF.pendAdd.length){ mostrarError("Previsualiza primero"); return; }
   if(!confirm(`¿Escribir ${OPF.pendAdd.length} filas al ALMACÉN de ${OPF.area}? (OF ${OPF.of})`)) return;
-  $("opfAddPv").innerHTML=cargandoHTML("Escribiendo en ALMACÉN…");
+  pintarCargando($("opfAddPv"),"Escribiendo en ALMACÉN…");
   try{
     const r=await edgeFn(FN_GENERAR_TICKETS,{p_dni:ING.dni,p_token:ING.token,area:OPF.area,accion:"append",filas:OPF.pendAdd});
     if(!r.ok) throw new Error(r.error||"No se pudo escribir");
@@ -801,7 +801,7 @@ function opfRenderDel(){
 }
 async function opfPrepDel(op){
   const o=OPF.ops.find(x=>x.op===op)||OPF.ops.find(x=>normKey(x.op)===normKey(op)); if(!o) return;
-  $("opfDelPv").innerHTML=cargandoHTML("Verificando reclamos…");
+  pintarCargando($("opfDelPv"),"Verificando reclamos…");
   const claimed=new Set();
   try{ const recl=await rpc("fn_reclamados",{p_dni:ING.dni,p_token:ING.token,p_area:OPF.area}); (recl||[]).forEach(x=>claimed.add(String(x.codigo))); }catch(e){}
   const H=OPF.H, rows=OPF.rowsByOp[o.op]||[];
@@ -826,7 +826,7 @@ async function opfPrepDel(op){
 async function opfBorrar(){
   const p=OPF.pendDel; if(!p||!p.codigos.length){ mostrarError("Nada que borrar"); return; }
   if(!confirm(`¿Borrar ${p.codigos.length} ticket(s) de "${p.op}" del ALMACÉN de ${OPF.area}? (OF ${OPF.of})`)) return;
-  $("opfDelPv").innerHTML=cargandoHTML("Borrando del ALMACÉN…");
+  pintarCargando($("opfDelPv"),"Borrando del ALMACÉN…");
   try{
     const r=await edgeFn(FN_GENERAR_TICKETS,{p_dni:ING.dni,p_token:ING.token,area:OPF.area,accion:"borrar",codigos:p.codigos});
     if(!r.ok) throw new Error(r.error||"No se pudo borrar");
@@ -874,7 +874,7 @@ async function cargarReclamosFec(){
   if(!dniOp){ mostrarError("Elige un operario"); return; }
   if(!fecha){ mostrarError("Elige la fecha actual de los tickets"); return; }
   $("fecGate").style.display="none"; $("fecContenido").hidden=false;
-  $("tablaFec").innerHTML=cargandoHTML("Cargando tickets…");
+  pintarCargando($("tablaFec"),"Cargando tickets…");
   FEC_SEL={};
   try{
     FEC_RECL = await rpc("fn_reclamos_operario",{p_dni:ING.dni,p_token:ING.token,p_dni_op:dniOp,p_fecha:fecha});
@@ -987,7 +987,7 @@ async function cargarOpArea(){
   const g=$("gridOpArea");
   if(!area){ $("opGate").style.display="block"; if(g) g.innerHTML=""; OP_PERSONAL=[]; return; }
   $("opGate").style.display="none";
-  if(g) g.innerHTML=cargandoHTML("Cargando personal…");
+  if(g) pintarCargando(g,"Cargando personal…");
   try{
     OP_PERSONAL = await rpc("fn_personal",{p_dni:ING.dni,p_token:ING.token,p_area:area});
     pintarOpArea();
@@ -1057,7 +1057,7 @@ async function cargarMod(reset){
   modArea = $("areaMod") ? $("areaMod").value : "";
   if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
   $("modGate").style.display="none";
-  $("zonaModulos").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("zonaModulos"),"Cargando…");
   $("resumenMod").textContent="";
   try{
     const r = await rpc("fn_mod_avance",{p_dni:ING.dni,p_token:ING.token,
@@ -1079,7 +1079,7 @@ async function cargarMod(reset){
 async function cargarModOF(){
   const art=modArtActual(), of=$("ofModSel")?$("ofModSel").value:"";
   if(!art || !of){ MOD_DATA=null; pintarMod(); return; }
-  $("zonaModulos").innerHTML=cargandoHTML("Cargando módulos…");
+  pintarCargando($("zonaModulos"),"Cargando módulos…");
   try{
     const r=await rpc("fn_mod_avance",{p_dni:ING.dni,p_token:ING.token,
       p_area:modArea, p_articulo:art, p_of:of, p_hasta:($("fechaMod")||{}).value||null});
@@ -1249,7 +1249,7 @@ function efFilas(area){
 }
 
 async function cargarEf(){
-  $("tablaEf").innerHTML=""; $("efAreas").innerHTML=cargandoHTML("Calculando…");
+  $("tablaEf").innerHTML=""; pintarCargando($("efAreas"),"Calculando…");
   try{
     const r = await rpc("fn_eficiencia_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:$("fechaEf").value});
     if(!r.ok){ mostrarError(r.error||"Error"); $("efAreas").innerHTML=""; return; }
@@ -1350,7 +1350,7 @@ function ordenarEfR(col){
 
 async function cargarEfRango(){
   if(!efRangoSel.desde || !efRangoSel.hasta){ mostrarError("Selecciona un rango de fechas"); return; }
-  $("tablaEfR").innerHTML = cargandoHTML("Calculando eficiencia del rango…");
+  pintarCargando($("tablaEfR"),"Calculando eficiencia del rango…");
   $("resumenEfR").textContent = "";
   try{
     const res = await rpc("fn_eficiencia_rango",{p_dni:ING.dni,p_token:ING.token,
@@ -1457,7 +1457,7 @@ async function cargarEstadosAsis(){
    Numeración y Cantidad no están en la tabla, así que no se pueden apagar. */
 let VISTA=[];
 async function cargarVista(){
-  $("vistaZona").innerHTML=cargandoHTML("Cargando…"); $("vistaAviso").textContent="";
+  pintarCargando($("vistaZona"),"Cargando…"); $("vistaAviso").textContent="";
   try{
     const r=await rpc("fn_tickets_visibilidad_listar",{p_dni:ING.dni,p_token:ING.token});
     if(!r.ok){ mostrarError(r.error||"Error"); $("vistaZona").innerHTML=""; return; }
@@ -1665,7 +1665,7 @@ let MOVS=[];
 async function cargarMovs(){
   const area=$("movArea")?$("movArea").value:"", fecha=$("movFecha")?$("movFecha").value:"";
   if(!fecha){ $("movTabla").innerHTML=""; $("movResumen").textContent="Elige la fecha"; return; }
-  $("movTabla").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("movTabla"),"Cargando…");
   try{
     const r=await rpc("fn_movimientos_listar",{p_dni:ING.dni,p_token:ING.token,p_area:area||"",p_fecha:fecha});
     if(r && r.ok===false){ mostrarError(r.error||"Error"); $("movTabla").innerHTML=""; return; }
@@ -1728,7 +1728,7 @@ async function eliminarMov(i){
 
 /* --- CRUD --- */
 async function perCargarCrud(){
-  $("perTablaCrud").innerHTML=cargandoHTML("Cargando personal…");
+  pintarCargando($("perTablaCrud"),"Cargando personal…");
   try{
     const r=await rpc("fn_personal_listar",{p_dni_ing:ING.dni,p_token:ING.token,p_area:$("perArea").value,p_incluir_inactivos:$("perInactivos").checked});
     if(!r.ok){ mostrarError(r.error||"Error"); $("perTablaCrud").innerHTML=""; return; }
@@ -1773,7 +1773,7 @@ async function perMoverArea(){
 /* --- Estados por rango --- */
 async function perCargarRango(){
   $("perRangoEstado").innerHTML=(ESTADOS_ASIS||[]).map(e=>`<option>${esc(e)}</option>`).join("")||'<option value="">Sin estados</option>';
-  $("perRangoList").innerHTML=cargandoHTML("Cargando personal…");
+  pintarCargando($("perRangoList"),"Cargando personal…");
   try{
     const r=await rpc("fn_personal_listar",{p_dni_ing:ING.dni,p_token:ING.token,p_area:$("perRangoArea").value,p_incluir_inactivos:false});
     if(!r.ok){ mostrarError(r.error||"Error"); $("perRangoList").innerHTML=""; return; }
@@ -1821,7 +1821,7 @@ async function perAplicarRango(){
 /* --- Matriz (personal × días editable) --- */
 async function perCargarMatriz(){
   if(!PER.matSel.desde||!PER.matSel.hasta){ mostrarError("Elige el rango de fechas"); return; }
-  $("perTablaMatriz").innerHTML=cargandoHTML("Cargando matriz…");
+  pintarCargando($("perTablaMatriz"),"Cargando matriz…");
   try{
     const r=await rpc("fn_asistencia_matriz",{p_dni:ING.dni,p_token:ING.token,p_area:$("perMatArea").value,p_desde:PER.matSel.desde,p_hasta:PER.matSel.hasta});
     if(!r.ok){ mostrarError(r.error||"Error"); $("perTablaMatriz").innerHTML=""; return; }
@@ -1881,7 +1881,7 @@ function perDashRange(){
 async function perCargarDash(){
   const rango=perDashRange();
   if(!rango.desde||!rango.hasta){ mostrarError("Elige el rango de fechas"); return; }
-  $("perDashKpis").innerHTML=cargandoHTML("Calculando…");
+  pintarCargando($("perDashKpis"),"Calculando…");
   try{
     const r=await rpc("fn_asistencia_dashboard",{p_dni:ING.dni,p_token:ING.token,p_area:$("perDashArea").value,p_desde:rango.desde,p_hasta:rango.hasta});
     if(!r.ok){ mostrarError(r.error||"Error"); $("perDashKpis").innerHTML=""; return; }
@@ -2013,7 +2013,7 @@ function dbBar(cid,labels,data,label,colors,horizontal){
 async function cargarDbEf(){
   if(!VER_EF_AREA && $("dbEfBtnEf")){ $("dbEfBtnEf").style.display="none"; dbEfModo("min"); }
   dbEnsureFp(); const o=DB.efSel; if(!o.desde||!o.hasta){ mostrarError("Elige el rango"); return; }
-  $("dbEfTabla").innerHTML=cargandoHTML("Calculando…");
+  pintarCargando($("dbEfTabla"),"Calculando…");
   try{
     const r=await rpc("fn_eficiencia_areas",{p_dni:ING.dni,p_token:ING.token,p_desde:o.desde,p_hasta:o.hasta});
     if(!r.ok){ mostrarError(r.error||"Error"); $("dbEfTabla").innerHTML=""; return; }
@@ -2072,7 +2072,7 @@ async function cargarExtra(){
     if($("exTiposLista")) $("exTiposLista").innerHTML=EXTRA_TIPOS.map(x=>`<option value="${esc(x)}">`).join("");
   }catch(e){}
   if(!area){ $("exTabla").innerHTML=""; $("exResumen").textContent="Elige un área"; return; }
-  $("exTabla").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("exTabla"),"Cargando…");
   try{
     const r=await rpc("fn_extra_listar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_todas:true});
     if(r && r.ok===false){ mostrarError(r.error||"Error"); $("exTabla").innerHTML=""; return; }
@@ -2127,7 +2127,7 @@ async function cargarCausasSilencioso(){
        if(Array.isArray(r)) CAUSAS_ING=r; }catch(e){}
 }
 async function cargarCausas(){
-  $("cauTabla").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("cauTabla"),"Cargando…");
   try{
     const r=await rpc("fn_causas_std_listar",{p_dni:ING.dni,p_token:ING.token,p_todas:true});
     if(r && r.ok===false){ mostrarError(r.error||"Error"); $("cauTabla").innerHTML=""; return; }
@@ -2182,7 +2182,7 @@ async function toggleCausa(i){
 /* --- OFs registradas (parche 26): lo guardado al confirmar cada HN --- */
 let OFS=[], OFS_VISTA=[];
 async function cargarOfs(){
-  $("ofsTabla").innerHTML=cargandoHTML("Cargando…"); $("ofsResumen").textContent="";
+  pintarCargando($("ofsTabla"),"Cargando…"); $("ofsResumen").textContent="";
   try{
     const r=await rpc("fn_ofs_listar",{p_dni:ING.dni,p_token:ING.token,p_buscar:""});
     if(r && r.ok===false){ mostrarError(r.error||"Error"); $("ofsTabla").innerHTML=""; return; }
@@ -2463,7 +2463,7 @@ async function cargarAvof(){
     const d=avofMesesDefecto(); $("avofDesde").value=d.desde; $("avofHasta").value=d.hasta;
   }
   const rg=avofRango();
-  $("avofTabla").innerHTML=cargandoHTML("Cargando resumen…"); $("avofResumen").textContent="";
+  pintarCargando($("avofTabla"),"Cargando resumen…"); $("avofResumen").textContent="";
   try{
     const r=await rpc("fn_of_trazabilidad",
       {p_dni:ING.dni,p_token:ING.token,p_desde:rg.desde,p_hasta:rg.hasta});
@@ -2788,7 +2788,7 @@ async function cargarAudit(){
   const u=Number($("audUmbral").value), pk=Number(($("audPico")||{}).value||20);
   if(!(u>0)){ mostrarError("El umbral debe ser un número mayor que 0"); return; }
   if(!(pk>0)){ mostrarError("El pico debe ser un número mayor que 0"); return; }
-  $("tablaAudit").innerHTML=cargandoHTML("Revisando…"); $("audResumen").innerHTML="";
+  pintarCargando($("tablaAudit"),"Revisando…"); $("audResumen").innerHTML="";
   audPag=1;
   try{
     const r=await rpc("fn_ef_auditoria_v2",{p_dni:ING.dni,p_token:ING.token,
@@ -2925,7 +2925,7 @@ function audIniciarDia(r, ops){
 async function audAbrir(i){
   const f=AUD_VISTA[i]; if(!f) return;
   const dr=$("audDrawer"), bd=$("audBackdrop");
-  dr.innerHTML=cargandoHTML("Cargando el día…");
+  pintarCargando(dr,"Cargando el día…");
   dr.classList.add("visible"); bd.classList.add("visible");
   try{
     const a={p_dni:ING.dni,p_token:ING.token,p_dni_op:f.dni,p_fecha:f.fecha};
@@ -3256,7 +3256,7 @@ function descargarTk(){
 }
 
 async function cargarTk(){
-  $("tablaTk").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("tablaTk"),"Cargando…");
   $("resumenUltimas").innerHTML="";
   libSel={}; tkPag=1;
   try{
@@ -3481,7 +3481,7 @@ async function cargarTkOp(){
   const area=$("tkOpArea").value, of=$("tkOpOf").value.trim();
   if(!area){ mostrarError("Elige el área"); return; }
   if(!of){ mostrarError("Escribe la OF"); return; }
-  $("tablaTkOp").innerHTML=cargandoHTML("Cargando…"); $("tkOpResumen").textContent="";
+  pintarCargando($("tablaTkOp"),"Cargando…"); $("tkOpResumen").textContent="";
   tkOpMarc={}; tkOpPag=1;
   try{
     const r=await rpc("fn_reclamos_por_of",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_of:of});
@@ -3728,7 +3728,7 @@ function incInit(){
 async function cargarInc(){
   const d=$("incDesde").value, h=$("incHasta").value;
   if(!d||!h){ mostrarError("Elige el rango de la quincena"); return; }
-  $("tablaInc").innerHTML=cargandoHTML("Calculando…"); $("incResumen").innerHTML="";
+  pintarCargando($("tablaInc"),"Calculando…"); $("incResumen").innerHTML="";
   try{
     const r=await rpc("fn_incentivos_quincena",{p_dni:ING.dni,p_token:ING.token,
       p_desde:d, p_hasta:h, p_area:""});
@@ -3738,7 +3738,7 @@ async function cargarInc(){
 }
 async function cargarIncTabla(){
   if(INC_TABLA.length){ incPintarTabla(); return; }
-  $("tablaIncCat").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("tablaIncCat"),"Cargando…");
   try{
     const r=await rpc("fn_incentivos_tabla_listar",{p_dni:ING.dni,p_token:ING.token});
     if(!r.ok){ mostrarError(r.error||"Error"); $("tablaIncCat").innerHTML=""; return; }
@@ -3787,7 +3787,7 @@ async function cargarModular(){
   const {desde,hasta}=incRango();
   if(!desde||!hasta){ mostrarError("Elige el rango de la quincena"); return; }
   MOD.area=($("modArea")||{}).value||"";
-  $("tablaModular").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("tablaModular"),"Cargando…");
   try{
     if(!MOD_TRAMOS.length){
       const t=await rpc("fn_bono_modular_tabla_listar",{p_dni:ING.dni,p_token:ING.token});
@@ -3890,7 +3890,7 @@ async function cargarEfManual(){
   const {desde,hasta}=incRango();
   if(!desde||!hasta){ mostrarError("Elige el rango de la quincena"); return; }
   EFM.area=($("efmArea")||{}).value||"";
-  $("tablaEfm").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("tablaEfm"),"Cargando…");
   try{
     const [r,t]=await Promise.all([
       rpc("fn_ef_manual_listar",{p_dni:ING.dni,p_token:ING.token,
@@ -4015,7 +4015,7 @@ let CONS=[];
 async function cargarCons(){
   const {desde,hasta}=incRango();
   if(!desde||!hasta){ mostrarError("Elige el rango de la quincena"); return; }
-  $("tablaCons").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("tablaCons"),"Cargando…");
   try{
     const r=await rpc("fn_consideracion_listar",{p_dni:ING.dni,p_token:ING.token,
       p_desde:desde, p_hasta:hasta, p_area:(($("consArea")||{}).value||null)});
@@ -4296,8 +4296,8 @@ async function cargarRep(){
   const f=$("repFecha").value;
   if(!f){ mostrarError("Indica la fecha"); return; }
   poblarAreaRep();
-  $("tablaRepTk").innerHTML=cargandoHTML("Cargando…");
-  $("tablaRepInci").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("tablaRepTk"),"Cargando…");
+  pintarCargando($("tablaRepInci"),"Cargando…");
   try{
     const [tk, oc] = await Promise.all([
       rpc("fn_tickets_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:f}),
@@ -4402,7 +4402,7 @@ function opeInit(){
 async function cargarOpe(){
   const desde=$("opeDesde").value, hasta=$("opeHasta").value;
   if(!desde||!hasta){ mostrarError("Indica el rango de fechas"); return; }
-  $("opeLista2").innerHTML=cargandoHTML("Cargando…"); $("opeKpis").innerHTML=""; $("opeNota").textContent="";
+  pintarCargando($("opeLista2"),"Cargando…"); $("opeKpis").innerHTML=""; $("opeNota").textContent="";
   try{
     const r=await rpc("fn_resumen_operario",{p_dni:ING.dni,p_token:ING.token,
       p_desde:desde,p_hasta:hasta,p_area:$("opeArea").value});
@@ -4556,7 +4556,7 @@ function basePagina(d){ basePag+=d; pintarBases(); }
 
 async function cargarBases(){
   $("zonaDiff").style.display="none";
-  $("tablaBases").innerHTML=cargandoHTML("Cargando base…");
+  pintarCargando($("tablaBases"),"Cargando base…");
   try{
     BASE = await rpc("fn_bases_listar",{p_dni:ING.dni,p_token:ING.token,p_area:$("areaBase").value});
     BASES_CACHE[$("areaBase").value] = BASE;
@@ -5280,7 +5280,7 @@ async function cargarIncidI(){        // pendientes + tabla aplicada
 
 let INCI_PEND=[];
 async function cargarPendientesInci(){
-  const z=$("listaIncidI"); z.innerHTML=cargandoHTML("Cargando pendientes…");
+  const z=$("listaIncidI"); pintarCargando(z,"Cargando pendientes…");
   try{
     const r=await rpc("fn_solicitudes_listar",{p_dni:ING.dni,p_token:ING.token,p_area:""});
     if(!r.ok){ mostrarError(r.error||"Error"); z.innerHTML=""; return; }
