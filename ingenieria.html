@@ -252,6 +252,7 @@
         <button class="tab" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
         <button class="tab activo" onclick="activarTab(&quot;pasoOpsOF&quot;)">OPERACIONES POR OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoOpAd&quot;)">ADICIONALES POR OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoCausas&quot;)">CAUSAS DE STD</button>
       </div>
       <div class="tabs sup-subtabs">
@@ -663,6 +664,7 @@
         <button class="tab" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoOpsOF&quot;)">OPERACIONES POR OF</button>
         <button class="tab activo" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoOpAd&quot;)">ADICIONALES POR OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoCausas&quot;)">CAUSAS DE STD</button>
       </div>
       <div class="barra-control">
@@ -678,6 +680,40 @@
       <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;"><table class="tabla" id="exTabla"></table></div>
     </section>
 
+    <!-- ===================== ADICIONALES POR OF (parche 91) ===================== -->
+    <section class="pantalla" id="pasoOpAd">
+      <div class="seccion-cab"><h1>Operaciones adicionales por OF</h1>
+        <p class="seccion-sub">Operaciones que no están en la BASE del artículo y hubo que hacer en una OF (por ejemplo, por una falla de otra área). No cambian la BASE ni el avance de la OF, pero sus minutos cuentan para la persona que las hizo y quedan ligados a la OF.</p></div>
+      <div class="tabs gen-subtabs">
+        <button class="tab" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoOpsOF&quot;)">OPERACIONES POR OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
+        <button class="tab activo" onclick="activarTab(&quot;pasoOpAd&quot;)">ADICIONALES POR OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoCausas&quot;)">CAUSAS DE STD</button>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="opadArea" onchange="cargarOpad()"></select></label>
+        <label class="campo"><span>OF (vacía = últimos 60 días)</span><input type="text" id="opadOf" inputmode="numeric" placeholder="Ej: 10431"
+          oninput="this.value=this.value.replace(/\D/g,'')" onkeydown="if(event.key==='Enter')cargarOpad()"></label>
+        <button class="btn-mini" onclick="cargarOpad()">Cargar</button>
+      </div>
+      <div id="opadForm" hidden>
+        <div class="sub" id="opadFormTit" style="text-align:left;margin-bottom:6px;"></div>
+        <div class="barra-control">
+          <label class="campo"><span>Módulo</span><select id="opadMod"></select></label>
+          <label class="campo" style="min-width:220px;"><span>Operación</span><input type="text" id="opadOp" placeholder="Ej: DESCOSER Y REHACER BOLSILLO" maxlength="120"></label>
+          <label class="campo"><span>STD (min)</span><input type="number" id="opadStd" min="0.01" step="0.01" placeholder="1.50"></label>
+          <label class="campo"><span>Cantidad autorizada</span><input type="number" id="opadTope" min="1" step="1" placeholder="Sin límite"></label>
+          <label class="campo" style="min-width:200px;"><span>Motivo</span><input type="text" id="opadMotivo" placeholder="Ej: FALLA DE CORTE" maxlength="120"></label>
+          <label class="campo"><span>Área que falló</span><input type="text" id="opadOrigen" list="opadOrigenLista" placeholder="Opcional" maxlength="60" autocomplete="off">
+            <datalist id="opadOrigenLista"></datalist></label>
+          <button class="btn-mini verde" onclick="guardarOpad()">Añadir</button>
+        </div>
+      </div>
+      <div class="sub" id="opadResumen"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;"><table class="tabla" id="opadTabla"></table></div>
+    </section>
+
     <!-- ===================== CAUSAS DE STD ===================== -->
     <section class="pantalla" id="pasoCausas">
       <div class="seccion-cab"><h1>Causas de STD</h1>
@@ -686,6 +722,7 @@
         <button class="tab" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoOpsOF&quot;)">OPERACIONES POR OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoOpAd&quot;)">ADICIONALES POR OF</button>
         <button class="tab activo" onclick="activarTab(&quot;pasoCausas&quot;)">CAUSAS DE STD</button>
       </div>
       <div class="barra-control">
@@ -698,23 +735,21 @@
     </section>
 
     <!-- ===================== OFs REGISTRADAS ===================== -->
-    <section class="pantalla" id="pasoOfs">
+    <section class="pantalla" id="pasoOfs" ondragover="ofsDrag(event)" ondrop="ofsSoltar(event)">
       <div class="seccion-cab"><h1>OFs registradas</h1>
         <p class="seccion-sub">Lo que quedó guardado al confirmar cada HN: cantidad programada y desglose por paquete. Toca ▾ para ver el detalle.</p></div>
       <div class="barra-control">
         <label class="campo"><span>Buscar</span><input type="text" id="ofsBuscar" placeholder="OF / artículo…" oninput="ofsPintar()"></label>
         <button class="btn-mini" onclick="cargarOfs()">Cargar</button>
       </div>
-      <details class="nav-group" style="margin:4px 0 10px;">
+      <details class="nav-group" id="ofsAlta" style="margin:4px 0 10px;">
         <summary class="nav-sep" style="cursor:pointer;">Dar de alta una OF</summary>
         <p class="seccion-sub" style="margin:6px 0;">Para las OF que ya estaban en curso antes de registrar HNs. <b>Con la HN</b> queda el desglose completo por paquete; <b>a mano</b> solo el corte real, que es lo que ACABADO necesita para su techo.</p>
-        <div class="barra-control">
-          <label class="btn-mini verde" style="cursor:pointer;align-self:flex-end;">
-            Cargar desde HN (uno o varios)
-            <input type="file" id="fileOfHN" accept=".xlsx,.xls,.xlsm" multiple style="display:none" onchange="ofsLeerHN(this)">
-          </label>
-          <span class="sub" style="align-self:flex-end;">No escribe en el ALMACÉN: solo registra la OF y su desglose.</span>
-        </div>
+        <label class="hn-drop" id="ofsHNDrop">
+          <input type="file" id="fileOfHN" accept=".xlsx,.xls,.xlsm" multiple hidden onchange="ofsLeerHN(this)">
+          <b>Arrastra aquí las HN</b> o toca para elegirlas (una o varias)
+          <span class="sub">Se compara cada hoja con lo ya registrado antes de escribir. No toca el ALMACÉN.</span>
+        </label>
         <div id="ofsHNCont" hidden>
           <div class="sub" id="ofsHNConteo" style="margin:8px 0;"></div>
           <div id="ofsHNJobs"></div>
@@ -913,6 +948,7 @@
         <button class="tab activo" onclick="activarTab(&quot;pasoGen&quot;)">DESDE HN / OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoOpsOF&quot;)">OPERACIONES POR OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoExtra&quot;)">OPERACIONES SIN OF</button>
+        <button class="tab" onclick="activarTab(&quot;pasoOpAd&quot;)">ADICIONALES POR OF</button>
         <button class="tab" onclick="activarTab(&quot;pasoCausas&quot;)">CAUSAS DE STD</button>
       </div>
       <div class="barra-control">

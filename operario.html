@@ -69,6 +69,27 @@
     <div class="lista-cards" id="listaOps"></div>
   </section>
 
+  <!-- Operaciones adicionales de la OF (parche 91): fuera de la BASE, por fallas -->
+  <section class="pantalla" id="pasoOpAd">
+    <h1 id="tituloOpAd"></h1>
+    <div class="sub">Operaciones extra que Ingeniería agregó a esta OF. Toca la que hiciste</div>
+    <div class="lista-cards" id="listaOpAd"></div>
+  </section>
+
+  <section class="pantalla" id="pasoOpAdCant">
+    <div class="zona-conf">
+      <h1 id="tituloOpAdCant"></h1>
+      <div class="conf-card">
+        <div class="tk-label">Cantidad que hiciste</div>
+        <input class="input-grande" id="opAdCant" inputmode="numeric" placeholder="0" autocomplete="off"
+          style="max-width:220px;margin:6px auto;text-align:center;">
+        <div class="conf-det" id="opAdDet"></div>
+      </div>
+      <button class="btn-principal" id="opAdBtnReg" onclick="opAdRegistrar()">REGISTRAR</button>
+      <button class="btn-secundario" onclick="irA('pasoOpAd')">VOLVER</button>
+    </div>
+  </section>
+
   <!-- Tickets -->
   <section class="pantalla" id="pasoTickets">
     <h1 id="tituloTickets"></h1>

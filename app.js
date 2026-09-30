@@ -549,7 +549,8 @@ const VOLVER_OPERARIO = {
   pasoModulos:"pasoOF", pasoOps:"pasoModulos",
   pasoTickets:"pasoOps", pasoConf:"pasoTickets",
   pasoAcabPrenda:"pasoAcabOF", pasoAcabOp:"pasoAcabOF",
-  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF", pasoMisReg:"pasoAcabOF"
+  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF", pasoMisReg:"pasoAcabOF",
+  pasoOpAd:"pasoModulos", pasoOpAdCant:"pasoOpAd"
 };
 
 let sa={signo:-1};
@@ -762,14 +763,44 @@ async function abrirCambioArea(s){
     c.innerHTML=`<div class="ca-nombre">${esc(a)}</div>
       <div class="ca-sub">${actual?"Estás aquí":"Cambiar"}</div>`;
     c.onclick=()=>{
-      cerrarModal();
-      if(actual) return;
-      AREA_ESTAJERO = a;
-      $("tituloArea").textContent = a;
-      cargarTodo(s);
+      if(actual){ cerrarModal(); return; }
+      pedirHoraArea(s, a);
     };
     g.appendChild(c);
   });
+}
+/* Parche 90: los 575 min del día se reparten entre áreas por la hora del
+   cambio, y la hora en que se registra no sirve (casi todos registran al
+   almuerzo o a las 18:20). Por eso se pregunta desde cuándo está ahí. */
+function pedirHoraArea(s, a){
+  const hm=d=>String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+  const ahora=hm(new Date());
+  abrirModal(`<h2>¿Desde qué hora estás en ${esc(a)}?</h2>
+    <div class="sub" style="margin-bottom:10px;">Pon la hora en que empezaste a trabajar ahí hoy, aunque lo estés registrando después. Así tus minutos se reparten bien entre las áreas.</div>
+    <div class="modal-campo"><label>Empecé en ${esc(a)} a las</label>
+      <input type="time" id="haHora" value="${ahora}"></div>
+    <div class="modal-msg" id="haMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" id="haOk">CONTINUAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+  $("haOk").onclick=async()=>{
+    const h=($("haHora").value||"").trim(), msg=$("haMsg");
+    if(!h){ msg.textContent="Indica la hora"; return; }
+    if(h>hm(new Date())){ msg.textContent="La hora no puede ser posterior a ahora"; return; }
+    $("haOk").disabled=true;
+    try{
+      const r=await rpc("fn_area_declarar_hora",{p_dni:s.dni,p_token:s.token,p_area:a,p_hora:h});
+      if(r && r.ok===false){ msg.textContent=r.error||"No se pudo guardar la hora"; $("haOk").disabled=false; return; }
+    }catch(e){
+      // Sin red o sin el parche en la base: se cambia igual, el reparto cae a producción.
+      if(e.message==="Sesión vencida") return;
+    }
+    cerrarModal();
+    AREA_ESTAJERO = a;
+    $("tituloArea").textContent = a;
+    cargarTodo(s);
+  };
 }
 function pintarAreasEstajero(s){
   const g=$("gridAreaEstajero"); if(!g) return;
@@ -1473,17 +1504,86 @@ async function abrirOF(of){
   ABRIENDO_OF=true;
   const z=$("sugerenciasOF");
   pintarCargando(z,"Cargando OF "+of+"…");
-  try{ await cargarTicketsDeOF(of); }
+  try{ await Promise.all([cargarTicketsDeOF(of), cargarOpAdOF(of)]); }
   catch(e){ mostrarError(e.message); return; }
   finally{ ABRIENDO_OF=false; pintarSugerencias(); }
   sel.of=of; sel.modulo=null; sel.op=null;
   pintarModulos(); irA("pasoModulos");
 }
 
+/* ---- Operaciones adicionales de la OF (parche 91) ----
+   Ingeniería las agrega a una OF cuando hay que hacer algo fuera de la BASE del
+   artículo (p. ej. por una falla de otra área). Se registran por cantidad, sin
+   ticket, y sus minutos cuentan para quien las hizo. Si la base todavía no
+   tiene la función, la OF se abre igual, sin la tarjeta. */
+let OPADX={of:null, items:[], sel:null, volver:null};
+async function cargarOpAdOF(of){
+  OPADX={of, items:[], sel:null, volver:null};
+  const s=sesionActual(); if(!s) return;
+  try{
+    const r=await rpc("fn_opad_listar",{p_dni:s.dni,p_token:s.token,p_area:AREA_ESTAJERO||s.area,p_of:of});
+    if(r && r.ok && Array.isArray(r.items)) OPADX.items=r.items;
+  }catch(e){}
+}
+function pintarOpAd(){
+  $("tituloOpAd").textContent = "Adicionales · OF " + OPADX.of;
+  const l=$("listaOpAd"); l.innerHTML="";
+  OPADX.items.forEach(x=>{
+    const lleno = x.restante!=null && Number(x.restante)<=0;
+    const c=document.createElement("div");
+    c.className="card-fila";
+    c.innerHTML=`<div><div class="cf-titulo">${esc(x.operacion)}</div>
+        <div class="cf-detalle">${esc(x.modulo)}${tkVer("std")?` · STD <b>${Number(x.std).toFixed(2)}</b> min`:""}</div></div>
+      <div class="badge-disp ${lleno?'vacio':''}">${x.restante==null?qty(x.hecho)+" und":qty(x.restante)+" und libres"}</div>`;
+    c.onclick=()=>{
+      if(lleno){ mostrarError("Ya se completó la cantidad autorizada"); return; }
+      OPADX.sel=x; opAdPedirCant();
+    };
+    l.appendChild(c);
+  });
+}
+function opAdPedirCant(){
+  const x=OPADX.sel; if(!x) return;
+  $("tituloOpAdCant").textContent = x.operacion;
+  $("opAdDet").innerHTML = `OF ${esc(OPADX.of)} · ${esc(x.modulo)}`
+    + (x.restante!=null ? `<br>Quedan <b>${qty(x.restante)}</b> und de ${qty(x.tope)}` : "");
+  $("opAdCant").value="";
+  irA("pasoOpAdCant");
+  setTimeout(()=>$("opAdCant").focus(),150);
+}
+async function opAdRegistrar(){
+  const x=OPADX.sel; if(!x) return;
+  const cant=parseFloat(String($("opAdCant").value).replace(/[^\d.]/g,""));
+  if(!cant || cant<=0){ mostrarError("Escribe la cantidad que hiciste"); return; }
+  const s=sesionActual(), area=AREA_ESTAJERO||s.area;
+  const btn=$("opAdBtnReg"); btn.disabled=true; btn.textContent="REGISTRANDO…";
+  try{
+    const r=await rpc("fn_opad_registrar",{p_dni:s.dni,p_token:s.token,p_area:area,p_id:x.id,p_cant:cant});
+    if(!r.ok){ mostrarError(r.error||"No se pudo registrar"); return; }
+    await cargarOpAdOF(OPADX.of);
+    pintarOpAd(); pintarModulos();
+    $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
+    $("exDetalle").innerHTML = `${qty(cant)} und · ${esc(x.operacion)} · OF ${esc(OPADX.of)}`
+      + (r.tope!=null ? `<br>Van ${qty(r.hecho)} de ${qty(r.tope)} und` : "");
+    OPADX.volver = OPADX.items.length ? "pasoOpAd" : "pasoModulos";
+    mostrarExito();
+  }catch(e){ mostrarError(e.message); }
+  finally{ btn.disabled=false; btn.textContent="REGISTRAR"; }
+}
+
 /* --- paso módulos --- */
 function pintarModulos(){
   { const a=artDeOF(sel.of); $("tituloModulos").textContent = (a?a+" · ":"") + "OF " + sel.of; }
   const l=$("listaModulos"); l.innerHTML="";
+  if(OPADX.of===sel.of && OPADX.items.length){
+    const c=document.createElement("div");
+    c.className="card-fila";
+    c.innerHTML=`<div><div class="cf-titulo">ADICIONALES</div>
+        <div class="cf-detalle">Operaciones fuera de la BASE para esta OF</div></div>
+      <div class="badge-disp">${OPADX.items.length} op.</div>`;
+    c.onclick=()=>{ pintarOpAd(); irA("pasoOpAd"); };
+    l.appendChild(c);
+  }
   const mods={};
   ALM.tickets.forEach(t=>{
     if(t.of!==sel.of) return;
@@ -1784,6 +1884,7 @@ function mostrarExito(){
     /* Acabado no tiene pantalla de tickets: ya lo deja en su lista de
        operaciones `refrescarAcabado`. Aquí solo se cierra el aviso. */
     if(ES_ACABADO) return;
+    if(OPADX.volver){ const v=OPADX.volver; OPADX.volver=null; irA(v); return; }
     pintarTickets(); irA("pasoTickets");
   }, 2500);
 }
