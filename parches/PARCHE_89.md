@@ -1,6 +1,6 @@
 # PARCHE 89 — Ingeniería · SUBIDA DE HOJAS DE NUMERACIÓN (HN)
 
-> **Pendiente de aplicar.** Va en el despliegue conjunto con los parches 88, 90 y 91.
+> **Aplicado en producción el 30-set-2026**, con autorización de Ruzaad (despliegue conjunto).
 
 ## Para qué
 
