@@ -1996,7 +1996,7 @@ function bindSupervisoraUI(){
   { const tb=$("tabSupBases"); if(tb) tb.onclick = ()=>{ pararAvance(); marcarTab("tabSupBases"); irA("pasoSupBases"); cargarBasesSup(); }; }
   $("tabIncidencias").onclick = ()=>{ pararAvance(); marcarTab("tabIncidencias"); irA("pasoIncidencias"); cargarIncidencias(); };
   { const te=$("tabEfPersonal"); if(te) te.onclick = ()=>{ pararAvance(); marcarTab("tabEfPersonal"); irA("pasoEfPersonal"); cargarEfPersonal(); }; }
-  { const tr=$("tabReclamos"); if(tr) tr.onclick = ()=>{ pararAvance(); marcarTab("tabReclamos"); irA("pasoSupRec"); cargarSupRec(); }; }
+  { const tr=$("tabReclamos"); if(tr) tr.onclick = ()=>{ pararAvance(); marcarTab("tabReclamos"); irA("pasoSupRec"); cargarSupRec(true); }; }   // vuelve con la OF/módulo/operación que ya tenía
   cargarEstadosSup();
 }
 
@@ -2013,7 +2013,8 @@ function srCambio(cual){
   if(cual==="op"){ SR.nop=$("srOp").value; }
   cargarSupRec(true);
 }
-/* `mantener` conserva lo elegido; sin él (entrar a la pestaña o ↻) se parte de cero. */
+/* `mantener` conserva lo elegido (entrar a la pestaña, ↻ y el refresco en vivo lo usan: antes
+   volver a la pestaña borraba la OF elegida). Sin él se parte de cero. */
 async function cargarSupRec(mantener){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   if(!mantener){ SR={of:"",mod:"",nop:"",acab:false}; }

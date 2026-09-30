@@ -3529,8 +3529,6 @@ async function cargarTk(){
   libSel={}; tkPag=1;
   try{
     TK = await rpc("fn_tickets_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:$("fechaTk").value});
-    // Si el área filtrada ya no tiene tickets hoy, vuelve a "todas".
-    if(tkArea && !TK.some(t=>t.area===tkArea)) tkArea="";
     poblarAreaTk();
     pintarTk();
     cargarResumenUltimas();   // no bloquea la tabla
@@ -3541,6 +3539,8 @@ async function cargarTk(){
 function poblarAreaTk(){
   const s=$("areaTk"); if(!s) return;
   const areas=[...new Set(TK.map(t=>t.area).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"es"));
+  // El área elegida se mantiene aunque ese día no tenga tickets (antes se soltaba a "todas").
+  if(tkArea && !areas.includes(tkArea)) areas.push(tkArea);
   s.innerHTML = `<option value="">Todas las áreas</option>`
     + areas.map(a=>`<option ${a===tkArea?"selected":""}>${esc(a)}</option>`).join("");
   s.value = tkArea;
@@ -4661,10 +4661,13 @@ function opeRangoDef(){
   return {desde:d.toLocaleDateString("sv-SE"), hasta:h};
 }
 function opeInit(){
+  /* El select se llena aunque las fechas ya vengan puestas (la barra de fecha
+     las escribe antes de entrar): antes quedaba vacío y el área no filtraba. */
+  const sa=$("opeArea");
+  if(sa && sa.options.length<=1) sa.innerHTML=`<option value="">Todas las áreas</option>`
+    + (AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
   if($("opeDesde").value) return;
   const r=opeRangoDef(); $("opeDesde").value=r.desde; $("opeHasta").value=r.hasta;
-  $("opeArea").innerHTML=`<option value="">Todas las áreas</option>`
-    + (AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
   cargarOpe();
 }
 async function cargarOpe(){
@@ -5558,8 +5561,10 @@ async function cargarPendientesInci(){
     if(sel){
       const prev=sel.value;
       const areas=[...new Set(INCI_PEND.map(x=>x.area).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+      // El área elegida se queda aunque ya no tenga pendientes: "nada en esta área", no "todas".
+      if(prev && !areas.includes(prev)) areas.push(prev);
       sel.innerHTML=`<option value="">Todas</option>`+areas.map(a=>`<option>${esc(a)}</option>`).join("");
-      if(areas.includes(prev)) sel.value=prev;
+      sel.value=prev;
     }
     pintarPendientesInci();
   }catch(e){ z.innerHTML=""; mostrarError(e.message); }
