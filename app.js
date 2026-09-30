@@ -846,7 +846,7 @@ async function cargarTodo(s){
   const area = AREA_ESTAJERO || s.area;
   ES_ACABADO = (area === "ACABADO");
   aplicarModoAcabado();
-  $("zonaCarga").innerHTML = cargandoHTML("Cargando "+(ES_ACABADO?"OFs":"almacén")+" de "+area+"…");
+  pintarCargando($("zonaCarga"),"Cargando "+(ES_ACABADO?"OFs":"almacén")+" de "+area+"…");
   try{
     // ACABADO ya no lee el almacén: registra por cantidad contra el corte real.
     if(ES_ACABADO){ await cargarAcabado(s, area); return; }
@@ -1178,7 +1178,7 @@ let MISREG={ofs:[]}, MISREG_ABIERTA="";
 async function abrirMisRegistros(){
   const s=sesionActual(); if(!s) return;
   const area=AREA_ESTAJERO||s.area;
-  $("listaMisReg").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("listaMisReg"),"Cargando…");
   irA("pasoMisReg");
   await cargarMisRegistros();
 }
@@ -1248,7 +1248,7 @@ function aplicarBotonMisPaq(){
 }
 async function abrirMisPaquetes(){
   const s=sesionActual(), area=AREA_ESTAJERO||s.area;
-  $("listaMisPaq").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("listaMisPaq"),"Cargando…");
   irA("pasoMisPaq");
   try{
     const r=await rpc("fn_mis_paquetes",{p_dni:s.dni,p_token:s.token,p_area:area});
@@ -1503,7 +1503,7 @@ async function abrirOF(of){
   if(ABRIENDO_OF) return;
   ABRIENDO_OF=true;
   const z=$("sugerenciasOF");
-  z.innerHTML=cargandoHTML("Cargando OF "+of+"…");
+  pintarCargando(z,"Cargando OF "+of+"…");
   try{ await Promise.all([cargarTicketsDeOF(of), cargarOpAdOF(of)]); }
   catch(e){ mostrarError(e.message); return; }
   finally{ ABRIENDO_OF=false; pintarSugerencias(); }
@@ -1901,7 +1901,7 @@ function areaSup(){ return SUP_AREA_OVERRIDE || ((sesionActual()||{}).area) || "
 
 async function cargarIncidencias(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
-  const z=$("listaIncidencias"); z.innerHTML=cargandoHTML("Cargando incidencias…");
+  const z=$("listaIncidencias"); pintarCargando(z,"Cargando incidencias…");
   try{
     const r=await rpc("fn_solicitudes_listar",{p_dni:s.dni,p_token:s.token,p_area:areaSup()});
     if(!r.ok){ mostrarError(r.error||"Error"); z.innerHTML=""; return; }
@@ -2017,7 +2017,7 @@ function srCambio(cual){
 async function cargarSupRec(mantener){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   if(!mantener){ SR={of:"",mod:"",nop:"",acab:false}; }
-  $("srLista").innerHTML=cargandoHTML("Cargando…");
+  pintarCargando($("srLista"),"Cargando…");
   $("srResumen").textContent="";
   try{
     const r=await rpc("fn_sup_reclamos_of",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),
@@ -2081,7 +2081,7 @@ function srPintar(r){
 function cargarEfPersonal(){
   const s=sesionActual(); if(!s) return;
   const fd=$("fechaEfPer"); if(fd && !fd.value) fd.value = new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"});
-  const g=$("gridEfPer"); if(g) g.innerHTML=cargandoHTML("Calculando eficiencia…");
+  const g=$("gridEfPer"); if(g) pintarCargando(g,"Calculando eficiencia…");
   rpc("fn_eficiencia_personal",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),p_fecha:(fd?fd.value:null)})
     .then(r=>{ if(!r.ok){ mostrarError(r.error||"Error"); if(g) g.innerHTML=""; return; }
       pintarEfPersonal(r.personal||[]); })
@@ -2199,7 +2199,7 @@ function aswHoy(){ return new Date().toLocaleDateString("sv-SE",{timeZone:"Ameri
 async function aswStart(cfg, fecha){
   ASW.cfg=cfg; ASW.dec={}; ASW.idx=0; ASW.cur={}; ASW.fecha=fecha||aswHoy();
   const st=$(cfg.stackId); if(!st) return;
-  st.innerHTML=cargandoHTML("Cargando personal…");
+  pintarCargando(st,"Cargando personal…");
   if($(cfg.resumenId)){ $(cfg.resumenId).hidden=true; $(cfg.resumenId).innerHTML=""; }
   try{
     const r=await cfg.listar(ASW.fecha);
@@ -2323,7 +2323,7 @@ function asisInit(){
   const s=sesionActual(); if(!s) return;
   const f=$("asisFecha"); if(f && !f.value) f.value=aswHoy();
   ASIS={list:[],dec:{},fecha:(f&&f.value)||aswHoy()};
-  const g=$("asisLista"); if(g) g.innerHTML=cargandoHTML("Cargando personal…");
+  const g=$("asisLista"); if(g) pintarCargando(g,"Cargando personal…");
   rpc("fn_asistencia_marcar_lista",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),p_fecha:ASIS.fecha})
     .then(r=>{
       if(r&&r.ok===false){ mostrarError(r.error||"Error"); if(g) g.innerHTML=""; return; }
@@ -2450,7 +2450,7 @@ async function cargarAvanceOF(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   const area=areaSup();
   if(AO.area!==area){ Object.assign(AO,{items:null,area,ops:{}}); AO.of.clear(); AO.mod.clear(); AO.mas.clear(); }
-  if(!AO.items) $("aoLista").innerHTML=cargandoHTML("Cargando OF abiertas…");
+  if(!AO.items) pintarCargando($("aoLista"),"Cargando OF abiertas…");
   try{
     const r=await rpc("fn_avance_of",{p_dni:s.dni,p_token:s.token,p_area:area});
     if(!r.ok){ aoFallo(r.error||"Error"); return; }
@@ -2530,7 +2530,7 @@ async function cargarBasesSup(forzar){
   const area=areaSup();
   if(BS.area!==area || forzar){ Object.assign(BS,{items:null,area,ops:{},opMatch:null}); BS.abiertos.clear(); BS.mods.clear(); BS.mas.clear(); }
   if(BS.items){ bsPintar(); return; }
-  $("bsLista").innerHTML=cargandoHTML("Cargando artículos…");
+  pintarCargando($("bsLista"),"Cargando artículos…");
   try{
     const r=await rpc("fn_bases_area_articulos",{p_dni:s.dni,p_token:s.token,p_area:area});
     if(!r.ok){ $("bsLista").innerHTML=`<div class="vacio-msg">${esc(r.error||"Error")}</div>`; return; }
@@ -2628,7 +2628,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   }
 });
 async function cargarPersonal(s){
-  $("gridPersonal").innerHTML = cargandoHTML("Cargando personal…");
+  pintarCargando($("gridPersonal"),"Cargando personal…");
   try{
     PERSONAL = await rpc("fn_personal",{p_dni:s.dni,p_token:s.token,p_area:areaSup()});
     pintarPersonal();
@@ -2944,7 +2944,7 @@ function pintarPersonalMov(){
 async function moverAreaElegir(){
   if(!mv.dnis.length) return;
   const s=sesionActual();
-  const l=$("listaAreasMov"); l.innerHTML=cargandoHTML("Cargando áreas…");
+  const l=$("listaAreasMov"); pintarCargando(l,"Cargando áreas…");
   irA("pasoMoverArea");
   const areas = (await cargarAreasDB()).filter(a=>a!==areaSup());
   l.innerHTML="";
