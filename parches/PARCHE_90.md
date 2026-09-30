@@ -1,6 +1,6 @@
 # PARCHE 90 — Personal que cambia de área en el día
 
-> **No aplicado.** Va en el despliegue conjunto que arma el coordinador.
+> **Aplicado en producción el 30-set-2026**, con autorización de Ruzaad (despliegue conjunto).
 
 ## El problema
 
