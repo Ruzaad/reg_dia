@@ -734,23 +734,21 @@
     </section>
 
     <!-- ===================== OFs REGISTRADAS ===================== -->
-    <section class="pantalla" id="pasoOfs">
+    <section class="pantalla" id="pasoOfs" ondragover="ofsDrag(event)" ondrop="ofsSoltar(event)">
       <div class="seccion-cab"><h1>OFs registradas</h1>
         <p class="seccion-sub">Lo que quedó guardado al confirmar cada HN: cantidad programada y desglose por paquete. Toca ▾ para ver el detalle.</p></div>
       <div class="barra-control">
         <label class="campo"><span>Buscar</span><input type="text" id="ofsBuscar" placeholder="OF / artículo…" oninput="ofsPintar()"></label>
         <button class="btn-mini" onclick="cargarOfs()">Cargar</button>
       </div>
-      <details class="nav-group" style="margin:4px 0 10px;">
+      <details class="nav-group" id="ofsAlta" style="margin:4px 0 10px;">
         <summary class="nav-sep" style="cursor:pointer;">Dar de alta una OF</summary>
         <p class="seccion-sub" style="margin:6px 0;">Para las OF que ya estaban en curso antes de registrar HNs. <b>Con la HN</b> queda el desglose completo por paquete; <b>a mano</b> solo el corte real, que es lo que ACABADO necesita para su techo.</p>
-        <div class="barra-control">
-          <label class="btn-mini verde" style="cursor:pointer;align-self:flex-end;">
-            Cargar desde HN (uno o varios)
-            <input type="file" id="fileOfHN" accept=".xlsx,.xls,.xlsm" multiple style="display:none" onchange="ofsLeerHN(this)">
-          </label>
-          <span class="sub" style="align-self:flex-end;">No escribe en el ALMACÉN: solo registra la OF y su desglose.</span>
-        </div>
+        <label class="hn-drop" id="ofsHNDrop">
+          <input type="file" id="fileOfHN" accept=".xlsx,.xls,.xlsm" multiple hidden onchange="ofsLeerHN(this)">
+          <b>Arrastra aquí las HN</b> o toca para elegirlas (una o varias)
+          <span class="sub">Se compara cada hoja con lo ya registrado antes de escribir. No toca el ALMACÉN.</span>
+        </label>
         <div id="ofsHNCont" hidden>
           <div class="sub" id="ofsHNConteo" style="margin:8px 0;"></div>
           <div id="ofsHNJobs"></div>

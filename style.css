@@ -1303,3 +1303,15 @@ details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content
 .lg-tag.ed{background:#e9eefa;color:var(--azul);} .lg-tag.nu{background:#eef7f0;color:var(--exito);}
 .lg-tag.bo{background:#fdecea;color:var(--alerta);}
 .nw{white-space:nowrap;}
+
+/* Subida de HN (parche 89) */
+.hn-drop{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;cursor:pointer;
+  border:2px dashed #b9c6d8;border-radius:14px;padding:18px 14px;margin:8px 0 12px;background:var(--blanco);
+  color:var(--azul);transition:background .15s,border-color .15s;}
+.hn-drop:hover,.hn-drop.sobre{border-color:var(--azul);background:#eef3fa;}
+.hn-aviso{color:var(--alerta);font-weight:700;font-size:14px;margin:6px 0;}
+.hn-dif{border:1px solid #f3c7c2;background:#fdf6f5;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:14px;}
+.hn-dif ul{margin:6px 0 8px 18px;}
+.hn-rep{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--azul);cursor:pointer;margin:4px 0;}
+.hn-rep input{width:18px;height:18px;}
+.tabla tr.hn-cero td{color:var(--tomado);text-decoration:line-through;}
