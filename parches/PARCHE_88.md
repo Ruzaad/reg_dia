@@ -103,3 +103,22 @@ supabase functions deploy ef-gemini --no-verify-jwt
 
 Sin la clave todo lo demás funciona; el botón de Gemini solo avisa que falta
 `GEMINI_API_KEY`.
+
+## Corrección del 30 de septiembre: los tiempos solo bajan
+
+Ruzaad vio que se sugería subir un tiempo (de 0.5 a 1.5). La finalidad es bajar los
+tiempos holgados, y nadie debe llegar a 100%: 95% o más ya es anormal.
+
+- La simulación apunta a una **meta** (90% por defecto, editable, nunca más de 94).
+- **Tiempo sugerido** = el menor entre el STD, el STD escalado a la meta y el tiempo
+  real del historial llevado a la meta (este último con 3 días o más). Nunca pasa
+  del STD, y el campo de tiempo no deja escribir más que el STD.
+- El escalado se mide sobre el turno completo (575): el exceso que viene de
+  incidencias negativas se corrige en la incidencia, no bajando tiempos, y el panel
+  lo dice.
+- Botón **Usar tiempos sugeridos**: aplica todos a la vez; el día queda en la meta o
+  debajo (salvo lo que venga de incidencias).
+- En rojo desde 95%; en ocre sobre la meta.
+- Gemini recibe la meta y el `tiempo_maximo` de cada operación; lo que proponga por
+  encima se recorta a ese tope, y la eficiencia resultante la calcula la función,
+  no Gemini.

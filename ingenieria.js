@@ -2820,12 +2820,16 @@ function audFilas(){
     return normKey(x.nombre+" "+x.dni+" "+x.area+" "+x.fecha).includes(q);
   });
 }
-function audClaseEf(v){ return v>=100 ? "alarma" : (v>=AUD.umbral ? "aviso" : ""); }
+/* 95% o más ya es anormal: nadie debería llegar a 100. La simulación apunta a
+   una META por debajo de eso (90 por defecto, nunca más de 94). */
+const AUD_ANORMAL=95;
+let AUD_META=90;
+function audClaseEf(v){ return v>=AUD_ANORMAL ? "alarma" : (v>AUD_META ? "aviso" : ""); }
 /* Barra de % como la de Resumen de OF, tope visual en 100. */
 function audBarra(v){
   if(v==null) return "—";
   const w=Math.max(0, Math.min(100, Number(v)));
-  const cls=v>=100 ? "bajo" : "alto";
+  const cls=v>=AUD_ANORMAL ? "bajo" : "alto";
   return `<div class="avof-pct"><div class="avof-pct-fill ${cls}" style="width:${w}%"></div>
     <span class="avof-pct-lbl">${(+v).toFixed(1)}%</span></div>`;
 }
@@ -2960,7 +2964,32 @@ function audSimTxt(){
   const cd=dispSim!==Number(d.disp), cp=Math.abs(prodSim-Number(d.prod))>0.05;
   return `Producido <b>${prodSim}</b> min ${cp?`(antes ${d.prod})`:""} ·
     disponible <b>${dispSim}</b> min ${cd?`(antes ${d.disp})`:""} →
-    eficiencia <b class="aud-ef ${audClaseEf(efSim)}">${efSim==null?"—":efSim.toFixed(1)+"%"}</b>`;
+    eficiencia <b class="aud-ef ${audClaseEf(efSim)}">${efSim==null?"—":efSim.toFixed(1)+"%"}</b>
+    <span class="aud-item-sub">(meta ${AUD_META}%)</span>`;
+}
+/* Tiempo sugerido: solo BAJA, nunca sube del STD. Es el menor entre
+   · el STD actual;
+   · el STD escalado para que el día quede en la meta (si hoy la pasa). Se mide
+     sobre el turno completo: el exceso que viene de incidencias negativas no
+     es culpa del STD y se corrige en la incidencia, no bajando tiempos;
+   · el tiempo real de su historial llevado a la meta (con 3 días o más).
+   Aplicado a todas las operaciones, el día queda en la meta o debajo. */
+function audEfReal(){ return AUDD ? AUDD.prod/Math.max(Number(AUDD.disp)||0, 575)*100 : null; }
+function audSugerido(o){
+  const c=[o.std], ef=audEfReal();
+  if(ef && ef>AUD_META) c.push(o.std*AUD_META/ef);
+  if(o.hist_dias>=3 && o.hist_t_med>0) c.push(o.hist_t_med*AUD_META/100);
+  return Math.floor(Math.min(...c)*1000)/1000;
+}
+function audUsarSugeridos(){
+  AUDD_OPS.forEach(o=>{ AUDD_STD[o.k]=audSugerido(o); });
+  audPintarDrawer();
+}
+function audSetMeta(v){
+  const n=Number(v);
+  if(!(n>=50)) return;
+  AUD_META=Math.min(94, Math.round(n));
+  audPintarDrawer();
 }
 function audPintarDrawer(){
   if(!AUDD) return;
@@ -3023,9 +3052,13 @@ function audPintarDrawer(){
     <div class="aud-sim aud-sim-fija" id="audSimCaja">
       <div class="aud-kpi-lbl">Simulación</div>
       <div class="aud-sim-res" id="audSimRes">${audSimTxt()}</div>
+      ${Number(d.disp)<575?`<div class="aud-sim-res">Sus incidencias le quitan ${575-Number(d.disp)} min de turno: esa parte del exceso se corrige en la incidencia, no bajando tiempos.</div>`:""}
       <div class="aud-sim-res">Solo simula: los tickets no se tocan. Cambia el tiempo de una operación
         o corrige una incidencia y aquí se recalcula.</div>
       <div class="aud-sim-fila" style="margin-top:8px;">
+        <label class="aud-campo"><div class="k">Meta % (menos de ${AUD_ANORMAL})</div>
+          <input type="number" min="50" max="94" step="1" value="${AUD_META}" onchange="audSetMeta(this.value)"></label>
+        ${AUDD_OPS.length?`<button class="btn-mini" onclick="audUsarSugeridos()">Usar tiempos sugeridos</button>`:""}
         <button class="btn-mini gris" onclick="audSimReset()">Volver a lo real</button>
       </div>
     </div>
@@ -3076,9 +3109,11 @@ function audFilaOp(o){
   const hist = o.hist_dias
     ? `Historial ${o.hist_dias} día(s)${o.hist_personas>1?` de ${o.hist_personas} personas`:""}: `
       + `normal ${hm} und/día, máximo ${hx} · tiempo real ${o.hist_t_med} min/prenda`
+      + (o.hist_dias<3 ? " (poco historial)" : "")
     : "Sin historial de esta operación en 60 días";
   const ofs = o.ofs.length>1 ? o.ofs.map(f=>`OF ${esc(f.of||"—")}: ${f.cant} und · ${f.minutos.toFixed(1)} min`).join(" · ")
                              : `OF ${esc(o.ofs[0].of||"—")}`;
+  const sg=audSugerido(o);
   return `<div class="aud-item">
     <div class="aud-item-fila">
       <div>
@@ -3091,16 +3126,17 @@ function audFilaOp(o){
     <div class="aud-sim">
       <div class="aud-sim-fila">
         <label class="aud-campo" style="flex:1;">
-          <div class="k">Tiempo por prenda (STD ${o.std})</div>
-          <input type="number" step="0.01" min="0" value="${t}" oninput="audSimStd('${o.k}', this.value)">
+          <div class="k">Tiempo por prenda (STD ${o.std}, solo se puede bajar)</div>
+          <input type="number" step="0.001" min="0" max="${o.std}" value="${t}" oninput="audSimStd('${o.k}', this.value)">
         </label>
-        ${o.hist_t_med!=null?`<button class="btn-mini gris" onclick="audSimStd('${o.k}', ${o.hist_t_med}, true)">Usar tiempo real</button>`:""}
+        ${sg<o.std?`<button class="btn-mini gris" onclick="audSimStd('${o.k}', ${sg}, true)">Sugerido ${sg}</button>`:`<span class="aud-item-sub">El STD ya está en lo sugerido</span>`}
       </div>
     </div>
   </div>`;
 }
 function audSimStd(k, v, repintar){
-  AUDD_STD[k]=Math.max(0, Number(v)||0);
+  const o=AUDD_OPS.find(x=>x.k===k);
+  AUDD_STD[k]=Math.min(o?o.std:Infinity, Math.max(0, Number(v)||0));
   if(repintar) audPintarDrawer(); else audPintarDrawerSoloSim();
 }
 /* ---- Tiempo idóneo con Gemini (Edge Function ef-gemini, parche 88) ----
@@ -3148,14 +3184,14 @@ async function audPedirIA(){
   const dni=AUDD.dni, fecha=AUDD.fecha;
   AUDD_IA="cargando"; audPintarDrawer();
   try{
-    const r=await edgeFn(FN_EF_GEMINI,{p_dni:ING.dni,p_token:ING.token,p_dni_op:dni,p_fecha:fecha,nota});
+    const r=await edgeFn(FN_EF_GEMINI,{p_dni:ING.dni,p_token:ING.token,p_dni_op:dni,p_fecha:fecha,nota,meta:AUD_META});
     if(!AUDD || AUDD.dni!==dni || AUDD.fecha!==fecha) return;   // cerró o cambió de fila
     AUDD_IA = r.ok ? Object.assign({}, r.analisis, {modelo:r.modelo}) : {error:r.error||"No se pudo analizar"};
   }catch(e){ AUDD_IA={error:e.message}; }
   audPintarDrawer();
 }
 function audUsarIA(opk, t, sinPintar){
-  AUDD_OPS.filter(o=>o.opk===opk).forEach(o=>{ AUDD_STD[o.k]=Math.max(0, Number(t)||0); });
+  AUDD_OPS.filter(o=>o.opk===opk).forEach(o=>{ AUDD_STD[o.k]=Math.min(o.std, Math.max(0, Number(t)||0)); });
   if(!sinPintar) audPintarDrawer();
 }
 function audUsarIATodo(){
