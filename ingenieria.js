@@ -1231,11 +1231,14 @@ let EF=null, efSort={col:null,dir:1};
 /* `ef` y `prod/disp` son del ÁREA que se está viendo; `ef_dia` es el día
    completo de la persona (todas sus áreas), que es la cifra con la que se paga
    el incentivo. `areas` muestra el reparto cuando estuvo en más de una. */
+/* Parche 88: la eficiencia de ÁREA se oculta por ahora (no hay control real de
+   las horas por área). Queda la personal del día. Para volver: true. */
+const VER_EF_AREA=false;
 const EF_COLS=[
   {k:"nombre",t:"Nombre"},{k:"dni",t:"DNI"},{k:"estado",t:"Estado"},
   {k:"tickets",t:"Tickets"},{k:"prod",t:"Min prod"},{k:"disp",t:"Min disp"},
   {k:"eficiencia",t:"Ef. del área"},{k:"ef_dia",t:"Ef. del día"},{k:"areas_txt",t:"Áreas del día"}
-];
+].filter(c=>VER_EF_AREA || c.k!=="eficiencia");
 /* Aplana personas × áreas: quien fue movido aparece en el filtro de AMBAS
    áreas, con los minutos que le corresponden a cada una (parche 55). */
 function efFilas(area){
@@ -1281,7 +1284,8 @@ function pintarEf(){
   $("efGate").style.display = "none";
   $("efContenido").hidden = false;
 
-  $("efAreas").innerHTML = (EF.areas||[]).filter(a=>a.area===fArea).map(a=>`
+  $("efAreas").style.display = VER_EF_AREA ? "" : "none";
+  if(VER_EF_AREA) $("efAreas").innerHTML = (EF.areas||[]).filter(a=>a.area===fArea).map(a=>`
     <div class="kpi"><div class="kpi-num">${censEf(Math.round(a.eficiencia)+"%")}</div>
     <div class="kpi-lbl">${esc(a.area)}<br>${Math.round(a.prod)} / ${Math.round(a.disp)} min</div></div>`).join("")
     || '<div class="vacio-msg">Sin datos ese día para esta área</div>';
@@ -1309,7 +1313,7 @@ function pintarEf(){
       <tr><td>${esc(p.nombre)}</td><td>${esc(p.dni)}</td>
       <td><span class="pill ${esc(p.estado)}">${esc(p.estado)}</span></td>
       <td>${p.tickets}</td><td>${Math.round(p.prod)}</td><td>${Math.round(p.disp)}</td>
-      <td class="${p.eficiencia>=80?'ef-alta':p.eficiencia<50?'ef-baja':''}">${censEf(Math.round(p.eficiencia)+"%")}</td>
+      ${VER_EF_AREA?`<td class="${p.eficiencia>=80?'ef-alta':p.eficiencia<50?'ef-baja':''}">${censEf(Math.round(p.eficiencia)+"%")}</td>`:""}
       <td class="${p.ef_dia>=80?'ef-alta':p.ef_dia<50?'ef-baja':''}">${censEf(Math.round(p.ef_dia)+"%")}${p.n_areas>1?' <span class="ef-multi">'+p.n_areas+'</span>':''}</td>
       <td class="izq ef-areas-txt">${esc(p.areas_txt)}</td></tr>`).join("");
   }
@@ -1342,6 +1346,7 @@ async function descargarEf(){
   const filas=lista.map(p=>[p.nombre,p.dni,p.area,pmOrigen(p.dni),pmCat(p.dni),
     p.estado,p.tickets,Math.round(p.prod),Math.round(p.disp),
     Math.round(p.eficiencia),Math.round(p.ef_dia),p.n_areas,p.areas_txt]);
+  if(!VER_EF_AREA){ CAB.splice(9,1); filas.forEach(f=>f.splice(9,1)); }
   const ws=XLSX.utils.aoa_to_sheet([CAB,...filas]); const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"Eficiencia"); XLSX.writeFile(wb,`EFICIENCIA_${fArea}_${$("fechaEf").value}.xlsx`);
 }
@@ -1989,7 +1994,7 @@ function dashTab(t){
   else if(t==="mod"){ if($("dbModArea")&&$("dbModArea").value) cargarDbMod(); }
 }
 let DBCH={};                 // instancias Chart por id de canvas
-let DB={fpReady:false, efSel:{}, cantSel:{}, modSel:{}, efModo:"ef", efData:null};
+let DB={fpReady:false, efSel:{}, cantSel:{}, modSel:{}, efModo:VER_EF_AREA?"ef":"min", efData:null};
 let AVOF={items:[], _rows:[]};
 let avofSort={col:null,dir:1};
 function ordenarAvof(col){ if(avofSort.col===col) avofSort.dir*=-1; else avofSort={col,dir:1}; avofPintar(); }
@@ -2017,6 +2022,7 @@ function dbBar(cid,labels,data,label,colors,horizontal){
 
 /* --- Eficiencia / minutaje por área --- */
 async function cargarDbEf(){
+  if(!VER_EF_AREA && $("dbEfBtnEf")){ $("dbEfBtnEf").style.display="none"; dbEfModo("min"); }
   dbEnsureFp(); const o=DB.efSel; if(!o.desde||!o.hasta){ mostrarError("Elige el rango"); return; }
   $("dbEfTabla").innerHTML=cargandoHTML("Calculando…");
   try{
@@ -2025,7 +2031,7 @@ async function cargarDbEf(){
     DB.efData=r; dbEfPintar();
   }catch(e){ $("dbEfTabla").innerHTML=""; mostrarError(e.message); }
 }
-function dbEfModo(m){ DB.efModo=m; $("dbEfBtnEf").classList.toggle("activo",m==="ef"); $("dbEfBtnMin").classList.toggle("activo",m==="min"); if(DB.efData) dbEfPintar(); }
+function dbEfModo(m){ if(!VER_EF_AREA) m="min"; DB.efModo=m; $("dbEfBtnEf").classList.toggle("activo",m==="ef"); $("dbEfBtnMin").classList.toggle("activo",m==="min"); if(DB.efData) dbEfPintar(); }
 function dbEfPintar(){
   const r=DB.efData; if(!r) return; const ef=DB.efModo==="ef"; const areas=r.areas||[];
   $("dbEfTit").textContent = ef?"Eficiencia % por área":"Minutaje por área";
@@ -2846,13 +2852,22 @@ async function exportarAvofCarpetas(){
    Casi toda incidencia trae minutos NEGATIVOS, así que achica el denominador
    y sube el porcentaje. Por eso la simulación se hace sobre el denominador y
    nunca sobre lo producido: los tickets no se tocan desde aquí. */
-let AUD={items:[], umbral:90, marcados:0, evaluados:0}, AUD_VISTA=[], audPag=1;
+/* Parche 88: umbral 95 por defecto, PICOS (salto sobre el promedio propio en el
+   rango) y los porqués que calcula el servidor. El panel resume el día por
+   operación (cantidades y minutos, no por numeración) y simula tiempos. */
+let AUD={items:[], umbral:95, pico:20, marcados:0, picos:0, evaluados:0}, AUD_VISTA=[], audPag=1;
 const AUD_PAGE=50;
+const AUD_POR={
+  PICO:["Pico","aviso"], INCIDENCIA:["Incidencia","alarma"], MULTIAREA:["Varias áreas","alarma"],
+  EN_BLOQUE:["Registro en bloque",""], TICKETS_DE_MAS:["Tickets de más","alarma"]
+};
 const AUD_COLS=[
   {k:"fecha",   t:"Fecha"},
   {k:"nombre",  t:"Persona", cls:"izq"},
   {k:"area",    t:"Área", cls:"izq"},
   {k:"ef",      t:"Eficiencia"},
+  {k:"prom",    t:"Su prom."},
+  {k:"por_txt", t:"Por qué", cls:"izq"},
   {k:"prod",    t:"Producido"},
   {k:"disp",    t:"Disponible"},
   {k:"tk",      t:"Tickets"},
@@ -2877,23 +2892,37 @@ function audInit(){
 async function cargarAudit(){
   const d=$("audDesde").value, h=$("audHasta").value;
   if(!d||!h){ mostrarError("Elige el rango de fechas"); return; }
-  const u=Number($("audUmbral").value);
+  const u=Number($("audUmbral").value), pk=Number(($("audPico")||{}).value||20);
   if(!(u>0)){ mostrarError("El umbral debe ser un número mayor que 0"); return; }
+  if(!(pk>0)){ mostrarError("El pico debe ser un número mayor que 0"); return; }
   $("tablaAudit").innerHTML=cargandoHTML("Revisando…"); $("audResumen").innerHTML="";
   audPag=1;
   try{
-    const r=await rpc("fn_ef_auditoria",{p_dni:ING.dni,p_token:ING.token,
-      p_desde:d, p_hasta:h, p_area:$("audArea").value, p_umbral:u});
+    const r=await rpc("fn_ef_auditoria_v2",{p_dni:ING.dni,p_token:ING.token,
+      p_desde:d, p_hasta:h, p_area:$("audArea").value, p_umbral:u, p_pico:pk});
     if(!r.ok){ mostrarError(r.error||"Error"); $("tablaAudit").innerHTML=""; return; }
-    AUD={items:r.items||[], umbral:r.umbral, marcados:r.marcados, evaluados:r.evaluados};
+    (r.items||[]).forEach(x=>{
+      x.por=(x.pico?["PICO"]:[]).concat(x.porques||[]);
+      x.por_txt=x.por.map(k=>(AUD_POR[k]||[k])[0]).join(", ");
+    });
+    AUD={items:r.items||[], umbral:r.umbral, pico:r.pico, marcados:r.marcados, picos:r.picos, evaluados:r.evaluados};
     audPintar();
   }catch(e){ $("tablaAudit").innerHTML=""; mostrarError(e.message); }
 }
+function audChips(x){
+  return (x.por||[]).map(k=>{
+    const d=AUD_POR[k]||[k,""];
+    const t=k==="PICO" ? `${d[0]} +${Math.round(x.ef-x.prom)}` : d[0];
+    return `<span class="aud-chip ${d[1]}">${esc(t)}</span>`;
+  }).join(" ") || '<span class="aud-item-sub">Revisar tickets</span>';
+}
 function audFilas(){
   const q=normKey($("audBuscar")?$("audBuscar").value:"");
-  const soloI=!!($("audSoloInci") && $("audSoloInci").checked);
+  const ver=($("audVer")||{}).value||"";
   return (AUD.items||[]).filter(x=>{
-    if(soloI && !(x.n_inci>0)) return false;
+    if(ver==="inci" && !(x.n_inci>0)) return false;
+    if(ver==="pico" && !x.pico) return false;
+    if(ver==="umbral" && !(x.ef>AUD.umbral)) return false;
     if(!q) return true;
     return normKey(x.nombre+" "+x.dni+" "+x.area+" "+x.fecha).includes(q);
   });
@@ -2911,15 +2940,16 @@ function audPintar(){
   const todas=audFilas();
   AUD_VISTA=ordAplicar("tablaAudit", todas, (a,b)=>(b.ef-a.ef)||String(a.fecha).localeCompare(b.fecha));
   const conInci=todas.filter(x=>x.n_inci>0).length;
-  const sobre100=todas.filter(x=>x.ef>=100).length;
+  const sobreU=todas.filter(x=>x.ef>AUD.umbral).length;
+  const picos=todas.filter(x=>x.pico).length;
   const kpi=(t,v,c)=>`<div class="kpi"><div class="kpi-num" style="color:${c}">${v}</div>`
     +`<div class="kpi-lbl">${t}</div></div>`;
   $("audResumen").innerHTML =
     kpi("Días marcados", todas.length, "var(--alerta)")+
-    kpi("Sobre 100%", sobre100, "var(--alerta)")+
+    kpi(`Sobre ${AUD.umbral}%`, sobreU, "var(--alerta)")+
+    kpi(`Picos (+${AUD.pico} pts)`, picos, "var(--ocre)")+
     kpi("Con incidencia", conInci, "var(--ocre)")+
-    kpi("Días evaluados", AUD.evaluados, "var(--azul)")+
-    kpi("Umbral", AUD.umbral+"%", "var(--azul)");
+    kpi("Días evaluados", AUD.evaluados, "var(--azul)");
 
   const totalP=Math.max(1, Math.ceil(AUD_VISTA.length/AUD_PAGE));
   if(audPag>totalP) audPag=totalP; if(audPag<1) audPag=1;
@@ -2932,6 +2962,8 @@ function audPintar(){
       <td class="izq">${esc(x.nombre)}</td>
       <td class="izq">${esc(x.area||"")}</td>
       <td class="avof-pct-td"><span class="aud-ef ${audClaseEf(x.ef)}">${(+x.ef).toFixed(1)}%</span></td>
+      <td>${x.prom==null?"—":(+x.prom).toFixed(1)+"%"}</td>
+      <td class="izq">${audChips(x)}</td>
       <td>${x.prod}</td>
       <td>${x.disp}</td>
       <td>${x.tk}</td>
@@ -2951,10 +2983,10 @@ function audPintar(){
 function audPagina(d){ audPag=Math.max(1, audPag+d); audPintar(); }
 function descargarAudit(){
   if(!AUD_VISTA.length){ mostrarError("No hay datos para descargar"); return; }
-  const CAB=["Fecha","DNI","Persona","Área","Eficiencia %","Producido","Disponible",
-             "Tickets","N° incidencias","Min. incidencias","Eficiencia sin incidencia %"];
-  const filas=AUD_VISTA.map(x=>[x.fecha,x.dni,x.nombre,x.area,x.ef,x.prod,x.disp,
-                                x.tk,x.n_inci,x.min_inci,x.ef_sin_inci]);
+  const CAB=["Fecha","DNI","Persona","Área","Eficiencia %","Su promedio %","Por qué","Producido","Disponible",
+             "Tickets","N° incidencias","Min. incidencias","Eficiencia sin incidencia %","Áreas de sus tickets"];
+  const filas=AUD_VISTA.map(x=>[x.fecha,x.dni,x.nombre,x.area,x.ef,x.prom,x.por_txt,x.prod,x.disp,
+                                x.tk,x.n_inci,x.min_inci,x.ef_sin_inci,x.areas_tk]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "AUDITORIA");
   XLSX.writeFile(wb, `AUDITORIA_EF_${$("audDesde").value}_a_${$("audHasta").value}.xlsx`);
@@ -2963,6 +2995,10 @@ function descargarAudit(){
 /* ---------- Panel lateral de la persona observada ---------- */
 let AUDD=null;          // detalle abierto
 let AUDD_SIM={};        // id de incidencia -> {minutos, quitada}
+let AUDD_OPS=[];        // el día agrupado por operación (fn_ef_auditoria_ops)
+let AUDD_STD={};        // clave de operación -> tiempo simulado (min/prenda)
+let AUDD_IA=null;       // último análisis de Gemini del día abierto
+let AUDD_NOTA="";       // nota del analista para Gemini
 function audIniciales(n){
   const p=String(n||"").replace(/,/g," ").trim().split(/\s+/).filter(Boolean);
   return ((p[0]||"")[0]||"" ).toUpperCase() + ((p[1]||"")[0]||"").toUpperCase();
@@ -2970,7 +3006,28 @@ function audIniciales(n){
 function audCerrar(){
   $("audDrawer").classList.remove("visible");
   $("audBackdrop").classList.remove("visible");
-  AUDD=null; AUDD_SIM={};
+  AUDD=null; AUDD_SIM={}; AUDD_OPS=[]; AUDD_STD={}; AUDD_IA=null; AUDD_NOTA="";
+}
+/* Operaciones del día sumadas entre OF: misma operación y mismo STD. */
+function audAgruparOps(d){
+  const g={};
+  (d.ops||[]).forEach(o=>{
+    const k=o.opk+"|"+o.std;
+    const x=g[k]||(g[k]={k, opk:o.opk, op:o.op, area:o.area, std:Number(o.std), tk:0, cant:0, minutos:0,
+      ofs:[], h_ini:o.h_ini, h_fin:o.h_fin, cant_dia:o.cant_op_dia, hist_dias:o.hist_dias,
+      hist_propios:o.hist_propios, hist_personas:o.hist_personas, hist_cant_med:o.hist_cant_med,
+      hist_cant_max:o.hist_cant_max, hist_t_med:o.hist_t_med, hist_t_p25:o.hist_t_p25});
+    x.tk+=o.tk; x.cant+=Number(o.cant); x.minutos+=Number(o.minutos);
+    x.ofs.push({of:o.of, cant:Number(o.cant), minutos:Number(o.minutos)});
+    if(o.h_ini<x.h_ini) x.h_ini=o.h_ini; if(o.h_fin>x.h_fin) x.h_fin=o.h_fin;
+  });
+  return Object.values(g).sort((a,b)=>b.minutos-a.minutos);
+}
+function audIniciarDia(r, ops){
+  AUDD=r; AUDD_SIM={}; AUDD_STD={}; AUDD_IA=null;
+  AUDD_OPS=audAgruparOps(ops&&ops.ok?ops:{});
+  (r.incidencias||[]).forEach(x=>{ AUDD_SIM[x.id]={minutos:Number(x.minutos), quitada:false}; });
+  AUDD_OPS.forEach(o=>{ AUDD_STD[o.k]=o.std; });
 }
 async function audAbrir(i){
   const f=AUD_VISTA[i]; if(!f) return;
@@ -2978,11 +3035,10 @@ async function audAbrir(i){
   dr.innerHTML=cargandoHTML("Cargando el día…");
   dr.classList.add("visible"); bd.classList.add("visible");
   try{
-    const r=await rpc("fn_ef_auditoria_detalle",{p_dni:ING.dni,p_token:ING.token,
-      p_dni_op:f.dni, p_fecha:f.fecha});
+    const a={p_dni:ING.dni,p_token:ING.token,p_dni_op:f.dni,p_fecha:f.fecha};
+    const [r,ops]=await Promise.all([rpc("fn_ef_auditoria_detalle",a), rpc("fn_ef_auditoria_ops",a).catch(()=>null)]);
     if(!r.ok){ mostrarError(r.error||"Error"); audCerrar(); return; }
-    AUDD=r; AUDD_SIM={};
-    (r.incidencias||[]).forEach(x=>{ AUDD_SIM[x.id]={minutos:Number(x.minutos), quitada:false}; });
+    audIniciarDia(r, ops);
     audPintarDrawer();
   }catch(e){ mostrarError(e.message); audCerrar(); }
 }
@@ -2996,17 +3052,28 @@ function audSimDisp(){
   });
   return 575+m;
 }
+/* Lo producido simulado: cada operación con su tiempo simulado. */
+function audSimProd(){
+  let p=Number(AUDD.prod)||0;
+  AUDD_OPS.forEach(o=>{ p += ((Number(AUDD_STD[o.k])||0) - o.std) * o.cant; });
+  return Math.round(p*10)/10;
+}
 function audSimEf(){
   const d=audSimDisp();
-  return d>0 ? Math.round(AUDD.prod/d*1000)/10 : null;
+  return d>0 ? Math.round(audSimProd()/d*1000)/10 : null;
+}
+function audSimTxt(){
+  const d=AUDD, efSim=audSimEf(), dispSim=audSimDisp(), prodSim=audSimProd();
+  const cd=dispSim!==Number(d.disp), cp=Math.abs(prodSim-Number(d.prod))>0.05;
+  return `Producido <b>${prodSim}</b> min ${cp?`(antes ${d.prod})`:""} ·
+    disponible <b>${dispSim}</b> min ${cd?`(antes ${d.disp})`:""} →
+    eficiencia <b class="aud-ef ${audClaseEf(efSim)}">${efSim==null?"—":efSim.toFixed(1)+"%"}</b>`;
 }
 function audPintarDrawer(){
   if(!AUDD) return;
   const dr=$("audDrawer"); if(!dr) return;
   const d=AUDD;
   const efAct = d.disp>0 ? Math.round(d.prod/d.disp*1000)/10 : null;
-  const efSim = audSimEf(), dispSim = audSimDisp();
-  const cambio = dispSim !== Number(d.disp);
   const inci=(d.incidencias||[]), tks=(d.tickets||[]);
 
   const fmtMin=v=>(v>0?"+":"")+v+" min";
@@ -3060,14 +3127,15 @@ function audPintarDrawer(){
         <div class="aud-kpi-num">${d.disp}</div></div>
     </div>
 
-    ${inci.length ? `<div class="aud-sim" id="audSimCaja" style="background:#eef3fb;">
+    <div class="aud-sim aud-sim-fija" id="audSimCaja">
       <div class="aud-kpi-lbl">Simulación</div>
-      <div class="aud-sim-res" id="audSimRes">
-        Disponible <b>${dispSim}</b> min ${cambio?`(antes ${d.disp})`:""} →
-        eficiencia <b class="aud-ef ${audClaseEf(efSim)}">${efSim==null?"—":efSim.toFixed(1)+"%"}</b>
+      <div class="aud-sim-res" id="audSimRes">${audSimTxt()}</div>
+      <div class="aud-sim-res">Solo simula: los tickets no se tocan. Cambia el tiempo de una operación
+        o corrige una incidencia y aquí se recalcula.</div>
+      <div class="aud-sim-fila" style="margin-top:8px;">
+        <button class="btn-mini gris" onclick="audSimReset()">Volver a lo real</button>
       </div>
-      <div class="aud-sim-res">Lo producido no se toca: ${d.prod} min en ${d.tk} ticket(s).</div>
-    </div>` : ""}
+    </div>
 
     <div class="aud-tit">Detalle del día</div>
     <div class="aud-grid">
@@ -3084,18 +3152,127 @@ function audPintarDrawer(){
     ${inci.length ? inci.map(filaInci).join("")
       : `<div class="vacio-msg">Sin incidencias. El porcentaje no viene de ahí: revisa los tickets.</div>`}
 
-    <div class="aud-tit">Tickets del día (${tks.length})</div>
-    ${tks.length ? tks.slice(0,40).map(t=>`<div class="aud-item">
+    <div class="aud-tit">Lo producido por operación (${AUDD_OPS.length})</div>
+    ${AUDD_OPS.length ? AUDD_OPS.map(audFilaOp).join("")
+      : `<div class="vacio-msg">Sin tickets</div>`}
+
+    ${audIAHTML()}
+
+    <details class="aud-det">
+      <summary>Ver los ${tks.length} ticket(s) uno por uno</summary>
+      ${tks.length ? tks.map(t=>`<div class="aud-item">
         <div class="aud-item-fila">
           <div>
             <div class="aud-item-tit">OF ${esc(t.of||"—")} · ${esc(t.op||"")}</div>
             <div class="aud-item-sub">${esc(t.hora)} · ${esc(t.area||"")} · ${t.cant} und${t.num?" · "+esc(t.num):""}</div>
           </div>
           <div class="aud-min">${t.minutos} min</div>
-        </div></div>`).join("")
-      + (tks.length>40?`<div class="aud-sim-res">…y ${tks.length-40} ticket(s) más.</div>`:"")
-      : `<div class="vacio-msg">Sin tickets</div>`}
+        </div></div>`).join("") : `<div class="vacio-msg">Sin tickets</div>`}
+    </details>
   `;
+}
+/* Una operación del día: cantidad y minutos sumados entre OF, contra su
+   historial (misma operación, 60 días previos) y con su tiempo simulable. */
+function audFilaOp(o){
+  const t=AUDD_STD[o.k], hm=o.hist_cant_med, hx=o.hist_cant_max;
+  let alerta="";      // con menos de 3 días de historial no hay "normal" contra qué medir
+  if(o.hist_dias>=3 && hx!=null && o.cant_dia>Number(hx))
+    alerta=`<span class="aud-chip alarma">Más que su máximo (${hx})</span>`;
+  else if(o.hist_dias>=3 && hm && o.cant_dia>=1.5*hm)
+    alerta=`<span class="aud-chip aviso">${(o.cant_dia/hm).toFixed(1)}× lo normal</span>`;
+  const hist = o.hist_dias
+    ? `Historial ${o.hist_dias} día(s)${o.hist_personas>1?` de ${o.hist_personas} personas`:""}: `
+      + `normal ${hm} und/día, máximo ${hx} · tiempo real ${o.hist_t_med} min/prenda`
+    : "Sin historial de esta operación en 60 días";
+  const ofs = o.ofs.length>1 ? o.ofs.map(f=>`OF ${esc(f.of||"—")}: ${f.cant} und · ${f.minutos.toFixed(1)} min`).join(" · ")
+                             : `OF ${esc(o.ofs[0].of||"—")}`;
+  return `<div class="aud-item">
+    <div class="aud-item-fila">
+      <div>
+        <div class="aud-item-tit">${esc(o.op)} ${alerta}</div>
+        <div class="aud-item-sub">${ofs} · ${o.tk} ticket(s) · registrados ${esc(o.h_ini)}–${esc(o.h_fin)}</div>
+      </div>
+      <div class="aud-min">${o.cant} und<br><span class="aud-item-sub">${o.minutos.toFixed(1)} min</span></div>
+    </div>
+    <div class="aud-item-sub">${hist}</div>
+    <div class="aud-sim">
+      <div class="aud-sim-fila">
+        <label class="aud-campo" style="flex:1;">
+          <div class="k">Tiempo por prenda (STD ${o.std})</div>
+          <input type="number" step="0.01" min="0" value="${t}" oninput="audSimStd('${o.k}', this.value)">
+        </label>
+        ${o.hist_t_med!=null?`<button class="btn-mini gris" onclick="audSimStd('${o.k}', ${o.hist_t_med}, true)">Usar tiempo real</button>`:""}
+      </div>
+    </div>
+  </div>`;
+}
+function audSimStd(k, v, repintar){
+  AUDD_STD[k]=Math.max(0, Number(v)||0);
+  if(repintar) audPintarDrawer(); else audPintarDrawerSoloSim();
+}
+/* ---- Tiempo idóneo con Gemini (Edge Function ef-gemini, parche 88) ----
+   La función toma los datos de la base con esta sesión; aquí solo se manda el
+   día a analizar y, si se quiere, una nota del analista. */
+const FN_EF_GEMINI="ef-gemini";
+function audIAHTML(){
+  if(!AUDD_OPS.length) return "";
+  const a=AUDD_IA;
+  let cuerpo="";
+  if(a==="cargando") cuerpo=cargandoHTML("Gemini está analizando el día…");
+  else if(a && a.error) cuerpo=`<div class="aud-sim-res" style="color:var(--alerta);">${esc(a.error)}</div>`;
+  else if(a){
+    const nom=k=>{ const o=AUDD_OPS.find(x=>x.opk===k); return o?o.op:k; };
+    cuerpo=`<div class="aud-ia-res">
+      <div class="aud-item-tit">${esc(a.resumen||"")}</div>
+      ${(a.porques||[]).length?`<ul class="aud-ia-lista">${a.porques.map(p=>`<li>${esc(p)}</li>`).join("")}</ul>`:""}
+      ${(a.operaciones||[]).map(o=>`<div class="aud-sim-fila aud-ia-op">
+        <div style="flex:1;"><b>${esc(nom(o.opk))}</b>: ${(+o.tiempo_idoneo).toFixed(3)} min/prenda
+          <span class="aud-chip">${esc(o.confianza||"")}</span>
+          <div class="aud-item-sub">${esc(o.razon||"")}</div></div>
+        <button class="btn-mini gris" onclick="audUsarIA('${esc(o.opk)}', ${Number(o.tiempo_idoneo)})">Simular</button>
+      </div>`).join("")}
+      ${a.eficiencia_con_idoneo!=null?`<div class="aud-sim-res">Con esos tiempos el día quedaría cerca de <b>${(+a.eficiencia_con_idoneo).toFixed(1)}%</b>.</div>`:""}
+      ${a.recomendacion?`<div class="aud-sim-res"><b style="font-size:13px;">Recomendación:</b> ${esc(a.recomendacion)}</div>`:""}
+      <div class="aud-item-sub" style="margin-top:6px;">Análisis de Gemini${a.modelo?` (${esc(a.modelo)})`:""}: es una sugerencia, revísala antes de cambiar la BASE.</div>
+    </div>`;
+  }
+  return `<div class="aud-tit">Tiempo idóneo con Gemini</div>
+    <div class="aud-sim">
+      <label class="aud-campo"><div class="k">Nota para el análisis (opcional)</div>
+        <input type="text" id="audIANota" maxlength="400" placeholder="Ej.: ese día cambió de máquina"
+          value="${esc(AUDD_NOTA)}" oninput="AUDD_NOTA=this.value">
+      </label>
+      <div class="aud-sim-fila" style="margin-top:8px;">
+        <button class="btn-mini" onclick="audPedirIA()" ${a==="cargando"?"disabled":""}>Analizar con Gemini</button>
+        ${a && a.operaciones ? `<button class="btn-mini gris" onclick="audUsarIATodo()">Simular todo lo sugerido</button>`:""}
+      </div>
+      ${cuerpo}
+    </div>`;
+}
+async function audPedirIA(){
+  if(!AUDD) return;
+  const nota=AUDD_NOTA;
+  const dni=AUDD.dni, fecha=AUDD.fecha;
+  AUDD_IA="cargando"; audPintarDrawer();
+  try{
+    const r=await edgeFn(FN_EF_GEMINI,{p_dni:ING.dni,p_token:ING.token,p_dni_op:dni,p_fecha:fecha,nota});
+    if(!AUDD || AUDD.dni!==dni || AUDD.fecha!==fecha) return;   // cerró o cambió de fila
+    AUDD_IA = r.ok ? Object.assign({}, r.analisis, {modelo:r.modelo}) : {error:r.error||"No se pudo analizar"};
+  }catch(e){ AUDD_IA={error:e.message}; }
+  audPintarDrawer();
+}
+function audUsarIA(opk, t, sinPintar){
+  AUDD_OPS.filter(o=>o.opk===opk).forEach(o=>{ AUDD_STD[o.k]=Math.max(0, Number(t)||0); });
+  if(!sinPintar) audPintarDrawer();
+}
+function audUsarIATodo(){
+  ((AUDD_IA&&AUDD_IA.operaciones)||[]).forEach(o=>audUsarIA(o.opk, o.tiempo_idoneo, true));
+  audPintarDrawer();
+}
+function audSimReset(){
+  AUDD_OPS.forEach(o=>{ AUDD_STD[o.k]=o.std; });
+  (AUDD.incidencias||[]).forEach(x=>{ AUDD_SIM[x.id]={minutos:Number(x.minutos), quitada:false}; });
+  audPintarDrawer();
 }
 function audSimMin(id, v){
   if(!AUDD_SIM[id]) return;
@@ -3111,9 +3288,7 @@ function audSimQuitar(id){
    tecla haría perder el foco del input que se está escribiendo. */
 function audPintarDrawerSoloSim(){
   const res=$("audSimRes"); if(!res || !AUDD) return;
-  const efSim=audSimEf(), dispSim=audSimDisp(), cambio=dispSim!==Number(AUDD.disp);
-  res.innerHTML = `Disponible <b>${dispSim}</b> min ${cambio?`(antes ${AUDD.disp})`:""} →
-    eficiencia <b class="aud-ef ${audClaseEf(efSim)}">${efSim==null?"—":efSim.toFixed(1)+"%"}</b>`;
+  res.innerHTML = audSimTxt();
 }
 /* Un disponible de 0 o negativo (incidencias que se comen el turno entero) no
    tiene porcentaje: se dice, no se divide. */
@@ -3157,13 +3332,9 @@ async function audAplicarEliminar(id){
 async function audRecargar(){
   const dni=AUDD.dni, fecha=AUDD.fecha;
   try{
-    const r=await rpc("fn_ef_auditoria_detalle",{p_dni:ING.dni,p_token:ING.token,
-      p_dni_op:dni, p_fecha:fecha});
-    if(r.ok){
-      AUDD=r; AUDD_SIM={};
-      (r.incidencias||[]).forEach(x=>{ AUDD_SIM[x.id]={minutos:Number(x.minutos),quitada:false}; });
-      audPintarDrawer();
-    }
+    const a={p_dni:ING.dni,p_token:ING.token,p_dni_op:dni,p_fecha:fecha};
+    const [r,ops]=await Promise.all([rpc("fn_ef_auditoria_detalle",a), rpc("fn_ef_auditoria_ops",a).catch(()=>null)]);
+    if(r.ok){ audIniciarDia(r, ops); audPintarDrawer(); }
   }catch(e){}
   cargarAudit();
 }
