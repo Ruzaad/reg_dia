@@ -125,7 +125,11 @@ header #btnOjoEf,header #btnRecargar,header #btnReloj,header #btnLlave,header #b
    sin ninguna transición se siente exactamente como saltar a otra página.
    Como irA() siempre quita "activa" de todas y la vuelve a poner en la
    nueva, el navegador reinicia esta animación en cada cambio. */
-.pantalla.activa{animation:dynEntrarVista .22s cubic-bezier(.2,.8,.3,1) both;}
+.pantalla.activa{animation:dynEntrarVista .22s cubic-bezier(.2,.8,.3,1) backwards;}
+/* "backwards" y no "both": una animación de transform que se queda aplicada
+   convierte la pantalla en el marco de todo lo position:fixed que tenga
+   dentro. Eso encajonaba el panel de Auditoría (y su fondo oscuro) dentro de
+   la sección, por debajo de la barra de fecha y área, en vez de la ventana. */
 @keyframes dynEntrarVista{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
 @media (prefers-reduced-motion:reduce){.pantalla.activa{animation:none;}}
 .banner-error{border-radius:12px;font-size:15px;font-weight:600;margin:12px 16px;box-shadow:var(--sombra-2);}
@@ -236,7 +240,7 @@ body[data-pagina="login"] .pantalla{width:100%;}
 .btn-mini{background:var(--enlace);border-radius:var(--r-s);font-size:14px;font-weight:600;padding:9px 14px;
   box-shadow:0 1px 0 rgba(0,0,0,.06);letter-spacing:.1px;}
 .btn-mini.verde{background:var(--exito);}
-.btn-mini.gris{background:#E4E9F1;color:var(--texto);}
+.btn-mini.gris{background:color-mix(in srgb,var(--texto) 10%,var(--sup));color:var(--texto);}   /* gris fijo: en oscuro quedaba texto claro sobre fondo claro */
 .btn-mini.azul{background:var(--azul);}
 .btn-mini.ocre{background:var(--ocre);color:#1B2433;}
 .btn-mini.rojo{background:var(--sup);color:var(--alerta);border:1px solid color-mix(in srgb,var(--alerta) 40%,transparent);
@@ -365,7 +369,25 @@ body[data-pagina="login"] .pantalla{width:100%;}
 .modal-msg{font-size:13.5px;font-weight:600;}
 .nov-item{background:var(--sup-2);border:1px solid var(--linea-2);border-left:3px solid var(--ocre);border-radius:10px;}
 .nov-tit{font-size:14px;font-weight:700;}
-.aud-drawer{border-left:1px solid var(--linea);}
+.aud-drawer{border-left:1px solid var(--linea);background:var(--sup);color:var(--texto);padding:0 20px 24px;}
+/* Auditoría: el panel usaba grises y azules fijos de antes del rediseño; con
+   los tokens se lee igual en claro y en oscuro. La caja de simulación queda
+   pegada arriba a todo el ancho y opaca, para que lo que pasa por debajo al
+   desplazarse no se monte con su texto. */
+.aud-cab{position:relative;padding-top:18px;}
+.aud-sub,.aud-kpi-lbl,.aud-tit,.aud-campo .k,.aud-item-sub,.aud-sim-res,.aud-det summary{color:var(--suave);}
+.aud-x{border-color:var(--linea);color:var(--suave);}
+.aud-kpi,.aud-sim,.aud-chip{background:var(--sup-2);}
+.aud-item{border-color:var(--linea-2);}
+.aud-item:last-child{border-bottom-color:var(--linea-2);}
+.aud-ia-op{border-top-color:var(--linea-2);}
+.aud-sim-fila input[type=number],.aud-sim input[type=text]{background:var(--sup);color:var(--texto);border-color:var(--linea);}
+.aud-chip.alarma{background:var(--alerta-t);} .aud-chip.aviso{background:var(--ocre-t);}
+.aud-sim-fija{position:sticky;top:0;z-index:2;margin:0 -20px 4px;padding:12px 20px 12px;border-radius:0;
+  background:var(--azul-t);border-bottom:1px solid var(--linea);box-shadow:0 6px 12px -8px rgba(11,24,52,.35);}
+.aud-sim-fija .aud-sim-fila{margin-top:8px!important;}
+tr.aud-fila:hover{background:var(--azul-t);}
+@media(max-width:560px){.aud-drawer{padding:0 14px 20px;}.aud-sim-fija{margin:0 -14px 4px;padding:10px 14px;position:static;}}
 
 /* ---------- avisos flotantes ---------- */
 .toast{background:#1B2433;border-left:4px solid var(--alerta);font-size:14px;font-weight:500;border-radius:12px;}
@@ -448,6 +470,14 @@ body[data-pagina="ingenieria"]{font-family:var(--sans);}
   letter-spacing:.7px;text-transform:uppercase;color:var(--ocre);margin-bottom:5px;}
 .seccion-sub{font-size:13.5px;color:var(--suave);line-height:1.45;}
 [data-pagina="ingenieria"] .barra-control{margin-bottom:18px;}
+/* .pantalla es flex en columna: con margin:auto los hijos se encogían a su
+   contenido y quedaban centrados (filtros y KPI flotando al medio, la tabla a
+   todo el ancho). Todo arranca en el mismo borde izquierdo que el título. */
+body[data-pagina="ingenieria"] .contenedor-ancho,
+body[data-pagina="ingenieria"] .fila-filtros,
+body[data-pagina="ingenieria"] .barra-control{margin-left:0;margin-right:auto;align-self:stretch;}
+body[data-pagina="ingenieria"] .kpis{margin-left:0;}
+body[data-pagina="ingenieria"] .ing-main .tabs{justify-content:flex-start;margin-left:0;max-width:none;padding-left:0;}
 .solo-admin{background:var(--ocre-t);color:#8A5F18;border:1px solid #EBD3AE;font-weight:700;font-size:11px;letter-spacing:.3px;}
 .mod-card,.det-card,.ope-card,.gen-job,.diff-box,.tk-ops-panel{border:1px solid var(--linea);border-radius:var(--r);box-shadow:var(--sombra-1);background:var(--sup);}
 .mod-head{background:var(--sup-2);color:var(--azul);border-bottom:1px solid var(--linea);}
@@ -507,7 +537,9 @@ body[data-pagina="ingenieria"]{font-family:var(--sans);}
    Capa dinámica: barra de contexto, en vivo, orden de tablas, buscador
    ===================================================================== */
 .dyn-oculto,.barra-control.dyn-vacia{display:none!important;}
-.dyn-ctx{position:sticky;top:0;z-index:30;margin:-22px -26px 18px;padding:10px 26px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;
+/* top negativo = padding de .ing-main: sticky se mide desde el borde interior
+   del contenedor, y con top:0 la barra bajaba 22px y tapaba el encabezado. */
+.dyn-ctx{position:sticky;top:-22px;z-index:30;margin:-22px -26px 18px;padding:10px 26px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;
   background:color-mix(in srgb,var(--gris-fondo) 90%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--linea);}
 .dyn-crumb{font-size:12.5px;color:var(--suave);font-weight:500;white-space:nowrap;margin-right:4px;}
 .dyn-crumb b{color:var(--texto);font-weight:700;}
@@ -543,7 +575,7 @@ body[data-pagina="ingenieria"]{font-family:var(--sans);}
 .dyn-ref:hover{border-color:var(--enlace);}
 :root{--ico-ref:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a9 9 0 1 1-2.6-6.4'/%3E%3Cpath d='M21 3v6h-6'/%3E%3C/svg%3E");}
 @media (max-width:900px){
-  .dyn-ctx{margin:-16px -14px 14px;padding:8px 14px;gap:6px 8px;}
+  .dyn-ctx{top:-16px;margin:-16px -14px 14px;padding:8px 14px;gap:6px 8px;}
   .dyn-crumb{width:100%;}
   .dyn-areas{display:none;}
   .dyn-area-sel{display:inline-block;}

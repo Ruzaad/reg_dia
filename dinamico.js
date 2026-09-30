@@ -102,7 +102,7 @@ const llamar=(nombre,...a)=>{const f=window[nombre]||(typeof globalThis[nombre]=
 const VISTAS=PAG==="ingenieria"?[
   {id:"tkActual",tab:"pasoTk",m:"tkActualView",modo:"dia",area:1,live:1,t:"Actual",
    aplicar(){const c=put("fechaTk",G.fecha); return c;},
-   despues(){ const a=$("areaTk"); if(a){ const v=[...a.options].some(o=>o.value===G.area)?G.area:""; if(a.value!==v){a.value=v; llamar("filtrarTkArea",v);} } },
+   despues(){ const a=$("areaTk"); if(a){ conOpcion(a); if(a.value!==G.area){a.value=G.area; llamar("filtrarTkArea",G.area);} } },
    cargar:()=>llamar("cargarTk"),ocupada:()=>{try{return modoLibTk||Object.keys(libSel).length>0;}catch(e){return false;}},
    ocultar:["fechaTk","areaTk"]},
   {id:"tkOp",tab:"pasoTk",m:"tkOpView",modo:null,area:1,areaReq:1,t:"Reclamados x operación",
@@ -118,14 +118,14 @@ const VISTAS=PAG==="ingenieria"?[
   {id:"mod",tab:"pasoMod",m:"pasoMod",modo:"dia",area:1,areaReq:1,live:1,t:"Avance por módulo",
    aplicar(){let c=put("fechaMod",G.fecha);if(put("areaMod",G.area)){c=true;if($("artMod"))$("artMod").value="";}return c;},
    cargar:()=>llamar("cargarMod"),auto:["artMod"],ocultar:["fechaMod","areaMod"],despues(){chipsMod();}},
-  {id:"gen",tab:"pasoGen",m:"pasoGen",modo:null,area:1,areaReq:1,t:"Generar tickets",
+  {id:"gen",tab:"pasoGen",m:"pasoGen",modo:null,area:1,areaReq:1,soloSel:1,t:"Generar tickets",
    aplicar(){const a=$("areaGen");if(a&&G.area&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;llamar("genAreaChange");}return false;},ocultar:["areaGen"]},
   {id:"ofs",tab:"pasoOfs",m:"pasoOfs",modo:null,t:"OFs registradas",live:1,cargar:()=>llamar("cargarOfs")},
   {id:"avof",tab:"pasoAvOF",m:"pasoAvOF",modo:"rango",def:"m3",t:"Resumen de OF",
    aplicar(){const [d,h]=rangoDe(this);let c=put("avofDesde",d.slice(0,7));c=put("avofHasta",h.slice(0,7))||c;return c;},
    cargar:()=>llamar("cargarAvof"),ocultar:["avofDesde","avofHasta"]},
   {id:"vista",tab:"pasoVista",m:"pasoVista",modo:null,t:"Vista del personal"},
-  {id:"ef",tab:"pasoEf",m:"pasoEf",modo:"dia",area:1,live:1,t:"Eficiencia · día",
+  {id:"ef",tab:"pasoEf",m:"pasoEf",modo:"dia",area:1,areaReq:1,live:1,t:"Eficiencia · día",
    aplicar(){return put("fechaEf",G.fecha);},
    despues(){const a=$("filtroAreaEf");if(a&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;try{if(EF)llamar("pintarEf");}catch(e){}}},
    cargar:()=>llamar("cargarEf"),ocultar:["fechaEf","filtroAreaEf"]},
@@ -136,7 +136,8 @@ const VISTAS=PAG==="ingenieria"?[
   {id:"audit",tab:"pasoAudit",m:"pasoAudit",modo:"rango",def:"d30",area:1,t:"Auditoría",
    aplicar(){const [d,h]=rangoDe(this);let c=put("audDesde",d);c=put("audHasta",h)||c;const a=$("audArea");if(a&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;c=true;}return c;},
    cargar:()=>llamar("cargarAudit"),auto:["audUmbral"],ocultar:["audDesde","audHasta","audArea"]},
-  {id:"incQ",tab:"pasoInc",m:"incQView",modo:"quin",t:"Incentivos · quincena",aplicar:aplQuin,cargar:()=>llamar("cargarInc")},
+  {id:"incQ",tab:"pasoInc",m:"incQView",modo:"quin",area:1,t:"Incentivos · quincena",
+   aplicar(){let c=aplQuin();c=areaSel("incArea")||c;return c;},cargar:()=>llamar("cargarInc"),ocultar:["incArea"]},
   {id:"incMod",tab:"pasoInc",m:"incModView",modo:"quin",area:1,t:"Incentivos · bono modular",
    aplicar(){let c=aplQuin();c=areaSel("modArea")||c;return c;},cargar:()=>llamar("cargarModular"),ocultar:["modArea"],ocupada:()=>!!document.querySelector("#incModView .mod-in.cambiada")},
   {id:"incEfm",tab:"pasoInc",m:"incEfmView",modo:"quin",area:1,t:"Incentivos · eficiencia manual",
@@ -178,7 +179,7 @@ const VISTAS=PAG==="ingenieria"?[
    aplicar(){const [d,h]=rangoDe(this);let c=put("fechaInciD",d);c=put("fechaInciH",h)||c;c=areaSel("areaInci")||c;return c;},
    cargar:()=>llamar("cargarOcurrencias"),ocultar:["fechaInciD","fechaInciH","areaInci"]},
   {id:"inciPend",tab:"pasoIncid",m:"inciPendientes",modo:null,area:1,live:1,t:"Incidencias · pendientes",
-   despues(){const a=$("areaInciPend");if(a&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;llamar("pintarPendientesInci");}},
+   despues(){const a=$("areaInciPend");if(a&&a.options.length){conOpcion(a);if(a.value!==G.area){a.value=G.area;llamar("pintarPendientesInci");}}},
    cargar:()=>llamar("cargarPendientesInci"),ocultar:["areaInciPend"]},
   {id:"inciHE",tab:"pasoIncid",m:"inciHE",modo:"dia",area:1,areaReq:1,t:"Incidencias · horas extras en lote",
    aplicar(){let c=put("heFecha",G.fecha);c=put("heArea",G.area)||c;return c;},cargar:()=>llamar("heCargar"),
@@ -187,14 +188,14 @@ const VISTAS=PAG==="ingenieria"?[
    aplicar(){let c=put("fechaFec",G.fecha);const a=$("areaFec");if(a&&G.area&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;llamar("cargarFecArea");}return c;},
    req:()=>$("opFec")&&$("opFec").value,cargar:()=>llamar("cargarReclamosFec"),auto:["opFec"],
    ocupada:()=>{try{return Object.keys(FEC_SEL).length>0;}catch(e){return false;}},ocultar:["fechaFec","areaFec"]},
-  {id:"opsOf",tab:"pasoOpsOF",m:"pasoOpsOF",modo:null,area:1,areaReq:1,t:"Operaciones por OF",
+  {id:"opsOf",tab:"pasoOpsOF",m:"pasoOpsOF",modo:null,area:1,areaReq:1,soloSel:1,t:"Operaciones por OF",
    aplicar(){const a=$("opfArea");if(a&&G.area&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;llamar("opfReset");}return false;},
    req:()=>$("opfArea").value&&$("opfOf").value.trim().length>=3,cargar:()=>llamar("opfCargarOF"),auto:["opfOf"],ocultar:["opfArea"],despues(){chipsOF(this,"opfOf");}},
   {id:"extra",tab:"pasoExtra",m:"pasoExtra",modo:null,area:1,t:"Operaciones sin OF",
    aplicar(){const a=$("exArea");if(a&&G.area&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;llamar("cargarExtra");}return false;},ocultar:["exArea"]},
   {id:"causas",tab:"pasoCausas",m:"pasoCausas",modo:null,t:"Causas de STD"},
   {id:"supArea",tab:"pasoSupArea",m:"pasoSupArea",modo:null,t:"Operar como supervisora"},
-  {id:"opArea",tab:"pasoOpArea",m:"pasoOpArea",modo:null,area:1,t:"Operar como operario",
+  {id:"opArea",tab:"pasoOpArea",m:"pasoOpArea",modo:null,area:1,areaReq:1,t:"Operar como operario",
    aplicar(){const a=$("areaOp");if(a&&G.area&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;llamar("cargarOpArea");}return false;},ocultar:["areaOp"]}
 ]:[];
 /* ---------- OF en fichas: se elige tocando, sin escribir el número ---------- */
@@ -226,6 +227,31 @@ function chipsOF(v,inputId){
   if(OFS_CACHE)return pintar();
   try{rpc("fn_ofs_listar",{p_dni:ING.dni,p_token:ING.token,p_buscar:""}).then(r=>{OFS_CACHE=Array.isArray(r)?r:[];pintar();}).catch(()=>{});}catch(e){}
 }
+/* ---------- el área de cada vista ----------
+   Cada vista tiene su propio select de área (el que la barra oculta). La barra
+   marca como elegida el valor REAL de ese select, no solo el que se pidió: si
+   una vista no admite esa área (Generar tickets solo lista áreas con Sheet),
+   se ve qué área está usando de verdad en vez de un chip que no filtra. */
+const selArea=v=>{const id=v.sel||(v.ocultar||[]).find(x=>/area/i.test(x));return id?$(id):null;};
+/* Selects que la app llena recién al entrar a la vista. Si se llenan antes,
+   la primera carga ya sale con el área elegida (sin esto se pedía "Todas" y
+   luego el área, y la respuesta que llegaba última, a veces "Todas", era la
+   que quedaba en pantalla con el chip marcando otra cosa). Mismo formato que
+   el que usa cada una. */
+const LLENAR={repArea:"Todas las áreas",opeArea:"Todas las áreas",audArea:"Todas las áreas",blArea:"Todas las áreas",
+  incArea:"Todas las áreas",modArea:"Todas las áreas",efmArea:"Todas las áreas",consArea:"Todas las áreas",tkOpArea:"— Elige área —",heArea:null};
+function llenarArea(v){
+  const a=selArea(v);if(!a||!(a.id in LLENAR)||a.options.length>1)return;
+  let L=[];try{L=AREAS_LISTA||[];}catch(e){}if(!L.length)return;
+  const ph=LLENAR[a.id],prev=a.value;
+  a.innerHTML=(ph?`<option value="">${ph}</option>`:"")+L.map(x=>`<option>${escH(x)}</option>`).join("");
+  if(prev&&L.includes(prev))a.value=prev;
+}
+/* Selects armados con lo que hay en los datos (áreas con tickets hoy, con
+   pendientes): si el área elegida no tiene nada, se agrega igual para que el
+   filtro diga "nada en esta área" en vez de soltarse y mostrar todas. */
+function conOpcion(a){if(G.area&&![...a.options].some(o=>o.value===G.area)){const o=document.createElement("option");o.textContent=G.area;a.appendChild(o);}}
+function areaVista(v){const a=selArea(v);return a&&a.options.length>1?a.value:G.area;}
 function aplQuin(){const q=quincenas(hoy())[G.quin==="ant"?"ant":"act"];let c=put("incDesde",q[0]);c=put("incHasta",q[1])||c;return c;}
 function areaSel(id){const a=$(id);if(!a)return false;const v=[...a.options].some(o=>o.value===G.area)?G.area:(G.area?null:"");if(v===null||a.value===v)return false;a.value=v;return true;}
 
@@ -282,6 +308,7 @@ window.pintarCargando=pintarCargando;
 
 async function refrescar(v,{forzar=false,vivo=false}={}){
   if(!v)return;
+  llenarArea(v);
   const cambio=v.aplicar?v.aplicar.call(v):false;
   if(v.despues)v.despues.call(v);
   const k=claveDe(v);
@@ -317,7 +344,7 @@ function envolver(nombre,antes){
 }
 /* Antes de la primera visita se escriben los valores del contexto en los
    campos, para que la carga inicial de la app ya salga con ellos. */
-function preEscribir(tab){VISTAS.filter(v=>v.tab===tab).forEach(v=>{try{if(v.aplicar)v.aplicar.call(v);}catch(e){}});}
+function preEscribir(tab){VISTAS.filter(v=>v.tab===tab).forEach(v=>{try{llenarArea(v);if(v.aplicar)v.aplicar.call(v);}catch(e){}});}
 
 /* =====================================================================
    BARRA DE CONTEXTO
@@ -357,9 +384,11 @@ function pintarCtx(){
       <span class="dyn-dtxt">${txtFecha((G.quin==="ant"?q.ant:q.act)[0])} – ${txtFecha((G.quin==="ant"?q.ant:q.act)[1])}</span>`;}
   let areas="";
   if(v&&v.area){let L=[];try{L=AREAS_LISTA||[];}catch(e){}
+    const s=selArea(v);if(v.soloSel&&s&&s.options.length>1)L=[...s.options].map(o=>o.value).filter(Boolean);
+    const act=areaVista(v);
     const opc=(v.areaReq?[]:[["","Todas"]]).concat(L.map(a=>[a,a.replace(" COSTURA","")]));
-    areas=`<div class="dyn-areas" role="group" aria-label="Área">${opc.map(([k,t])=>`<button data-dyn="area:${escH(k)}" class="dyn-chip ${G.area===k?"on":""}"><i data-a="${escH(k)}"></i>${escH(t)}</button>`).join("")}</div>
-      <select id="dynArea" class="dyn-area-sel" aria-label="Área">${v.areaReq&&!G.area?'<option value="">Elige área…</option>':""}${opc.map(([k,t])=>`<option value="${escH(k)}" ${G.area===k?"selected":""}>${escH(t)}</option>`).join("")}</select>`;}
+    areas=`<div class="dyn-areas" role="group" aria-label="Área">${opc.map(([k,t])=>`<button data-dyn="area:${escH(k)}" class="dyn-chip ${act===k?"on":""}" aria-pressed="${act===k}"><i data-a="${escH(k)}"></i>${escH(t)}</button>`).join("")}</div>
+      <select id="dynArea" class="dyn-area-sel" aria-label="Área">${v.areaReq&&!act?'<option value="">Elige área…</option>':""}${opc.map(([k,t])=>`<option value="${escH(k)}" ${act===k?"selected":""}>${escH(t)}</option>`).join("")}</select>`;}
   const esHoy=v&&(v.modo==="dia"?G.fecha===hoy():v.modo==="rango"?rangoDe(v)[1]===hoy():true);
   const vivo=v&&v.live&&esHoy;
   const estado=v&&v.cargar?`<span class="dyn-live ${vivo?"on":""} ${cargando?"car":""}"><b>${cargando?"Actualizando":vivo?"En vivo":"Actualizado"}</b><span id="dynHace">${hace()}</span></span><button class="dyn-ref" data-dyn="ref" title="Actualizar ahora" aria-label="Actualizar ahora"></button>`:"";
