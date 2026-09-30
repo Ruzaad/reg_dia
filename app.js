@@ -763,14 +763,44 @@ async function abrirCambioArea(s){
     c.innerHTML=`<div class="ca-nombre">${esc(a)}</div>
       <div class="ca-sub">${actual?"Estás aquí":"Cambiar"}</div>`;
     c.onclick=()=>{
-      cerrarModal();
-      if(actual) return;
-      AREA_ESTAJERO = a;
-      $("tituloArea").textContent = a;
-      cargarTodo(s);
+      if(actual){ cerrarModal(); return; }
+      pedirHoraArea(s, a);
     };
     g.appendChild(c);
   });
+}
+/* Parche 90: los 575 min del día se reparten entre áreas por la hora del
+   cambio, y la hora en que se registra no sirve (casi todos registran al
+   almuerzo o a las 18:20). Por eso se pregunta desde cuándo está ahí. */
+function pedirHoraArea(s, a){
+  const hm=d=>String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+  const ahora=hm(new Date());
+  abrirModal(`<h2>¿Desde qué hora estás en ${esc(a)}?</h2>
+    <div class="sub" style="margin-bottom:10px;">Pon la hora en que empezaste a trabajar ahí hoy, aunque lo estés registrando después. Así tus minutos se reparten bien entre las áreas.</div>
+    <div class="modal-campo"><label>Empecé en ${esc(a)} a las</label>
+      <input type="time" id="haHora" value="${ahora}"></div>
+    <div class="modal-msg" id="haMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" id="haOk">CONTINUAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+  $("haOk").onclick=async()=>{
+    const h=($("haHora").value||"").trim(), msg=$("haMsg");
+    if(!h){ msg.textContent="Indica la hora"; return; }
+    if(h>hm(new Date())){ msg.textContent="La hora no puede ser posterior a ahora"; return; }
+    $("haOk").disabled=true;
+    try{
+      const r=await rpc("fn_area_declarar_hora",{p_dni:s.dni,p_token:s.token,p_area:a,p_hora:h});
+      if(r && r.ok===false){ msg.textContent=r.error||"No se pudo guardar la hora"; $("haOk").disabled=false; return; }
+    }catch(e){
+      // Sin red o sin el parche en la base: se cambia igual, el reparto cae a producción.
+      if(e.message==="Sesión vencida") return;
+    }
+    cerrarModal();
+    AREA_ESTAJERO = a;
+    $("tituloArea").textContent = a;
+    cargarTodo(s);
+  };
 }
 function pintarAreasEstajero(s){
   const g=$("gridAreaEstajero"); if(!g) return;
