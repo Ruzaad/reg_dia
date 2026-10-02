@@ -704,3 +704,10 @@ body[data-pagina="supervisora"] .fila-filtros,
 body[data-pagina="supervisora"] .acc-toolbar{justify-content:center;}
 body[data-pagina="supervisora"] .grid-personal{max-width:1100px;width:100%;margin-left:auto;margin-right:auto;}
 .grid-personal>.vacio-msg,.grid-personal>.cargando{grid-column:1/-1;}
+
+/* Lista de atajos de teclado (tecla ?) */
+.dyn-atajos{padding:18px 20px 14px;}
+.dyn-atajos h3{font-size:16px;font-weight:700;color:var(--azul);margin:0 0 10px;}
+.dyn-at-f{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:8px 0;border-bottom:1px solid var(--linea-2);font-size:14px;color:var(--texto);}
+.dyn-at-f:last-child{border-bottom:0;}
+.dyn-at-f kbd{font-family:var(--mono);font-size:12px;background:var(--sup-2);border:1px solid var(--linea);border-bottom-width:2px;border-radius:6px;padding:2px 7px;color:var(--texto);}
