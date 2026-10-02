@@ -53,6 +53,7 @@
     </div>
     <button type="button" class="btn-secundario" id="btnMisPaq"
       style="max-width:300px;margin:14px auto 0;" onclick="abrirMisPaquetes()">MIS PAQUETES</button>
+    <button type="button" class="btn-secundario btn-boleta" onclick="abrirBoleta()">MI BOLETA</button>
   </section>
 
   <!-- Módulos -->
@@ -106,8 +107,7 @@
       <input class="input-grande" id="acabBuscaOF" placeholder="OF o artículo…" autocomplete="off"
         oninput="pintarAcabOF()">
     </div>
-    <button type="button" class="btn-secundario" id="btnMisReg"
-      style="display:none;max-width:300px;margin:14px auto 0;" onclick="abrirMisRegistros()">MIS REGISTROS</button>
+    <button type="button" class="btn-secundario btn-boleta" onclick="abrirBoleta()">MI BOLETA</button>
     <div class="lista-cards" id="listaAcabOF"></div>
   </section>
 
@@ -163,11 +163,25 @@
     <div class="lista-cards" id="listaMisPaq"></div>
   </section>
 
-  <!-- ACABADO: lo que YO registré, por OF (parche 58) -->
-  <section class="pantalla" id="pasoMisReg">
-    <h1>Mis registros</h1>
-    <div class="sub">Lo que has registrado en esta área, por OF. Toca una OF para ver sus fechas.</div>
-    <div class="lista-cards" id="listaMisReg"></div>
+  <!-- MI BOLETA (parche 93): qué días entregó y cuáles faltan. Sin eficiencia. -->
+  <section class="pantalla" id="pasoBoleta">
+    <h1>Mi boleta</h1>
+    <div class="sub">Un día cuenta como entregado si registraste tickets o si una incidencia cubre toda tu jornada.</div>
+    <div class="bol-filtros">
+      <div class="bol-presets" id="bolPresets">
+        <button type="button" data-p="q">Esta quincena</button>
+        <button type="button" data-p="qa">Quincena anterior</button>
+        <button type="button" data-p="m">Este mes</button>
+        <button type="button" data-p="ma">Mes anterior</button>
+      </div>
+      <div class="bol-rango">
+        <label>Desde<input type="date" id="bolDesde"></label>
+        <label>Hasta<input type="date" id="bolHasta"></label>
+        <button type="button" class="btn-mini" onclick="bolRangoManual()">Ver</button>
+      </div>
+      <label class="bol-solo"><input type="checkbox" id="bolSoloPend" onchange="pintarBoleta()"> Solo mis días pendientes</label>
+    </div>
+    <div id="bolCuerpo"></div>
   </section>
 
   <!-- Confirmación -->

@@ -549,7 +549,7 @@ const VOLVER_OPERARIO = {
   pasoModulos:"pasoOF", pasoOps:"pasoModulos",
   pasoTickets:"pasoOps", pasoConf:"pasoTickets",
   pasoAcabPrenda:"pasoAcabOF", pasoAcabOp:"pasoAcabOF",
-  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF", pasoMisReg:"pasoAcabOF",
+  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF", pasoBoleta:"pasoOF",
   pasoOpAd:"pasoModulos", pasoOpAdCant:"pasoOpAd"
 };
 
@@ -667,11 +667,11 @@ function aplicarModoAcabado(){
   if(oj) oj.style.display = "";
   if(rl) rl.style.display = "";   // ajuste de tiempo disponible también en ACABADO
   const lblConf=$("confLabel"); if(lblConf) lblConf.textContent = ES_ACABADO ? "Cantidad" : "Numeración";
-  /* ACABADO no pasa por el almacén, así que "Mis paquetes" no aplica; en su
-     lugar tiene "Mis registros" (parche 58), que vive en la pantalla de OF de
-     Acabado. El botón de costura se oculta igual. */
+  /* ACABADO no pasa por el almacén, así que "Mis paquetes" no aplica. "Mi
+     boleta" (parche 93) está en la pantalla de OF de los dos modos y vuelve a
+     la de cada uno. */
   const bmp=$("btnMisPaq"); if(bmp) bmp.style.display = ES_ACABADO ? "none" : "";
-  const bmr=$("btnMisReg"); if(bmr) bmr.style.display = ES_ACABADO ? "" : "none";
+  VOLVER_OPERARIO.pasoBoleta = ES_ACABADO ? "pasoAcabOF" : "pasoOF";
   window.VOLVER_INICIO = ES_ACABADO ? "pasoAcabOF" : "pasoOF";
 }
 function initOperario(){
@@ -823,7 +823,7 @@ function pintarAreasEstajero(s){
 }
 
 /* parche 74: al cambiar de área quedaba viva la selección y los buscadores de
-   la anterior (sel/ACAB/MISREG/marcados y el texto de OF), así que la pantalla
+   la anterior (sel/ACAB/marcados y el texto de OF), así que la pantalla
    nueva se pintaba filtrada por una OF que no existe en el área elegida y
    parecía "no actualizarse". Todo el estado que depende del área se borra
    ANTES de cargar la nueva. */
@@ -832,12 +832,12 @@ function resetEstadoArea(){
   ALM = null; RECL = {}; OF_LISTA = []; OF_CARGADAS = new Set();
   ACAB = {ofs:[], extra:[], of:null, op:null, tipo:null, prenda:null, ver:false};
   CAUSAS = []; CANT_HOY_ACABADO = 0;
-  MISREG = {ofs:[]}; MISREG_ABIERTA = ""; MISPAQ = [];
+  MISPAQ = [];
   NOPS_FIN = {}; modoSel = false; marcados = {};
   SR = {of:"", mod:"", nop:"", acab:false};
   ACAB_REFRESCO++;   // un refresco de Acabado aún en vuelo no debe pisar el área nueva
   ["inputOF","acabBuscaOF"].forEach(id=>{ const e=$(id); if(e) e.value=""; });
-  ["listaAcabOF","listaTickets","listaModulos","listaOps","listaMisPaq","listaMisReg","sugerenciasOF"].forEach(id=>{ const e=$(id); if(e) e.innerHTML=""; });
+  ["listaAcabOF","listaTickets","listaModulos","listaOps","listaMisPaq","sugerenciasOF"].forEach(id=>{ const e=$(id); if(e) e.innerHTML=""; });
 }
 
 async function cargarTodo(s){
@@ -1170,67 +1170,113 @@ async function acabRegistrar(){
   finally{ if(btn){ btn.disabled=false; btn.textContent="REGISTRAR"; } }
 }
 
-/* ================= ACABADO · MIS REGISTROS (parche 58) =================
-   Lo que ESTA persona registró en el área, agrupado por OF. Al tocar una OF se
-   abre su detalle por fecha, que ya viene en el mismo JSON (la lista es corta y
-   ahorra un viaje). Solo lo propio: lo del área lo ve supervisión. */
-let MISREG={ofs:[]}, MISREG_ABIERTA="";
-async function abrirMisRegistros(){
-  const s=sesionActual(); if(!s) return;
-  const area=AREA_ESTAJERO||s.area;
-  pintarCargando($("listaMisReg"),"Cargando…");
-  irA("pasoMisReg");
-  await cargarMisRegistros();
+/* ================= MI BOLETA (parche 93) =================
+   Reemplaza "Mis registros". Por día dice si entregó su boleta: ENTREGADO
+   (tickets, o incidencia que cubre la jornada) o PENDIENTE. Nunca eficiencia.
+   Ausencias (vacaciones, DM…) y días sin labor no se le exigen. La regla vive
+   en fn_mi_boleta; aquí solo se pinta. Rango por defecto: la quincena en curso. */
+let BOL={dias:[], desde:"", hasta:"", preset:"q"};
+const BOL_DOW=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+const BOL_MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const bolDow = f => (new Date(f+"T00:00:00Z").getUTCDay()+6)%7;   // 0 = lunes
+function bolPreset(p){
+  const h=hoyLimaApp(), [y,m,d]=h.split("-").map(Number);
+  const f=(Y,M,D)=>new Date(Date.UTC(Y,M-1,D)).toISOString().slice(0,10);
+  return ({ q:  d<=15 ? [f(y,m,1),h] : [f(y,m,16),h],
+            qa: d<=15 ? [f(y,m-1,16),f(y,m,0)] : [f(y,m,1),f(y,m,15)],
+            m:  [f(y,m,1),h],
+            ma: [f(y,m-1,1),f(y,m,0)] })[p];
 }
-async function cargarMisRegistros(){
-  const s=sesionActual(); if(!s) return;
-  const area=AREA_ESTAJERO||s.area;
-  try{
-    const r=await rpc("fn_acabado_mis_registros",{p_dni:s.dni,p_token:s.token,p_area:area});
-    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); MISREG={ofs:[]}; }
-    else MISREG={ofs:r.ofs||[]};
-    pintarMisReg();
-  }catch(e){ $("listaMisReg").innerHTML=""; mostrarError(e.message); }
+function bolUsarPreset(p){
+  const r=bolPreset(p); if(!r) return;
+  BOL.preset=p; [BOL.desde,BOL.hasta]=r;
+  cargarBoleta();
 }
-function misRegToggle(of){
-  MISREG_ABIERTA = (MISREG_ABIERTA===of ? "" : of);
-  pintarMisReg();
+function bolRangoManual(){
+  const d=$("bolDesde").value, h=$("bolHasta").value || d;
+  if(!d){ mostrarError("Elige la fecha de inicio"); return; }
+  if(h<d){ mostrarError("La fecha final no puede ser menor a la inicial"); return; }
+  BOL.preset=""; BOL.desde=d; BOL.hasta=h;
+  cargarBoleta();
 }
-function pintarMisReg(){
-  const l=$("listaMisReg"); if(!l) return;
-  const ofs=MISREG.ofs||[];
-  if(!ofs.length){
-    l.innerHTML=`<div class="vacio-msg">Todavía no has registrado nada en esta área.</div>`;
-    return;
+async function abrirBoleta(){
+  const pr=$("bolPresets");
+  if(pr && !pr.dataset.ok){
+    pr.dataset.ok="1";
+    pr.querySelectorAll("button").forEach(b=>b.onclick=()=>bolUsarPreset(b.dataset.p));
   }
-  const tot=ofs.reduce((a,o)=>a+(+o.cant||0),0);
-  const min=ofs.reduce((a,o)=>a+(+o.minutos||0),0);
-  l.innerHTML =
-    `<div class="mr-resumen">${ofs.length} OF · <b>${qty(tot)} und</b> · ${Math.round(min)} min</div>`
-    + ofs.map(o=>{
-      const abierta = MISREG_ABIERTA===o.of;
-      /* Los datos vienen de la BD: van por esc() y en atributos de comilla
-         doble — esc() no escapa la comilla simple. */
-      const cab=`<div class="card-fila mr-of${abierta?" abierta":""}" onclick="misRegToggle(&quot;${esc(o.of)}&quot;)">
-          <div style="flex:1;min-width:0;">
-            <div class="cf-titulo">OF ${esc(o.of)} · ${esc(o.articulo||"—")}</div>
-            <div class="cf-detalle">${o.registros} registro(s) · ${esc(o.desde||"")} a ${esc(o.hasta||"")}</div>
-          </div>
-          <div class="mr-cant"><b>${qty(o.cant)}</b> und<div class="mr-min">${Math.round(o.minutos)} min</div></div>
-          <div class="mr-car">${abierta?"▴":"▾"}</div>
+  irA("pasoBoleta");
+  if(!BOL.desde) bolUsarPreset("q"); else cargarBoleta();
+}
+/* `quieto`: el refresco automático no muestra "Cargando…" encima de la vista. */
+async function cargarBoleta(quieto){
+  const s=sesionActual(); if(!s) return;
+  const z=$("bolCuerpo"); if(!z) return;
+  $("bolDesde").value=BOL.desde; $("bolHasta").value=BOL.hasta;
+  document.querySelectorAll("#bolPresets button").forEach(b=>b.classList.toggle("activo", b.dataset.p===BOL.preset));
+  if(!quieto) pintarCargando(z,"Cargando…");
+  try{
+    const r=await rpc("fn_mi_boleta",{p_dni:s.dni,p_token:s.token,p_desde:BOL.desde,p_hasta:BOL.hasta});
+    if(!r || r.ok===false){ z.innerHTML=`<div class="vacio-msg">${esc((r&&r.error)||"No se pudo cargar")}</div>`; return; }
+    BOL.dias=r.dias||[];
+    pintarBoleta();
+  }catch(e){
+    /* Despliegue nuevo con la base aún sin el parche 93. */
+    const falta=/fn_mi_boleta|function|schema cache/i.test(e.message);
+    z.innerHTML=`<div class="vacio-msg">${falta?"La boleta todavía no está disponible.":esc(e.message)}</div>`;
+  }
+}
+function bolDetalle(d){
+  if(d.estado==="ENTREGADO") return d.tickets>0
+    ? `${d.tickets} ticket${d.tickets==1?"":"s"}`
+    : `Incidencia de jornada completa${d.detalle?" · "+esc(d.detalle):""}`;
+  if(d.estado==="AUSENTE") return "No se te exige boleta";
+  if(d.solicitud) return "Tienes una incidencia por aprobar";
+  if(d.desc_min>0) return `Incidencia de ${d.desc_min} min: no cubre la jornada`;
+  return d.fecha===hoyLimaApp() ? "Hoy aún no registras tickets" : "Sin tickets ni incidencia";
+}
+const bolCls = e => ({ENTREGADO:"e",PENDIENTE:"p",AUSENTE:"a"})[e] || "s";
+const bolPalabra = d => d.estado==="ENTREGADO" ? "Entregado" : d.estado==="PENDIENTE" ? "Pendiente"
+  : d.estado==="AUSENTE" ? (d.asistencia||"Ausente").charAt(0)+(d.asistencia||"Ausente").slice(1).toLowerCase() : "";
+function pintarBoleta(){
+  const z=$("bolCuerpo"); if(!z) return;
+  const dias=BOL.dias||[], hoy=hoyLimaApp();
+  const solo=!!($("bolSoloPend")||{}).checked;
+  const nP=dias.filter(d=>d.estado==="PENDIENTE").length, nE=dias.filter(d=>d.estado==="ENTREGADO").length;
+  let h=`<div class="bol-resumen">
+      <div class="bol-kpi p${nP?"":" cero"}"><b>${nP}</b>${nP===1?"día pendiente":"días pendientes"}</div>
+      <div class="bol-kpi e"><b>${nE}</b>${nE===1?"día entregado":"días entregados"}</div>
+    </div>`;
+  if(!solo && dias.length){
+    /* Matriz: semanas de lunes a domingo; el día 1 lleva el mes. */
+    h+=`<div class="bol-cal">${["Lu","Ma","Mi","Ju","Vi","Sá","Do"].map(x=>`<div class="bol-dow">${x}</div>`).join("")}`
+      + `<div class="bol-vacia"></div>`.repeat(bolDow(dias[0].fecha))
+      + dias.map(d=>{
+          const n=+d.fecha.slice(8), w=bolPalabra(d);
+          const mes=(n===1||d===dias[0]) ? ` <small>${BOL_MES[+d.fecha.slice(5,7)-1]}</small>` : "";
+          return `<button type="button" class="bol-dia ${bolCls(d.estado)}${d.fecha===hoy?" hoy":""}"
+              ${w?`onclick="bolIr(&quot;${d.fecha}&quot;)"`:"disabled"} title="${esc(d.fecha)}">
+              <span class="bol-n">${n}${mes}</span>${w?`<span class="bol-w">${esc(w)}</span>`:""}</button>`;
+        }).join("")
+      + `</div>`;
+  }
+  /* Lista: lo más reciente arriba. Los días sin labor no se listan. */
+  const lista=dias.filter(d=> solo ? d.estado==="PENDIENTE" : d.estado!=="SIN_LABOR").slice().reverse();
+  if(!lista.length) h+=`<div class="vacio-msg">${solo?"Ningún día pendiente en este rango.":"No hay días con labor en este rango."}</div>`;
+  else h+=`<div class="bol-lista">`+lista.map(d=>{
+      const c=bolCls(d.estado), [, m, dd]=d.fecha.split("-");
+      return `<div class="bol-fila ${c}" id="bol-${d.fecha}">
+          <div class="bol-f"><b>${BOL_DOW[bolDow(d.fecha)]} ${+dd}</b><small>${BOL_MES[+m-1]}</small></div>
+          <div class="bol-det">${bolDetalle(d)}</div>
+          <span class="bol-tag ${c}">${esc(bolPalabra(d))}</span>
         </div>`;
-      if(!abierta) return cab;
-      const ops=(o.ops||[]).map(x=>`<div class="mr-fila">
-          <span class="mr-txt">${esc(x.op)}</span>
-          <span class="mr-n">${qty(x.cant)} und</span></div>`).join("");
-      const dias=(o.dias||[]).map(d=>`<div class="mr-fila">
-          <span class="mr-txt"><b>${esc(d.fecha)}</b><br><small>${esc(d.ops||"")}</small></span>
-          <span class="mr-n">${qty(d.cant)} und</span></div>`).join("");
-      return cab + `<div class="mr-det">
-          <div class="mr-det-tit">Por operación</div>${ops}
-          <div class="mr-det-tit">Por fecha</div>${dias}
-        </div>`;
-    }).join("");
+    }).join("")+`</div>`;
+  z.innerHTML=h;
+}
+function bolIr(f){
+  const e=$("bol-"+f); if(!e) return;
+  e.scrollIntoView({behavior:"smooth",block:"center"});
+  e.classList.remove("flash"); void e.offsetWidth; e.classList.add("flash");
 }
 
 /* ================= MIS PAQUETES (costura) =================
@@ -1396,14 +1442,14 @@ async function recargarMiEficiencia(){
   const b=$("btnRecargar"); if(b) b.classList.add("girando");
   try{
     const act=pasoActivo();
+    /* Mi boleta tiene su propia fuente: si el operario está ahí, se recarga
+       solo eso (parche 93). */
+    if(act==="pasoBoleta"){ await cargarBoleta(true); return; }
     if(ES_ACABADO){
       /* En Acabado no hay tickets que liberar: lo que cambia es la ruta (una
          operación nueva en la BASE) y lo ya registrado por otros. Se recarga
          eso, conservando dónde está el operario. */
       const area=AREA_ESTAJERO||s.area;
-      /* Mis registros tiene su propia fuente: si el operario está ahí, se
-         recarga eso y no la ruta de OF (parche 58). */
-      if(act==="pasoMisReg"){ await cargarMisRegistros(); return; }
       await refrescarAcabado(s, area, null);   // recarga y reengancha, sin mover de pantalla
       if(act==="pasoAcabCant"){
         if(ACAB.op) await cargarAcabHist();
