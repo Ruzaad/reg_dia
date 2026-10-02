@@ -250,8 +250,8 @@ function ingSupVolverAreas(){
 function ingSupElegirArea(area){
   try{
     const s=sesionActual();
-    sessionStorage.setItem("stx_volver_ing", localStorage.getItem("stx_sesion")||"");
-    guardarSesion({...s, area});          // misma sesión, con el área a supervisar
+    sessionStorage.setItem("stx_volver_ing", localStorage.getItem("stx_sesion")||"1");
+    guardarSesion({...s, area});          // copia solo de esta pestaña, con el área a supervisar
   }catch(e){ mostrarError("No se pudo abrir supervisión"); return; }
   location.href="supervisora.html";
 }
@@ -1050,9 +1050,9 @@ async function opEntrar(){
     const r=await rpc("fn_login",{p_dni:dni,p_pin:pin});
     if(!r.ok){ msg.textContent=r.error||"DNI o PIN incorrectos"; return; }
     if(r.cargo!=="OPERARIO" && r.cargo!=="ESTAJERO"){ msg.textContent="Ese usuario no es operario"; return; }
-    // Guarda la sesión de INGENIERÍA para poder volver desde operario.html.
-    try{ sessionStorage.setItem("stx_volver_ing", localStorage.getItem("stx_sesion")||""); }catch(e){}
-    // Reutiliza el flujo de operario tal cual: guarda la sesión del operario y entra.
+    // Marca esta pestaña como prestada: la sesión del operario vive solo aquí
+    // (sessionStorage) y la de ingeniería sigue intacta en localStorage (parche 92).
+    try{ sessionStorage.setItem("stx_volver_ing", localStorage.getItem("stx_sesion")||"1"); }catch(e){}
     guardarSesion({dni:r.dni, nombre:r.nombre, cargo:r.cargo, token:r.token,
       area:(r.cargo==="ESTAJERO"? null : (r.area_actual||null))});
     location.href="operario.html";

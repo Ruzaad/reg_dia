@@ -241,15 +241,41 @@ function cerrarModal(){ const o=$("modalOverlay"); if(!o) return; o.classList.re
    SIN USAR la app (ventana deslizante), con un tope duro de SESION_MAX_HORAS
    por si alguien deja el equipo abierto. El mismo criterio vive en `_auth`
    del lado de la BD; este lado solo evita mandar RPC que ya sabemos muertas. */
+/* parche 92: "Entrar como" y "Operar como supervisora" desde ingeniería guardan
+   la sesión prestada SOLO en esta pestaña (sessionStorage). Antes pisaban la de
+   localStorage, que comparten todas las pestañas: otra pestaña que seguía
+   mostrando a un operario registraba con el DNI de quien entró después, o con el
+   de ingeniería. */
+let _cerrandoSesion = false;
+function _ses(){
+  try{ if(sessionStorage.getItem("stx_volver_ing")) return sessionStorage; }catch(e){}
+  return localStorage;
+}
+/* DNI con el que se abrió la pantalla. Si la sesión guardada pasa a ser de otra
+   persona (otra pestaña, otro login), esta pantalla no manda nada más a su nombre. */
+let SES_DNI = null;
+function fijarSesion(s){ SES_DNI = s ? s.dni : null; }
+function sesionCambiada(){
+  if(_cerrandoSesion) return; _cerrandoSesion = true;
+  try{ mostrarError("Se entró con otro usuario en este equipo. Se recarga la pantalla."); }catch(e){}
+  setTimeout(()=>location.reload(), 1500);
+}
+window.addEventListener("storage", (e)=>{
+  if(e.key!=="stx_sesion" || !SES_DNI || _ses()!==localStorage) return;
+  let d=null; try{ d=(JSON.parse(e.newValue||"null")||{}).dni||null; }catch(x){}
+  if(d!==SES_DNI) sesionCambiada();
+});
 function guardarSesion(s){
   s.ini = s.ini || Date.now();
   s.exp = Math.min(Date.now() + SESION_HORAS*3600*1000, s.ini + SESION_MAX_HORAS*3600*1000);
-  localStorage.setItem("stx_sesion", JSON.stringify(s));
+  _ses().setItem("stx_sesion", JSON.stringify(s));
 }
 function sesionActual(){
   try{
-    const s = JSON.parse(localStorage.getItem("stx_sesion")||"null");
-    if(!s || Date.now() > s.exp){ localStorage.removeItem("stx_sesion"); return null; }
+    const st = _ses();
+    const s = JSON.parse(st.getItem("stx_sesion")||"null");
+    if(!s || Date.now() > s.exp){ st.removeItem("stx_sesion"); return null; }
+    if(SES_DNI && s.dni !== SES_DNI){ sesionCambiada(); return null; }
     return s;
   }catch(e){ return null; }
 }
@@ -257,16 +283,16 @@ function sesionActual(){
    tocar localStorage en cada una de las 6 RPC que dispara una pantalla. */
 function renovarSesion(){
   try{
-    const s = JSON.parse(localStorage.getItem("stx_sesion")||"null");
+    const s = JSON.parse(_ses().getItem("stx_sesion")||"null");
     if(!s || !s.exp || Date.now() > s.exp) return;
+    if(SES_DNI && s.dni !== SES_DNI) return;
     if(s.exp - Date.now() > SESION_HORAS*3600*1000/2) return;
     guardarSesion(s);
   }catch(e){}
 }
-let _cerrandoSesion = false;
 function cerrarSesion(){
   if(_cerrandoSesion) return; _cerrandoSesion = true;
-  localStorage.removeItem("stx_sesion");
+  _ses().removeItem("stx_sesion");
   try{ sessionStorage.removeItem("stx_volver_ing"); }catch(e){}
   location.href = "index.html";
 }
@@ -275,13 +301,13 @@ function cerrarSesion(){
    6 veces y se encadenaban 6 redirecciones (las ráfagas de los logs). */
 function sesionVencida(){
   if(_cerrandoSesion) return;
-  try{ localStorage.removeItem("stx_sesion"); }catch(e){}
+  try{ _ses().removeItem("stx_sesion"); }catch(e){}
   try{ mostrarError("Tu sesión venció. Vuelve a ingresar."); }catch(e){}
   setTimeout(cerrarSesion, 1200);
   _cerrandoSesion = true;
 }
 /* Si se entró como operario o como supervisora DESDE ingeniería, botón de vuelta.
-   Restaura la sesión original de ingeniería, que se guardó al salir. */
+   La sesión de ingeniería sigue en localStorage; solo se suelta la prestada. */
 function botonVolverIng(){
   try{
     const prevIng = sessionStorage.getItem("stx_volver_ing");
@@ -290,8 +316,9 @@ function botonVolverIng(){
     const b=document.createElement("button");
     b.type="button"; b.className="btn-hdr-icon"; b.id="btnVolverIng";
     b.title="Volver a Ingeniería"; b.textContent="🏭";
-    b.onclick=()=>{ localStorage.setItem("stx_sesion", prevIng);
-      sessionStorage.removeItem("stx_volver_ing"); location.href="ingenieria.html"; };
+    b.onclick=()=>{ sessionStorage.removeItem("stx_sesion"); sessionStorage.removeItem("stx_volver_ing");
+      if(!localStorage.getItem("stx_sesion")) localStorage.setItem("stx_sesion", prevIng);
+      location.href="ingenieria.html"; };
     badges.insertBefore(b, badges.firstChild);
   }catch(e){}
 }
@@ -677,6 +704,8 @@ function aplicarModoAcabado(){
 function initOperario(){
   const s = sesionActual();
   if(!s || !s.area){ location.href="index.html"; return; }
+  if(s.cargo!=="OPERARIO" && s.cargo!=="ESTAJERO"){ location.href = destinoPorCargo(s.cargo); return; }
+  fijarSesion(s);
   $("quienBadge").textContent = soloApellidos(s.nombre); $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
   { const rb=$("btnReloj"); if(rb) rb.onclick=abrirSolicitudAjuste; }
@@ -1732,6 +1761,7 @@ function pintarTickets(){
                     + `</span>`
                   : "");
           }
+          $("confDet").innerHTML += "<br>" + aNombreDe();
           $("btnRegistrar").disabled=false;
           irA("pasoConf");
         }
@@ -1765,6 +1795,12 @@ function marcarTodos(){
   ticketsActuales().forEach(t=>{ if(!RECL[t.codigo]) marcados[t.codigo]=t; });
   pintarTickets();
 }
+/* parche 92: la confirmación dice a nombre de quién va, leído de la sesión en
+   ese momento (no del encabezado, que pudo quedar de antes). */
+function aNombreDe(){
+  const s=sesionActual();
+  return `a nombre de <b>${esc(s ? soloApellidos(s.nombre) : "—")}</b>`;
+}
 function confirmarLote(){
   const lista=Object.values(marcados);
   if(!lista.length) return;
@@ -1774,7 +1810,7 @@ function confirmarLote(){
     $("confDet").innerHTML =
       `${esc(sel.op)} · OF ${esc(sel.of)}<br>`+
       `<span style="color:#5a6270">${lista.length} paquete(s)</span><br>`+
-      `Total: <b>${qty(cant)} und</b> a tu nombre`;
+      `Total: <b>${qty(cant)} und</b> ` + aNombreDe();
   } else {
     const min = Math.round(lista.reduce((a,t)=>a+t.minutos,0)*10)/10;
     const nums = lista.slice(0,6).map(t=>t.num).join(", ") + (lista.length>6?"…":"");
@@ -1782,7 +1818,7 @@ function confirmarLote(){
     $("confDet").innerHTML =
       `${esc(sel.op)} · OF ${esc(sel.of)}<br>`+
       `<span style="color:#5a6270">${esc(nums)}</span><br>`+
-      `Total: <b>${min} min</b> a tu nombre`;
+      `Total: <b>${min} min</b> ` + aNombreDe();
   }
   $("btnRegistrar").disabled=false;
   irA("pasoConf");
@@ -2147,6 +2183,7 @@ function initSupervisora(){
   const desdeIng = (()=>{ try{ return !!sessionStorage.getItem("stx_volver_ing"); }catch(e){ return false; } })();
   if(s.cargo!=="SUPERVISORA" && !(s.cargo==="INGENIERIA" && desdeIng)){
     location.href = destinoPorCargo(s.cargo); return; }
+  fijarSesion(s);
   SUP_AREA_OVERRIDE=null;
   mostrarNovedades();   // parche 58: novedades del área al entrar
   $("tituloArea").textContent = s.area + " · Supervisión";
