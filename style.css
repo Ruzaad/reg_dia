@@ -746,23 +746,6 @@ body[data-pagina="ingenieria"] .tabla-scroll{max-width:100%;}
 .lib-lock{font-size:13px;cursor:help;}
 .tabla td.lib-cod{font-size:11px;color:#5a6270;font-variant-numeric:tabular-nums;}
 
-/* ACABADO · Mis registros (parche 58) */
-.mr-resumen{font-size:14px;color:#5a6270;text-align:center;margin-bottom:10px;}
-.card-fila.mr-of{cursor:pointer;}
-.card-fila.mr-of.abierta{border-color:var(--azul);}
-.mr-cant{text-align:right;font-size:15px;white-space:nowrap;}
-.mr-cant b{font-size:19px;color:var(--azul);}
-.mr-min{font-size:11px;color:#5a6270;}
-.mr-car{font-size:13px;color:#5a6270;margin-left:8px;}
-.mr-det{background:var(--gris-fondo);border-radius:12px;padding:10px 12px;margin:-6px 0 10px;}
-.mr-det-tit{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;
-  color:#5a6270;margin:6px 0 4px;}
-.mr-fila{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;
-  font-size:14px;padding:5px 0;border-bottom:1px solid #e3e9f2;}
-.mr-fila:last-child{border-bottom:none;}
-.mr-txt{flex:1;min-width:0;font-weight:600;}
-.mr-txt small{color:#5a6270;font-weight:500;}
-.mr-n{font-weight:800;color:var(--azul);white-space:nowrap;}
 /* El área propia se distingue de las temporales en el selector */
 .card-area.propia{border-color:var(--exito);}
 
