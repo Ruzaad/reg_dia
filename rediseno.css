@@ -470,12 +470,16 @@ body[data-pagina="ingenieria"]{font-family:var(--sans);}
   letter-spacing:.7px;text-transform:uppercase;color:var(--ocre);margin-bottom:5px;}
 .seccion-sub{font-size:13.5px;color:var(--suave);line-height:1.45;}
 [data-pagina="ingenieria"] .barra-control{margin-bottom:18px;}
-/* .pantalla es flex en columna: con margin:auto los hijos se encogían a su
-   contenido y quedaban centrados (filtros y KPI flotando al medio, la tabla a
-   todo el ancho). Todo arranca en el mismo borde izquierdo que el título. */
+/* Cada vista es UNA columna centrada en la pantalla (tope --ancho-ing) y todo
+   lo de adentro ocupa esa columna entera: filtros, tablas y título comparten
+   los dos bordes. Antes la columna iba pegada a la izquierda y cada bloque
+   tenía su propio ancho (margin-right:auto encogía la barra de filtros a su
+   contenido), así que unos bloques quedaban a la izquierda y otros al medio. */
+body[data-pagina="ingenieria"] .ing-main>.pantalla{width:100%;max-width:var(--ancho-ing);margin-left:auto;margin-right:auto;}
 body[data-pagina="ingenieria"] .contenedor-ancho,
 body[data-pagina="ingenieria"] .fila-filtros,
-body[data-pagina="ingenieria"] .barra-control{margin-left:0;margin-right:auto;align-self:stretch;}
+body[data-pagina="ingenieria"] .barra-control{max-width:none;margin-left:0;margin-right:0;align-self:stretch;}
+body[data-pagina="ingenieria"] .estado-vacio{width:100%;margin-left:auto;margin-right:auto;}
 body[data-pagina="ingenieria"] .kpis{margin-left:0;}
 body[data-pagina="ingenieria"] .ing-main .tabs{justify-content:flex-start;margin-left:0;max-width:none;padding-left:0;}
 .solo-admin{background:var(--ocre-t);color:#8A5F18;border:1px solid #EBD3AE;font-weight:700;font-size:11px;letter-spacing:.3px;}
@@ -539,7 +543,7 @@ body[data-pagina="ingenieria"] .ing-main .tabs{justify-content:flex-start;margin
 .dyn-oculto,.barra-control.dyn-vacia{display:none!important;}
 /* top negativo = padding de .ing-main: sticky se mide desde el borde interior
    del contenedor, y con top:0 la barra bajaba 22px y tapaba el encabezado. */
-.dyn-ctx{position:sticky;top:-22px;z-index:30;margin:-22px -26px 18px;padding:10px 26px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;
+.dyn-ctx{position:sticky;top:-22px;z-index:30;margin:-22px -26px 18px;padding:10px calc(26px + max(0px,(100% - var(--ancho-ing,100%))/2));display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;
   background:color-mix(in srgb,var(--gris-fondo) 90%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--linea);}
 .dyn-crumb{font-size:12.5px;color:var(--suave);font-weight:500;white-space:nowrap;margin-right:4px;}
 .dyn-crumb b{color:var(--texto);font-weight:700;}
@@ -682,3 +686,21 @@ header .dyn-buscar::before{content:"";flex:0 0 16px;height:16px;background:curre
 .pantalla.activa .kpis>*:nth-child(n+6),.pantalla.activa .chip-estado:nth-child(n+6){animation-delay:.14s}
 @media (prefers-reduced-motion:reduce){.dyn-suave{transition:none;}.dyn-llego,.dyn-llego .kpi-num,.dyn-llego .ce-num,
   .dyn-llego .conf-num,.dyn-llego .aud-kpi-num,.dyn-llego .sv-pct,.pantalla.activa .kpis>*,.pantalla.activa .chip-estado{animation:none;}}
+
+/* Matrices (persona × día, área × día): las columnas de referencia quedan fijas
+   al desplazarse a la derecha. dinamico.js marca las celdas (.col-fija) y
+   calcula su `left`; aquí solo el fondo opaco y la sombra del borde. */
+.tabla tbody tr td.col-fija,.tabla thead tr th.col-fija{position:sticky;}
+.tabla tbody tr td.col-fija{z-index:1;background:var(--sup);}
+.tabla thead tr th.col-fija{z-index:4;background:var(--sup-2);}
+.tabla tbody tr:hover td.col-fija{background:#F4F7FC;}
+.tabla-inc tbody tr.inc-anulado td.col-fija{background:#fdecea;}
+.tabla .col-fija-ult{box-shadow:inset -1px 0 0 var(--linea),8px 0 10px -8px rgba(13,59,133,.28);}
+
+/* Supervisora: la fila del día, los botones de acción y las tarjetas del
+   personal iban pegados a la izquierda mientras el título y el buscador
+   estaban al centro. Mismo eje para todo. */
+body[data-pagina="supervisora"] .fila-filtros,
+body[data-pagina="supervisora"] .acc-toolbar{justify-content:center;}
+body[data-pagina="supervisora"] .grid-personal{max-width:1100px;width:100%;margin-left:auto;margin-right:auto;}
+.grid-personal>.vacio-msg,.grid-personal>.cargando{grid-column:1/-1;}

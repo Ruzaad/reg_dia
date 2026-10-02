@@ -466,9 +466,23 @@ function prepararTabla(t){
     th.addEventListener("click",go);th.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});});
   const s=ORD[k];if(s){ordenar(t,s.col,s.dir);marcarCab(t,s.col,s.dir);}
 }
+/* Matrices: columnas de referencia fijas al desplazar a la derecha. Incentivos
+   fija Personal, DNI, Área y Cat.; el resto, su primera columna. El `left` de
+   cada una es la suma de los anchos de las anteriores; el ResizeObserver lo
+   recalcula cuando la tabla cambia de ancho o pasa de oculta a visible. */
+const FIJAS={tablaInc:4,tablaModular:1,tablaEfm:1,dbEfTabla:1};
+const nFijas=t=>FIJAS[t.id]||(t.classList.contains("ope-tabla")?1:0);
+const roFijas=window.ResizeObserver?new ResizeObserver(es=>es.forEach(e=>fijarColumnas(e.target))):null;
+function fijarColumnas(t){
+  const n=nFijas(t),fc=filaCab(t);if(!n||!fc||!t.offsetWidth)return;
+  const lefts=[];let x=0;[...fc.cells].slice(0,n).forEach(c=>{lefts.push(x);x+=c.offsetWidth;});
+  [...t.rows].forEach(tr=>{let col=0;[...tr.cells].forEach(c=>{const sp=c.colSpan||1,f=col<n&&sp===1&&lefts[col]!=null;
+    c.classList.toggle("col-fija",f);c.classList.toggle("col-fija-ult",f&&col===n-1);c.style.left=f?lefts[col]+"px":"";col+=sp;});});
+}
+function vigilarFijas(t){if(!nFijas(t))return;if(roFijas&&!t.dataset.fijas){t.dataset.fijas="1";roFijas.observe(t);}fijarColumnas(t);}
 let tObs=null;
 const obs=new MutationObserver(()=>{if(ordenando)return;cancelAnimationFrame(tObs);tObs=requestAnimationFrame(()=>{
-  document.querySelectorAll(".pantalla table").forEach(t=>{const fc=filaCab(t);
+  document.querySelectorAll(".pantalla table").forEach(t=>{const fc=filaCab(t);vigilarFijas(t);
     if(fc&&!fc.dataset.dyn)prepararTabla(t);
     else if(fc&&t.tBodies[0]&&!t.tBodies[0].dataset.dyn){t.tBodies[0].dataset.dyn="1";const s=ORD[claveTabla(t)];if(s&&fc.querySelector(".dyn-ord")){ordenar(t,s.col,s.dir);marcarCab(t,s.col,s.dir);}}});
   const v=vistaActual();if(v)ocultarCampos(v);});});

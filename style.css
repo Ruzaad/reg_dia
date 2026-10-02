@@ -488,9 +488,10 @@ body[data-pagina="ingenieria"] .barra-control{max-width:var(--ancho-ing);
 .chip-estado .ce-lbl{font-size:12px;font-weight:700;color:#5a6270;margin-top:2px;}
 
 /* ---- tabla de asistencia mensual (persona x día) ----
-   Contenedor centrado explícitamente: antes .contenedor-ancho quedaba
-   pegado a la izquierda cuando la tabla era más angosta que 1100px. */
-#pasoAsis .contenedor-ancho{display:flex;justify-content:center;}
+   La tabla se centra sola con margin:auto. NO usar flex+justify-content:center
+   en el contenedor: cuando la matriz es más ancha que la pantalla, flex la
+   desborda por los DOS lados y los primeros días quedan cortados a la
+   izquierda, fuera del alcance del scroll. */
 .tabla-asis-mes{border-collapse:collapse;font-size:13px;background:var(--blanco);margin:0 auto;}
 .tabla-asis-mes th, .tabla-asis-mes td{padding:6px 8px;text-align:center;
   border:1px solid var(--gris-fondo);white-space:nowrap;}
