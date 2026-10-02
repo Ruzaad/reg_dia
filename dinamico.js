@@ -466,9 +466,23 @@ function prepararTabla(t){
     th.addEventListener("click",go);th.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});});
   const s=ORD[k];if(s){ordenar(t,s.col,s.dir);marcarCab(t,s.col,s.dir);}
 }
+/* Matrices: columnas de referencia fijas al desplazar a la derecha. Incentivos
+   fija Personal, DNI, Área y Cat.; el resto, su primera columna. El `left` de
+   cada una es la suma de los anchos de las anteriores; el ResizeObserver lo
+   recalcula cuando la tabla cambia de ancho o pasa de oculta a visible. */
+const FIJAS={tablaInc:4,tablaModular:1,tablaEfm:1,dbEfTabla:1};
+const nFijas=t=>FIJAS[t.id]||(t.classList.contains("ope-tabla")?1:0);
+const roFijas=window.ResizeObserver?new ResizeObserver(es=>es.forEach(e=>fijarColumnas(e.target))):null;
+function fijarColumnas(t){
+  const n=nFijas(t),fc=filaCab(t);if(!n||!fc||!t.offsetWidth)return;
+  const lefts=[];let x=0;[...fc.cells].slice(0,n).forEach(c=>{lefts.push(x);x+=c.offsetWidth;});
+  [...t.rows].forEach(tr=>{let col=0;[...tr.cells].forEach(c=>{const sp=c.colSpan||1,f=col<n&&sp===1&&lefts[col]!=null;
+    c.classList.toggle("col-fija",f);c.classList.toggle("col-fija-ult",f&&col===n-1);c.style.left=f?lefts[col]+"px":"";col+=sp;});});
+}
+function vigilarFijas(t){if(!nFijas(t))return;if(roFijas&&!t.dataset.fijas){t.dataset.fijas="1";roFijas.observe(t);}fijarColumnas(t);}
 let tObs=null;
 const obs=new MutationObserver(()=>{if(ordenando)return;cancelAnimationFrame(tObs);tObs=requestAnimationFrame(()=>{
-  document.querySelectorAll(".pantalla table").forEach(t=>{const fc=filaCab(t);
+  document.querySelectorAll(".pantalla table").forEach(t=>{const fc=filaCab(t);vigilarFijas(t);
     if(fc&&!fc.dataset.dyn)prepararTabla(t);
     else if(fc&&t.tBodies[0]&&!t.tBodies[0].dataset.dyn){t.tBodies[0].dataset.dyn="1";const s=ORD[claveTabla(t)];if(s&&fc.querySelector(".dyn-ord")){ordenar(t,s.col,s.dir);marcarCab(t,s.col,s.dir);}}});
   const v=vistaActual();if(v)ocultarCampos(v);});});
@@ -478,7 +492,7 @@ const obs=new MutationObserver(()=>{if(ordenando)return;cancelAnimationFrame(tOb
    ===================================================================== */
 let cmdk=null,PERS=null,OFSL=null,sel=0,items=[];
 function abrirCmdk(){
-  if(!cmdk){cmdk=document.createElement("div");cmdk.className="dyn-cmdk";cmdk.innerHTML=`<div class="dyn-cmdk-box" role="dialog" aria-label="Buscar"><input id="dynCk" placeholder="Busca una pestaña, una persona o una OF…" autocomplete="off"><div class="dyn-ck-l" id="dynCkL"></div><div class="dyn-ck-pie"><span>↑↓ moverse</span><span>Enter abrir</span><span>Esc cerrar</span></div></div>`;
+  if(!cmdk){cmdk=document.createElement("div");cmdk.className="dyn-cmdk";cmdk.innerHTML=`<div class="dyn-cmdk-box" role="dialog" aria-label="Buscar"><input id="dynCk" placeholder="Busca una pestaña, una persona o una OF…" autocomplete="off"><div class="dyn-ck-l" id="dynCkL"></div><div class="dyn-ck-pie"><span>↑↓ moverse</span><span>Enter abrir</span><span>Esc cerrar</span><span>? atajos</span></div></div>`;
     document.body.appendChild(cmdk);cmdk.addEventListener("click",e=>{if(e.target===cmdk)cerrarCmdk();const b=e.target.closest("[data-i]");if(b)ir(items[+b.dataset.i]);});
     $("dynCk").addEventListener("input",()=>{sel=0;listaCk();});
     $("dynCk").addEventListener("keydown",e=>{if(e.key==="ArrowDown"){sel=Math.min(items.length-1,sel+1);listaCk();e.preventDefault();}else if(e.key==="ArrowUp"){sel=Math.max(0,sel-1);listaCk();e.preventDefault();}else if(e.key==="Enter"&&items[sel])ir(items[sel]);else if(e.key==="Escape")cerrarCmdk();});}
@@ -503,7 +517,93 @@ function ir(x){cerrarCmdk();x.go();}
 function irVista(v){activarTab(v.tab);setTimeout(()=>{const m={tkOp:()=>tkVista("op"),tkRep:()=>tkVista("rep"),tkOpe:()=>tkVista("ope"),tkActual:()=>tkVista("actual"),efR:()=>efVista("dia"),
   incMod:()=>incVista("mod"),incEfm:()=>incVista("efm"),incCons:()=>incVista("cons"),incTabla:()=>incVista("tabla"),dashEf:()=>dashTab("ef"),dashCant:()=>dashTab("cant"),dashMod:()=>dashTab("mod"),
   perRango:()=>perTab("rango"),perMat:()=>perTab("matriz"),perMov:()=>perTab("mov"),inciPend:()=>inciVista("pend"),inciHE:()=>inciVista("he"),inciApl:()=>inciVista("apl")}[v.id];if(m)m();},60);}
-document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"&&PAG==="ingenieria"){e.preventDefault();abrirCmdk();}if(e.key==="Escape")cerrarCmdk();});
+/* =====================================================================
+   TECLADO · INGENIERÍA
+   Ctrl+K buscador · Alt+1…9 secciones del menú · Shift+←/→ sub-pestañas ·
+   / al primer filtro · Alt+R recargar · ? lista de atajos · Esc cierra.
+   Enter en un filtro = su botón Cargar; Enter en un modal = Guardar.
+   Clic fuera de un modal, del panel de Auditoría o del menú lo cierra.
+   ===================================================================== */
+const enCampo=el=>!!el&&(el.isContentEditable||/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName));
+const visible=el=>!!el&&el.offsetParent!==null&&!el.disabled&&!el.hidden;
+const FOCOS='a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+const modalAbierto=()=>document.querySelector(".modal-overlay.visible");
+const drawerAbierto=()=>document.querySelector(".aud-drawer.visible");
+function cerrarCapa(){
+  if(cmdk&&cmdk.classList.contains("on")){cerrarCmdk();return true;}
+  if(modalAbierto()){try{cerrarModal();}catch(e){}return true;}
+  if(drawerAbierto()){try{audCerrar();}catch(e){}return true;}
+  if($("dynAtajos")&&$("dynAtajos").classList.contains("on")){$("dynAtajos").classList.remove("on");return true;}
+  const sb=document.querySelector(".ing-sidebar");
+  if(sb&&sb.contains(document.activeElement)){document.activeElement.blur();return true;}
+  if(window.innerWidth<=900&&!document.body.classList.contains("sidebar-cerrada")){document.body.classList.add("sidebar-cerrada");return true;}
+  return false;
+}
+/* Botón principal de un contenedor: Guardar/Cargar, no Cancelar ni Descargar. */
+function botonPrincipal(c){
+  /* Los Cargar que oculta la barra de contexto (dyn-oculto) siguen valiendo: son la misma carga. */
+  const bs=[...c.querySelectorAll("button")].filter(b=>(visible(b)||b.classList.contains("dyn-oculto"))&&!b.disabled&&!/cancel|cerrar|descargar|xlsx|limpiar|borrar|eliminar/i.test(b.textContent+" "+b.className));
+  return bs.find(b=>/guardar|btn-principal/i.test(b.className))||bs.find(b=>/cargar|buscar|aplicar|guardar|confirmar|aceptar/i.test(b.textContent))||null;
+}
+function moverSubtab(d){
+  const p=document.querySelector(".pantalla.activa");if(!p)return;
+  const ts=[...p.querySelectorAll(".tabs .tab")].filter(visible);if(ts.length<2)return;
+  const i=ts.findIndex(t=>t.classList.contains("activo"));const n=ts[(Math.max(i,0)+d+ts.length)%ts.length];
+  n.click();n.focus({preventScroll:true});
+}
+function abrirAtajos(){
+  let a=$("dynAtajos");
+  if(!a){a=document.createElement("div");a.id="dynAtajos";a.className="dyn-cmdk";
+    const f=(k,t)=>`<div class="dyn-at-f"><span>${t}</span><span>${k.map(x=>`<kbd>${x}</kbd>`).join(" ")}</span></div>`;
+    a.innerHTML=`<div class="dyn-cmdk-box dyn-atajos" role="dialog" aria-label="Atajos de teclado"><h3>Atajos de teclado</h3>`
+      +f(["Ctrl","K"],"Buscar pestaña, persona u OF")+f(["Alt","1…9"],"Ir a la sección 1 a 9 del menú")
+      +f(["Shift","←"],"Sub-pestaña anterior")+f(["Shift","→"],"Sub-pestaña siguiente")
+      +f(["/"],"Ir al primer filtro de la vista")+f(["Alt","R"],"Recargar la vista")
+      +f(["Enter"],"En un filtro: Cargar · En un formulario: Guardar")+f(["Tab"],"Pasar al siguiente campo")
+      +f(["Esc"],"Cerrar ventana, panel o menú")+f(["?"],"Ver esta lista")+`</div>`;
+    document.body.appendChild(a);a.addEventListener("click",e=>{if(e.target===a)a.classList.remove("on");});}
+  a.classList.add("on");
+}
+if(PAG==="ingenieria"){
+  document.addEventListener("keydown",e=>{
+    const k=e.key,el=document.activeElement,campo=enCampo(el);
+    if((e.ctrlKey||e.metaKey)&&k.toLowerCase()==="k"){e.preventDefault();abrirCmdk();return;}
+    if(k==="Escape"){if(cerrarCapa())e.preventDefault();return;}
+    /* Tab no se escapa de un modal o del panel abierto hacia la página de atrás. */
+    if(k==="Tab"){const cap=modalAbierto()?$("modalBox"):drawerAbierto();if(!cap)return;
+      const fs=[...cap.querySelectorAll(FOCOS)].filter(visible);if(!fs.length)return;
+      const i=fs.indexOf(el);
+      if(i<0){e.preventDefault();fs[0].focus();}
+      else if(e.shiftKey&&i===0){e.preventDefault();fs[fs.length-1].focus();}
+      else if(!e.shiftKey&&i===fs.length-1){e.preventDefault();fs[0].focus();}
+      return;}
+    if(k==="Enter"&&campo&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.shiftKey&&el.tagName!=="TEXTAREA"){
+      if(el.onkeydown||el.closest(".dyn-cmdk,.autocomplete,.tabla,.tabla-asis-mes"))return;
+      const c=el.closest(".modal-box,.barra-control,.fila-filtros,.aud-drawer");if(!c)return;
+      const b=botonPrincipal(c);if(b){e.preventDefault();b.click();}return;}
+    if(campo||e.ctrlKey||e.metaKey||modalAbierto()||(cmdk&&cmdk.classList.contains("on")))return;
+    if(e.altKey&&/^[1-9]$/.test(k)){const its=[...document.querySelectorAll(".nav-item[data-tab]")];const it=its[+k-1];
+      if(it){e.preventDefault();activarTab(it.dataset.tab);}return;}
+    if(e.altKey&&k.toLowerCase()==="r"){const b=document.querySelector('.dyn-ctx [data-dyn^="ref"]')||$("btnRecargar");if(b){e.preventDefault();b.click();}return;}
+    if(e.shiftKey&&(k==="ArrowLeft"||k==="ArrowRight")){e.preventDefault();moverSubtab(k==="ArrowLeft"?-1:1);return;}
+    if(k==="/"){const p=document.querySelector(".pantalla.activa");const f=p&&[...p.querySelectorAll("input:not([type=checkbox]):not([type=hidden]),select")].find(visible);
+      if(f){e.preventDefault();f.focus();if(f.select)try{f.select();}catch(x){}}return;}
+    if(k==="?"){e.preventDefault();abrirAtajos();}
+  });
+  /* Clic fuera: el fondo del modal lo cierra (antes solo CANCELAR); un clic en
+     el contenido suelta el foco del menú, que si no se quedaba desplegado. */
+  document.addEventListener("click",e=>{
+    const o=modalAbierto();if(o&&e.target===o){try{cerrarModal();}catch(x){}return;}
+    const sb=document.querySelector(".ing-sidebar");
+    if(sb&&sb.contains(document.activeElement)&&!sb.contains(e.target))document.activeElement.blur();
+    const it=e.target.closest(".nav-item[data-tab]");if(it&&e.detail>0)it.blur();
+  });
+  /* Al abrir un modal, el cursor va directo al primer campo. */
+  const mo=$("modalOverlay");
+  if(mo)new MutationObserver(()=>{if(!mo.classList.contains("visible"))return;
+    setTimeout(()=>{const f=[...$("modalBox").querySelectorAll("input:not([type=hidden]):not([type=checkbox]),select,textarea")].find(visible)||[...$("modalBox").querySelectorAll(FOCOS)].find(visible);if(f)f.focus();},30);
+  }).observe(mo,{attributes:true,attributeFilter:["class"]});
+}else document.addEventListener("keydown",e=>{if(e.key==="Escape")cerrarCmdk();});
 
 /* ---------- contadores del menú ---------- */
 let tCont=0;
