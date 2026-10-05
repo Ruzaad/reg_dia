@@ -2378,7 +2378,8 @@ function ofsPintar(){
    Se lee, se muestra una tarjeta por hoja con lo detectado —editable— y solo al
    CONFIRMAR se escribe. Desde el parche 89 cada tarjeta ya se compara con lo
    registrado ANTES de escribir: la hoja idéntica se omite sola y la que difiere
-   puede reemplazar el desglose guardado (si la OF aún no tiene reclamos). */
+   puede reemplazar el desglose guardado. Desde el parche 94 también con
+   reclamos: si cambia un paquete ya reclamado, se pide confirmar. */
 let OFS_JOBS=[], OFS_SEQ=0, OFS_DRAG=0;
 function ofsDrag(e){
   e.preventDefault();
@@ -2536,7 +2537,7 @@ function renderOfsJobs(){
         <ul>${k.dif.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>
         <label class="hn-rep"><input type="checkbox" ${j.reemplazar?"checked":""} onchange="ofsJobCampo(${j.id},'rep',this.checked)">
           Reemplazar lo registrado con esta HN</label>
-        <div class="sub">${k.gen.length?`Ya generada en ${esc(k.gen.join(", "))}: sus tickets se recalculan. `:""}No se puede si la OF ya tiene tickets reclamados. Si no lo marcas, esta hoja se omite.</div>
+        <div class="sub">${k.gen.length?`Ya generada en ${esc(k.gen.join(", "))}: sus tickets se recalculan. `:""}Si hay tickets reclamados en paquetes que cambian, te pido confirmar antes (esos reclamos se quedan como están). Si no lo marcas, esta hoja se omite.</div>
       </div>` : "";
     return `<div class="gen-job" id="ofsJob_${j.id}">
       <div class="gen-job-head">
@@ -2592,8 +2593,15 @@ Se registrarán una tras otra y la segunda saldrá como "ya registrada". ¿Sigo?
   for(const p of pend){
     try{
       if(p.rep){
-        const g=await rpc("fn_of_reemplazar",{p_dni:ING.dni,p_token:ING.token,p_of:p.of,
-          p_articulo:p.art, p_prenda:p.pre, p_cant_prog:p.total, p_detalle:p.det});
+        const args={p_dni:ING.dni,p_token:ING.token,p_of:p.of,
+          p_articulo:p.art, p_prenda:p.pre, p_cant_prog:p.total, p_detalle:p.det};
+        let g=await rpc("fn_of_reemplazar",args);
+        if(g && g.confirmar){
+          const lis=(g.paquetes_reclamados||[]).map(x=>`Paq ${x.paq}: ${x.antes} → ${x.ahora} (${x.tickets} ticket(s))`).join("\n");
+          if(confirm(`OF ${p.of}: ${g.tickets} ticket(s) reclamados están en paquetes que cambian.\n\n${lis}\n\nEsos reclamos se quedan con sus datos de antes. ¿Reemplazo igual?`))
+            g=await rpc("fn_of_reemplazar",{...args, p_forzar:true});
+          else { lineas.push(`<div class="hn-aviso">OF ${esc(p.of)}: no se reemplazó (cancelado).</div>`); continue; }
+        }
         if(!g || g.ok===false) lineas.push(`<div class="hn-aviso">OF ${esc(p.of)}: ${esc((g&&g.error)||"error")}</div>`);
         else lineas.push(`<div class="cf-detalle">✓ OF ${esc(g.of)} reemplazada${g.solo_prenda?" (solo "+esc(g.prenda)+")":""} · ${g.paquetes} paquete(s) · ${Math.round(p.total)} und</div>`);
         continue;
