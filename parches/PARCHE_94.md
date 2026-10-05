@@ -15,7 +15,7 @@ tenía un solo ticket reclamado, así que en la práctica casi nunca se podía.
 
 ## Qué cambia en la base
 
-`fn_of_reemplazar` gana un parámetro `p_forzar boolean default false`:
+`fn_of_reemplazar` gana un parámetro `p_forzar boolean default true`:
 
 - Ya no se niega por tener reclamos.
 - Si hay reclamos ACTIVO en paquetes que cambian o desaparecen y no se fuerza,
@@ -25,8 +25,11 @@ tenía un solo ticket reclamado, así que en la práctica casi nunca se podía.
 - Lo demás igual que el parche 89 (terno: solo la prenda indicada; refresca el
   caché de tickets de las áreas generadas).
 
-Los despliegues sin migrar llaman con 7 parámetros y siguen funcionando: sin
-forzar, solo reemplazan cuando no cambian paquetes reclamados.
+Los despliegues sin migrar llaman con 7 parámetros y reemplazan directo
+(default true): los paquetes que la HN ya no trae se borran del desglose. La
+pantalla nueva manda `p_forzar=false` y pide confirmar primero. Se cambió a
+true el 5 oct porque la primera versión (default false) trababa la OF 10257
+desde la pantalla vieja.
 
 Aplicar: correr `sql/parche_94.sql` en el SQL Editor.
 Deshacer: `sql/parche_94_rollback.sql` (vuelve a la versión del parche 89).

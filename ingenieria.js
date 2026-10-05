@@ -2594,7 +2594,7 @@ Se registrarán una tras otra y la segunda saldrá como "ya registrada". ¿Sigo?
     try{
       if(p.rep){
         const args={p_dni:ING.dni,p_token:ING.token,p_of:p.of,
-          p_articulo:p.art, p_prenda:p.pre, p_cant_prog:p.total, p_detalle:p.det};
+          p_articulo:p.art, p_prenda:p.pre, p_cant_prog:p.total, p_detalle:p.det, p_forzar:false};
         let g=await rpc("fn_of_reemplazar",args);
         if(g && g.confirmar){
           const lis=(g.paquetes_reclamados||[]).map(x=>`Paq ${x.paq}: ${x.antes} → ${x.ahora} (${x.tickets} ticket(s))`).join("\n");

@@ -9,14 +9,15 @@
 -- · Si alguno cambia o desaparece, la función devuelve confirmar=true con la
 --   lista de esos paquetes; la pantalla lo muestra y, si se acepta, vuelve a
 --   llamar con p_forzar=true. Esos reclamos quedan con sus datos de antes.
--- El parámetro p_forzar tiene default false: los despliegues sin migrar que
--- llaman con 7 parámetros siguen funcionando (sin forzar).
+-- El parámetro p_forzar tiene default TRUE: los despliegues que llaman con 7
+-- parámetros (la pantalla vieja) reemplazan directo, borrando los paquetes que
+-- sobran. La pantalla nueva manda p_forzar=false para pedir confirmación.
 
 drop function if exists public.fn_of_reemplazar(text, uuid, text, text, text, numeric, jsonb);
 
 create or replace function public.fn_of_reemplazar(
   p_dni text, p_token uuid, p_of text, p_articulo text, p_prenda text,
-  p_cant_prog numeric, p_detalle jsonb, p_forzar boolean default false)
+  p_cant_prog numeric, p_detalle jsonb, p_forzar boolean default true)
  returns json language plpgsql security definer
  set search_path to 'public'
  set statement_timeout to '30s'
