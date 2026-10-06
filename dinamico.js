@@ -76,6 +76,8 @@ function quincenas(h){
 
 /* ---------- estado global (se recuerda por pestaña del navegador) ---------- */
 const G={fecha:hoy(),area:"",rango:null,desde:null,hasta:null,quin:"act"};
+/* parche 95: quien no lee todas las áreas no tiene la opción "Todas". */
+const todasOk=()=>{try{return leeTodas();}catch(e){return true;}};
 try{Object.assign(G,JSON.parse(sessionStorage.getItem("stx-dyn")||"{}"));}catch(e){}
 if(G.fecha>hoy())G.fecha=hoy();
 const guardar=()=>{try{sessionStorage.setItem("stx-dyn",JSON.stringify(G));}catch(e){}};
@@ -194,6 +196,15 @@ const VISTAS=PAG==="ingenieria"?[
   {id:"extra",tab:"pasoExtra",m:"pasoExtra",modo:null,area:1,t:"Operaciones sin OF",
    aplicar(){const a=$("exArea");if(a&&G.area&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;llamar("cargarExtra");}return false;},ocultar:["exArea"]},
   {id:"causas",tab:"pasoCausas",m:"pasoCausas",modo:null,t:"Causas de STD"},
+  {id:"costosBase",tab:"pasoCostosBase",m:"pasoCostosBase",modo:null,area:1,areaReq:1,t:"Base y balance",
+   aplicar(){return put("cbArea",G.area);},cargar:()=>llamar("cargarCostosBase"),ocultar:["cbArea"]},
+  {id:"costosHoy",tab:"pasoCostosHoy",m:"pasoCostosHoy",modo:"dia",area:1,live:1,t:"Reporte de hoy",
+   aplicar(){let c=put("chFecha",G.fecha);c=areaSel("chArea")||c;return c;},cargar:()=>llamar("cargarCostosHoy"),ocultar:["chFecha","chArea"]},
+  {id:"costosInc",tab:"pasoCostosInc",m:"pasoCostosInc",modo:"rango",def:"semana",area:1,live:1,t:"Incidencias",
+   aplicar(){const [d,h]=rangoDe(this);let c=put("ciDesde",d);c=put("ciHasta",h)||c;c=areaSel("ciArea")||c;return c;},
+   cargar:()=>llamar("cargarCostosInc"),ocultar:["ciDesde","ciHasta","ciArea"]},
+  {id:"costosAsis",tab:"pasoCostosAsis",m:"pasoCostosAsis",modo:"dia",area:1,live:1,t:"Asistencia",
+   aplicar(){let c=put("caFecha",G.fecha);c=areaSel("caArea")||c;return c;},cargar:()=>llamar("cargarCostosAsis"),ocultar:["caFecha","caArea"]},
   {id:"supArea",tab:"pasoSupArea",m:"pasoSupArea",modo:null,t:"Operar como supervisora"},
   {id:"opArea",tab:"pasoOpArea",m:"pasoOpArea",modo:null,area:1,areaReq:1,t:"Operar como operario",
    aplicar(){const a=$("areaOp");if(a&&G.area&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;llamar("cargarOpArea");}return false;},ocultar:["areaOp"]}
@@ -239,11 +250,12 @@ const selArea=v=>{const id=v.sel||(v.ocultar||[]).find(x=>/area/i.test(x));retur
    que quedaba en pantalla con el chip marcando otra cosa). Mismo formato que
    el que usa cada una. */
 const LLENAR={repArea:"Todas las áreas",opeArea:"Todas las áreas",audArea:"Todas las áreas",blArea:"Todas las áreas",
-  incArea:"Todas las áreas",modArea:"Todas las áreas",efmArea:"Todas las áreas",consArea:"Todas las áreas",tkOpArea:"— Elige área —",heArea:null};
+  incArea:"Todas las áreas",modArea:"Todas las áreas",efmArea:"Todas las áreas",consArea:"Todas las áreas",tkOpArea:"— Elige área —",heArea:null,
+  cbArea:null,chArea:"Todas las áreas",ciArea:"Todas las áreas",caArea:"Todas las áreas"};
 function llenarArea(v){
   const a=selArea(v);if(!a||!(a.id in LLENAR)||a.options.length>1)return;
   let L=[];try{L=AREAS_LISTA||[];}catch(e){}if(!L.length)return;
-  const ph=LLENAR[a.id],prev=a.value;
+  const ph=LLENAR[a.id]==="Todas las áreas"&&!todasOk()?null:LLENAR[a.id],prev=a.value;
   a.innerHTML=(ph?`<option value="">${ph}</option>`:"")+L.map(x=>`<option>${escH(x)}</option>`).join("");
   if(prev&&L.includes(prev))a.value=prev;
 }
@@ -386,7 +398,7 @@ function pintarCtx(){
   if(v&&v.area){let L=[];try{L=AREAS_LISTA||[];}catch(e){}
     const s=selArea(v);if(v.soloSel&&s&&s.options.length>1)L=[...s.options].map(o=>o.value).filter(Boolean);
     const act=areaVista(v);
-    const opc=(v.areaReq?[]:[["","Todas"]]).concat(L.map(a=>[a,a.replace(" COSTURA","")]));
+    const opc=(v.areaReq||!todasOk()?[]:[["","Todas"]]).concat(L.map(a=>[a,a.replace(" COSTURA","")]));
     areas=`<div class="dyn-areas" role="group" aria-label="Área">${opc.map(([k,t])=>`<button data-dyn="area:${escH(k)}" class="dyn-chip ${act===k?"on":""}" aria-pressed="${act===k}"><i data-a="${escH(k)}"></i>${escH(t)}</button>`).join("")}</div>
       <select id="dynArea" class="dyn-area-sel" aria-label="Área">${v.areaReq&&!act?'<option value="">Elige área…</option>':""}${opc.map(([k,t])=>`<option value="${escH(k)}" ${act===k?"selected":""}>${escH(t)}</option>`).join("")}</select>`;}
   const esHoy=v&&(v.modo==="dia"?G.fecha===hoy():v.modo==="rango"?rangoDe(v)[1]===hoy():true);
@@ -394,6 +406,7 @@ function pintarCtx(){
   const estado=v&&v.cargar?`<span class="dyn-live ${vivo?"on":""} ${cargando?"car":""}"><b>${cargando?"Actualizando":vivo?"En vivo":"Actualizado"}</b><span id="dynHace">${hace()}</span></span><button class="dyn-ref" data-dyn="ref" title="Actualizar ahora" aria-label="Actualizar ahora"></button>`:"";
   ctx.innerHTML=`<div class="dyn-crumb">${grp?escH(grp.textContent.trim())+" <i>›</i> ":""}<b>${escH(tit)}</b></div>${fecha}${areas}<span class="dyn-sp"></span>${estado}`;
   ctx.hidden=!(fecha||areas||estado);
+  try{aplicarSoloLectura();}catch(e){}
 }
 function hace(){if(!ultimaCarga)return"";const s=Math.round((Date.now()-ultimaCarga)/1000);return s<60?`hace ${s} s`:`hace ${Math.round(s/60)} min`;}
 setInterval(()=>{const e=$("dynHace");if(e)e.textContent=hace();},1000);
@@ -620,13 +633,17 @@ function contadores(){
    ===================================================================== */
 const GRUPOS={pasoTk:"Tickets",pasoMod:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
   pasoEf:"Eficiencia",pasoAudit:"Eficiencia",pasoInc:"Eficiencia",pasoDash:"Dashboards",
-  pasoAsis:"Gestión",pasoBases:"Gestión",pasoBaseLog:"Gestión",pasoIncid:"Gestión",pasoFechas:"Gestión",
+  pasoAsis:"Gestión",pasoBases:"Gestión",pasoBaseLog:"Gestión",pasoIncid:"Gestión",pasoFechas:"Gestión",pasoPermisos:"Gestión",
+  pasoCostosBase:"Costos",pasoCostosHoy:"Costos",pasoCostosInc:"Costos",pasoCostosAsis:"Costos",
   pasoSupArea:"Operar como",pasoOpArea:"Operar como"};
 function etiquetarGrupos(){
   document.querySelectorAll(".pantalla").forEach(p=>{const g=GRUPOS[p.id];const c=p.querySelector(".seccion-cab");
     if(g&&c)c.dataset.grupo=g;});
 }
 function iniciarIng(){
+  /* parche 95: al abrir la pestaña del navegador, quien maneja áreas arranca en la suya. */
+  try{const nuevo=!sessionStorage.getItem("stx-dyn"),mias=areasEdita().filter(a=>AREAS_LISTA.includes(a));
+    if(!PERM_LIBRE()&&((nuevo&&!G.area)||(G.area?!AREAS_LISTA.includes(G.area):!todasOk()))){G.area=mias[0]||AREAS_LISTA[0]||"";guardar();}}catch(e){}
   crearCtx();
   etiquetarGrupos();
   const hdr=document.querySelector("header");
@@ -635,7 +652,8 @@ function iniciarIng(){
     const q=$("quienBadge");q?q.before(b):hdr.appendChild(b);}
   /* Pestañas cuya primera visita ya carga sola (con los valores ya escritos):
      se da por cargada para no pedir lo mismo dos veces a la base. */
-  const INIT_CARGA=["pasoTk","pasoAudit","pasoAsis","pasoIncid","pasoDash","pasoOfs","pasoInc","pasoBaseLog"];
+  const INIT_CARGA=["pasoTk","pasoAudit","pasoAsis","pasoIncid","pasoDash","pasoOfs","pasoInc","pasoBaseLog",
+    "pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
   envolver("activarTab",t=>{if(typeof t==="string"&&!TABS_VISTAS.has(t)){preEscribir(t);
     if(INIT_CARGA.includes(t))setTimeout(()=>{const v=vistaActual();if(v&&v.tab===t&&v.cargar){const c=v.aplicar?v.aplicar.call(v):false;if(!c){v.clave=claveDe(v);ultimaCarga=Date.now();}}},0);}});
   ["tkVista","perTab","dashTab","inciVista","incVista","efVista"].forEach(n=>envolver(n));

@@ -337,11 +337,15 @@ async function rpc(fn, args){
     try{ const j = await r.json(); detalle = j.message || j.hint || ""; }catch(e){}
     if(detalle.includes("SESION_INVALIDA")){ sesionVencida(); throw new Error("Sesión vencida"); }
     if(detalle.includes("FUERA_DE_HORARIO")) throw new Error(MSG_FUERA_HORARIO);
+    if(detalle.includes("NO_AUTORIZADA_AREA")) throw new Error(detalle.replace(/^.*NO_AUTORIZADA_AREA:\s*/,"No tienes permiso: "));
     if(detalle.includes("NO_AUTORIZADA")) throw new Error("No autorizada para esta acción");
     throw new Error("Servidor: " + (detalle || ("error " + r.status)));
   }
   renovarSesion();
-  return await r.json();
+  const j = await r.json();
+  if(j && typeof j.error==="string" && j.error.includes("NO_AUTORIZADA_AREA"))
+    j.error = j.error.replace(/^.*NO_AUTORIZADA_AREA:\s*/,"No tienes permiso: ");
+  return j;
 }
 
 /* ---------------- EDGE FUNCTIONS (Supabase) ---------------- */
@@ -472,14 +476,17 @@ async function cargarAlmacen(nombreArea){
 /* ============================================================
    PÁGINA: LOGIN + ÁREA (index.html)
    ============================================================ */
+/* parche 95: todo cargo que no es de planta (Ingeniería, Costos…) entra por
+   ingenieria.html y ve solo las pestañas que le dio el administrador. */
+function esOficina(cargo){ return !!cargo && !["OPERARIO","ESTAJERO","SUPERVISORA"].includes(cargo); }
 function destinoPorCargo(cargo){
-  if(cargo==="INGENIERIA") return "ingenieria.html";
+  if(esOficina(cargo)) return "ingenieria.html";
   if(cargo==="SUPERVISORA") return "supervisora.html";
   return "operario.html";
 }
 function initLogin(){
   const s = sesionActual();
-  if(s && (s.area || s.cargo==="INGENIERIA")){ location.href = destinoPorCargo(s.cargo); return; }
+  if(s && (s.area || esOficina(s.cargo))){ location.href = destinoPorCargo(s.cargo); return; }
 
   let dni="", pin="", foco="dni", modoIng=false;
   $("linkIng").onclick = ()=>{
@@ -538,7 +545,7 @@ function initLogin(){
       if(!r.ok){ $("msgLogin").textContent=r.error; pin=""; pintar(); return; }
       guardarSesion({dni:r.dni, nombre:r.nombre, cargo:r.cargo, token:r.token, area:null,
                      admin:r.es_admin===true});
-      if(r.cargo==="INGENIERIA"){ location.href="ingenieria.html"; return; }
+      if(esOficina(r.cargo)){ location.href="ingenieria.html"; return; }
       $("nombreSaludo").textContent = "Hola, " + r.nombre.split(" ")[0];
       await hidratarAreas();
       pintarAreas(r.cargo);

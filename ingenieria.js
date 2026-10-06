@@ -14,11 +14,12 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   if(document.body.dataset.pagina!=="ingenieria") return;
   ING = sesionActual();
   if(!ING){ location.href="index.html"; return; }
-  if(ING.cargo!=="INGENIERIA"){ location.href = destinoPorCargo(ING.cargo); return; }
+  if(!esOficina(ING.cargo)){ location.href = destinoPorCargo(ING.cargo); return; }
   /* INCENTIVOS es del administrador maestro (parche 78). Esto solo quita la
      pestaña de la vista: quien la tenga en caché o escriba la RPC a mano recibe
      NO_AUTORIZADA igual, porque las 12 funciones validan con _admin. */
   if(!ES_ADMIN()) quitarIncentivos();
+  await cargarPermisos();               // parche 95: áreas y pestañas que dio el administrador
   $("quienBadge").textContent = ING.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
@@ -59,6 +60,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   AREAS_LISTA = await cargarAreasDB();
   poblarSelectsArea();
   pintarSupAreas();
+  document.addEventListener("change", e=>{ if(e.target && e.target.tagName==="SELECT") aplicarSoloLectura(); });
 
   $("filtroAreaEf").addEventListener("change", ()=>{ if(EF) pintarEf(); else cargarEf(); });
   $("filtroNomEfR").addEventListener("input", ()=>{ if(EFR.personal.length) pintarEfRango(); });
@@ -98,7 +100,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoOpAd"];
+  "pasoBaseLog","pasoOpAd","pasoPermisos","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -111,7 +113,8 @@ function activarTab(tab){
   pararAvance();
   { const st=$("supTabs"); if(st) st.style.display="none"; }
   try{ history.replaceState(null,"","#"+tab); }catch(e){}
-  if(TABS_ADMIN.includes(tab) && !ES_ADMIN()){ activarTab("pasoTk"); return; }
+  if(!tabPermitida(tab)){ const t=primeraTab(); if(t && t!==tab){ activarTab(t); } else irA("pasoSinPermiso"); return; }
+  aplicarSoloLectura();
   if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
   if(tab==='pasoEf' || tab==='pasoDia'){ efVista(tab==='pasoDia'?'dia':'area'); TABS_VISTAS.add(tab); return; }
   irA(tab);
@@ -134,6 +137,8 @@ function activarTab(tab){
   else if(tab==='pasoVista') cargarVista();
   else if(tab==='pasoAudit') audInit();
   else if(tab==='pasoBaseLog') blInit();
+  else if(tab==='pasoPermisos') cargarPermisosAdmin();
+  else if(COSTOS_TABS.includes(tab)) costosEntrar(tab);
 }
 /* Eficiencia = una sola entrada del menú con dos vistas (parche 75). Son dos
    `section.pantalla` distintas, así que se cambia con irA(); lo que no puede
@@ -153,7 +158,7 @@ function efVista(v){
 /* Administrador maestro: hoy solo ALOPEZ, y lo decide `operarios.es_admin`,
    no el DNI escrito en el código. La sesión lo trae desde fn_login. */
 function ES_ADMIN(){ return (ING && ING.admin===true); }
-const TABS_ADMIN=["pasoInc","pasoAudit","pasoBaseLog"];
+const TABS_ADMIN=["pasoInc","pasoAudit","pasoBaseLog","pasoPermisos"];
 function quitarIncentivos(){
   TABS_ADMIN.forEach(t=>{
     const it=document.querySelector('.nav-item[data-tab="'+t+'"]'); if(it) it.remove();
@@ -161,13 +166,158 @@ function quitarIncentivos(){
     const i=NAV_TABS.indexOf(t); if(i>=0) NAV_TABS.splice(i,1);
   });
 }
+/* ================= PERMISOS (parche 95) =================
+   El administrador maestro decide, por usuario, qué áreas lee o edita y qué
+   pestañas abre. La base los hace cumplir (_lector y el trigger por área); aquí
+   solo se esconde lo que no aplica. Si fn_mis_permisos no existe todavía (base
+   sin el parche), PERM.cargado queda en false y todo se ve como antes. */
+let PERM={cargado:false, admin:false, areas:{}, pestanas:[]};
+async function cargarPermisos(){
+  try{
+    const r=await rpc("fn_mis_permisos",{p_dni:ING.dni,p_token:ING.token});
+    if(r && r.areas) PERM={cargado:true, admin:r.admin===true, areas:r.areas||{}, pestanas:r.pestanas||[]};
+  }catch(e){ PERM={cargado:false, admin:false, areas:{}, pestanas:[]}; }
+  aplicarPestanas();
+}
+const PERM_LIBRE=()=>!PERM.cargado || PERM.admin || ES_ADMIN();
+const puedeLeer  = a => PERM_LIBRE() || !!PERM.areas["*"] || !!PERM.areas[a];
+const leeTodas   = () => PERM_LIBRE() || !!PERM.areas["*"];
+const areasEdita = () => Object.keys(PERM.areas).filter(a=>a!=="*" && PERM.areas[a]==="EDITAR");
+function puedeEditar(a){
+  if(PERM_LIBRE() || PERM.areas["*"]==="EDITAR") return true;
+  if(!a) return areasEdita().length>0;          // "Todas": deja abrir si edita alguna
+  return PERM.areas[a]==="EDITAR";
+}
+/* Subpestañas que no están en el menú: siguen el permiso de su pestaña madre. */
+const TAB_MADRE={pasoDia:"pasoEf",pasoOpsOF:"pasoGen",pasoExtra:"pasoGen",pasoOpAd:"pasoGen",pasoCausas:"pasoGen"};
+function tabPermitida(tab){
+  if(TABS_ADMIN.includes(tab)) return ES_ADMIN();
+  if(PERM_LIBRE()) return true;
+  return PERM.pestanas.includes(TAB_MADRE[tab]||tab);
+}
+function primeraTab(){
+  const it=[...document.querySelectorAll(".nav-item[data-tab]")].find(x=>tabPermitida(x.dataset.tab));
+  return it ? it.dataset.tab : null;
+}
+function aplicarPestanas(){
+  if(PERM_LIBRE()) return;
+  document.querySelectorAll(".nav-item[data-tab]").forEach(it=>{ if(!tabPermitida(it.dataset.tab)) it.remove(); });
+  document.querySelectorAll("details.nav-group").forEach(d=>{ if(!d.querySelector(".nav-item")) d.remove(); });
+  for(let i=NAV_TABS.length-1;i>=0;i--) if(!tabPermitida(NAV_TABS[i])) NAV_TABS.splice(i,1);
+}
+/* Quien maneja áreas arranca viendo las suyas: en cada filtro de área se
+   elige la primera que edita, si está entre las opciones. */
+function areasPropiasPorDefecto(){
+  if(PERM_LIBRE()) return;
+  const mias=areasEdita(); if(!mias.length) return;
+  ["areaBase","perArea","areaTk","areaMod","areaOp","areaFec","areaInci","filtroAreaEf","filtroAreaEfR",
+   "perRangoArea","perDashArea","perMatArea","dbModArea","exArea","opadArea","movArea","areaGen","heArea","areaInciPend"]
+    .forEach(id=>{
+      const s=$(id); if(!s || s.dataset.permDef) return;
+      const o=[...s.options].find(x=>mias.includes(x.value)); if(o){ s.value=o.value; s.dataset.permDef="1"; }
+    });
+}
+/* Pantallas con área (data-area-sel en la sección): si el área elegida es de
+   solo lectura, se esconden los botones de edición (data-edita, .acc-editar,
+   .acc-borrar) y se avisa arriba. */
+function aplicarSoloLectura(){
+  if(PERM_LIBRE()) return;
+  document.querySelectorAll(".pantalla[data-area-sel]").forEach(sec=>{
+    const sel=$(sec.dataset.areaSel); if(!sel) return;
+    const ro=!puedeEditar(sel.value);
+    sec.classList.toggle("solo-lectura", ro);
+    let av=sec.querySelector(":scope > .aviso-lectura");
+    if(ro && !av){
+      av=document.createElement("div"); av.className="aviso-lectura"; av.setAttribute("role","status");
+      const cab=sec.querySelector(":scope > .seccion-cab");
+      cab ? cab.after(av) : sec.prepend(av);
+    }
+    if(av){ av.hidden=!ro;
+      if(ro) av.innerHTML=`<b>Solo lectura</b> en ${esc(sel.value||"todas las áreas")}. Puedes ver, filtrar y descargar; para editar pide permiso al administrador.`; }
+  });
+}
+
+/* ---- Pestaña Permisos (solo el administrador maestro) ---- */
+let PERMU=[];
+async function cargarPermisosAdmin(){
+  const z=$("permZona"); if(!z) return;
+  pintarCargando(z,"Cargando usuarios…");
+  try{ PERMU=await rpc("fn_permisos_listar",{p_dni:ING.dni,p_token:ING.token}); pintarPermisosAdmin(); }
+  catch(e){ z.innerHTML=""; mostrarError(e.message); }
+}
+function permResumen(u){
+  if(u.admin) return `<span class="pill CERRADO">Administrador: todo</span>`;
+  const ed=Object.keys(u.areas).filter(a=>u.areas[a]==="EDITAR").map(a=>a==="*"?"todas":a);
+  const le=Object.keys(u.areas).filter(a=>u.areas[a]==="LEER").map(a=>a==="*"?"todas":a);
+  const p=[];
+  if(ed.length) p.push(`<b>Edita:</b> ${esc(ed.join(", "))}`);
+  if(le.length) p.push(`<b>Lee:</b> ${esc(le.join(", "))}`);
+  return p.join("<br>") || `<span class="perm-nada">Sin acceso</span>`;
+}
+function pintarPermisosAdmin(){
+  const z=$("permZona");
+  const q=normKey(($("permBuscar")||{}).value||"");
+  const lista=PERMU.filter(u=>!q || normKey(u.dni+" "+(u.nombre||"")+" "+u.cargo).includes(q));
+  if(!lista.length){ z.innerHTML=`<div class="vacio-msg">Sin usuarios de oficina</div>`; return; }
+  z.innerHTML=`<table class="tabla perm-tabla"><thead><tr>
+      <th class="izq">Usuario</th><th>Cargo</th><th>Estado</th><th class="izq">Áreas</th><th>Pestañas</th><th></th></tr></thead><tbody>
+    ${lista.map(u=>`<tr${u.estado!=="ACTIVO"?' class="perm-inactivo"':""}>
+      <td class="izq"><b>${esc(u.dni)}</b><div class="perm-nom">${esc(soloApellidos(u.nombre||""))}</div></td>
+      <td>${esc(u.cargo)}</td><td><span class="pill ${esc(u.estado)}">${esc(u.estado)}</span></td>
+      <td class="izq">${permResumen(u)}</td>
+      <td>${u.admin?"Todas":(u.pestanas.length||"Ninguna")}</td>
+      <td>${u.admin?"":`<button class="btn-mini" onclick="abrirModalPermisos('${esc(u.dni)}')">Editar</button>`}</td>
+    </tr>`).join("")}</tbody></table>`;
+}
+function abrirModalPermisos(dni){
+  const u=PERMU.find(x=>x.dni===dni); if(!u) return;
+  const areas=["*", ...AREAS_LISTA];
+  const nivel=a=>u.areas[a]||"";
+  const filaArea=a=>{
+    const n="pa_"+areas.indexOf(a);
+    const r=(v,t)=>`<label><input type="radio" name="${n}" value="${v}" data-area="${esc(a)}"${nivel(a)===v?" checked":""}> ${t}</label>`;
+    return `<tr><td class="izq">${a==="*"?"<b>Todas las áreas</b>":esc(a)}</td>
+      <td>${r("","Sin acceso")}</td><td>${r("LEER","Lectura")}</td><td>${r("EDITAR","Edición")}</td></tr>`;
+  };
+  const grupos=[...document.querySelectorAll("details.nav-group")].map(d=>{
+    const items=[...d.querySelectorAll(".nav-item[data-tab]")].filter(x=>!TABS_ADMIN.includes(x.dataset.tab));
+    if(!items.length) return "";
+    return `<fieldset class="perm-grupo"><legend>${esc(d.querySelector("summary").textContent.trim())}</legend>
+      ${items.map(x=>`<label class="chk-inline"><input type="checkbox" class="perm-tab" value="${esc(x.dataset.tab)}"${u.pestanas.includes(x.dataset.tab)?" checked":""}> ${esc((x.firstChild&&x.firstChild.nodeType===3?x.firstChild.textContent:x.textContent).trim())}</label>`).join("")}
+    </fieldset>`;
+  }).join("");
+  abrirModal(`
+    <h2>Permisos de ${esc(u.dni)}</h2>
+    <div class="sub" style="margin-bottom:12px;">${esc(u.nombre||"")} · ${esc(u.cargo)}. "Todas las áreas" vale para las que se agreguen después. Un área suelta manda sobre "Todas" solo si da más permiso.</div>
+    <h3 class="perm-h3">Áreas</h3>
+    <div class="perm-areas"><table class="tabla"><tbody>${areas.map(filaArea).join("")}</tbody></table></div>
+    <h3 class="perm-h3">Pestañas</h3>
+    <div class="perm-tabs">${grupos}</div>
+    <div class="modal-msg" id="permMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="guardarPermisos('${esc(u.dni)}')">GUARDAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`, "modal-ancho");
+}
+async function guardarPermisos(dni){
+  const areas={};
+  document.querySelectorAll('#modalBox input[type=radio][data-area]:checked').forEach(r=>{ if(r.value) areas[r.dataset.area]=r.value; });
+  const pestanas=[...document.querySelectorAll("#modalBox .perm-tab:checked")].map(c=>c.value);
+  try{
+    const r=await rpc("fn_permisos_guardar",{p_dni:ING.dni,p_token:ING.token,p_usuario:dni,p_areas:areas,p_pestanas:pestanas});
+    if(!r.ok){ $("permMsg").textContent=r.error||"No se pudo guardar"; return; }
+    cerrarModal(); mostrarOk(`Permisos de ${dni} guardados. Se aplican la próxima vez que entre o recargue.`);
+    cargarPermisosAdmin();
+  }catch(e){ $("permMsg").textContent=e.message; }
+}
 function toggleSidebar(){ document.body.classList.toggle("sidebar-cerrada"); }
 function cerrarSidebarMovil(){ if(window.innerWidth<=900) document.body.classList.add("sidebar-cerrada"); }
 
 function poblarSelectsArea(){
+  AREAS_LISTA = AREAS_LISTA.filter(puedeLeer);   // parche 95: solo las áreas que puede ver
   const op = a=>`<option>${esc(a)}</option>`;
   const elige = `<option value="">— Elige área —</option>`;
-  const todas = `<option value="">Todas las áreas</option>`;
+  const todas = leeTodas() ? `<option value="">Todas las áreas</option>` : "";
   { const se=$("selArea"); if(se) se.innerHTML = AREAS_LISTA.map(op).join(""); }  // "Cambiar Área" removido de la matriz
   $("areaBase").innerHTML = AREAS_LISTA.map(op).join("");
   if($("filtroAreaAsis")) $("filtroAreaAsis").innerHTML = todas + AREAS_LISTA.map(op).join("");
@@ -191,7 +341,9 @@ function poblarSelectsArea(){
   // Operaciones por OF y Generar tickets: solo áreas con Sheet en areas_config.
   const conSheet = Object.keys(AREAS).filter(a=>AREAS[a].habilitada && AREAS[a].sheetId).sort();
   if($("opfArea")) $("opfArea").innerHTML = elige + conSheet.map(op).join("");
-  if($("areaGen")) $("areaGen").innerHTML = elige + conSheet.map(op).join("");
+  if($("areaGen")) $("areaGen").innerHTML = elige + conSheet.filter(puedeLeer).map(op).join("");
+  areasPropiasPorDefecto();
+  aplicarSoloLectura();
 }
 
 /* Recargar la pestaña activa (botón ↻ del header). */
@@ -210,6 +362,7 @@ function recargarIngenieria(){
   else if(act("pasoBaseLog")) cargarBaseLog();
   else if(act("pasoAudit")) cargarAudit();
   else if(act("pasoOpAd")) cargarOpad();
+  else if(COSTOS_TABS.some(act)) costosRecargar(COSTOS_TABS.find(act));
   else if(act("pasoPersonal")||act("pasoAvance")||act("pasoIncidencias")||act("pasoEfPersonal")) recargarSupervisora();
 }
 /* Censura de eficiencia: reemplaza los % por **** en toda la pestaña. */
@@ -1535,11 +1688,13 @@ async function abrirModalPersonal(dni){
   MP_ORIG = esEdicion ? datos : null;
   // Igual que las áreas: el valor real siempre está entre las opciones. Si no,
   // el select caía en la primera y GUARDAR pisaba el cargo (INGENIERIA→OPERARIO).
-  const cargosSel = [...new Set([datos.cargo, ...CARGOS_LISTA])].filter(Boolean);
+  // Cargos de oficina: solo el administrador los crea (parche 95). Su acceso
+  // lo dan los permisos, no el cargo.
+  const cargosSel = [...new Set([datos.cargo, ...CARGOS_LISTA, ...(ES_ADMIN()?["INGENIERIA","COSTOS"]:[])])].filter(Boolean);
   const catsSel = [...new Set([...CATEGORIAS_LISTA, datos.categoria||""])];
   // Incluye siempre el área real del registro aunque no esté en AREAS_LISTA,
   // para que el select no caiga en la primera opción por defecto al editar.
-  const areasSel = [...new Set([datos.area_origen, datos.area_actual, ...AREAS_LISTA])].filter(Boolean);
+  const areasSel = [...new Set([datos.area_origen, datos.area_actual, ...AREAS_LISTA.filter(a=>puedeEditar(a))])].filter(Boolean);
   const html = `
     <h2>${esEdicion? "Editar personal":"Agregar personal"}</h2>
     <div class="modal-campo">
@@ -1594,6 +1749,7 @@ async function guardarPersonal(dniOriginal){
   let cargo = $("mpCargo").value;
   let categoria = $("mpCategoria").value;
   if(!dni || !nombres){ $("mpMsg").textContent = "DNI y nombres son obligatorios"; return; }
+  if(esOficina(cargo)){ areaOrigen=null; areaActual="INGENIERIA"; }   // oficina no es un área de planta
   try{
     let r;
     if(dniOriginal){
@@ -2383,7 +2539,8 @@ function ofsPintar(){
    Se lee, se muestra una tarjeta por hoja con lo detectado —editable— y solo al
    CONFIRMAR se escribe. Desde el parche 89 cada tarjeta ya se compara con lo
    registrado ANTES de escribir: la hoja idéntica se omite sola y la que difiere
-   puede reemplazar el desglose guardado (si la OF aún no tiene reclamos). */
+   puede reemplazar el desglose guardado. Desde el parche 94 también con
+   reclamos: si cambia un paquete ya reclamado, se pide confirmar. */
 let OFS_JOBS=[], OFS_SEQ=0, OFS_DRAG=0;
 function ofsDrag(e){
   e.preventDefault();
@@ -2541,7 +2698,7 @@ function renderOfsJobs(){
         <ul>${k.dif.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>
         <label class="hn-rep"><input type="checkbox" ${j.reemplazar?"checked":""} onchange="ofsJobCampo(${j.id},'rep',this.checked)">
           Reemplazar lo registrado con esta HN</label>
-        <div class="sub">${k.gen.length?`Ya generada en ${esc(k.gen.join(", "))}: sus tickets se recalculan. `:""}No se puede si la OF ya tiene tickets reclamados. Si no lo marcas, esta hoja se omite.</div>
+        <div class="sub">${k.gen.length?`Ya generada en ${esc(k.gen.join(", "))}: sus tickets se recalculan. `:""}Si hay tickets reclamados en paquetes que cambian, te pido confirmar antes (esos reclamos se quedan como están). Si no lo marcas, esta hoja se omite.</div>
       </div>` : "";
     return `<div class="gen-job" id="ofsJob_${j.id}">
       <div class="gen-job-head">
@@ -2597,8 +2754,15 @@ Se registrarán una tras otra y la segunda saldrá como "ya registrada". ¿Sigo?
   for(const p of pend){
     try{
       if(p.rep){
-        const g=await rpc("fn_of_reemplazar",{p_dni:ING.dni,p_token:ING.token,p_of:p.of,
-          p_articulo:p.art, p_prenda:p.pre, p_cant_prog:p.total, p_detalle:p.det});
+        const args={p_dni:ING.dni,p_token:ING.token,p_of:p.of,
+          p_articulo:p.art, p_prenda:p.pre, p_cant_prog:p.total, p_detalle:p.det, p_forzar:false};
+        let g=await rpc("fn_of_reemplazar",args);
+        if(g && g.confirmar){
+          const lis=(g.paquetes_reclamados||[]).map(x=>`Paq ${x.paq}: ${x.antes} → ${x.ahora} (${x.tickets} ticket(s))`).join("\n");
+          if(confirm(`OF ${p.of}: ${g.tickets} ticket(s) reclamados están en paquetes que cambian.\n\n${lis}\n\nEsos reclamos se quedan con sus datos de antes. ¿Reemplazo igual?`))
+            g=await rpc("fn_of_reemplazar",{...args, p_forzar:true});
+          else { lineas.push(`<div class="hn-aviso">OF ${esc(p.of)}: no se reemplazó (cancelado).</div>`); continue; }
+        }
         if(!g || g.ok===false) lineas.push(`<div class="hn-aviso">OF ${esc(p.of)}: ${esc((g&&g.error)||"error")}</div>`);
         else lineas.push(`<div class="cf-detalle">✓ OF ${esc(g.of)} reemplazada${g.solo_prenda?" (solo "+esc(g.prenda)+")":""} · ${g.paquetes} paquete(s) · ${Math.round(p.total)} und</div>`);
         continue;
