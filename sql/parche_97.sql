@@ -1,5 +1,8 @@
 -- PARCHE 97 · Asistencia: variables "EN <área>" (personal presente apoyando en otra área)
 -- Ver parches/PARCHE_97.md. Idempotente: se puede correr más de una vez.
+-- Requiere el parche 95 (permisos por área): estas dos funciones validan con
+-- _lector, como las dejó el 95. Antes usaban _ing y, corridas después del 95,
+-- habrían quitado el permiso por área en Asistencia.
 
 begin;
 
@@ -26,7 +29,7 @@ create or replace function public.fn_asistencia_areas(p_dni text, p_token uuid, 
 as $function$
 declare v json;
 begin
-  perform _ing(p_dni, p_token);
+  perform _lector(p_dni, p_token, '');
   if p_hasta < p_desde then return json_build_object('ok',false,'error','Rango inválido'); end if;
   if (p_hasta - p_desde) > 366 then return json_build_object('ok',false,'error','Rango máximo 366 días'); end if;
 
@@ -88,7 +91,7 @@ declare
   v_pordia json; v_porestado json; v_alertas json; v_detalle json;
   hoy date := _hoy();
 begin
-  perform _ing(p_dni, p_token);
+  perform _lector(p_dni, p_token, p_area);
   if p_hasta < p_desde then return json_build_object('ok',false,'error','Rango inválido'); end if;
   if (p_hasta - p_desde) > 366 then return json_build_object('ok',false,'error','Rango máximo 366 días'); end if;
 

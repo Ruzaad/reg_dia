@@ -56,3 +56,8 @@ En un Postgres 16 local con las definiciones de producción: con D4 "EN ACABADO"
 el tablero de CAMISA COSTURA sigue en 3 presentes (antes del parche lo contaba
 ausente), `hoy_otra_area` = 1, las alertas solo traen VACACIONES y FALTA. El
 parche corre dos veces sin error y el rollback deja todo como estaba.
+
+**Ajuste al fusionar (6 oct 2026):** `fn_asistencia_areas` y `fn_asistencia_dashboard`
+validan con `_lector` en lugar de `_ing`, porque el parche 95 ya las había pasado a
+lectura por área. Por eso el 97 se corre después del 95. Los tres van juntos en
+`sql/maestro_95_96_97.sql`.
