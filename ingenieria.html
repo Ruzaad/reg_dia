@@ -59,6 +59,13 @@
         <a class="nav-item" data-tab="pasoFechas" href="#pasoFechas">Corregir fechas</a>
       </details>
       <details class="nav-group" open>
+        <summary class="nav-sep">Costos</summary>
+        <a class="nav-item" data-tab="pasoCostosBase" href="#pasoCostosBase">Base y balance</a>
+        <a class="nav-item" data-tab="pasoCostosHoy" href="#pasoCostosHoy">Reporte de hoy</a>
+        <a class="nav-item" data-tab="pasoCostosInc" href="#pasoCostosInc">Incidencias</a>
+        <a class="nav-item" data-tab="pasoCostosAsis" href="#pasoCostosAsis">Asistencia</a>
+      </details>
+      <details class="nav-group" open>
         <summary class="nav-sep">Operar como</summary>
         <a class="nav-item" data-tab="pasoSupArea" href="#pasoSupArea">Supervisora</a>
         <a class="nav-item" data-tab="pasoOpArea" href="#pasoOpArea">Operario</a>
@@ -818,6 +825,117 @@
       </div>
     </section>
 
+    <!-- ===================== COSTOS (parche 96): todo de solo lectura ===================== -->
+    <section class="pantalla" id="pasoCostosBase">
+      <div class="seccion-cab">
+        <h1>Base y balance de línea <span class="solo-lectura">SOLO LECTURA</span></h1>
+        <p class="seccion-sub">La BASE del área tal cual, con el balance de cada artículo: S.A.M, PPH, PxH,
+        horas y personas requeridas para la meta. Meta, horas y eficiencia son para el cálculo: no se guardan en la base.</p>
+      </div>
+      <div class="tabs sup-subtabs">
+        <button id="cbTabBal" class="tab activo" onclick="cbVista('bal')">BALANCE POR ARTÍCULO</button>
+        <button id="cbTabTab" class="tab" onclick="cbVista('tab')">TABLA</button>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="cbArea" onchange="cargarCostosBase()"></select></label>
+        <label class="campo"><span>Artículo</span><input type="text" id="cbArt" list="cbArtLista" placeholder="Artículo…" autocomplete="off" oninput="cbFiltrar()"></label>
+        <datalist id="cbArtLista"></datalist>
+        <label class="campo"><span>Prenda</span><input type="text" id="cbPrenda" placeholder="Prenda…" oninput="cbFiltrar()"></label>
+        <label class="campo"><span>Cliente</span><input type="text" id="cbCli" placeholder="Cliente…" oninput="cbFiltrar()"></label>
+        <label class="campo"><span>Módulo</span><input type="text" id="cbMod" placeholder="Módulo…" oninput="cbFiltrar()"></label>
+        <label class="campo"><span>Operación</span><input type="text" id="cbOp" placeholder="Operación…" oninput="cbFiltrar()"></label>
+        <button class="btn-mini" onclick="cargarCostosBase()">Cargar</button>
+      </div>
+      <div class="barra-control cb-params">
+        <label class="campo"><span>Meta (und/día)</span><input type="number" id="cbMeta" min="1" step="1" oninput="cbParam()"></label>
+        <label class="campo"><span>Horas disp.</span><input type="number" id="cbHoras" min="0.1" step="0.01" oninput="cbParam()"></label>
+        <label class="campo"><span>Eficiencia %</span><input type="number" id="cbEf" min="1" max="100" step="1" oninput="cbParam()"></label>
+        <span class="cb-sp"></span>
+        <button class="btn-mini" onclick="cbDescargarPdf()">⬇ Descargar PDF</button>
+        <button class="btn-mini verde" onclick="cbDescargarXlsx()">⬇ Descargar Excel</button>
+      </div>
+      <div class="kpis" id="cbKpis" style="margin-bottom:14px;"></div>
+      <div id="cbBalView"></div>
+      <div id="cbTabView" hidden>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="cbTabla"></table></div>
+      </div>
+      <div class="pager" id="cbPager" style="margin-top:8px;"></div>
+    </section>
+
+    <section class="pantalla" id="pasoCostosHoy">
+      <div class="seccion-cab">
+        <h1>Reporte de hoy <span class="solo-lectura">SOLO LECTURA</span></h1>
+        <p class="seccion-sub">Tickets activos del día en la última o penúltima operación de cada artículo, por OF,
+        y las incidencias del día. En CAMISA COSTURA cuenta por defecto la penúltima.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Fecha</span><input type="date" id="chFecha" onchange="cargarCostosHoy()"></label>
+        <label class="campo"><span>Área</span><select id="chArea" onchange="cargarCostosHoy()"></select></label>
+        <label class="campo"><span>Operación</span>
+          <select id="chOp" onchange="pintarCostosHoy()">
+            <option value="a">Según el área</option>
+            <option value="u">Última operación</option>
+            <option value="p">Penúltima operación</option>
+          </select></label>
+        <button class="btn-mini" onclick="cargarCostosHoy()">Cargar</button>
+        <button class="btn-mini verde" onclick="chDescargar()">⬇ Descargar Excel</button>
+      </div>
+      <div class="kpis" id="chKpis" style="margin-bottom:14px;"></div>
+      <div class="rep-cols">
+        <div class="rep-col">
+          <div class="tk-ops-title" id="chTitTk">Tickets activos</div>
+          <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;"><table class="tabla" id="chTablaTk"></table></div>
+          <div class="sub rep-pie" id="chPieTk"></div>
+        </div>
+        <div class="rep-col">
+          <div class="tk-ops-title">Incidencias del día</div>
+          <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;"><table class="tabla" id="chTablaInc"></table></div>
+          <div class="sub rep-pie" id="chPieInc"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="pantalla" id="pasoCostosInc">
+      <div class="seccion-cab">
+        <h1>Incidencias por área <span class="solo-lectura">SOLO LECTURA</span></h1>
+        <p class="seccion-sub">Incidencias registradas en el rango, con sus minutos a favor y en contra.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Desde</span><input type="date" id="ciDesde"></label>
+        <label class="campo"><span>Hasta</span><input type="date" id="ciHasta"></label>
+        <label class="campo"><span>Área</span><select id="ciArea" onchange="cargarCostosInc()"></select></label>
+        <button class="btn-mini" onclick="cargarCostosInc()">Cargar</button>
+        <label class="campo"><span>Tipo</span><select id="ciTipo" onchange="pintarCostosInc()"><option value="">Todos</option></select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="ciBuscar" placeholder="Nombre / descripción…" oninput="pintarCostosInc()"></label>
+        <button class="btn-mini verde" onclick="ciDescargar()">⬇ Descargar Excel</button>
+      </div>
+      <div class="kpis" id="ciKpis" style="margin-bottom:14px;"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;"><table class="tabla" id="ciTabla"></table></div>
+      <div class="pager" id="ciPager" style="margin-top:8px;"></div>
+    </section>
+
+    <section class="pantalla" id="pasoCostosAsis">
+      <div class="seccion-cab">
+        <h1>Asistencia del día <span class="solo-lectura">SOLO LECTURA</span></h1>
+        <p class="seccion-sub">Personal de cada área (por área de origen) con su estado del día. Con al menos un
+        ticket cuenta como presente aunque tenga otra marca.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Fecha</span><input type="date" id="caFecha" onchange="cargarCostosAsis()"></label>
+        <label class="campo"><span>Área</span><select id="caArea" onchange="cargarCostosAsis()"></select></label>
+        <button class="btn-mini" onclick="cargarCostosAsis()">Cargar</button>
+        <label class="campo"><span>Estado</span><select id="caEstado" onchange="pintarCostosAsis()"><option value="">Todos</option></select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="caBuscar" placeholder="Nombre…" oninput="pintarCostosAsis()"></label>
+        <button class="btn-mini verde" onclick="caDescargar()">⬇ Descargar Excel</button>
+      </div>
+      <div class="kpis" id="caKpis" style="margin-bottom:14px;"></div>
+      <div id="caAreasWrap" style="margin-bottom:16px;" hidden>
+        <div class="tk-ops-title" style="margin-bottom:8px;">Resumen por área</div>
+        <div class="contenedor-ancho tabla-scroll"><table class="tabla" id="caTablaAreas"></table></div>
+      </div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;"><table class="tabla" id="caTabla"></table></div>
+    </section>
+
     <!-- ===================== AUDITORÍA DE EFICIENCIA (parche 80) ===================== -->
     <section class="pantalla" id="pasoAudit">
       <div class="seccion-cab">
@@ -1185,6 +1303,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="app.js"></script>
 <script src="ingenieria.js"></script>
+<script src="costos.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>

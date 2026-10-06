@@ -763,3 +763,51 @@ body[data-pagina="supervisora"] .grid-personal{max-width:1100px;width:100%;margi
 .dyn-at-f{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:8px 0;border-bottom:1px solid var(--linea-2);font-size:14px;color:var(--texto);}
 .dyn-at-f:last-child{border-bottom:0;}
 .dyn-at-f kbd{font-family:var(--mono);font-size:12px;background:var(--sup-2);border:1px solid var(--linea);border-bottom-width:2px;border-radius:6px;padding:2px 7px;color:var(--texto);}
+
+/* ---------- Costos (parche 96): pestañas de solo lectura ----------
+   La ficha de artículo sigue la hoja de balance de línea de ingeniería:
+   datos a la izquierda, S.A.M grande, nombre del artículo y la tabla por
+   módulo con su subtotal. Colores del sistema, no los grises del Excel. */
+.solo-lectura{background:var(--azul-t);color:var(--azul);border:1px solid var(--linea);border-radius:8px;
+  font-weight:700;font-size:11px;letter-spacing:.3px;padding:2px 8px;vertical-align:middle;}
+.cb-params{align-items:flex-end;}
+.cb-params .campo input{width:110px;}
+.cb-sp{flex:1 1 auto;}
+.cb-ficha{background:var(--sup);border-radius:var(--r);box-shadow:var(--sombra-2);margin-bottom:18px;overflow:hidden;}
+.cb-cab{display:grid;grid-template-columns:minmax(220px,280px) 150px 1fr;border-bottom:1px solid var(--linea);}
+.cb-datos{display:grid;grid-template-columns:auto 1fr;margin:0;padding:12px 16px;gap:3px 12px;font-size:12.5px;
+  border-right:1px solid var(--linea-2);}
+.cb-datos dt{color:var(--suave);font-weight:600;}
+.cb-datos dd{margin:0;font-weight:700;color:var(--texto);font-family:var(--mono);font-size:12px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cb-sam{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;background:var(--ocre-t);
+  border-right:1px solid var(--linea-2);}
+.cb-sam span{font-size:11px;font-weight:800;letter-spacing:.6px;color:var(--aviso);}
+.cb-sam b{font-family:var(--mono);font-size:34px;font-weight:700;color:var(--texto);line-height:1;}
+.cb-nombre{display:flex;flex-direction:column;justify-content:center;padding:14px 22px;min-width:0;}
+.cb-nombre span{font-size:12px;font-weight:700;letter-spacing:.8px;color:var(--suave);font-family:var(--mono);}
+.cb-nombre b{font-size:32px;font-weight:800;color:var(--azul);letter-spacing:-.5px;line-height:1.1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cb-tabla{margin:0;width:100%;}
+.cb-tabla thead th{background:var(--hdr);color:#fff;border-radius:0!important;}
+.cb-tabla td{padding:6px 10px;font-size:13px;}
+.cb-tabla td.cb-mod{font-weight:800;color:var(--azul);text-align:center;vertical-align:middle;background:var(--sup-2);
+  letter-spacing:.3px;border-right:1px solid var(--linea-2);min-width:140px;}
+.tabla tr.cb-sub td{font-weight:800;font-family:var(--mono);color:var(--azul);background:var(--azul-t);border-bottom:2px solid var(--linea);}
+.cb-pie{display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:12px 16px;background:var(--sup-2);
+  font-size:12px;font-weight:700;color:var(--suave);text-transform:uppercase;letter-spacing:.4px;}
+.cb-pie b{font-family:var(--mono);font-size:17px;color:var(--texto);background:var(--ocre-t);border-radius:8px;padding:3px 10px;margin-right:12px;}
+.cb-pie b:last-child{margin-right:0;}
+@media (max-width:900px){
+  .cb-cab{grid-template-columns:1fr 110px;}
+  .cb-nombre{grid-column:1/-1;border-top:1px solid var(--linea-2);order:-1;}
+  .cb-nombre b{font-size:24px;}
+  .cb-sam b{font-size:26px;}
+}
+.pill.LICENCIA,.pill.PH{background:var(--ocre-t);color:var(--aviso);}
+.pill.SIN_MARCAR{background:var(--sup-2);color:var(--tenue);}
+.pill[class*=" EN_"]{background:var(--azul-t);color:var(--enlace);}
+.nav-item[data-tab="pasoCostosBase"]{--ni:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Crect x='4' y='3' width='16' height='18' rx='2'/%3E%3Cpath d='M8 7h8M8 11h8M8 15h5'/%3E%3C/svg%3E")!important;}
+.nav-item[data-tab="pasoCostosHoy"]{--ni:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 20V10M10 20V4M16 20v-7M22 20H2'/%3E%3C/svg%3E")!important;}
+.nav-item[data-tab="pasoCostosInc"]{--ni:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 3 2 20h20L12 3z'/%3E%3Cpath d='M12 10v4M12 17h.01'/%3E%3C/svg%3E")!important;}
+.nav-item[data-tab="pasoCostosAsis"]{--ni:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M9 11l2 2 4-4'/%3E%3Crect x='3' y='4' width='18' height='17' rx='2'/%3E%3Cpath d='M8 2v4M16 2v4'/%3E%3C/svg%3E")!important;}
