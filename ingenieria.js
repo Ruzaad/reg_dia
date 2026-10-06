@@ -100,7 +100,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoOpAd","pasoPermisos"];
+  "pasoBaseLog","pasoOpAd","pasoPermisos","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -138,6 +138,7 @@ function activarTab(tab){
   else if(tab==='pasoAudit') audInit();
   else if(tab==='pasoBaseLog') blInit();
   else if(tab==='pasoPermisos') cargarPermisosAdmin();
+  else if(COSTOS_TABS.includes(tab)) costosEntrar(tab);
 }
 /* Eficiencia = una sola entrada del menú con dos vistas (parche 75). Son dos
    `section.pantalla` distintas, así que se cambia con irA(); lo que no puede
@@ -361,6 +362,7 @@ function recargarIngenieria(){
   else if(act("pasoBaseLog")) cargarBaseLog();
   else if(act("pasoAudit")) cargarAudit();
   else if(act("pasoOpAd")) cargarOpad();
+  else if(COSTOS_TABS.some(act)) costosRecargar(COSTOS_TABS.find(act));
   else if(act("pasoPersonal")||act("pasoAvance")||act("pasoIncidencias")||act("pasoEfPersonal")) recargarSupervisora();
 }
 /* Censura de eficiencia: reemplaza los % por **** en toda la pestaña. */

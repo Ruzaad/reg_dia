@@ -196,6 +196,15 @@ const VISTAS=PAG==="ingenieria"?[
   {id:"extra",tab:"pasoExtra",m:"pasoExtra",modo:null,area:1,t:"Operaciones sin OF",
    aplicar(){const a=$("exArea");if(a&&G.area&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;llamar("cargarExtra");}return false;},ocultar:["exArea"]},
   {id:"causas",tab:"pasoCausas",m:"pasoCausas",modo:null,t:"Causas de STD"},
+  {id:"costosBase",tab:"pasoCostosBase",m:"pasoCostosBase",modo:null,area:1,areaReq:1,t:"Base y balance",
+   aplicar(){return put("cbArea",G.area);},cargar:()=>llamar("cargarCostosBase"),ocultar:["cbArea"]},
+  {id:"costosHoy",tab:"pasoCostosHoy",m:"pasoCostosHoy",modo:"dia",area:1,live:1,t:"Reporte de hoy",
+   aplicar(){let c=put("chFecha",G.fecha);c=areaSel("chArea")||c;return c;},cargar:()=>llamar("cargarCostosHoy"),ocultar:["chFecha","chArea"]},
+  {id:"costosInc",tab:"pasoCostosInc",m:"pasoCostosInc",modo:"rango",def:"semana",area:1,live:1,t:"Incidencias",
+   aplicar(){const [d,h]=rangoDe(this);let c=put("ciDesde",d);c=put("ciHasta",h)||c;c=areaSel("ciArea")||c;return c;},
+   cargar:()=>llamar("cargarCostosInc"),ocultar:["ciDesde","ciHasta","ciArea"]},
+  {id:"costosAsis",tab:"pasoCostosAsis",m:"pasoCostosAsis",modo:"dia",area:1,live:1,t:"Asistencia",
+   aplicar(){let c=put("caFecha",G.fecha);c=areaSel("caArea")||c;return c;},cargar:()=>llamar("cargarCostosAsis"),ocultar:["caFecha","caArea"]},
   {id:"supArea",tab:"pasoSupArea",m:"pasoSupArea",modo:null,t:"Operar como supervisora"},
   {id:"opArea",tab:"pasoOpArea",m:"pasoOpArea",modo:null,area:1,areaReq:1,t:"Operar como operario",
    aplicar(){const a=$("areaOp");if(a&&G.area&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;llamar("cargarOpArea");}return false;},ocultar:["areaOp"]}
@@ -241,7 +250,8 @@ const selArea=v=>{const id=v.sel||(v.ocultar||[]).find(x=>/area/i.test(x));retur
    que quedaba en pantalla con el chip marcando otra cosa). Mismo formato que
    el que usa cada una. */
 const LLENAR={repArea:"Todas las áreas",opeArea:"Todas las áreas",audArea:"Todas las áreas",blArea:"Todas las áreas",
-  incArea:"Todas las áreas",modArea:"Todas las áreas",efmArea:"Todas las áreas",consArea:"Todas las áreas",tkOpArea:"— Elige área —",heArea:null};
+  incArea:"Todas las áreas",modArea:"Todas las áreas",efmArea:"Todas las áreas",consArea:"Todas las áreas",tkOpArea:"— Elige área —",heArea:null,
+  cbArea:null,chArea:"Todas las áreas",ciArea:"Todas las áreas",caArea:"Todas las áreas"};
 function llenarArea(v){
   const a=selArea(v);if(!a||!(a.id in LLENAR)||a.options.length>1)return;
   let L=[];try{L=AREAS_LISTA||[];}catch(e){}if(!L.length)return;
@@ -624,6 +634,7 @@ function contadores(){
 const GRUPOS={pasoTk:"Tickets",pasoMod:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
   pasoEf:"Eficiencia",pasoAudit:"Eficiencia",pasoInc:"Eficiencia",pasoDash:"Dashboards",
   pasoAsis:"Gestión",pasoBases:"Gestión",pasoBaseLog:"Gestión",pasoIncid:"Gestión",pasoFechas:"Gestión",pasoPermisos:"Gestión",
+  pasoCostosBase:"Costos",pasoCostosHoy:"Costos",pasoCostosInc:"Costos",pasoCostosAsis:"Costos",
   pasoSupArea:"Operar como",pasoOpArea:"Operar como"};
 function etiquetarGrupos(){
   document.querySelectorAll(".pantalla").forEach(p=>{const g=GRUPOS[p.id];const c=p.querySelector(".seccion-cab");
@@ -641,7 +652,8 @@ function iniciarIng(){
     const q=$("quienBadge");q?q.before(b):hdr.appendChild(b);}
   /* Pestañas cuya primera visita ya carga sola (con los valores ya escritos):
      se da por cargada para no pedir lo mismo dos veces a la base. */
-  const INIT_CARGA=["pasoTk","pasoAudit","pasoAsis","pasoIncid","pasoDash","pasoOfs","pasoInc","pasoBaseLog"];
+  const INIT_CARGA=["pasoTk","pasoAudit","pasoAsis","pasoIncid","pasoDash","pasoOfs","pasoInc","pasoBaseLog",
+    "pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
   envolver("activarTab",t=>{if(typeof t==="string"&&!TABS_VISTAS.has(t)){preEscribir(t);
     if(INIT_CARGA.includes(t))setTimeout(()=>{const v=vistaActual();if(v&&v.tab===t&&v.cargar){const c=v.aplicar?v.aplicar.call(v):false;if(!c){v.clave=claveDe(v);ultimaCarga=Date.now();}}},0);}});
   ["tkVista","perTab","dashTab","inciVista","incVista","efVista"].forEach(n=>envolver(n));
