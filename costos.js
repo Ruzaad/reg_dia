@@ -580,7 +580,7 @@ function caConteo(lista){
 function pintarCostosAsis(){
   const todo=CA.personal, c=caConteo(todo), est=Object.keys(c).sort(caOrdenEstado);
   const pres=todo.filter(p=>caPresente(caEstado(p))).length;
-  const color=e=>e==="ACTIVO"?"var(--exito)":/^EN\s/.test(e)?"var(--enlace)":e===SIN_MARCAR?"var(--tenue)":"var(--alerta)";
+  const color=e=>e==="ACTIVO"?"var(--exito)":/^EN\s/.test(e)?"var(--violeta)":e===SIN_MARCAR?"var(--tenue)":"var(--alerta)";
   $("caKpis").innerHTML = kpi("Personal", todo.length) + kpi("Presentes", `${pres}/${todo.length}`, "var(--exito)")
     + est.filter(e=>e!=="ACTIVO").map(e=>kpi(e===SIN_MARCAR?"Sin marcar":e, c[e], color(e))).join("");
   // Resumen por área: solo con "Todas las áreas".
