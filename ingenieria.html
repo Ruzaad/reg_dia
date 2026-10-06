@@ -57,6 +57,7 @@
         <a class="nav-item" data-tab="pasoBaseLog" href="#pasoBaseLog">Historial de tiempos</a>
         <a class="nav-item" data-tab="pasoIncid" href="#pasoIncid">Incidencias</a>
         <a class="nav-item" data-tab="pasoFechas" href="#pasoFechas">Corregir fechas</a>
+        <a class="nav-item" data-tab="pasoPermisos" href="#pasoPermisos">Permisos</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Costos</summary>
@@ -446,7 +447,7 @@
     </section>
 
     <!-- ===================== BASES ===================== -->
-    <section class="pantalla" id="pasoBases">
+    <section class="pantalla" id="pasoBases" data-area-sel="areaBase">
       <div class="fila-filtros">
         <select id="areaBase" onchange="cargarBases()"></select>
         <input type="text" id="fPrenda" placeholder="Filtrar prenda…" oninput="filtrarBases()">
@@ -456,11 +457,11 @@
         <input type="text" id="fMod" placeholder="Filtrar módulo…" oninput="filtrarBases()">
         <button class="btn-mini" onclick="cargarBases()">↻ CARGAR</button>
         <button class="btn-mini verde" onclick="descargarBase()">DESCARGAR XLSX</button>
-        <button class="btn-mini" id="btnEditLote" onclick="basesModoEdicion()">✎ EDITAR EN LOTE</button>
-        <button class="btn-mini" onclick="abrirModalBaseOp(null)">+ AGREGAR OPERACIÓN</button>
-        <button class="btn-mini" id="btnEditArt" onclick="abrirModalArticulo()" hidden>EDITAR ARTÍCULO</button>
-        <button class="btn-mini rojo" onclick="abrirModalBorrarArt()">BORRAR ARTÍCULO</button>
-        <label class="btn-mini" style="cursor:pointer;">
+        <button data-edita class="btn-mini" id="btnEditLote" onclick="basesModoEdicion()">✎ EDITAR EN LOTE</button>
+        <button data-edita class="btn-mini" onclick="abrirModalBaseOp(null)">+ AGREGAR OPERACIÓN</button>
+        <button data-edita class="btn-mini" id="btnEditArt" onclick="abrirModalArticulo()" hidden>EDITAR ARTÍCULO</button>
+        <button data-edita class="btn-mini rojo" onclick="abrirModalBorrarArt()">BORRAR ARTÍCULO</button>
+        <label class="btn-mini" data-edita style="cursor:pointer;">
           SUBIR EXCEL
           <input type="file" accept=".xlsx,.xls" style="display:none" onchange="leerExcelBase(this)">
         </label>
@@ -482,7 +483,7 @@
     </section>
 
     <!-- ===================== PERSONAL ===================== -->
-    <section class="pantalla" id="pasoAsis">
+    <section class="pantalla" id="pasoAsis" data-area-sel="perArea">
       <div class="seccion-cab">
         <h1>Personal</h1>
         <p class="seccion-sub">Gestión de personal, estados por rango, dashboard de asistencia y marcado diario.</p>
@@ -503,7 +504,7 @@
           <label class="campo"><span>Área</span><select id="perArea" onchange="perCargarCrud()"></select></label>
           <label class="campo"><span>Buscar</span><input type="text" id="perBuscar" placeholder="Nombre / DNI…" oninput="perPintarCrud()"></label>
           <label class="campo-check"><input type="checkbox" class="sw" id="perInactivos" onchange="perCargarCrud()"> Ver inactivos</label>
-          <button class="btn-mini verde" onclick="abrirModalPersonal(null)">+ Agregar personal</button>
+          <button data-edita class="btn-mini verde" onclick="abrirModalPersonal(null)">+ Agregar personal</button>
         </div>
         <div class="barra-control">
           <span class="sub" style="margin:0;">Seleccionados: <b id="perNSel">0</b></span>
@@ -828,7 +829,7 @@
     <!-- ===================== COSTOS (parche 96): todo de solo lectura ===================== -->
     <section class="pantalla" id="pasoCostosBase">
       <div class="seccion-cab">
-        <h1>Base y balance de línea <span class="solo-lectura">SOLO LECTURA</span></h1>
+        <h1>Base y balance de línea <span class="etq-lectura">SOLO LECTURA</span></h1>
         <p class="seccion-sub">La BASE del área tal cual, con el balance de cada artículo: S.A.M, PPH, PxH,
         horas y personas requeridas para la meta. Lo resaltado (meta, eficiencia y personas) es para jugar con los números: no se guarda en la base.</p>
       </div>
@@ -865,7 +866,7 @@
 
     <section class="pantalla" id="pasoCostosHoy">
       <div class="seccion-cab">
-        <h1>Reporte de hoy <span class="solo-lectura">SOLO LECTURA</span></h1>
+        <h1>Reporte de hoy <span class="etq-lectura">SOLO LECTURA</span></h1>
         <p class="seccion-sub">Tickets activos del día en la última o penúltima operación de cada artículo, por OF,
         y las incidencias del día. En CAMISA COSTURA cuenta por defecto la penúltima.</p>
       </div>
@@ -898,7 +899,7 @@
 
     <section class="pantalla" id="pasoCostosInc">
       <div class="seccion-cab">
-        <h1>Incidencias por área <span class="solo-lectura">SOLO LECTURA</span></h1>
+        <h1>Incidencias por área <span class="etq-lectura">SOLO LECTURA</span></h1>
         <p class="seccion-sub">Incidencias registradas en el rango, con sus minutos a favor y en contra.</p>
       </div>
       <div class="barra-control">
@@ -917,7 +918,7 @@
 
     <section class="pantalla" id="pasoCostosAsis">
       <div class="seccion-cab">
-        <h1>Asistencia del día <span class="solo-lectura">SOLO LECTURA</span></h1>
+        <h1>Asistencia del día <span class="etq-lectura">SOLO LECTURA</span></h1>
         <p class="seccion-sub">Personal de cada área (por área de origen) con su estado del día. Con al menos un
         ticket cuenta como presente aunque tenga otra marca.</p>
       </div>
@@ -992,8 +993,26 @@
       <div id="vistaZona" class="mod-grid"></div>
     </section>
 
+    <!-- ===================== PERMISOS (parche 95, solo administrador) ===================== -->
+    <section class="pantalla" id="pasoPermisos">
+      <div class="seccion-cab">
+        <h1>Permisos</h1>
+        <p class="seccion-sub">Qué áreas <b>lee</b> o <b>edita</b> cada usuario de oficina y qué pestañas abre.
+        Sin acceso a un área no la ve; con lectura la ve y la filtra pero no guarda nada en ella.
+        Operarios y supervisoras no pasan por aquí: siguen atados a su área.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Buscar</span><input type="text" id="permBuscar" placeholder="Usuario, nombre o cargo…" oninput="pintarPermisosAdmin()"></label>
+        <button class="btn-mini" onclick="cargarPermisosAdmin()">↻ Cargar</button>
+      </div>
+      <div id="permZona"></div>
+    </section>
+    <section class="pantalla" id="pasoSinPermiso">
+      <div class="estado-vacio">Todavía no tienes pestañas asignadas. Pide al administrador que te dé acceso.</div>
+    </section>
+
     <!-- ===================== INCIDENCIAS (ajustes) ===================== -->
-    <section class="pantalla" id="pasoIncid">
+    <section class="pantalla" id="pasoIncid" data-area-sel="areaInci">
       <div class="seccion-cab">
         <h1>Incidencias</h1>
         <p class="seccion-sub">Ajustes de tiempo del personal: aplicadas (editar/borrar) y pendientes por resolver.</p>
@@ -1011,7 +1030,7 @@
           <label class="campo"><span>Área</span><select id="areaInci" onchange="cargarOcurrencias()"></select></label>
           <label class="campo"><span>Buscar</span><input type="text" id="filtroInci" placeholder="Nombre / tipo / motivo…" oninput="pintarOcurrencias()"></label>
           <button class="btn-mini" onclick="cargarOcurrencias()">Cargar</button>
-          <button class="btn-mini verde" onclick="nuevaIncidencia()">+ Nueva incidencia</button>
+          <button data-edita class="btn-mini verde" onclick="nuevaIncidencia()">+ Nueva incidencia</button>
         </div>
         <div class="kpis" id="resumenInci" style="margin-bottom:14px;"></div>
         <div id="motivosInci" style="margin-bottom:4px;"></div>
@@ -1058,7 +1077,7 @@
     </section>
 
     <!-- ===================== GENERAR TICKETS (HOJA DE NUMERACIÓN) ===================== -->
-    <section class="pantalla" id="pasoGen">
+    <section class="pantalla" id="pasoGen" data-area-sel="areaGen">
       <div class="seccion-cab">
         <h1>Generar tickets</h1>
         <p class="seccion-sub">La OF se registra primero en <b>OFs registradas</b> (subiendo su HN). Aquí eliges el área y la OF, decides qué operaciones trocear y se generan sus tickets desde el desglose — sin escribir el ALMACÉN. Solo ingeniería.</p>
@@ -1084,7 +1103,7 @@
     </section>
 
     <!-- ===================== CORREGIR FECHAS DE RECLAMO ===================== -->
-    <section class="pantalla" id="pasoFechas">
+    <section class="pantalla" id="pasoFechas" data-area-sel="areaFec">
       <div class="seccion-cab">
         <h1>Corregir fechas de reclamo</h1>
         <p class="seccion-sub">Para personal que registró su avance en otro día. Elige al operario y la fecha donde están los tickets, márcalos y muévelos a la fecha correcta con un motivo.</p>
@@ -1112,7 +1131,7 @@
             <select id="motivoFec" onchange="motivoFecCambio()"></select></label>
           <label class="campo" id="motivoOtroWrap" style="display:none;"><span>Otro motivo</span>
             <input type="text" id="motivoOtroFec" placeholder="Se guarda en MAYÚSCULAS" maxlength="120"></label>
-          <button class="btn-mini verde" onclick="aplicarCambioFec()">Aplicar cambio</button>
+          <button class="btn-mini verde" data-edita onclick="aplicarCambioFec()">Aplicar cambio</button>
         </div>
       </div>
     </section>

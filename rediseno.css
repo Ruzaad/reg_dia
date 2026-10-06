@@ -764,11 +764,31 @@ body[data-pagina="supervisora"] .grid-personal{max-width:1100px;width:100%;margi
 .dyn-at-f:last-child{border-bottom:0;}
 .dyn-at-f kbd{font-family:var(--mono);font-size:12px;background:var(--sup-2);border:1px solid var(--linea);border-bottom-width:2px;border-radius:6px;padding:2px 7px;color:var(--texto);}
 
+/* ---------- Permisos por área (parche 95) ---------- */
+.nav-item[data-tab="pasoPermisos"]{--ni:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='11' width='16' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4'/%3E%3C/svg%3E")!important;}
+.pantalla.solo-lectura [data-edita],.pantalla.solo-lectura .acc-editar,.pantalla.solo-lectura .acc-borrar{display:none!important;}
+.aviso-lectura{margin:0 0 12px;padding:10px 14px;border-radius:10px;background:var(--ocre-t);color:var(--texto);
+  border-left:4px solid var(--ocre);font-size:14px;line-height:1.4;}
+.aviso-lectura b{color:var(--aviso);}
+.perm-tabla td{vertical-align:top;}
+.perm-tabla .perm-nom{font-size:12px;color:var(--tomado);}
+.perm-tabla tr.perm-inactivo td{opacity:.55;}
+.perm-nada{color:var(--alerta);font-weight:700;}
+.perm-h3{font-size:15px;margin:14px 0 8px;}
+.perm-areas .tabla td{padding:6px 10px;}
+.perm-areas label{display:inline-flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;}
+.perm-tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;}
+.perm-grupo{border:1px solid var(--linea);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;gap:6px;margin:0;}
+.perm-grupo legend{font-weight:800;font-size:13px;padding:0 4px;}
+@media (max-width:600px){.perm-areas{overflow-x:auto;}}
+.base-edit-bar[hidden],.pantalla.solo-lectura .base-edit-bar{display:none!important;}
+.perm-grupo{align-items:flex-start;}
+.modal-box .perm-grupo .chk-inline{display:flex;width:100%;gap:8px;align-items:center;justify-content:flex-start;text-align:left;margin:0;}
 /* ---------- Costos (parche 96): pestañas de solo lectura ----------
    La ficha de artículo sigue la hoja de balance de línea de ingeniería:
    datos a la izquierda, S.A.M grande, nombre del artículo y la tabla por
    módulo con su subtotal. Colores del sistema, no los grises del Excel. */
-.solo-lectura{background:var(--azul-t);color:var(--azul);border:1px solid var(--linea);border-radius:8px;
+.etq-lectura{background:var(--azul-t);color:var(--azul);border:1px solid var(--linea);border-radius:8px;
   font-weight:700;font-size:11px;letter-spacing:.3px;padding:2px 8px;vertical-align:middle;}
 .cb-params{align-items:flex-end;}
 .cb-params .campo input{width:110px;}
