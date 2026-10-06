@@ -11,7 +11,7 @@ fecha y área del rediseño.
 
 | Pestaña (`data-tab`) | Qué muestra |
 |---|---|
-| Base y balance (`pasoCostosBase`) | La BASE del área con los mismos filtros que Bases (artículo, prenda, cliente, módulo, operación). Vista **Balance por artículo**: una ficha por artículo con el formato de la hoja de balance de línea (Meta, Horas disp., Pers. disp., Eficiencia, S.A.M, PPH, PxH, H. Req., N° Pers, subtotal por bloque y tiempo estándar de prenda). Vista **Tabla**: la base plana, con ★ en la última y penúltima. Descarga en **PDF** (una página A4 horizontal por artículo) y en **Excel** (una hoja por artículo, con fórmulas: cambiar Meta, Horas o Eficiencia en el Excel recalcula todo). Hasta 80 artículos por descarga. |
+| Base y balance (`pasoCostosBase`) | La BASE del área con los mismos filtros que Bases (artículo, prenda, cliente, módulo, operación). Vista **Balance por artículo**: una ficha por artículo con el formato de la hoja de balance de línea (Meta, Horas disp., Pers. disp., Eficiencia, S.A.M, PPH, PxH, H. Req., N° Pers, subtotal por bloque y tiempo estándar de prenda). Vista **Tabla**: la base plana, con ★ en la última y penúltima. Descarga en **PDF** (una página A4 horizontal por artículo) y en **Excel** (una hoja por artículo, con fórmulas: cambiar Meta, Eficiencia o Personas en el Excel recalcula todo). Hasta 80 artículos por descarga. |
 | Reporte de hoy (`pasoCostosHoy`) | Tickets activos del día en la última o penúltima operación, por OF, más las incidencias del día. **Según el área** (por defecto) toma la penúltima en CAMISA COSTURA y la última en el resto; se puede forzar Última o Penúltima. Descarga Excel. |
 | Incidencias (`pasoCostosInc`) | Incidencias del rango por área, con minutos a favor y en contra, conteo por tipo, filtro por tipo y buscador. Descarga Excel. |
 | Asistencia (`pasoCostosAsis`) | Personal del día por área de origen con su estado; presentes, sin marcar y una tarjeta por cada estado. Con "Todas las áreas", resumen por área. Descarga Excel. |
@@ -27,8 +27,15 @@ TE5247 GIOVANNI II, 3LS002 MARTIN):
 - N° Pers = H. Req. / Horas disp.
 - Pers. disp. = N° Pers total redondeado hacia arriba
 
-Meta, Horas disp. y Eficiencia son parámetros del cálculo (por defecto 1400,
-9.57 y 80%). No se guardan en la base; el navegador recuerda los últimos usados.
+Como en las hojas de Ruzaad (Balances.xlsx), lo manual va en amarillo: Meta,
+Eficiencia, Artículo, Prenda y Cliente. Horas disp. es fija (9.57, la jornada de
+575 min) y Pers. disp. es fórmula. En la pantalla, Meta y Eficiencia (por defecto
+1400 y 80%) no se guardan en la base; el navegador recuerda los últimos usados.
+
+**Producción posible** (la hoja META): prendas = personas × minutos ÷ S.A.M ×
+eficiencia, con 575 y 576 minutos y eficiencias de 100% a 70%. Las personas son
+las disponibles del artículo, o las que se escriban en "Personas". En el Excel la
+celda Personas va en amarillo y la tabla es fórmula.
 En ACABADO los bloques son por prenda (ACABADO PANTALON, ACABADO SACO); en
 costura, por módulo. El N° de cada operación es su N° OP de la base.
 

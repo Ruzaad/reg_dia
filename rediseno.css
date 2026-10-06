@@ -798,6 +798,16 @@ body[data-pagina="supervisora"] .grid-personal{max-width:1100px;width:100%;margi
   font-size:12px;font-weight:700;color:var(--suave);text-transform:uppercase;letter-spacing:.4px;}
 .cb-pie b{font-family:var(--mono);font-size:17px;color:var(--texto);background:var(--ocre-t);border-radius:8px;padding:3px 10px;margin-right:12px;}
 .cb-pie b:last-child{margin-right:0;}
+/* Lo manual (amarillo en la hoja de balance): Meta, Eficiencia, Personas, Artículo, Prenda, Cliente. */
+.cb-manual input{background:var(--ocre-t);border-color:var(--ocre);}
+.cb-datos dd.cb-man{background:var(--ocre-t);border-radius:4px;padding:0 6px;}
+.cb-horas{align-self:center;white-space:nowrap;}
+.cb-prod{padding:12px 16px 16px;border-top:1px solid var(--linea-2);}
+.cb-prod-tit{font-size:12px;font-weight:700;color:var(--suave);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;
+  display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+.cb-prod-tit b{color:var(--texto);font-family:var(--mono);font-size:15px;}
+.cb-prod-tit .sub{text-transform:none;letter-spacing:0;font-weight:500;}
+.cb-prod .cb-tabla{max-width:720px;}
 @media (max-width:900px){
   .cb-cab{grid-template-columns:1fr 110px;}
   .cb-nombre{grid-column:1/-1;border-top:1px solid var(--linea-2);order:-1;}

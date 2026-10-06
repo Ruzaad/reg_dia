@@ -830,7 +830,7 @@
       <div class="seccion-cab">
         <h1>Base y balance de línea <span class="solo-lectura">SOLO LECTURA</span></h1>
         <p class="seccion-sub">La BASE del área tal cual, con el balance de cada artículo: S.A.M, PPH, PxH,
-        horas y personas requeridas para la meta. Meta, horas y eficiencia son para el cálculo: no se guardan en la base.</p>
+        horas y personas requeridas para la meta. Lo resaltado (meta, eficiencia y personas) es para jugar con los números: no se guarda en la base.</p>
       </div>
       <div class="tabs sup-subtabs">
         <button id="cbTabBal" class="tab activo" onclick="cbVista('bal')">BALANCE POR ARTÍCULO</button>
@@ -847,9 +847,10 @@
         <button class="btn-mini" onclick="cargarCostosBase()">Cargar</button>
       </div>
       <div class="barra-control cb-params">
-        <label class="campo"><span>Meta (und/día)</span><input type="number" id="cbMeta" min="1" step="1" oninput="cbParam()"></label>
-        <label class="campo"><span>Horas disp.</span><input type="number" id="cbHoras" min="0.1" step="0.01" oninput="cbParam()"></label>
-        <label class="campo"><span>Eficiencia %</span><input type="number" id="cbEf" min="1" max="100" step="1" oninput="cbParam()"></label>
+        <label class="campo cb-manual"><span>Meta (und/día)</span><input type="number" id="cbMeta" min="1" step="1" oninput="cbParam()"></label>
+        <label class="campo cb-manual"><span>Eficiencia %</span><input type="number" id="cbEf" min="1" max="100" step="1" oninput="cbParam()"></label>
+        <label class="campo cb-manual"><span>Personas</span><input type="number" id="cbPers" min="1" step="1" placeholder="Pers. disp." title="Para la producción posible; vacío usa las personas disponibles de cada artículo" oninput="cbParam()"></label>
+        <span class="sub cb-horas">Horas disp. 9.57 (575 min)</span>
         <span class="cb-sp"></span>
         <button class="btn-mini" onclick="cbDescargarPdf()">⬇ Descargar PDF</button>
         <button class="btn-mini verde" onclick="cbDescargarXlsx()">⬇ Descargar Excel</button>

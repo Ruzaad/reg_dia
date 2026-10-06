@@ -47,27 +47,31 @@ const kpi=(t,v,c)=>`<div class="kpi"><div class="kpi-num"${c?` style="color:${c}
    PPH = 60 / S.A.M · PxH = PPH × eficiencia · H. Req. = meta / PxH ·
    N° Pers = H. Req. / horas disponibles · Pers. disp. = N° Pers total redondeado
    hacia arriba. En ACABADO los bloques son por prenda (ACABADO PANTALON, ACABADO
-   SACO); en costura, por módulo. */
+   SACO); en costura, por módulo. Como en las hojas de Ruzaad (Balances.xlsx), lo
+   manual (en amarillo) es Meta, Eficiencia, Artículo, Prenda y Cliente; las horas
+   disponibles son fijas (575 min). La producción posible es la hoja META:
+   personas × minutos / S.A.M × eficiencia, con 575 y 576 minutos. */
 let CB={area:"", filas:[], vista:"bal", pag:1};
 const CB_PAG_BAL=6, CB_PAG_TAB=100;
-const CB_PARAM_DEF={meta:1400, horas:9.57, ef:80};
+const CB_PARAM_DEF={meta:1400, ef:80}, CB_HORAS=9.57;
+const CB_MIN=[575,576], CB_EFS=[1,.95,.9,.85,.8,.75,.7];
 function cbParamsLeer(){
   let p={...CB_PARAM_DEF};
   try{ Object.assign(p, JSON.parse(localStorage.getItem("stx-costos-param")||"{}")); }catch(e){}
   return p;
 }
 function cbParams(){
-  const m=Number($("cbMeta").value), h=Number($("cbHoras").value), e=Number($("cbEf").value);
-  return {meta:m>0?m:CB_PARAM_DEF.meta, horas:h>0?h:CB_PARAM_DEF.horas, ef:(e>0&&e<=100?e:CB_PARAM_DEF.ef)/100};
+  const m=Number($("cbMeta").value), e=Number($("cbEf").value), n=Math.floor(Number($("cbPers").value));
+  return {meta:m>0?m:CB_PARAM_DEF.meta, horas:CB_HORAS, ef:(e>0&&e<=100?e:CB_PARAM_DEF.ef)/100, personas:n>0?n:0};
 }
 function cbParam(){
   const p=cbParams();
-  try{ localStorage.setItem("stx-costos-param", JSON.stringify({meta:p.meta,horas:p.horas,ef:Math.round(p.ef*100)})); }catch(e){}
+  try{ localStorage.setItem("stx-costos-param", JSON.stringify({meta:p.meta,ef:Math.round(p.ef*100)})); }catch(e){}
   cbPintar();
 }
 function cbInit(){
   costosAreas("cbArea", false);
-  if(!$("cbMeta").value){ const p=cbParamsLeer(); $("cbMeta").value=p.meta; $("cbHoras").value=p.horas; $("cbEf").value=p.ef; }
+  if(!$("cbMeta").value){ const p=cbParamsLeer(); $("cbMeta").value=p.meta; $("cbEf").value=p.ef; }
   cargarCostosBase();
 }
 async function cargarCostosBase(){
@@ -119,10 +123,12 @@ function cbArticulos(filas){
       bl.ops.push({n:b.n_op, op:norm(b.operacion), sam, pph, ef:p.ef, pxh, hreq, pers});
       bl.sam+=sam; bl.pers+=pers;
     });
-    const sam=bloques.reduce((a,x)=>a+x.sam,0), pers=bloques.reduce((a,x)=>a+x.pers,0);
+    const sam=bloques.reduce((a,x)=>a+x.sam,0), pers=bloques.reduce((a,x)=>a+x.pers,0), persDisp=Math.ceil(pers-1e-9);
+    const personas=p.personas||persDisp;
     return {art, cliente:masComun(ops.map(b=>b.cliente)),
       prenda:[...new Set(ops.map(b=>norm(b.prenda)).filter(Boolean))].join(" + "),
-      bloques, sam, pers, persDisp:Math.ceil(pers-1e-9), nOps:ops.length, p};
+      bloques, sam, pers, persDisp, nOps:ops.length, p, personas,
+      prod:CB_MIN.map(min=>({min, vals:CB_EFS.map(ef=>sam>0?personas*min/sam*ef:0)}))};
   });
 }
 function cbPintar(){
@@ -150,8 +156,9 @@ function cbPintar(){
 }
 function cbFichaHTML(a){
   const p=a.p;
-  const cab=[["Meta",p.meta],["Horas disp.",num2(p.horas)],["Pers. disp.",a.persDisp],["Eficiencia",Math.round(p.ef*100)+"%"],
-             ["Artículo",a.art],["Prenda",a.prenda||"—"],["Cliente",a.cliente||"—"]];
+  // [etiqueta, valor, manual] — lo manual va resaltado como el amarillo de la hoja.
+  const cab=[["Meta",p.meta,1],["Horas disp.",num2(p.horas)],["Pers. disp.",a.persDisp],["Eficiencia",Math.round(p.ef*100)+"%",1],
+             ["Artículo",a.art,1],["Prenda",a.prenda||"—",1],["Cliente",a.cliente||"—",1]];
   const filas=a.bloques.map(bl=>bl.ops.map((o,i)=>`<tr>
       ${i===0?`<td class="cb-mod" rowspan="${bl.ops.length}">${esc(bl.nombre)}</td>`:""}
       <td>${esc(o.n??"")}</td><td class="izq">${esc(o.op)}</td><td>${num2(o.sam)}</td><td>${num2(o.pph)}</td>
@@ -159,7 +166,7 @@ function cbFichaHTML(a){
     + `<tr class="cb-sub"><td colspan="3"></td><td>${num2(bl.sam)}</td><td colspan="4"></td><td>${num2(bl.pers)}</td></tr>`).join("");
   return `<article class="cb-ficha">
     <div class="cb-cab">
-      <dl class="cb-datos">${cab.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+      <dl class="cb-datos">${cab.map(([k,v,m])=>`<dt>${k}</dt><dd${m?' class="cb-man"':""}>${esc(v)}</dd>`).join("")}</dl>
       <div class="cb-sam"><span>S.A.M</span><b>${num2(a.sam)}</b></div>
       <div class="cb-nombre"><span>${esc(a.art)}</span><b>${esc(a.cliente||a.art)}</b></div>
     </div>
@@ -170,6 +177,14 @@ function cbFichaHTML(a){
     </table></div>
     <div class="cb-pie"><span>Tiempo estándar de prenda</span><b>${num2(a.sam)}</b>
       <span>N° pers</span><b>${num2(a.pers)}</b></div>
+    <div class="cb-prod">
+      <div class="cb-prod-tit">Producción posible con <b>${a.personas}</b> persona${a.personas===1?"":"s"}
+        <span class="sub">personas × minutos ÷ S.A.M × eficiencia</span></div>
+      <div class="tabla-scroll"><table class="tabla cb-tabla">
+        <thead><tr data-dyn="1"><th>Minutos disp.</th>${CB_EFS.map(e=>`<th>${Math.round(e*100)}%</th>`).join("")}</tr></thead>
+        <tbody>${a.prod.map(r=>`<tr><td><b>${r.min}</b></td>${r.vals.map(v=>`<td>${Math.round(v).toLocaleString("es-PE")}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table></div>
+    </div>
   </article>`;
 }
 function cbPintarTabla(filas){
@@ -218,13 +233,13 @@ async function cbDescargarPdf(){
     if(ix) doc.addPage();
     const p=a.p, x0=14, y0=12;
     // Datos de cabecera (izquierda, en amarillo como la hoja original).
-    const cab=[["Meta:",String(p.meta)],["Horas Disp.",num2(p.horas)],["Pers. Disp.:",String(a.persDisp)],
-               ["Eficiencia:",Math.round(p.ef*100)+"%"],["Articulo:",a.art],["Prenda",a.prenda],["Cliente:",a.cliente]];
+    const cab=[["Meta:",String(p.meta),1],["Horas Disp.",num2(p.horas)],["Pers. Disp.:",String(a.persDisp)],
+               ["Eficiencia:",Math.round(p.ef*100)+"%",1],["Articulo:",a.art,1],["Prenda",a.prenda,1],["Cliente:",a.cliente,1]];
     doc.setFontSize(7.5); doc.setDrawColor(0); doc.setLineWidth(.2);
-    cab.forEach(([k,v],i)=>{
+    cab.forEach(([k,v,m],i)=>{
       const y=y0+i*4.6;
       doc.setFont("helvetica","bold"); doc.rect(x0,y,22,4.6); doc.text(k,x0+1,y+3.3);
-      doc.setFillColor(...AMAR); doc.rect(x0+22,y,26,4.6,"FD");
+      if(m){ doc.setFillColor(...AMAR); doc.rect(x0+22,y,26,4.6,"FD"); } else doc.rect(x0+22,y,26,4.6);
       doc.text(doc.splitTextToSize(String(v||""),25)[0]||"", x0+35, y+3.3, {align:"center"});
     });
     const hCab=cab.length*4.6;
@@ -259,6 +274,15 @@ async function cbDescargarPdf(){
     doc.setFillColor(...AMAR); doc.rect(212,y,16,6,"FD"); doc.setFont("helvetica","bold"); doc.text(num2(a.sam),220,y+4,{align:"center"});
     doc.setFont("helvetica","normal"); doc.rect(228,y,16,6); doc.text("N° PERS",236,y+4,{align:"center"});
     doc.setFillColor(...AMAR); doc.rect(244,y,16,6,"FD"); doc.setFont("helvetica","bold"); doc.text(num2(a.pers),252,y+4,{align:"center"});
+    // Producción posible (hoja META).
+    doc.autoTable({
+      startY:y+10, margin:{left:x0}, tableWidth:150, theme:"grid",
+      head:[[{content:`PRODUCCIÓN POSIBLE CON ${a.personas} PERSONAS`,colSpan:8,styles:{halign:"left"}}],
+            ["Minutos disp.",...CB_EFS.map(e=>Math.round(e*100)+"%")]],
+      body:a.prod.map(r=>[String(r.min),...r.vals.map(v=>String(Math.round(v)))]),
+      styles:{fontSize:7,cellPadding:.9,halign:"center",lineColor:[200,205,215],lineWidth:.15,textColor:[60,64,80]},
+      headStyles:{fillColor:GRIS,textColor:255,fontStyle:"bold",fontSize:7.5}
+    });
   });
   doc.save(cbNombreDescarga(arts,"pdf"));
 }
@@ -275,7 +299,7 @@ async function cbDescargarXlsx(){
   arts.forEach(a=>{
     let nom=nombreArchivo(a.art).slice(0,28)||"ART"; let k=2; while(usados.has(nom)) nom=nom.slice(0,26)+"_"+(k++); usados.add(nom);
     const ws=wb.addWorksheet(nom,{views:[{showGridLines:false}],pageSetup:{orientation:"landscape",paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0}});
-    ws.columns=[{width:3},{width:16},{width:14},{width:7},{width:52},{width:9},{width:9},{width:8},{width:9},{width:9},{width:9}];
+    ws.columns=[{width:3},{width:16},{width:14},{width:7},{width:52},{width:9},{width:9},{width:8},{width:9},{width:13},{width:9},{width:9}];
     ws.mergeCells("E2:K2"); ws.getCell("E2").value="BALANCE DE LINEA";
     ws.getCell("E2").font={name:"Century Gothic",bold:true,size:16}; ws.getCell("E2").alignment={horizontal:"center"};
     ws.mergeCells("E3:K3"); ws.getCell("E3").value="AREA: "+CB.area;
@@ -286,7 +310,8 @@ async function cbDescargarXlsx(){
       const r=5+i, ct=ws.getCell("B"+r), cv=ws.getCell("C"+r);
       ct.value=t; ct.font={name:"Century Gothic",bold:true,size:8}; ct.border=borde;
       cv.value=v; cv.font={name:"Century Gothic",bold:true,size:8}; cv.border=borde; cv.alignment={horizontal:"center"};
-      cv.fill={type:"pattern",pattern:"solid",fgColor:{argb:AMAR}};
+      // Amarillo = manual (Meta, Eficiencia, Artículo, Prenda, Cliente), como en la hoja original.
+      if(i!==1&&i!==2) cv.fill={type:"pattern",pattern:"solid",fgColor:{argb:AMAR}};
     });
     ws.getCell("C8").numFmt="0%";
     let r=14; const subtot=[];
@@ -332,8 +357,37 @@ async function cbDescargarXlsx(){
     });
     ws.getCell("C7").value={formula:`ROUNDUP(F${fP},0)`};
     ws.getCell("D5").value={formula:`F${fT}`}; ws.getCell("D5").numFmt="0.00"; ws.getCell("D5").font={size:16};
-    ws.mergeCells("E5:K11"); const t=ws.getCell("E5"); t.value=a.cliente||a.art;
+    ws.mergeCells("E5:I11"); const t=ws.getCell("E5"); t.value=a.cliente||a.art;
     t.font={name:"Times New Roman",bold:true,size:28}; t.alignment={horizontal:"center",vertical:"middle"};
+    // Recuadro negro de totales (como TE5247): N° de personas y S.A.M de la prenda.
+    [["N° PERSONAS",`F${fP}`],["SAM",`F${fT}`]].forEach(([tx,fx],i)=>{
+      const l=ws.getCell(5+i,10), v=ws.getCell(5+i,11);
+      l.value=tx; v.value={formula:fx}; v.numFmt="0.00";
+      [l,v].forEach(c=>{ c.font={name:"Century Gothic",bold:true,size:9,color:{argb:"FFFFFFFF"}};
+        c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF000000"}}; c.alignment={horizontal:"center"}; });
+    });
+    // Producción posible (hoja META): personas × minutos / SAM × eficiencia.
+    const r0=fP+3, cPers=ws.getCell(r0,3);
+    ws.getCell(r0,2).value="Personas:"; ws.getCell(r0,2).font={name:"Century Gothic",bold:true,size:8}; ws.getCell(r0,2).border=borde;
+    cPers.value=a.personas; cPers.font={name:"Century Gothic",bold:true,size:8}; cPers.border=borde; cPers.alignment={horizontal:"center"};
+    cPers.fill={type:"pattern",pattern:"solid",fgColor:{argb:AMAR}};
+    ws.mergeCells(r0,5,r0,12); const tp=ws.getCell(r0,5);
+    tp.value={formula:`"PRODUCCIÓN POSIBLE CON "&C${r0}&" PERSONAS"`};
+    tp.font={name:"Century Gothic",bold:true,size:10}; tp.alignment={horizontal:"center"};
+    const hP=r0+1;
+    ["Minutos disp.",...CB_EFS].forEach((v,i)=>{
+      const c=ws.getCell(hP,5+i); c.value=v; if(i) c.numFmt="0%";
+      c.font={bold:true,color:{argb:"FFFFFFFF"},name:"Century Gothic",size:9};
+      c.fill={type:"pattern",pattern:"solid",fgColor:{argb:GRIS}}; c.alignment={horizontal:"center"};
+    });
+    CB_MIN.forEach((min,j)=>{
+      const f=hP+1+j, cm=ws.getCell(f,5); cm.value=min; cm.font={name:"Century Gothic",bold:true,size:8}; cm.border=borde; cm.alignment={horizontal:"center"};
+      CB_EFS.forEach((e,i)=>{
+        const col=String.fromCharCode(70+i), c=ws.getCell(f,6+i);
+        c.value={formula:`IF($F$${fT}>0,$C$${r0}*$E${f}/$F$${fT}*${col}$${hP},"")`}; c.numFmt="#,##0";
+        c.font={name:"Century Gothic",size:8,color:{argb:"FF3C4050"}}; c.border=borde; c.alignment={horizontal:"center"};
+      });
+    });
   });
   const buf=await wb.xlsx.writeBuffer();
   const url=URL.createObjectURL(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
