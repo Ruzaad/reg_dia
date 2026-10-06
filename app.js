@@ -2278,11 +2278,16 @@ async function cargarEstadosSup(){
 /* Parche 97: "EN <área>" = vino a planta pero apoya en otra área. Cuenta como
    presente; no es ausencia. La variable de su propia área no se ofrece. */
 const esOtraArea = e => /^EN /.test(e||"");
+/* Parche 98: en estas áreas hay tickets, así que se le exige el día y se ve su
+   eficiencia. Las demás "EN <área>" (Despacho, Reproceso…) no tienen tickets. */
+const OTRA_AREA_CON_TICKETS = ["EN ACABADO","EN CAMISAS","EN SACOS","EN PANTALON"];
+const otraAreaConTickets = e => OTRA_AREA_CON_TICKETS.includes(e);
 const OTRA_AREA_PROPIA = {"ACABADO":"EN ACABADO","CAMISA COSTURA":"EN CAMISAS","SACO COSTURA":"EN SACOS","PANTALON COSTURA":"EN PANTALON"};
 function estadosGrupos(lista, area){
   const propia=OTRA_AREA_PROPIA[norm(area).toUpperCase()]||"";
   const xs=(lista||[]).filter(e=>e!=="ACTIVO"&&e!==propia);
-  return {aus:xs.filter(e=>!esOtraArea(e)), otra:xs.filter(esOtraArea)};
+  return {aus:xs.filter(e=>!esOtraArea(e)), otra:xs.filter(otraAreaConTickets),
+          otraSin:xs.filter(e=>esOtraArea(e)&&!otraAreaConTickets(e))};
 }
 /* <option>s agrupadas: Ausencia / Apoyo en otra área. */
 function estadosOpciones(lista, cur, area, sinFalta){
@@ -2291,7 +2296,8 @@ function estadosOpciones(lista, cur, area, sinFalta){
   const aus=g.aus.filter(e=>!(sinFalta&&e==="FALTA"));
   return (tieneAct&&!sinFalta?o("ACTIVO"):"")
     +(aus.length?`<optgroup label="Ausencia">${aus.map(o).join("")}</optgroup>`:"")
-    +(g.otra.length?`<optgroup label="Apoyo en otra área">${g.otra.map(o).join("")}</optgroup>`:"");
+    +(g.otra.length?`<optgroup label="Otra área con tickets (cuenta eficiencia)">${g.otra.map(o).join("")}</optgroup>`:"")
+    +(g.otraSin.length?`<optgroup label="Otra área sin tickets">${g.otraSin.map(o).join("")}</optgroup>`:"");
 }
 
 /* ============================================================
@@ -2470,7 +2476,8 @@ function asisElegir(dni){
   const g=estadosGrupos(ESTADOS_SUP,areaSup());
   const chip=e=>`<button class="asis-chip${esOtraArea(e)?" otra":""} ${e===cur?"sel":""}" onclick="asisSet('${esc(dni)}','${esc(e)}')">${esc(e)}</button>`;
   const chips=`<div class="asis-chips">${chip("ACTIVO")}${g.aus.map(chip).join("")}</div>`
-    +(g.otra.length?`<div class="asis-grupo">Vino, pero apoya en otra área</div><div class="asis-chips">${g.otra.map(chip).join("")}</div>`:"");
+    +(g.otra.length?`<div class="asis-grupo">Apoya en otra área con tickets · cuenta su eficiencia</div><div class="asis-chips">${g.otra.map(chip).join("")}</div>`:"")
+    +(g.otraSin.length?`<div class="asis-grupo">Apoya en un área sin tickets · no se le exige</div><div class="asis-chips">${g.otraSin.map(chip).join("")}</div>`:"");
   const tk=Number(p.tickets)||0;
   abrirModal(`<h2>${esc(p.nombre)}</h2>
     <div class="sub" style="margin-bottom:10px;">Estado del ${ASIS.fecha}</div>
@@ -2482,7 +2489,7 @@ function asisSet(dni,est){
   /* Ponerle ausencia a quien sí reclamó tickets suele ser un descuido, y cuesta
      caro: cualquier penalidad anula su quincena. Se avisa, no se impide. */
   const p=ASIS.list.find(x=>x.dni===dni), tk=p?Number(p.tickets)||0:0;
-  if(esOtraArea(est) && tk>0 &&
+  if(esOtraArea(est) && !otraAreaConTickets(est) && tk>0 &&
      !confirm(`${p.nombre} reclamó ${tk} ticket(s) hoy en su área.\n`
        +`Con ${est} esos tickets no cuentan para su eficiencia del día. Si se cambió de área `
        +`para producir, mejor usa el cambio de área. ¿Marcar igual?`)) return;
@@ -2759,11 +2766,12 @@ async function cargarPersonal(s){
 /* Los minutos disponibles solo tienen sentido si la persona está en planta.
    Si su estado del día es otro (FALTA, DM, VACACIONES, LICENCIA…), se muestra
    el estado en su lugar: enseñar "575 min" de alguien que faltó confunde. */
-const esAusente = p => !!(p && (p.ausente || (norm(p.estado_dia||"") && norm(p.estado_dia)!=="ACTIVO")));
+const esAusente = p => !!(p && (p.ausente || (norm(p.estado_dia||"") && norm(p.estado_dia)!=="ACTIVO"
+  && !otraAreaConTickets(norm(p.estado_dia)))));
 function dispPersona(p){
   const e=norm(p.estado_dia||"");
-  if(p.ausente || (e && e!=="ACTIVO")) return `<span class="pill ${esc(e||"FALTA")}">${esc(e||"—")}</span>`;
-  return `${p.disp} min`;
+  if(esAusente(p)) return `<span class="pill ${esc(e||"FALTA")}">${esc(e||"—")}</span>`;
+  return otraAreaConTickets(e) ? `<span class="pill ${esc(e)}">${esc(e)}</span> ${p.disp} min` : `${p.disp} min`;
 }
 function pintarPersonal(){
   /* Cada pantalla tiene su buscador: el de selección múltiple no existía y
