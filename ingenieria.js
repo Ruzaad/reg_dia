@@ -1741,7 +1741,9 @@ async function abrirModalPersonal(dni){
 
 let MP_ORIG = null;   // cómo estaba la persona al abrir el modal
 async function guardarPersonal(dniOriginal){
-  const dni = dniOriginal || $("mpDni").value.trim();
+  /* El ingreso de oficina pasa el usuario a MAYÚSCULAS: si se guarda en minúsculas
+     ("vbendita") nunca puede entrar. */
+  const dni = dniOriginal || $("mpDni").value.trim().toUpperCase();
   const nombres = $("mpNombres").value.trim();
   let areaOrigen = $("mpAreaOrigen").value;
   let areaActual = $("mpAreaActual").value;
