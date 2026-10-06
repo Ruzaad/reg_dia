@@ -1796,7 +1796,7 @@ async function perMoverArea(){
 
 /* --- Estados por rango --- */
 async function perCargarRango(){
-  $("perRangoEstado").innerHTML=(ESTADOS_ASIS||[]).map(e=>`<option>${esc(e)}</option>`).join("")||'<option value="">Sin estados</option>';
+  $("perRangoEstado").innerHTML=estadosOpciones(ESTADOS_ASIS,"")||'<option value="">Sin estados</option>';
   pintarCargando($("perRangoList"),"Cargando personal…");
   try{
     const r=await rpc("fn_personal_listar",{p_dni_ing:ING.dni,p_token:ING.token,p_area:$("perRangoArea").value,p_incluir_inactivos:false});
@@ -1874,7 +1874,8 @@ function perPintarMatriz(){
   $("perTablaMatriz").innerHTML=thead+tbody+"</tbody>";
 }
 function perEditarCelda(dni,nombre,fecha,actual){
-  const opts=(ESTADOS_ASIS||[]).map(e=>`<option ${e===actual?"selected":""}>${esc(e)}</option>`).join("")||'<option value="">Sin estados</option>';
+  const p=PER.matriz.personal.find(x=>x.dni===dni);
+  const opts=estadosOpciones(ESTADOS_ASIS,actual,p&&p.area)||'<option value="">Sin estados</option>';
   abrirModal(`<h2>${esc(nombre)}</h2><div class="sub" style="margin-bottom:12px;">${esc(fecha)}</div>
     <div class="modal-campo"><label>Estado</label><select id="pmcEstado">${opts}</select></div>
     <div class="modal-msg" id="pmcMsg"></div>
@@ -1918,6 +1919,7 @@ function perPintarDash(r){
   const kpi=(t,v,c)=>`<div class="kpi"><div class="kpi-num"${c?` style="color:${c}"`:""}>${v}</div><div class="kpi-lbl">${t}</div></div>`;
   $("perDashKpis").innerHTML=
     kpi("Presentes hoy",`${r.hoy_presentes}/${r.hoy_total}`,"var(--exito)")+
+    (r.hoy_otra_area?kpi("De ellos, en otra área",r.hoy_otra_area,"var(--violeta)"):"")+
     kpi("Asistencia prom.",prom+"%","var(--azul)")+
     kpi("Personal",r.personal)+
     kpi("Días laborales",r.dias_laborales);
@@ -1926,6 +1928,9 @@ function perPintarDash(r){
   perChart("line",{labels,datasets:[{label:"% Presentes",data:pct,borderColor:"#0D3B85",backgroundColor:"rgba(13,59,133,.12)",fill:true,tension:.3,pointRadius:2}]});
   const est=r.por_estado||{}, keys=Object.keys(est);
   const col={ACTIVO:"#1E7B3C",FALTA:"#B3261E",DM:"#D49D53",VACACIONES:"#1A56B4",PERMISO:"#8e6bb5"};
+  /* "EN <área>" (parche 97): tonos violeta, uno por área, para que se distingan en la torta. */
+  const vio=["#6B46B8","#8B6BD0","#5A3A9E","#A58BE0","#4B2F85","#7C5BC4","#9C7FE0","#6A4FA8","#B9A3EA"];
+  keys.filter(esOtraArea).forEach((k,i)=>col[k]=vio[i%vio.length]);
   perChart("pie",{labels:keys,datasets:[{data:keys.map(k=>est[k]),backgroundColor:keys.map(k=>col[k]||"#9aa4b1")}]});
   $("perDashDetalleWrap").style.display="none";
   // Con "Todas las áreas": tendencia → comparativa por área (activos ÷ estructura − vacaciones/otros).
@@ -1986,7 +1991,7 @@ function perMarcarArea(area){
   aswStart({
     stackId:"perSwipeStack", progId:"perMarcarProgreso", saveBtnId:"perMarcarGuardar",
     resumenId:"perMarcarResumen", ayudaId:"perSwipeAyuda",
-    estados:()=>ESTADOS_ASIS,
+    estados:()=>ESTADOS_ASIS, area,
     listar:(f)=>rpc("fn_asistencia_marcar_lista",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_fecha:f}),
     guardar:(m,f)=>rpc("fn_asistencia_marcar_guardar",{p_dni:ING.dni,p_token:ING.token,p_fecha:f,p_marcas:m}),
     onSaved:()=>perMarcarInit()

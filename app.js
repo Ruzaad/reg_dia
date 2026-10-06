@@ -2268,6 +2268,24 @@ async function cargarEstadosSup(){
   try{ ESTADOS_SUP = await rpc("fn_estados_asistencia_listar",{p_dni:s.dni,p_token:s.token}); }
   catch(e){ ESTADOS_SUP = ["ACTIVO","FALTA","DM","VACACIONES"]; }
 }
+/* Parche 97: "EN <área>" = vino a planta pero apoya en otra área. Cuenta como
+   presente; no es ausencia. La variable de su propia área no se ofrece. */
+const esOtraArea = e => /^EN /.test(e||"");
+const OTRA_AREA_PROPIA = {"ACABADO":"EN ACABADO","CAMISA COSTURA":"EN CAMISAS","SACO COSTURA":"EN SACOS","PANTALON COSTURA":"EN PANTALON"};
+function estadosGrupos(lista, area){
+  const propia=OTRA_AREA_PROPIA[norm(area).toUpperCase()]||"";
+  const xs=(lista||[]).filter(e=>e!=="ACTIVO"&&e!==propia);
+  return {aus:xs.filter(e=>!esOtraArea(e)), otra:xs.filter(esOtraArea)};
+}
+/* <option>s agrupadas: Ausencia / Apoyo en otra área. */
+function estadosOpciones(lista, cur, area, sinFalta){
+  const g=estadosGrupos(lista,area), o=e=>`<option ${e===cur?"selected":""}>${esc(e)}</option>`;
+  const tieneAct=(lista||[]).includes("ACTIVO");
+  const aus=g.aus.filter(e=>!(sinFalta&&e==="FALTA"));
+  return (tieneAct&&!sinFalta?o("ACTIVO"):"")
+    +(aus.length?`<optgroup label="Ausencia">${aus.map(o).join("")}</optgroup>`:"")
+    +(g.otra.length?`<optgroup label="Apoyo en otra área">${g.otra.map(o).join("")}</optgroup>`:"");
+}
 
 /* ============================================================
    MOTOR DE ASISTENCIA POR TARJETAS DESLIZABLES (compartido)
@@ -2347,7 +2365,7 @@ function aswArriba(p){
 }
 function aswArribaOk(dni){ const act=ASW.cur[dni]||"ACTIVO"; cerrarModal(); aswDecidir(dni,act); }
 function aswOtro(p){
-  const opts=(ASW.cfg.estados()||[]).filter(e=>e!=="ACTIVO"&&e!=="FALTA").map(e=>`<option>${esc(e)}</option>`).join("")||'<option value="">Sin estados</option>';
+  const opts=estadosOpciones(ASW.cfg.estados(),"",ASW.cfg.area,true)||'<option value="">Sin estados</option>';
   abrirModal(`<h2>${esc(p.nombre)}</h2>
     <div class="modal-campo"><label>Estado</label><select id="aswEst">${opts}</select></div>
     <div class="modal-acciones">
@@ -2358,12 +2376,15 @@ function aswOtroOk(dni){ const est=$("aswEst").value; if(!est) return; cerrarMod
 function aswVerResumen(){ if(!Object.keys(ASW.dec).length){ mostrarError("Marca al menos una persona"); return; } aswResumen(); }
 function aswResumen(){
   const cfg=ASW.cfg, dec=ASW.dec, box=$(cfg.resumenId); if(!box) return;
-  const dnis=Object.keys(dec), otros=dnis.filter(d=>dec[d]!=="ACTIVO"), activos=dnis.length-otros.length;
+  const dnis=Object.keys(dec), otra=dnis.filter(d=>esOtraArea(dec[d])),
+        otros=dnis.filter(d=>dec[d]!=="ACTIVO"&&!esOtraArea(dec[d])), activos=dnis.length-otros.length-otra.length;
   const nom=d=>{ const p=ASW.list.find(x=>x.dni===d); return p?p.nombre:d; };
   box.hidden=false;
   box.innerHTML=`<div class="asis-res">
       <div class="asis-res-cab">Resumen · ${ASW.fecha}</div>
-      <div class="asis-res-activo">✓ ACTIVOS: <b>${activos}</b></div>
+      <div class="asis-res-activo">✓ ACTIVOS: <b>${activos}</b>${otra.length?` · EN OTRA ÁREA: <b>${otra.length}</b>`:""}</div>
+      ${otra.length? `<div class="tk-ops-title" style="margin-top:10px;">Apoyo en otra área (${otra.length})</div><div class="asis-res-lista">`+otra.map(d=>`<div class="asis-res-fila" onclick="aswEditar('${esc(d)}')">
+          <span>${esc(nom(d))}</span><span class="pill ${esc(dec[d])}">${esc(dec[d])}</span></div>`).join("")+`</div>` : ""}
       <div class="tk-ops-title" style="margin-top:10px;">Faltas / otros estados (${otros.length})</div>
       ${otros.length? `<div class="asis-res-lista">`+otros.map(d=>`<div class="asis-res-fila" onclick="aswEditar('${esc(d)}')">
           <span>${esc(nom(d))}</span><span class="pill ${esc(dec[d])}">${esc(dec[d])}</span></div>`).join("")+`</div>`
@@ -2378,7 +2399,7 @@ function aswResumen(){
 }
 function aswEditar(dni){
   const cfg=ASW.cfg, cur=ASW.dec[dni]||ASW.cur[dni]||"ACTIVO";
-  const opts=(cfg.estados()||[]).map(e=>`<option ${e===cur?"selected":""}>${esc(e)}</option>`).join("")||'<option value="">Sin estados</option>';
+  const opts=estadosOpciones(cfg.estados(),cur,cfg.area)||'<option value="">Sin estados</option>';
   const p=ASW.list.find(x=>x.dni===dni);
   abrirModal(`<h2>${esc(p?p.nombre:dni)}</h2>
     <div class="modal-campo"><label>Estado</label><select id="aswEd">${opts}</select></div>
@@ -2421,15 +2442,16 @@ function asisPintar(){
   const g=$("asisLista"); if(!g) return;
   const q=normKey($("asisBuscar")?$("asisBuscar").value:"");
   const lista=ASIS.list.filter(p=>!q||normKey(p.nombre+" "+p.dni).includes(q));
-  const marc=Object.keys(ASIS.dec).length;
-  if($("asisProg")) $("asisProg").textContent=`${ASIS.list.length-marc} activo(s) · ${marc} con estado`;
+  const marc=Object.keys(ASIS.dec).length, otra=Object.values(ASIS.dec).filter(esOtraArea).length;
+  if($("asisProg")) $("asisProg").textContent=`${ASIS.list.length-marc} activo(s)`
+    +(otra?` · ${otra} en otra área`:"")+` · ${marc-otra} ausente(s)`;
   if(!lista.length){ g.innerHTML=`<div class="vacio-msg">Sin personal</div>`; return; }
   g.innerHTML=lista.map(p=>{
-    const est=ASIS.dec[p.dni]||"ACTIVO", m=est!=="ACTIVO";
+    const est=ASIS.dec[p.dni]||"ACTIVO", m=est!=="ACTIVO", oa=esOtraArea(est);
     /* Con al menos un ticket del día estuvo en planta: se marca para que no se
        le ponga ausente por descuido (una FALTA anula su quincena entera). */
     const tk=Number(p.tickets)||0;
-    return `<div class="asis-fila${m?" marcada":""}" onclick="asisElegir('${esc(p.dni)}')">
+    return `<div class="asis-fila${m?(oa?" otra-area":" marcada"):""}" onclick="asisElegir('${esc(p.dni)}')">
       <div class="asis-nom">${esc(p.nombre)}<div class="asis-dni">DNI ${esc(p.dni)}</div></div>
       <div class="asis-der">${tk?`<span class="asis-tk" title="${tk} ticket(s) reclamado(s) hoy: asistió">🎫 ${tk}</span>`:""}
         <span class="pill ${esc(est)}">${esc(est)}</span></div></div>`;
@@ -2438,20 +2460,26 @@ function asisPintar(){
 function asisElegir(dni){
   const p=ASIS.list.find(x=>x.dni===dni); if(!p) return;
   const cur=ASIS.dec[dni]||"ACTIVO";
-  const ests=["ACTIVO",...(ESTADOS_SUP||[]).filter(e=>e!=="ACTIVO")];
-  const chips=ests.map(e=>`<button class="asis-chip ${e===cur?"sel":""}" onclick="asisSet('${esc(dni)}','${esc(e)}')">${esc(e)}</button>`).join("");
+  const g=estadosGrupos(ESTADOS_SUP,areaSup());
+  const chip=e=>`<button class="asis-chip${esOtraArea(e)?" otra":""} ${e===cur?"sel":""}" onclick="asisSet('${esc(dni)}','${esc(e)}')">${esc(e)}</button>`;
+  const chips=`<div class="asis-chips">${chip("ACTIVO")}${g.aus.map(chip).join("")}</div>`
+    +(g.otra.length?`<div class="asis-grupo">Vino, pero apoya en otra área</div><div class="asis-chips">${g.otra.map(chip).join("")}</div>`:"");
   const tk=Number(p.tickets)||0;
   abrirModal(`<h2>${esc(p.nombre)}</h2>
     <div class="sub" style="margin-bottom:10px;">Estado del ${ASIS.fecha}</div>
     ${tk?`<div class="asis-aviso-tk">Reclamó <b>${tk}</b> ticket(s) hoy: asistió.</div>`:""}
-    <div class="asis-chips">${chips}</div>
+    ${chips}
     <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`);
 }
 function asisSet(dni,est){
   /* Ponerle ausencia a quien sí reclamó tickets suele ser un descuido, y cuesta
      caro: cualquier penalidad anula su quincena. Se avisa, no se impide. */
   const p=ASIS.list.find(x=>x.dni===dni), tk=p?Number(p.tickets)||0:0;
-  if(est!=="ACTIVO" && tk>0 &&
+  if(esOtraArea(est) && tk>0 &&
+     !confirm(`${p.nombre} reclamó ${tk} ticket(s) hoy en su área.\n`
+       +`Con ${est} esos tickets no cuentan para su eficiencia del día. Si se cambió de área `
+       +`para producir, mejor usa el cambio de área. ¿Marcar igual?`)) return;
+  if(est!=="ACTIVO" && !esOtraArea(est) && tk>0 &&
      !confirm(`${p.nombre} reclamó ${tk} ticket(s) hoy, así que sí estuvo en planta.\n`
        +`Marcarlo como ${est} le anula la quincena completa. ¿Seguro?`)) return;
   if(est==="ACTIVO") delete ASIS.dec[dni]; else ASIS.dec[dni]=est;
@@ -2461,8 +2489,9 @@ async function asisGuardar(){
   const s=sesionActual(); if(!s) return;
   if(!ASIS.list.length){ mostrarError("Sin personal"); return; }
   const marcas=ASIS.list.map(p=>({dni:p.dni,estado:ASIS.dec[p.dni]||"ACTIVO"}));
-  const faltas=Object.keys(ASIS.dec).length;
-  if(!confirm(`Guardar asistencia del ${ASIS.fecha}: ${marcas.length-faltas} activo(s) y ${faltas} con otro estado. ¿Continuar?`)) return;
+  const faltas=Object.keys(ASIS.dec).length, otra=Object.values(ASIS.dec).filter(esOtraArea).length;
+  if(!confirm(`Guardar asistencia del ${ASIS.fecha}: ${marcas.length-faltas} activo(s)`
+    +(otra?`, ${otra} en otra área`:"")+` y ${faltas-otra} ausente(s). ¿Continuar?`)) return;
   try{
     const r=await rpc("fn_asistencia_marcar_guardar",{p_dni:s.dni,p_token:s.token,p_fecha:ASIS.fecha,p_marcas:marcas});
     if(r&&r.ok===false){ mostrarError(r.error||"No se pudo guardar"); return; }
