@@ -4276,9 +4276,9 @@ const soles = v => (Math.round((+v||0)*100)/100).toFixed(2);
    cuatro son lo que la alimenta (modular, tabla de tramos, eficiencia escrita a
    mano y minutos de consideración). */
 const INC_VISTAS={mod:"incModView", q:"incQView", tabla:"incTablaView",
-                  efm:"incEfmView", cons:"incConsView"};
+                  efm:"incEfmView", cons:"incConsView", sus:"incSusView"};
 const INC_TABS  ={mod:"incTabMod",  q:"incTabQ",  tabla:"incTabTab",
-                  efm:"incTabEfm",  cons:"incTabCons"};
+                  efm:"incTabEfm",  cons:"incTabCons", sus:"incTabSus"};
 function incVista(v){
   if(!INC_VISTAS[v]) v="q";
   Object.keys(INC_VISTAS).forEach(k=>{
@@ -4289,6 +4289,7 @@ function incVista(v){
   if(v==="mod")   incAreaSel("modArea",  cargarModular);
   if(v==="efm")   incAreaSel("efmArea",  cargarEfManual);
   if(v==="cons")  incAreaSel("consArea", cargarCons);
+  if(v==="sus")   susInit();
 }
 /* Los tres selectores de área comparten relleno: el primero que se abre carga. */
 function incAreaSel(id, cargar){
@@ -4863,6 +4864,350 @@ async function descargarInc(){
       "TABLA DE INC.");
   }
   XLSX.writeFile(wb, "BONIFICACION_"+INC.desde+"_"+INC.hasta+".xlsx");
+}
+
+/* ================= SUSTENTO DE LA QUINCENA (solo front, sin cambios de base) =================
+   El documento que se manda por correo cuando se paga la quincena. Antes se
+   armaba a mano desde los Excel de pago; aquí lo arma la base: la misma
+   `fn_incentivos_quincena` que pinta la matriz, pedida dos veces (la quincena
+   que se paga y la anterior) y resumida.
+
+   Es POR ÁREA y POR CATEGORÍA, nunca persona por persona: el sustento es para
+   explicar el monto, no para exponer a nadie. Nada se digita, así que el
+   documento no puede contradecir a la matriz de la que sale. */
+let SUS=null;
+/* En un documento los montos se leen con separador de miles; en las matrices
+   de la app no, así que el sustento tiene su propio formato. */
+const susSoles = v => (Math.round((+v||0)*100)/100).toLocaleString("es-PE",{minimumFractionDigits:2, maximumFractionDigits:2});
+
+function susInit(){
+  if($("susDesde") && !$("susDesde").value){
+    const {desde,hasta}=incRango();
+    const [a,m,d]=hoyLima().split("-").map(Number);
+    const ult=new Date(a,m,0).getDate(), mm=String(m).padStart(2,"0");
+    $("susDesde").value = desde || (a+"-"+mm+"-"+(d<=15?"01":"16"));
+    $("susHasta").value = hasta || (a+"-"+mm+"-"+String(d<=15?15:ult).padStart(2,"0"));
+    susCmpAuto();
+  }
+}
+/* La quincena anterior: la del 1–15 del mismo mes, o la 16–fin del mes pasado.
+   Se puede cambiar a mano porque el corte de pago no siempre es ese. */
+function susQuinAnterior(desde){
+  const [a,m,d]=desde.split("-").map(Number);
+  if(d>15) return [`${a}-${String(m).padStart(2,"0")}-01`, `${a}-${String(m).padStart(2,"0")}-15`];
+  const am = m===1 ? a-1 : a, mm = m===1 ? 12 : m-1;
+  const ult = new Date(am, mm, 0).getDate();
+  const s=String(mm).padStart(2,"0");
+  return [`${am}-${s}-16`, `${am}-${s}-${ult}`];
+}
+function susCmpAuto(){
+  const d=($("susDesde")||{}).value; if(!d) return;
+  const [cd,ch]=susQuinAnterior(d);
+  if($("susCmpDesde")) $("susCmpDesde").value=cd;
+  if($("susCmpHasta")) $("susCmpHasta").value=ch;
+  /* El pago de una quincena cae a mediados del mes siguiente: se propone, se
+     puede cambiar. */
+  const h=($("susHasta")||{}).value;
+  if(h && $("susPago") && !$("susPago").value){
+    const [a,m]=h.split("-").map(Number);
+    const am = m===12 ? a+1 : a, mm = m===12 ? 1 : m+1;
+    $("susPago").value = `${am}-${String(mm).padStart(2,"0")}-15`;
+  }
+}
+async function armarSustento(){
+  const d=($("susDesde")||{}).value, h=($("susHasta")||{}).value;
+  const cd=($("susCmpDesde")||{}).value, ch=($("susCmpHasta")||{}).value;
+  if(!d||!h){ mostrarError("Elige la quincena que se paga"); return; }
+  const area = leeTodas() ? "" : (($("incArea")||{}).value||"");
+  const btn=$("btnSusArmar"); if(btn) btn.disabled=true;
+  $("susDoc").innerHTML=`<div class="vacio-msg">Armando el sustento…</div>`;
+  try{
+    const pedir = (x,y)=>rpc("fn_incentivos_quincena",{p_dni:ING.dni,p_token:ING.token,
+      p_desde:x, p_hasta:y, p_area:area});
+    const [act, ant] = await Promise.all([pedir(d,h), cd&&ch ? pedir(cd,ch) : Promise.resolve(null)]);
+    if(!act.ok){ mostrarError(act.error||"Error"); $("susDoc").innerHTML=""; return; }
+    if(ant && !ant.ok) mostrarError("La quincena anterior no se pudo leer: el sustento sale sin comparación");
+    SUS={desde:d, hasta:h, cmp:(ant&&ant.ok)?{desde:cd,hasta:ch}:null, area,
+         act:susResumir(act), ant:(ant&&ant.ok)?susResumir(ant):null,
+         pago:($("susPago")||{}).value||""};
+    susPintar();
+  }catch(e){ $("susDoc").innerHTML=""; mostrarError(e.message); }
+  finally{ if(btn) btn.disabled=false; }
+}
+/* De la respuesta cruda al resumen que necesita el documento. Una sola pasada:
+   totales, por área y por categoría. Los nombres se quedan fuera a propósito. */
+function susResumir(r){
+  const g={personas:0, ganan:0, final:0, bruto:0, modular:0, indiv:0,
+           penal:0, penFalta:0, penBoleta:0, penTard:0, sinCat:0, promSuma:0};
+  const areas={}, cats={};
+  (r.personas||[]).forEach(p=>{
+    const fin=+p.final||0, mod=fin>0?(+p.modular||0):0;
+    const a=p.area||"SIN ÁREA";
+    const A=areas[a]=areas[a]||{area:a, personas:0, ganan:0, final:0, modular:0, indiv:0, penal:0, promSuma:0};
+    A.personas++; A.final+=fin; A.modular+=mod; A.indiv+=fin-mod; A.promSuma+=(+p.prom_ef||0);
+    g.personas++; g.final+=fin; g.bruto+=(+p.bono_total||0); g.modular+=mod; g.indiv+=fin-mod;
+    g.promSuma+=(+p.prom_ef||0);
+    if(fin>0){ A.ganan++; g.ganan++; }
+    if(p.penalizado){
+      A.penal++; g.penal++;
+      if(+p.faltas>0) g.penFalta++;
+      else if(+p.boleta>0) g.penBoleta++;
+      else g.penTard++;
+    }
+    if(!p.categoria) g.sinCat++;
+    const c=p.categoria||"SIN CATEGORÍA";
+    const C=cats[c]=cats[c]||{cat:c, personas:0, ganan:0, final:0};
+    C.personas++; C.final+=fin; if(fin>0) C.ganan++;
+  });
+  g.prom = g.personas ? g.promSuma/g.personas : 0;
+  Object.values(areas).forEach(A=>{ A.prom = A.personas ? A.promSuma/A.personas : 0; });
+  return {g, areas, cats, desde:r.desde, hasta:r.hasta};
+}
+const susFecha = f => { if(!f) return ""; const [a,m,d]=f.split("-"); return `${d}/${m}/${a}`; };
+const susPct = (v,t) => t ? Math.round(v/t*100)+"%" : "0%";
+/* Variación con signo, para texto y tabla. */
+function susVar(hoy, antes){
+  const d=hoy-antes;
+  const pc = antes ? Math.round(d/antes*100) : (hoy?100:0);
+  return {d, pc, txt:(d>=0?"+":"−")+susSoles(Math.abs(d))+(antes?` (${d>=0?"+":"−"}${Math.abs(pc)}%)`:"")};
+}
+/* Las áreas ordenadas por cuánto mueven el total, que es lo que se pregunta
+   primero cuando el monto sube o baja. */
+function susAreasOrden(){
+  const A=SUS.act.areas, B=(SUS.ant&&SUS.ant.areas)||{};
+  return Object.keys(A).sort((x,y)=>{
+    const dx=A[x].final-((B[x]||{}).final||0), dy=A[y].final-((B[y]||{}).final||0);
+    return Math.abs(dy)-Math.abs(dx) || A[y].final-A[x].final;
+  }).map(k=>({...A[k], ant:(B[k]||{final:0,ganan:0,prom:0})}));
+}
+/* Las dos o tres áreas que explican la variación: se suman hasta cubrir el 80%
+   del movimiento, que es la frase que siempre hay que escribir a mano. */
+function susExplica(){
+  if(!SUS.ant) return [];
+  const v=SUS.act.g.final-SUS.ant.g.final;
+  if(Math.abs(v)<1) return [];
+  const sube=v>0;
+  const list=susAreasOrden()
+    .map(a=>({area:a.area, d:a.final-a.ant.final}))
+    .filter(a=>(sube ? a.d>0 : a.d<0))
+    .sort((x,y)=>Math.abs(y.d)-Math.abs(x.d));
+  const tot=list.reduce((s,a)=>s+Math.abs(a.d),0) || 1;
+  const out=[]; let acum=0;
+  for(const a of list){ out.push(a); acum+=Math.abs(a.d); if(acum/tot>=.8) break; }
+  return out.map(a=>({...a, parte:Math.round(Math.abs(a.d)/tot*100)}));
+}
+function susPintar(){
+  if(!SUS){ return; }
+  const g=SUS.act.g, ag=SUS.ant&&SUS.ant.g;
+  const vFinal = ag ? susVar(g.final, ag.final) : null;
+  const filas = susAreasOrden();
+  const num = v => `<td class="rep-num">${susSoles(v)}</td>`;
+  const cab = `<thead><tr><th class="izq">Área</th><th>Pers.</th><th>Cobran</th>
+      <th>Individual S/</th><th>Modular S/</th><th>Total S/</th>
+      <th>Prom. ef.</th><th>Anterior S/</th><th>Variación</th></tr></thead>`;
+  const cuerpo = filas.map(a=>{
+    const v=SUS.ant?susVar(a.final,a.ant.final):null;
+    return `<tr><td class="izq"><b>${esc(a.area)}</b></td>
+      <td>${a.personas}</td><td>${a.ganan}</td>`
+      + num(a.indiv) + num(a.modular) + num(a.final)
+      + `<td class="rep-num">${Math.round(a.prom)}%</td>`
+      + (SUS.ant?`<td class="rep-num">${susSoles(a.ant.final)}</td>
+         <td class="rep-num ${v.d>=0?"ef-alta":"inc-pen"}">${v.txt}</td>`
+        :`<td>·</td><td>·</td>`)
+      + `</tr>`;
+  }).join("");
+  const pie = `<tfoot><tr><th class="izq">TOTAL</th><th>${g.personas}</th><th>${g.ganan}</th>`
+    + `<th class="rep-num">${susSoles(g.indiv)}</th><th class="rep-num">${susSoles(g.modular)}</th>`
+    + `<th class="rep-num">${susSoles(g.final)}</th><th class="rep-num">${Math.round(g.prom)}%</th>`
+    + (ag?`<th class="rep-num">${susSoles(ag.final)}</th><th class="rep-num">${vFinal.txt}</th>`:`<th>·</th><th>·</th>`)
+    + `</tr></tfoot>`;
+  const cats = Object.values(SUS.act.cats).sort((a,b)=>String(a.cat).localeCompare(String(b.cat),"es"));
+  const tCats = `<table class="tabla sus-tabla"><thead><tr><th class="izq">Categoría</th><th>Personas</th>
+      <th>Cobran</th><th>Total S/</th><th>% del pago</th></tr></thead><tbody>`
+    + cats.map(c=>`<tr><td class="izq"><b>${esc(c.cat)}</b></td><td>${c.personas}</td><td>${c.ganan}</td>
+        <td class="rep-num">${susSoles(c.final)}</td><td class="rep-num">${susPct(c.final,g.final)}</td></tr>`).join("")
+    + `</tbody></table>`;
+  const exp = susExplica();
+  $("susDoc").innerHTML = `
+    <div class="sus-cab">
+      <div class="sus-tit">SUSTENTO DEL PAGO DE INCENTIVOS</div>
+      <div class="sus-sub">Quincena del ${susFecha(SUS.desde)} al ${susFecha(SUS.hasta)}${
+        SUS.pago?` · pago del ${susFecha(SUS.pago)}`:""}${SUS.area?` · área ${esc(SUS.area)}`:""}</div>
+      <div class="sus-sub">Armado el ${susFecha(hoyLima())} con los datos del sistema de registro de planta.</div>
+    </div>
+    <h3 class="sus-h">1. Resumen</h3>
+    <ul class="sus-lista">
+      <li>Monto a pagar: <b>S/ ${susSoles(g.final)}</b> para <b>${g.ganan}</b> de ${g.personas} operarios (${susPct(g.ganan,g.personas)}).</li>
+      ${ag?`<li>Quincena anterior (${susFecha(SUS.cmp.desde)} al ${susFecha(SUS.cmp.hasta)}): S/ ${susSoles(ag.final)} para ${ag.ganan}.
+            Variación: <b>${vFinal.txt}</b>.</li>`:""}
+      <li>Del total, <b>S/ ${susSoles(g.indiv)}</b> es producción individual y <b>S/ ${susSoles(g.modular)}</b> bono modular del área (${susPct(g.modular,g.final)} del pago).</li>
+      <li>Promedio de eficiencia: <b>${Math.round(g.prom)}%</b>${ag?` (quincena anterior ${Math.round(ag.prom)}%)`:""}.</li>
+      <li>Quincenas anuladas por penalidad: <b>${g.penal}</b>; se dejaron de pagar S/ ${susSoles(g.bruto-g.final)} ya ganados.</li>
+    </ul>
+    <h3 class="sus-h">2. Pago por área</h3>
+    <div class="tabla-scroll"><table class="tabla sus-tabla">${cab}<tbody>${cuerpo}</tbody>${pie}</table></div>
+    ${exp.length?`<p class="sus-p">El movimiento lo explican ${exp.map(e=>
+        `<b>${esc(e.area)}</b> (${e.d>=0?"+":"−"}S/ ${susSoles(Math.abs(e.d))}, ${e.parte}% del cambio)`).join(" y ")}.</p>`:""}
+    <h3 class="sus-h">3. Pago por categoría</h3>
+    ${tCats}
+    <h3 class="sus-h">4. Penalidades</h3>
+    <p class="sus-p">${g.penal
+      ? `${g.penal} persona(s) perdieron la quincena completa: ${g.penFalta} por falta, ${g.penBoleta} por no llenar su boleta virtual y ${g.penTard} por tres o más tardanzas.`
+      : "Ninguna quincena se anuló por penalidad."}
+      ${g.sinCat?`<br>${g.sinCat} persona(s) sin categoría asignada no generan incentivo.`:""}</p>
+    <h3 class="sus-h">5. Cómo se calcula</h3>
+    <ul class="sus-lista">
+      <li>Cada día se mide la eficiencia de la persona (minutos producidos sobre minutos disponibles del turno, ajustados por incidencias).</li>
+      <li>Desde <b>80%</b> el día paga según la <b>categoría</b> y el porcentaje alcanzado, con la tabla de incentivos cargada en el sistema; el porcentaje se topa en 100%.</li>
+      <li>El <b>bono modular</b> es del área y del día, no mira categorías, y se paga solo a quien tenga promedio de eficiencia <b>≥ 70%</b>; el día que la persona no tuvo porcentaje no se le paga.</li>
+      <li>Una falta o una boleta virtual sin llenar anulan la quincena completa; la tardanza anula a partir de la tercera.</li>
+      <li>Las cifras salen del mismo cálculo que la matriz de Incentivos, sin ningún ajuste a mano.</li>
+    </ul>`;
+}
+/* El mismo documento en texto plano, para pegarlo en el correo. */
+function susTexto(){
+  if(!SUS) return "";
+  const g=SUS.act.g, ag=SUS.ant&&SUS.ant.g, L=[];
+  const vFinal = ag?susVar(g.final,ag.final):null;
+  L.push("SUSTENTO DEL PAGO DE INCENTIVOS");
+  L.push(`Quincena del ${susFecha(SUS.desde)} al ${susFecha(SUS.hasta)}`
+    + (SUS.pago?` · pago del ${susFecha(SUS.pago)}`:"") + (SUS.area?` · área ${SUS.area}`:""));
+  L.push("");
+  L.push("1. RESUMEN");
+  L.push(`- Monto a pagar: S/ ${susSoles(g.final)} para ${g.ganan} de ${g.personas} operarios (${susPct(g.ganan,g.personas)}).`);
+  if(ag) L.push(`- Quincena anterior (${susFecha(SUS.cmp.desde)} al ${susFecha(SUS.cmp.hasta)}): S/ ${susSoles(ag.final)} para ${ag.ganan}. Variación: ${vFinal.txt}.`);
+  L.push(`- Producción individual S/ ${susSoles(g.indiv)} + bono modular S/ ${susSoles(g.modular)} (${susPct(g.modular,g.final)} del pago).`);
+  L.push(`- Promedio de eficiencia: ${Math.round(g.prom)}%${ag?` (antes ${Math.round(ag.prom)}%)`:""}.`);
+  L.push(`- Quincenas anuladas por penalidad: ${g.penal} (S/ ${susSoles(g.bruto-g.final)} ganados que no se pagan).`);
+  L.push("");
+  L.push("2. PAGO POR ÁREA");
+  susAreasOrden().forEach(a=>{
+    const v=SUS.ant?susVar(a.final,a.ant.final):null;
+    L.push(`- ${a.area}: S/ ${susSoles(a.final)} (individual ${susSoles(a.indiv)} + modular ${susSoles(a.modular)}), `
+      + `${a.ganan}/${a.personas} cobran, prom. ${Math.round(a.prom)}%`
+      + (v?`, antes S/ ${susSoles(a.ant.final)} → ${v.txt}`:"") + ".");
+  });
+  const exp=susExplica();
+  if(exp.length) L.push(`El movimiento lo explican ${exp.map(e=>`${e.area} (${e.d>=0?"+":"−"}S/ ${susSoles(Math.abs(e.d))}, ${e.parte}%)`).join(" y ")}.`);
+  L.push("");
+  L.push("3. PAGO POR CATEGORÍA");
+  Object.values(SUS.act.cats).sort((a,b)=>String(a.cat).localeCompare(String(b.cat),"es"))
+    .forEach(c=>L.push(`- Categoría ${c.cat}: S/ ${susSoles(c.final)} (${susPct(c.final,g.final)}), ${c.ganan}/${c.personas} cobran.`));
+  L.push("");
+  L.push("4. PENALIDADES");
+  L.push(g.penal
+    ? `- ${g.penal} persona(s) perdieron la quincena: ${g.penFalta} por falta, ${g.penBoleta} por boleta virtual sin llenar, ${g.penTard} por tres o más tardanzas.`
+    : "- Ninguna quincena se anuló por penalidad.");
+  if(g.sinCat) L.push(`- ${g.sinCat} persona(s) sin categoría asignada no generan incentivo.`);
+  L.push("");
+  L.push("5. CÓMO SE CALCULA");
+  L.push("- Eficiencia diaria = minutos producidos / minutos disponibles del turno (ajustados por incidencias).");
+  L.push("- Desde 80% el día paga según categoría y porcentaje, con la tabla de incentivos del sistema; tope 100%.");
+  L.push("- El bono modular es del área y del día, para quien tenga promedio de eficiencia >= 70%.");
+  L.push("- Una falta o una boleta sin llenar anulan la quincena; la tardanza anula desde la tercera.");
+  L.push("- Cifras tomadas del cálculo de Incentivos del sistema, sin ajustes a mano.");
+  return L.join("\n");
+}
+function susCopiar(){
+  if(!SUS){ mostrarError("Arma primero el sustento"); return; }
+  const t=susTexto();
+  const ok=()=>mostrarOk("Sustento copiado: pégalo en el correo");
+  if(navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(t).then(ok, ()=>susCopiarViejo(t,ok));
+  else susCopiarViejo(t,ok);
+}
+function susCopiarViejo(t,ok){
+  const a=document.createElement("textarea");
+  a.value=t; a.style.position="fixed"; a.style.opacity="0";
+  document.body.appendChild(a); a.select();
+  try{ document.execCommand("copy"); ok(); }catch(e){ mostrarError("No se pudo copiar"); }
+  document.body.removeChild(a);
+}
+/* PDF A4 vertical: el mismo documento, con las dos tablas como tablas. */
+async function susPdf(){
+  if(!SUS){ mostrarError("Arma primero el sustento"); return; }
+  try{ for(const u of LIB_PDF) await cargarLib(u); }catch(e){ mostrarError(e.message); return; }
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
+  const AZUL=[13,59,133], X=16; let y=18;
+  const g=SUS.act.g, ag=SUS.ant&&SUS.ant.g;
+  doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.setTextColor(...AZUL);
+  doc.text("SUSTENTO DEL PAGO DE INCENTIVOS", X, y); y+=6;
+  doc.setFont("helvetica","normal"); doc.setFontSize(9.5); doc.setTextColor(60);
+  doc.text(`Quincena del ${susFecha(SUS.desde)} al ${susFecha(SUS.hasta)}`
+    + (SUS.pago?` · pago del ${susFecha(SUS.pago)}`:"") + (SUS.area?` · área ${SUS.area}`:""), X, y); y+=5;
+  doc.text(`Armado el ${susFecha(hoyLima())} con los datos del sistema de registro de planta.`, X, y); y+=8;
+  const bloque=(tit, lineas)=>{
+    doc.setFont("helvetica","bold"); doc.setFontSize(10.5); doc.setTextColor(...AZUL);
+    doc.text(tit, X, y); y+=5;
+    doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(40);
+    lineas.forEach(t=>{
+      doc.splitTextToSize("• "+t, 178).forEach(l=>{
+        if(y>278){ doc.addPage(); y=18; }
+        doc.text(l, X, y); y+=4.4;
+      });
+    });
+    y+=3.5;
+  };
+  const vFinal = ag?susVar(g.final,ag.final):null;
+  bloque("1. Resumen", [
+    `Monto a pagar: S/ ${susSoles(g.final)} para ${g.ganan} de ${g.personas} operarios (${susPct(g.ganan,g.personas)}).`,
+    ...(ag?[`Quincena anterior (${susFecha(SUS.cmp.desde)} al ${susFecha(SUS.cmp.hasta)}): S/ ${susSoles(ag.final)} para ${ag.ganan}. Variación: ${vFinal.txt}.`]:[]),
+    `Producción individual S/ ${susSoles(g.indiv)} + bono modular S/ ${susSoles(g.modular)} (${susPct(g.modular,g.final)} del pago).`,
+    `Promedio de eficiencia: ${Math.round(g.prom)}%${ag?` (antes ${Math.round(ag.prom)}%)`:""}.`,
+    `Quincenas anuladas por penalidad: ${g.penal} (S/ ${susSoles(g.bruto-g.final)} ganados que no se pagan).`
+  ]);
+  doc.setFont("helvetica","bold"); doc.setFontSize(10.5); doc.setTextColor(...AZUL);
+  doc.text("2. Pago por área", X, y); y+=2;
+  const cab=["Área","Pers.","Cobran","Individual","Modular","Total S/","Prom.","Anterior","Variación"];
+  const cuerpo=susAreasOrden().map(a=>{
+    const v=SUS.ant?susVar(a.final,a.ant.final):null;
+    return [a.area, String(a.personas), String(a.ganan), susSoles(a.indiv), susSoles(a.modular),
+            susSoles(a.final), Math.round(a.prom)+"%", SUS.ant?susSoles(a.ant.final):"—", v?v.txt:"—"];
+  });
+  cuerpo.push(["TOTAL", String(g.personas), String(g.ganan), susSoles(g.indiv), susSoles(g.modular),
+               susSoles(g.final), Math.round(g.prom)+"%", ag?susSoles(ag.final):"—", vFinal?vFinal.txt:"—"]);
+  doc.autoTable({
+    startY:y+3, margin:{left:X,right:X}, head:[cab], body:cuerpo, theme:"grid",
+    styles:{fontSize:7.5, cellPadding:1.2, halign:"right", lineColor:[200,205,215], lineWidth:.15, textColor:[50,55,70]},
+    headStyles:{fillColor:AZUL, textColor:255, fontStyle:"bold", fontSize:7.5, halign:"center"},
+    columnStyles:{0:{halign:"left", cellWidth:36}},
+    didParseCell:d=>{ if(d.row.index===cuerpo.length-1 && d.section==="body") d.cell.styles.fontStyle="bold"; }
+  });
+  y=doc.lastAutoTable.finalY+6;
+  const exp=susExplica();
+  if(exp.length){
+    doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(40);
+    doc.splitTextToSize("El movimiento lo explican "
+      + exp.map(e=>`${e.area} (${e.d>=0?"+":"−"}S/ ${susSoles(Math.abs(e.d))}, ${e.parte}% del cambio)`).join(" y ")+".", 178)
+      .forEach(l=>{ if(y>278){ doc.addPage(); y=18; } doc.text(l,X,y); y+=4.4; });
+    y+=3;
+  }
+  if(y>230){ doc.addPage(); y=18; }
+  doc.setFont("helvetica","bold"); doc.setFontSize(10.5); doc.setTextColor(...AZUL);
+  doc.text("3. Pago por categoría", X, y);
+  doc.autoTable({
+    startY:y+3, margin:{left:X,right:X}, theme:"grid",
+    head:[["Categoría","Personas","Cobran","Total S/","% del pago"]],
+    body:Object.values(SUS.act.cats).sort((a,b)=>String(a.cat).localeCompare(String(b.cat),"es"))
+      .map(c=>[c.cat, String(c.personas), String(c.ganan), susSoles(c.final), susPct(c.final,g.final)]),
+    styles:{fontSize:8, cellPadding:1.3, halign:"right", lineColor:[200,205,215], lineWidth:.15, textColor:[50,55,70]},
+    headStyles:{fillColor:AZUL, textColor:255, fontStyle:"bold", fontSize:8, halign:"center"},
+    columnStyles:{0:{halign:"left"}}
+  });
+  y=doc.lastAutoTable.finalY+8;
+  bloque("4. Penalidades", [g.penal
+    ? `${g.penal} persona(s) perdieron la quincena: ${g.penFalta} por falta, ${g.penBoleta} por boleta virtual sin llenar, ${g.penTard} por tres o más tardanzas.`
+    : "Ninguna quincena se anuló por penalidad.",
+    ...(g.sinCat?[`${g.sinCat} persona(s) sin categoría asignada no generan incentivo.`]:[])]);
+  bloque("5. Cómo se calcula", [
+    "Eficiencia diaria = minutos producidos / minutos disponibles del turno (ajustados por incidencias).",
+    "Desde 80% el día paga según categoría y porcentaje, con la tabla de incentivos del sistema; tope 100%.",
+    "El bono modular es del área y del día, para quien tenga promedio de eficiencia mayor o igual a 70%.",
+    "Una falta o una boleta sin llenar anulan la quincena; la tardanza anula desde la tercera.",
+    "Cifras tomadas del cálculo de Incentivos del sistema, sin ajustes a mano."
+  ]);
+  doc.save(`SUSTENTO_INCENTIVOS_${SUS.desde}_${SUS.hasta}.pdf`);
 }
 
 /* ================= REPORTE DE HOY =================
