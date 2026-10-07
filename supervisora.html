@@ -27,6 +27,7 @@
 
   <div class="tabs">
     <button id="tabAsistencia" class="tab activo">ASISTENCIA</button>
+    <button id="tabBoletas" class="tab">BOLETAS</button>
     <button id="tabPersonal" class="tab">PERSONAL</button>
     <button id="tabAvance" class="tab">AVANCE OF</button>
     <button id="tabSupBases" class="tab">BASES</button>
@@ -226,6 +227,19 @@
     </div>
     <div class="sub" id="srResumen"></div>
     <div class="lista-cards" id="srLista"></div>
+  </section>
+
+  <!-- Boletas sin llenar (parche 103) -->
+  <section class="pantalla" id="pasoBoletasSup">
+    <h1>Boletas del día</h1>
+    <p class="sub" id="bolSupSub" style="margin:2px 0 8px"></p>
+    <div class="seg" style="max-width:560px;">
+      <input type="date" id="bolSupFecha" onchange="cargarBoletasSup()"
+        style="flex:1;background:var(--blanco);border:3px solid var(--azul);border-radius:13px;font-size:18px;font-weight:800;padding:10px;text-align:center;">
+      <button class="btn-recargar" onclick="cargarBoletasSup()" style="flex:0 0 auto;">↻</button>
+    </div>
+    <div class="bs-res" id="bolSupRes"></div>
+    <div id="bolSupLista"></div>
   </section>
 
   <!-- Eficiencias del personal -->

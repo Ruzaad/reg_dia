@@ -383,7 +383,7 @@ function crearCtx(){
 function pintarCtx(){
   if(!ctx)return;const v=vistaActual();
   const nav=document.querySelector(".nav-item.activo");const grp=nav&&nav.closest("details")&&nav.closest("details").querySelector("summary");
-  const tit=v?v.t:(nav?nav.textContent.trim():"");
+  const tit=v?v.t:(nav?(nav.firstChild&&nav.firstChild.nodeType===3?nav.firstChild.textContent:nav.textContent).trim():"");
   let fecha="";
   if(v&&v.modo==="dia"){const h=hoy(),ay=mas(h,-1);
     fecha=`<div class="dyn-seg" role="group" aria-label="Día"><button data-dyn="dia:hoy" class="${G.fecha===h?"on":""}">Hoy</button><button data-dyn="dia:ayer" class="${G.fecha===ay?"on":""}">Ayer</button></div>
