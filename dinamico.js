@@ -146,6 +146,12 @@ const VISTAS=PAG==="ingenieria"?[
    aplicar(){let c=aplQuin();c=areaSel("efmArea")||c;return c;},cargar:()=>llamar("cargarEfManual"),ocultar:["efmArea"],ocupada:()=>!!document.querySelector("#incEfmView .efm-in.cambiada")},
   {id:"incCons",tab:"pasoInc",m:"incConsView",modo:"quin",area:1,t:"Incentivos · min. consideración",
    aplicar(){let c=aplQuin();c=areaSel("consArea")||c;return c;},cargar:()=>llamar("cargarCons"),ocultar:["consArea"]},
+  {id:"incSus",tab:"pasoInc",m:"incSusView",modo:"quin",area:1,t:"Incentivos · sustento",
+   aplicar(){const q=quincenas(hoy())[G.quin==="ant"?"ant":"act"];
+     let c=put("susDesde",q[0]);c=put("susHasta",q[1])||c;
+     if(c)try{llamar("susCmpAuto");}catch(e){}
+     return c;},
+   cargar:()=>llamar("armarSustento")},
   {id:"incTabla",tab:"pasoInc",m:"incTablaView",modo:null,t:"Incentivos · tabla"},
   {id:"dashAsis",tab:"pasoDash",m:"dbPanelAsis",modo:"rango",def:"semana",area:1,t:"Tableros · asistencia",
    aplicar(){const [d,h]=rangoDe(this);let c=false;const g=$("perDashGrano");if(g&&g.value!=="rango"){g.value="rango";llamar("perDashGranoChange");c=true;}

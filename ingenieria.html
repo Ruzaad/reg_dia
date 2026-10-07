@@ -159,6 +159,7 @@
         <button id="incTabTab" class="tab" onclick="incVista('tabla')">TABLA DE INC.</button>
         <button id="incTabEfm" class="tab" onclick="incVista('efm')">EFICIENCIA MANUAL</button>
         <button id="incTabCons" class="tab" onclick="incVista('cons')">MIN. CONSIDERACIÓN</button>
+        <button id="incTabSus" class="tab" onclick="incVista('sus')">SUSTENTO</button>
       </div>
 
       <!-- BONO MODULAR: del ÁREA y del DÍA, sin categorías. Se escribe el % que
@@ -219,6 +220,27 @@
         <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;">
           <table class="tabla" id="tablaCons"></table>
         </div>
+      </div>
+
+
+      <!-- SUSTENTO DE LA QUINCENA: el documento que se manda por correo cuando se
+           paga. Lo arma la base, no se escribe a mano: la quincena que se paga
+           contra la anterior. Es POR ÁREA, sin nombres de personas. -->
+      <div id="incSusView" hidden>
+        <p class="seccion-sub" style="margin-bottom:14px;">El sustento del pago, armado solo con lo que ya está en la base: la quincena que se paga
+        comparada con la anterior. Sale <b>por área y por categoría</b>, nunca persona por persona.
+        Revísalo, cópialo al correo o bájalo en PDF.</p>
+        <div class="barra-control">
+          <label class="campo"><span>Quincena que se paga</span><input type="date" id="susDesde" onchange="susCmpAuto()"></label>
+          <label class="campo"><span>Hasta</span><input type="date" id="susHasta" onchange="susCmpAuto()"></label>
+          <label class="campo"><span>Compara con</span><input type="date" id="susCmpDesde"></label>
+          <label class="campo"><span>Hasta</span><input type="date" id="susCmpHasta"></label>
+          <label class="campo"><span>Fecha de pago</span><input type="date" id="susPago"></label>
+          <button class="btn-mini" id="btnSusArmar" onclick="armarSustento()">ARMAR SUSTENTO</button>
+          <button class="btn-mini" onclick="susCopiar()">COPIAR TEXTO</button>
+          <button class="btn-mini verde" onclick="susPdf()">DESCARGAR PDF</button>
+        </div>
+        <div class="sus-hoja" id="susDoc"><div class="vacio-msg">Elige la quincena y pulsa ARMAR SUSTENTO.</div></div>
       </div>
 
       <div id="incQView">
