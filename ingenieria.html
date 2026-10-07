@@ -33,6 +33,7 @@
     <nav class="ing-nav" aria-label="Secciones de ingeniería">
       <details class="nav-group" open>
         <summary class="nav-sep">Tickets</summary>
+        <a class="nav-item" data-tab="pasoBolSin" href="#pasoBolSin">Boletas sin llenar<b class="dyn-cnt" id="bslNavCnt" hidden></b></a>
         <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
         <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Avance por módulo</a>
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
@@ -841,6 +842,30 @@
       <div class="kpis" id="blResumen" style="margin-bottom:14px;"></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;">
         <table class="tabla" id="blTabla"></table>
+      </div>
+    </section>
+
+    <!-- ===================== BOLETAS SIN LLENAR (parche 103) ===================== -->
+    <section class="pantalla" id="pasoBolSin">
+      <div class="seccion-cab">
+        <h1>Boletas sin llenar</h1>
+        <p class="seccion-sub">Quién trabajó el día y no registró ni un ticket ni una incidencia que cubra su jornada. Es el mismo
+        cálculo de Mi boleta: lo que ves aquí es lo que el operario ve como PENDIENTE. No salen los ausentes, los que están
+        EN DESPACHO, REPROCESO, ALMACÉN, CORTE o SASTRERÍA, ni las áreas que ese día no registraron tickets.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Día</span><input type="date" id="bslFecha" onchange="cargarBolSin()"></label>
+        <label class="campo"><span>Área</span><select id="bslArea" onchange="cargarBolSin()"></select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="bslBuscar" placeholder="Operario…" oninput="pintarBolSin()"></label>
+        <span class="bsl-hora" id="bslHora" style="display:none"></span>
+        <span style="flex:1"></span>
+        <button class="btn-mini" onclick="cargarBolSin()">Cargar</button>
+        <button class="btn-mini verde" onclick="descargarBolSin()">⬇ Descargar XLSX</button>
+      </div>
+      <div class="kpis" id="bslKpis" style="margin-bottom:14px;"></div>
+      <div class="bsl-areas" id="bslAreas"></div>
+      <div class="contenedor-ancho tabla-scroll">
+        <table class="tabla" id="bslTabla"></table>
       </div>
     </section>
 
