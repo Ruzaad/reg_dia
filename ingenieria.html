@@ -310,6 +310,7 @@
         <button id="tkTabOp" class="tab" onclick="tkVista('op')">RECLAMADOS X OPERACIÓN</button>
         <button id="tkTabRep" class="tab" onclick="tkVista('rep')">REPORTE DE HOY</button>
         <button id="tkTabOpe" class="tab" onclick="tkVista('ope')">RESUMEN X OPERARIO</button>
+        <button id="tkTabHis" class="tab" onclick="tkVista('his')">HISTORIAL DE CAMBIOS</button>
       </div>
 
       <div id="tkActualView">
@@ -339,6 +340,22 @@
         <aside id="tkOpsPanel" class="tk-ops-panel" style="display:none;"></aside>
       </div>
       </div><!-- /tkActualView -->
+
+      <div id="tkHisView" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Desde</span><input type="date" id="hisDesde" onchange="cargarHis()"></label>
+          <label class="campo"><span>Hasta</span><input type="date" id="hisHasta" onchange="cargarHis()"></label>
+          <label class="campo"><span>Área</span><select id="hisArea" onchange="cargarHis()"><option value="">Todas las áreas</option></select></label>
+          <label class="campo"><span>Acción</span><select id="hisAccion" onchange="pintarHis()">
+            <option value="">Todas</option><option value="LIBERAR">Liberó</option><option value="MOVER">Movió de día</option>
+            <option value="PARTIR">Partió</option><option value="DESHACER">Deshizo</option></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="hisBuscar" placeholder="Quién / persona / OF / motivo…" oninput="pintarHis()"></label>
+        </div>
+        <div class="sub" id="resumenHis"></div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;">
+          <table class="tabla" id="tablaHis"></table>
+        </div>
+      </div>
 
       <div id="tkOpView" hidden>
         <div class="barra-control">
