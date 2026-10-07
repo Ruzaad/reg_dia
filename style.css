@@ -1299,3 +1299,7 @@ details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content
 .hn-rep{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--azul);cursor:pointer;margin:4px 0;}
 .hn-rep input{width:18px;height:18px;}
 .tabla tr.hn-cero td{color:var(--tomado);text-decoration:line-through;}
+
+/* Tiempos (parche 104): lista de operaciones por aplicar en el modal. */
+.tm-lista{margin:0 0 4px 18px;font-size:14px;color:var(--azul);}
+.tm-lista li{margin:2px 0;}

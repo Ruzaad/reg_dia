@@ -52,6 +52,11 @@
         <a class="nav-item" data-tab="pasoDash" href="#pasoDash">Tableros</a>
       </details>
       <details class="nav-group" open>
+        <summary class="nav-sep">Tiempos</summary>
+        <a class="nav-item" data-tab="pasoTmpMed" href="#pasoTmpMed">Tiempos medidos</a>
+        <a class="nav-item" data-tab="pasoTmpFalta" href="#pasoTmpFalta">Qué falta medir</a>
+      </details>
+      <details class="nav-group" open>
         <summary class="nav-sep">Gestión</summary>
         <a class="nav-item" data-tab="pasoAsis" href="#pasoAsis">Personal</a>
         <a class="nav-item" data-tab="pasoBases" href="#pasoBases">Bases</a>
@@ -843,6 +848,53 @@
       <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;">
         <table class="tabla" id="blTabla"></table>
       </div>
+    </section>
+
+    <!-- ===================== TIEMPOS MEDIDOS vs BASE (parche 104) ===================== -->
+    <section class="pantalla" id="pasoTmpMed">
+      <div class="seccion-cab">
+        <h1>Tiempos medidos vs BASE</h1>
+        <p class="seccion-sub">Lo que los analistas midieron con el cronómetro, al lado del STD que hoy tiene la BASE.
+        Una operación se mide una vez por área y vale para todos los artículos que la tienen. Aplicar cambia el STD y queda
+        en el Historial de tiempos como origen ESTUDIO.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="tmArea" onchange="tmArts()"></select></label>
+        <label class="campo"><span>Artículo</span><select id="tmArt" onchange="cargarTmpMed()"></select></label>
+        <label class="campo"><span>Mostrar</span><select id="tmFiltro" onchange="tmPintar()">
+          <option value="">Todas las operaciones</option>
+          <option value="dif">Solo las que difieren 5% o más</option>
+          <option value="sin">Solo las que no tienen estudio</option>
+          <option value="con">Solo las medidas</option>
+        </select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="tmBuscar" placeholder="Operación / módulo…" oninput="tmPintar()"></label>
+        <button class="btn-mini" onclick="cargarTmpMed()">Cargar</button>
+        <button class="btn-mini verde" id="tmBtnAplicar" onclick="tmAplicarMarcados()" disabled>Aplicar los marcados</button>
+        <button class="btn-mini" onclick="tmDescargar()">⬇ Descargar XLSX</button>
+      </div>
+      <div class="kpis" id="tmKpis" style="margin-bottom:14px;"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;"><table class="tabla" id="tmTabla"></table></div>
+    </section>
+
+    <!-- ===================== QUÉ FALTA MEDIR (parche 104) ===================== -->
+    <section class="pantalla" id="pasoTmpFalta">
+      <div class="seccion-cab">
+        <h1>Qué falta medir</h1>
+        <p class="seccion-sub">Las operaciones que más se produjeron y todavía no tienen un estudio consolidado
+        (tres operarios o más). Arriba las de más minutos producidos: ahí un estudio es el que más pesa.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="tfArea" onchange="cargarTmpFalta()"></select></label>
+        <label class="campo"><span>Producción de los últimos</span><select id="tfDias" onchange="cargarTmpFalta()">
+          <option value="15">15 días</option><option value="30" selected>30 días</option>
+          <option value="60">60 días</option><option value="90">90 días</option>
+        </select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="tfBuscar" placeholder="Artículo / operación…" oninput="tfPintar()"></label>
+        <button class="btn-mini" onclick="cargarTmpFalta()">Cargar</button>
+        <button class="btn-mini" onclick="tfDescargar()">⬇ Descargar XLSX</button>
+      </div>
+      <div class="kpis" id="tfKpis" style="margin-bottom:14px;"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="tfTabla"></table></div>
     </section>
 
     <!-- ===================== BOLETAS SIN LLENAR (parche 103) ===================== -->
