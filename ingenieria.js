@@ -39,13 +39,15 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   // Botón hamburguesa: colapsa el sidebar (PC) o abre/cierra el cajón (móvil).
   { const bm=$("btnMenu"); if(bm) bm.onclick=toggleSidebar; }
   { const bd=$("ingBackdrop"); if(bd) bd.onclick=()=>document.body.classList.add("sidebar-cerrada"); }
-  // En pantallas chicas el sidebar arranca cerrado (cajón).
-  if(window.innerWidth<=900) document.body.classList.add("sidebar-cerrada");
+  // En pantallas chicas el sidebar arranca cerrado (cajón); en PC, como lo dejó.
+  if(window.innerWidth<=900 || menuRielGuardado()) document.body.classList.add("sidebar-cerrada");
+  // Con el menú en riel solo se ven los iconos: el nombre sale al pasar el mouse.
+  document.querySelectorAll(".ing-nav .nav-item").forEach(a=>{ if(!a.title) a.title=a.textContent.trim(); });
   // Dinámico: al cruzar el breakpoint (redimensionar/rotar) ajusta el sidebar.
   let _wasNarrow = window.innerWidth<=900;
   window.addEventListener("resize", ()=>{
     const narrow = window.innerWidth<=900;
-    if(narrow!==_wasNarrow){ _wasNarrow=narrow; document.body.classList.toggle("sidebar-cerrada", narrow); }
+    if(narrow!==_wasNarrow){ _wasNarrow=narrow; document.body.classList.toggle("sidebar-cerrada", narrow || menuRielGuardado()); }
   });
   // Deep-link / nueva pestaña: si la URL trae #pasoXxx válido, abre esa sección.
   window.addEventListener("hashchange",()=>{
@@ -321,7 +323,11 @@ async function guardarPermisos(dni){
     cargarPermisosAdmin();
   }catch(e){ $("permMsg").textContent=e.message; }
 }
-function toggleSidebar(){ document.body.classList.toggle("sidebar-cerrada"); }
+function toggleSidebar(){
+  const cerrada=document.body.classList.toggle("sidebar-cerrada");
+  if(window.innerWidth>900) try{ localStorage.setItem("ing_menu_riel", cerrada?"1":"0"); }catch(e){}
+}
+function menuRielGuardado(){ try{ return localStorage.getItem("ing_menu_riel")==="1"; }catch(e){ return false; } }
 function cerrarSidebarMovil(){ if(window.innerWidth<=900) document.body.classList.add("sidebar-cerrada"); }
 
 function poblarSelectsArea(){
