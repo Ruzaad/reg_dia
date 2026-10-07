@@ -15,10 +15,9 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   ING = sesionActual();
   if(!ING){ location.href="index.html"; return; }
   if(!esOficina(ING.cargo)){ location.href = destinoPorCargo(ING.cargo); return; }
-  /* INCENTIVOS es del administrador maestro (parche 78). Esto solo quita la
-     pestaña de la vista: quien la tenga en caché o escriba la RPC a mano recibe
-     NO_AUTORIZADA igual, porque las 12 funciones validan con _admin. */
-  if(!ES_ADMIN()) quitarIncentivos();
+  /* Permisos y Correcciones son solo del administrador maestro. Esto solo
+     quita la pestaña de la vista: sus RPC validan con _admin igual. */
+  if(!ES_ADMIN()) quitarTabsAdmin();
   await cargarPermisos();               // parche 95: áreas y pestañas que dio el administrador
   $("quienBadge").textContent = ING.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
@@ -100,7 +99,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoOpAd","pasoPermisos","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
+  "pasoBaseLog","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -138,6 +137,7 @@ function activarTab(tab){
   else if(tab==='pasoAudit') audInit();
   else if(tab==='pasoBaseLog') blInit();
   else if(tab==='pasoPermisos') cargarPermisosAdmin();
+  else if(tab==='pasoCorr') corrInit();
   else if(COSTOS_TABS.includes(tab)) costosEntrar(tab);
 }
 /* Eficiencia = una sola entrada del menú con dos vistas (parche 75). Son dos
@@ -158,8 +158,11 @@ function efVista(v){
 /* Administrador maestro: hoy solo ALOPEZ, y lo decide `operarios.es_admin`,
    no el DNI escrito en el código. La sesión lo trae desde fn_login. */
 function ES_ADMIN(){ return (ING && ING.admin===true); }
-const TABS_ADMIN=["pasoInc","pasoAudit","pasoBaseLog","pasoPermisos"];
-function quitarIncentivos(){
+/* Desde el parche 101, Incentivos, Auditoría e Historial de tiempos se reparten
+   en Permisos como cualquier otra pestaña y la base filtra por área. Solo
+   quedan para el administrador las que reparten o vigilan esos permisos. */
+const TABS_ADMIN=["pasoPermisos","pasoCorr"];
+function quitarTabsAdmin(){
   TABS_ADMIN.forEach(t=>{
     const it=document.querySelector('.nav-item[data-tab="'+t+'"]'); if(it) it.remove();
     const sec=$(t); if(sec) sec.remove();
@@ -182,6 +185,10 @@ async function cargarPermisos(){
 const PERM_LIBRE=()=>!PERM.cargado || PERM.admin || ES_ADMIN();
 const puedeLeer  = a => PERM_LIBRE() || !!PERM.areas["*"] || !!PERM.areas[a];
 const leeTodas   = () => PERM_LIBRE() || !!PERM.areas["*"];
+/* Filtro de área de las pantallas que eran solo del administrador (parche 101):
+   "Todas las áreas" solo sale a quien lee todas; los demás eligen una suya. */
+const opcionesAreaVista = () => (leeTodas() ? '<option value="">Todas las áreas</option>' : "")
+  + (AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
 const areasEdita = () => Object.keys(PERM.areas).filter(a=>a!=="*" && PERM.areas[a]==="EDITAR");
 function puedeEditar(a){
   if(PERM_LIBRE() || PERM.areas["*"]==="EDITAR") return true;
@@ -3180,9 +3187,7 @@ function audInit(){
     d.value=hace.toLocaleDateString("sv-SE"); h.value=audHoy();
   }
   const sa=$("audArea");
-  if(sa && sa.options.length<=1)
-    sa.innerHTML='<option value="">Todas las áreas</option>'
-      +(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+  if(sa && !sa.options.length) sa.innerHTML=opcionesAreaVista();
   if(!AUD.items.length) cargarAudit();
 }
 async function cargarAudit(){
@@ -4137,10 +4142,7 @@ function incVista(v){
 /* Los tres selectores de área comparten relleno: el primero que se abre carga. */
 function incAreaSel(id, cargar){
   const sel=$(id); if(!sel) return;
-  if(sel.options.length<=1){
-    sel.innerHTML='<option value="">Todas las áreas</option>'
-      +(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
-  }
+  if(!sel.options.length) sel.innerHTML=opcionesAreaVista();
   cargar();
 }
 /* El rango sale de la misma quincena elegida arriba: una sola fuente de fechas. */
@@ -4159,9 +4161,7 @@ function incInit(){
     $("incHasta").value = a+"-"+mm+"-"+String(d<=15?15:ult).padStart(2,"0");
   }
   const sa=$("incArea");
-  if(sa && sa.options.length<=1)
-    sa.innerHTML='<option value="">Todas las áreas</option>'
-      +(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+  if(sa && !sa.options.length) sa.innerHTML=opcionesAreaVista();
   if(!INC) cargarInc();
 }
 async function cargarInc(){
@@ -4170,11 +4170,14 @@ async function cargarInc(){
   pintarCargando($("tablaInc"),"Calculando…"); $("incResumen").innerHTML="";
   try{
     const r=await rpc("fn_incentivos_quincena",{p_dni:ING.dni,p_token:ING.token,
-      p_desde:d, p_hasta:h, p_area:""});
+      p_desde:d, p_hasta:h, p_area:leeTodas()?"":(($("incArea")||{}).value||"")});
     if(!r.ok){ mostrarError(r.error||"Error"); $("tablaInc").innerHTML=""; return; }
     INC=r; incPintar();
   }catch(e){ $("tablaInc").innerHTML=""; mostrarError(e.message); }
 }
+/* Quien lee todas trae la quincena entera y filtra aquí; quien solo ve sus
+   áreas pide una a la vez, porque la base no le da "todas". */
+function incCambiaArea(){ leeTodas() ? incPintar() : cargarInc(); }
 async function cargarIncTabla(){
   if(INC_TABLA.length){ incPintarTabla(); return; }
   pintarCargando($("tablaIncCat"),"Cargando…");
@@ -5643,7 +5646,7 @@ async function heRegistrar(){
   await heCargar();
 }
 
-/* ---- Historial de tiempos de BASE (parche 86, solo maestro) ---- */
+/* ---- Historial de tiempos de BASE (parche 86; por área desde el 101) ---- */
 let BL=[], BL_VISTA=[];
 function blInit(){
   if(!$("blDesde").value){
@@ -5651,8 +5654,7 @@ function blInit(){
     $("blDesde").value=d.toLocaleDateString("sv-SE"); $("blHasta").value=hoyLima();
   }
   const sa=$("blArea");
-  if(sa && !sa.options.length)
-    sa.innerHTML='<option value="">Todas las áreas</option>'+(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+  if(sa && !sa.options.length) sa.innerHTML=opcionesAreaVista();
   cargarBaseLog();
 }
 async function cargarBaseLog(){
@@ -5700,6 +5702,93 @@ function descargarBaseLog(){
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "HISTORIAL_BASE");
   XLSX.writeFile(wb, `HISTORIAL_BASE_${$("blDesde").value}_a_${$("blHasta").value}.xlsx`);
+}
+/* ---- Correcciones (parche 101, solo administrador) ----
+   Qué corrigieron los usuarios de oficina en las pantallas que ahora se reparten
+   por área. Sale de correcciones_log más bases_log (tiempos de BASE). */
+let CORR=[], CORR_VISTA=[];
+const CORR_QUE={ocurrencias:"Incidencia", eficiencia_manual:"Eficiencia manual",
+  minutos_consideracion:"Min. consideración", bono_modular_dia:"Bono modular",
+  bono_modular_override:"Bono modular: excepción", bases:"Tiempo de BASE"};
+const CORR_ACC={INSERT:["Nuevo","nu"], UPDATE:["Cambio","ed"], DELETE:["Borrado","bo"],
+  EDITADO:["Cambio","ed"], AGREGADA:["Nuevo","nu"], BORRADA:["Borrado","bo"]};
+function corrInit(){
+  if(!$("corrDesde").value){
+    const h=new Date(hoyLima()+"T00:00:00"), d=new Date(h.getTime()-6*86400000);
+    $("corrDesde").value=d.toLocaleDateString("sv-SE"); $("corrHasta").value=hoyLima();
+  }
+  cargarCorr();
+}
+async function cargarCorr(){
+  const d=$("corrDesde").value, h=$("corrHasta").value;
+  if(!d||!h){ mostrarError("Elige el rango de fechas"); return; }
+  $("corrTabla").innerHTML=`<tbody><tr><td>${cargandoHTML("Cargando…")}</td></tr></tbody>`; $("corrResumen").innerHTML="";
+  try{
+    const r=await rpc("fn_correcciones_listar",{p_dni:ING.dni,p_token:ING.token,p_desde:d,p_hasta:h});
+    if(!r.ok){ mostrarError(r.error||"Error"); CORR=[]; } else CORR=r.items||[];
+  }catch(e){ mostrarError(e.message); CORR=[]; }
+  /* Por defecto se ve a los analistas: lo del administrador queda en "Todos". */
+  const su=$("corrUsuario"), antes=su.value;
+  const us=[...new Map(CORR.filter(x=>!x.admin).map(x=>[x.dni,x.nombre])).entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+  su.innerHTML='<option value="">Analistas</option><option value="*">Todos</option>'
+    +us.map(([u,n])=>`<option value="${esc(u)}"${u===antes?" selected":""}>${esc(u)}${n?" · "+esc(soloApellidos(n)):""}</option>`).join("");
+  if(antes==="*") su.value="*";
+  const sq=$("corrQue"), qa=sq.value;
+  sq.innerHTML='<option value="">Todo</option>'+Object.keys(CORR_QUE).map(k=>`<option value="${k}"${k===qa?" selected":""}>${esc(CORR_QUE[k])}</option>`).join("");
+  corrPintar();
+}
+/* Una línea legible por estado (antes o después) según la tabla. */
+function corrTxt(t,v){
+  if(!v) return "";
+  const n=x=>x==null?"—":String(+(+x).toFixed(2));
+  switch(t){
+    case "ocurrencias": return `${v.tipo||""} · ${n(v.minutos)} min`+(v.detalle?` · ${v.detalle}`:"");
+    case "eficiencia_manual": return `${n(v.pct)}%`;
+    case "minutos_consideracion": return `${n(v.minutos)} min`+(v.motivo?` · ${v.motivo}`:"");
+    case "bono_modular_dia": return `${n(v.pct)}% del área`;
+    case "bono_modular_override": return (v.forzar?"Forzar pago":"Quitar pago")+` (${v.desde||""} a ${v.hasta||""})`;
+    case "bases": return `STD ${n(v.std)}`;
+  }
+  return "";
+}
+/* Qué fila se tocó: la persona y el día, o el artículo y la operación en BASE. */
+function corrSobre(x){
+  if(x.tabla==="bases"){ const v=x.despues||x.antes||{}; return `${v.articulo||""} · ${v.operacion||""}`; }
+  if(x.dni_op) return `${soloApellidos(x.nombre_op||"")||x.dni_op} (${x.dni_op})`;
+  return "Toda el área";
+}
+function corrPintar(){
+  const u=$("corrUsuario").value, que=$("corrQue").value, q=normKey($("corrBuscar").value);
+  CORR_VISTA=CORR.filter(x=>(u==="*"||(u===""?!x.admin:x.dni===u))
+    &&(!que||x.tabla===que)
+    &&(!q||normKey([x.dni,x.nombre,x.area,x.dni_op,x.nombre_op,corrSobre(x)].join(" ")).includes(q)));
+  const k=(n,l)=>`<div class="kpi"><div class="kpi-num">${n}</div><div class="kpi-lbl">${l}</div></div>`;
+  $("corrResumen").innerHTML=k(CORR_VISTA.length,"Correcciones")+k(new Set(CORR_VISTA.map(x=>x.dni)).size,"Usuarios")
+    +k(CORR_VISTA.filter(x=>x.tabla==="ocurrencias").length,"Incidencias")
+    +k(CORR_VISTA.filter(x=>x.tabla==="bases").length,"Tiempos de BASE")
+    +k(CORR_VISTA.filter(x=>x.accion==="DELETE"||x.accion==="BORRADA").length,"Borrados");
+  const TOPE=1000, ver=CORR_VISTA.slice(0,TOPE);
+  const fmt=f=>{ f=String(f||""); return f.slice(8,10)+"-"+f.slice(5,7)+"-"+f.slice(0,4)+(f.length>10?" "+f.slice(11):""); };
+  const head=`<thead><tr><th>Fecha y hora</th><th>Usuario</th><th>Qué</th><th>Cambio</th><th>Área</th>
+    <th class="izq">Sobre</th><th>Día</th><th class="izq">Antes</th><th class="izq">Después</th></tr></thead>`;
+  const body=ver.length? ver.map(x=>{
+    const ac=CORR_ACC[x.accion]||[x.accion,"ed"];
+    return `<tr><td class="nw">${esc(fmt(x.hora))}</td><td class="nw" title="${esc(x.nombre||"")}"><b>${esc(x.dni)}</b></td>
+      <td class="nw">${esc(CORR_QUE[x.tabla]||x.tabla)}</td><td><span class="lg-tag ${ac[1]}">${esc(ac[0])}</span></td>
+      <td>${esc(x.area||"")}</td><td class="izq">${esc(corrSobre(x))}</td><td class="nw">${x.fecha?esc(fmt(x.fecha)):"—"}</td>
+      <td class="izq">${esc(corrTxt(x.tabla,x.antes))||"—"}</td><td class="izq"><b>${esc(corrTxt(x.tabla,x.despues))||"—"}</b></td></tr>`;
+  }).join("") : `<tr><td colspan="9"><div class="vacio-msg">Sin correcciones en el rango</div></td></tr>`;
+  $("corrTabla").innerHTML=head+"<tbody>"+body+"</tbody>"
+    +(CORR_VISTA.length>TOPE?`<caption class="sub" style="caption-side:bottom;">Se muestran ${TOPE} de ${CORR_VISTA.length}; la descarga trae todos.</caption>`:"");
+}
+function descargarCorr(){
+  if(!CORR_VISTA.length){ mostrarError("No hay datos para descargar"); return; }
+  const CAB=["Fecha y hora","Usuario","Nombre","Qué","Cambio","Área","Sobre","Día","Antes","Después"];
+  const filas=CORR_VISTA.map(x=>[x.hora,x.dni,x.nombre||"",CORR_QUE[x.tabla]||x.tabla,(CORR_ACC[x.accion]||[x.accion])[0],
+    x.area||"",corrSobre(x),x.fecha||"",corrTxt(x.tabla,x.antes),corrTxt(x.tabla,x.despues)]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "CORRECCIONES");
+  XLSX.writeFile(wb, `CORRECCIONES_${$("corrDesde").value}_a_${$("corrHasta").value}.xlsx`);
 }
 /* Semana del sistema en hora de Lima: lunes a domingo. `getDay()` da 0 el
    domingo, así que el lunes se calcula con ((dow+6) % 7). */

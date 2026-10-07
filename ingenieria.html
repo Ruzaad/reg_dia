@@ -58,6 +58,7 @@
         <a class="nav-item" data-tab="pasoIncid" href="#pasoIncid">Incidencias</a>
         <a class="nav-item" data-tab="pasoFechas" href="#pasoFechas">Corregir fechas</a>
         <a class="nav-item" data-tab="pasoPermisos" href="#pasoPermisos">Permisos</a>
+        <a class="nav-item" data-tab="pasoCorr" href="#pasoCorr">Correcciones</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Costos</summary>
@@ -223,7 +224,7 @@
         <div class="barra-control">
           <label class="campo"><span>Desde</span><input type="date" id="incDesde"></label>
           <label class="campo"><span>Hasta</span><input type="date" id="incHasta"></label>
-          <label class="campo"><span>Área</span><select id="incArea" onchange="incPintar()"></select></label>
+          <label class="campo"><span>Área</span><select id="incArea" onchange="incCambiaArea()"></select></label>
           <label class="campo"><span>Buscar</span>
             <input type="text" id="incBuscar" placeholder="Nombre / DNI…" oninput="incPintar()"></label>
           <label class="campo-check"><input type="checkbox" class="sw" id="incSoloGanan" onchange="incPintar()"> Solo quienes ganan</label>
@@ -804,10 +805,10 @@
       <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="avofTabla"></table></div>
     </section>
 
-    <!-- ===================== HISTORIAL DE TIEMPOS DE BASE (parche 86, solo maestro) ===================== -->
+    <!-- ===================== HISTORIAL DE TIEMPOS DE BASE (parche 86; por área desde el 101) ===================== -->
     <section class="pantalla" id="pasoBaseLog">
       <div class="seccion-cab">
-        <h1>Historial de tiempos de BASE <span class="solo-admin">SOLO ALOPEZ</span></h1>
+        <h1>Historial de tiempos de BASE</h1>
         <p class="seccion-sub">Cada cambio de STD en BASE: quién lo hizo, cuándo, en qué artículo y operación,
         y cuánto cambió. También quedan las operaciones agregadas y borradas. Registra desde el 24-09-2026.</p>
       </div>
@@ -1006,6 +1007,28 @@
         <button class="btn-mini" onclick="cargarPermisosAdmin()">↻ Cargar</button>
       </div>
       <div id="permZona"></div>
+    </section>
+    <!-- ===================== CORRECCIONES (parche 101, solo administrador) ===================== -->
+    <section class="pantalla" id="pasoCorr">
+      <div class="seccion-cab">
+        <h1>Correcciones</h1>
+        <p class="seccion-sub">Lo que corrigieron los usuarios de oficina: incidencias cambiadas o borradas, eficiencia manual,
+        minutos de consideración, bono modular y tiempos de BASE. Cada fila dice <b>quién</b>, <b>cuándo</b> y cómo estaba
+        <b>antes</b> y <b>después</b>. Registra desde que se aplicó el parche 101; los tiempos de BASE, desde el 24-09-2026.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Desde</span><input type="date" id="corrDesde"></label>
+        <label class="campo"><span>Hasta</span><input type="date" id="corrHasta"></label>
+        <label class="campo"><span>Usuario</span><select id="corrUsuario" onchange="corrPintar()"></select></label>
+        <label class="campo"><span>Qué</span><select id="corrQue" onchange="corrPintar()"></select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="corrBuscar" placeholder="Persona, DNI, área…" oninput="corrPintar()"></label>
+        <button class="btn-mini" onclick="cargarCorr()">Cargar</button>
+        <button class="btn-mini verde" onclick="descargarCorr()">⬇ Descargar XLSX</button>
+      </div>
+      <div class="kpis" id="corrResumen" style="margin-bottom:14px;"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;">
+        <table class="tabla" id="corrTabla"></table>
+      </div>
     </section>
     <section class="pantalla" id="pasoSinPermiso">
       <div class="estado-vacio">Todavía no tienes pestañas asignadas. Pide al administrador que te dé acceso.</div>
