@@ -1299,3 +1299,21 @@ details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content
 .hn-rep{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--azul);cursor:pointer;margin:4px 0;}
 .hn-rep input{width:18px;height:18px;}
 .tabla tr.hn-cero td{color:var(--tomado);text-decoration:line-through;}
+
+/* Tiempos (parche 104): lista de operaciones por aplicar en el modal. */
+.tm-lista{margin:0 0 4px 18px;font-size:14px;color:var(--azul);}
+.tm-lista li{margin:2px 0;}
+
+/* Sustento de la quincena: el documento se ve como la hoja que se
+   va a mandar, no como una pantalla más. */
+.sus-hoja{background:var(--blanco);border:1px solid #e3e9f2;border-radius:16px;
+  padding:26px 30px;max-width:1100px;margin:0 auto;box-shadow:0 2px 14px rgba(13,59,133,.07);}
+.sus-cab{border-bottom:2px solid var(--azul);padding-bottom:12px;margin-bottom:18px;}
+.sus-tit{font-size:20px;font-weight:800;color:var(--azul);letter-spacing:.3px;}
+.sus-sub{font-size:13px;color:#5b6477;margin-top:4px;}
+.sus-h{font-size:15px;font-weight:800;color:var(--azul);margin:20px 0 8px;}
+.sus-lista{margin:0 0 4px 18px;font-size:14px;line-height:1.65;}
+.sus-p{font-size:14px;line-height:1.6;margin:8px 0 4px;}
+.sus-tabla{font-size:12.5px;}
+.sus-tabla td,.sus-tabla th{white-space:nowrap;}
+.sus-tabla tfoot th{background:#eef3fa;color:var(--azul);font-weight:800;}

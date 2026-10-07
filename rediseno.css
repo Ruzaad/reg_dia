@@ -915,3 +915,9 @@ body[data-pagina="supervisora"] .grid-personal{max-width:1100px;width:100%;margi
 .bs-pie .bsl-av{white-space:normal;min-width:0}
 .bs-btn{border:0;border-radius:10px;padding:9px 14px;font:700 13px var(--sans);background:var(--azul);color:#fff;cursor:pointer}
 .tab .cnt{display:inline-block;background:var(--alerta);color:#fff;border-radius:999px;font-size:11px;padding:1px 7px;margin-left:5px}
+
+/* Sustento de la quincena en modo oscuro: la hoja se apoya en los
+   tokens, no en el blanco fijo. */
+.sus-hoja{background:var(--sup);border:1px solid var(--linea);border-radius:var(--r);box-shadow:var(--sombra-2);}
+.sus-sub{color:var(--suave);}
+.sus-tabla tfoot th{background:var(--azul-t);}
