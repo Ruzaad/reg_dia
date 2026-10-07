@@ -1128,14 +1128,14 @@ async function confirmarPartirFec(id){
       p_id:id,p_cant:cant,p_fecha:fecha,p_motivo:motivo,p_causa:causa});
     if(!r.ok){ $("prtMsg").textContent=r.error||"No se pudo partir"; return; }
     cerrarModal();
-    mostrarOk(`${qty(r.movido)} und · ${esc(r.fecha)}${r.causa?" · "+esc(r.causa):""} · quedan ${qty(r.queda)}`);
+    toastDeshacer(`${qty(r.movido)} und · ${r.fecha}${r.causa?" · "+r.causa:""} · quedan ${qty(r.queda)}`, r.cambio, cargarReclamosFec);
     FEC_MOTIVOS = await rpc("fn_motivos_fecha_listar",{p_dni:ING.dni,p_token:ING.token}).catch(()=>FEC_MOTIVOS);
     pintarMotivosFec();
     await cargarReclamosFec();
   }catch(e){ $("prtMsg").textContent=e.message; }
 }
 
-async function aplicarCambioFec(){
+function aplicarCambioFec(){
   const ids = Object.keys(FEC_SEL).map(Number);
   if(!ids.length){ mostrarError("Marca al menos un ticket"); return; }
   const nueva = $("fechaNuevaFec").value;
@@ -1143,16 +1143,14 @@ async function aplicarCambioFec(){
   let motivo = $("motivoFec").value;
   if(motivo==="__OTRO__") motivo = $("motivoOtroFec").value.trim();
   if(!motivo){ mostrarError("Indica el motivo"); return; }
-  if(!confirm(`¿Mover ${ids.length} ticket(s) a ${nueva}?\nMotivo: ${motivo.toUpperCase()}`)) return;
-  try{
-    const r = await rpc("fn_reclamos_cambiar_fecha",{p_dni:ING.dni,p_token:ING.token,
-      p_ids:ids, p_fecha:nueva, p_motivo:motivo});
-    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
-    mostrarOk(`${r.cambiados} ticket(s) movidos a ${nueva}`);
-    FEC_MOTIVOS = await rpc("fn_motivos_fecha_listar",{p_dni:ING.dni,p_token:ING.token}).catch(()=>FEC_MOTIVOS);
-    pintarMotivosFec();
-    await cargarReclamosFec();
-  }catch(e){ mostrarError(e.message); }
+  const so=$("opFec"), nombre=so && so.selectedIndex>=0 ? so.options[so.selectedIndex].text : "";
+  abrirPreviaCambio({accion:"MOVER", ids, fecha:nueva, motivo,
+    filas:(FEC_RECL||[]).map(r=>({...r, nombre, area:$("areaFec").value})),
+    alTerminar: async()=>{
+      FEC_MOTIVOS = await rpc("fn_motivos_fecha_listar",{p_dni:ING.dni,p_token:ING.token}).catch(()=>FEC_MOTIVOS);
+      pintarMotivosFec();
+      await cargarReclamosFec();
+    }});
 }
 
 /* ================= OPERAR COMO OPERARIO ================= */
@@ -3745,7 +3743,7 @@ function actualizarLibSel(){
 }
 /* Marcar todos los tickets ACTIVOS visibles (respeta filtro de área/búsqueda). */
 function marcarVisiblesLib(){
-  const todos = TK_VISTA.filter(t=>t.estado==='ACTIVO' && t.id!=null);
+  const todos = TK_VISTA.filter(t=>t.estado==='ACTIVO' && t.id!=null && puedeEditar(t.area));
   const faltan = todos.some(t=>!libSel[t.id]);
   if(faltan) todos.forEach(t=>{ libSel[t.id]=true; });   // marca todos
   else todos.forEach(t=>{ delete libSel[t.id]; });        // si ya estaban todos, desmarca
@@ -3755,21 +3753,18 @@ function marcarVisiblesLib(){
 async function liberarLote(){
   const ids=Object.keys(libSel).map(Number).filter(n=>!isNaN(n));
   if(!ids.length){ mostrarError("No hay tickets seleccionados"); return; }
-  const motivo=prompt(`Liberar ${ids.length} ticket(s) seleccionado(s).\nMotivo:`);
-  if(motivo===null) return;
-  try{
-    // Por id: una sola llamada, sirva el ticket para costura (deshace el
-    // troceo) o para Acabado / trabajo sin OF (parche 60).
-    const r=await rpc("fn_liberar_ids",{p_dni:ING.dni,p_token:ING.token,
-      p_ids:ids,p_motivo:motivo.trim()});
-    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
-    mostrarOk(`${r.liberados} ticket(s) liberado(s)${avisoTroceoLote(r)}`);
-    modoLibTk=false; libSel={};
-    const bm=$("btnModoLiberar"); if(bm){ bm.textContent="LIBERAR EN LOTE"; bm.classList.remove("gris"); }
-    const bs=$("btnLiberarSel"); if(bs) bs.style.display="none";
-    await cargarTk();
-  }catch(e){ mostrarError(e.message); }
+  const fecha=$("fechaTk").value;
+  abrirPreviaCambio({accion:"LIBERAR", ids, filas:TK.map(t=>({...t,fecha})), motivos:MOTIVOS_LIB,
+    alTerminar: async()=>{
+      modoLibTk=false; libSel={};
+      const bm=$("btnModoLiberar"); if(bm){ bm.textContent="Liberar en lote"; bm.classList.remove("gris"); }
+      const bs=$("btnLiberarSel"); if(bs) bs.style.display="none";
+      const bv=$("btnMarcarVisibles"); if(bv) bv.style.display="none";
+      await cargarTk();
+    }});
 }
+/* Motivos frecuentes al liberar (sugerencias, no una lista cerrada). */
+const MOTIVOS_LIB=["ERROR DE OP","ERROR DE CANTIDAD","ERROR DE NUMERACIÓN","NO LO REALIZÓ","OTRO PERSONAL LO REALIZÓ","EQUIVOCACIÓN DE MÓDULO","AÚN NO SALE LA ORDEN"];
 let tkOcultarLib=true;   // parche 76: los liberados no estorban por defecto
 function toggleOcultarLib(){ tkOcultarLib = !!($("chkOcultarLib") && $("chkOcultarLib").checked); pintarTk(); }
 function pintarTk(){
@@ -3802,7 +3797,7 @@ function pintarTk(){
   if(tkPag>totalP) tkPag=totalP; if(tkPag<1) tkPag=1;
   const ini=(tkPag-1)*TK_PAGE;
   const pagina=lista.slice(ini, ini+TK_PAGE);
-  // Cualquier cargo INGENIERIA puede liberar (el servidor revalida).
+  // Liberar solo en las áreas que el usuario edita (parche 95); el servidor revalida.
   const flecha=k=>tkSort.col===k?(tkSort.dir===1?" \u25B2":" \u25BC"):"";
   const thead="<thead><tr>"
     +(modoLibTk?`<th></th>`:"")
@@ -3810,12 +3805,12 @@ function pintarTk(){
     +"<th></th></tr></thead>";
   $("tablaTk").innerHTML = thead+"<tbody>"+
     pagina.map((t,idx)=>{ const i=ini+idx; return `<tr>
-      ${modoLibTk?`<td>${(t.estado==='ACTIVO'&&t.id!=null)?`<input type="checkbox" class="chk-lib" ${libSel[t.id]?"checked":""} onclick="toggleLibSel(${Number(t.id)})">`:""}</td>`:""}
+      ${modoLibTk?`<td>${(t.estado==='ACTIVO'&&t.id!=null&&puedeEditar(t.area))?`<input type="checkbox" class="chk-lib" ${libSel[t.id]?"checked":""} onclick="toggleLibSel(${Number(t.id)})">`:""}</td>`:""}
       <td>${esc(t.hora)}</td><td>${esc(t.nombre)}</td><td>${esc(t.area)}</td>
       <td>${esc(t.articulo)}</td><td>${esc(t.of)}</td><td class="izq">${esc(t.op)}</td>
       <td>${t.std!=null?t.std:""}</td><td>${t.cant}</td><td>${t.minutos}</td><td>${esc(t.num)}</td>
       <td><span class="pill ${esc(t.estado)}">${esc(t.estado)}</span></td>
-      <td>${t.estado==='ACTIVO'?`<button class="btn-mini rojo" onclick="liberarTicket(${i})">LIBERAR</button>`:""}</td>
+      <td>${t.estado==='ACTIVO'&&puedeEditar(t.area)?`<button class="btn-mini rojo" onclick="liberarTicket(${i})">LIBERAR</button>`:""}</td>
       </tr>`; }).join("")+"</tbody>";
   const pg=$("tkPager");
   if(pg){
@@ -3881,37 +3876,24 @@ function resumenPorPersonal(){
       </div>`).join("");
 }
 
-/* Retiro de tickets desde la app: SOLO el usuario ALOPEZ.
-   El servidor vuelve a validar (fn_liberar_ticket); esto es solo UI. */
-async function liberarTicket(i){
+/* Liberar un ticket desde la tabla: misma vista previa que el lote (parche 102).
+   Va por id, que sirve igual para costura y para Acabado / trabajo sin OF. */
+function liberarTicket(i){
   const t = TK_VISTA[i]; if(!t) return;
-  /* Acabado y el trabajo sin OF no tienen código (parche 27): se identifican
-     por id. Antes se mandaba p_codigo:null, la RPC no encontraba nada y solo
-     se podía deshacer desde la base de datos (parche 60). */
-  const sinCodigo = (t.codigo==null || t.codigo==="");
-  const etiqueta = t.num || t.codigo || `${t.op||"registro"} · ${t.cant} und`;
-  if(sinCodigo && t.id==null){ mostrarError("Este registro no trae id: recarga con ↻"); return; }
-  const motivo = prompt(`Liberar ${etiqueta} tomado por ${t.nombre}.\nMotivo:`);
-  if(motivo===null) return;
-  try{
-    const r = sinCodigo
-      ? await rpc("fn_liberar_ids",{p_dni:ING.dni,p_token:ING.token,
-          p_ids:[Number(t.id)],p_motivo:motivo.trim()})
-      : await rpc("fn_liberar_ticket",{p_dni:ING.dni,p_token:ING.token,
-          p_codigo:t.codigo,p_motivo:motivo.trim(),p_area:t.area});
-    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
-    mostrarOk(`${etiqueta} liberado${sinCodigo?avisoTroceoLote(r):avisoTroceo(r)}`);
-    await cargarTk();
-  }catch(e){ mostrarError(e.message); }
+  if(t.id==null){ mostrarError("Este registro no trae id: recarga con ↻"); return; }
+  const fecha=$("fechaTk").value;
+  abrirPreviaCambio({accion:"LIBERAR", ids:[Number(t.id)], filas:[{...t,fecha}], motivos:MOTIVOS_LIB, alTerminar:cargarTk});
 }
 
 /* ---- Tickets · Reclamados x Operación (por OF, sin filtro de fecha) ---- */
 let TKOP={items:[],of:"",area:"",_rows:[]}, tkOpSort={col:null,dir:1}, tkOpMarc={}, tkOpPag=1;
 const TKOP_PAGE=10;
 function tkVista(v){
-  const op=v==="op", rep=v==="rep", ope=v==="ope", act=!op&&!rep&&!ope;
+  const op=v==="op", rep=v==="rep", ope=v==="ope", his=v==="his", act=!op&&!rep&&!ope&&!his;
   $("tkActualView").hidden=!act; $("tkOpView").hidden=!op;
-  $("tkRepView").hidden=!rep; $("tkOpeView").hidden=!ope;
+  $("tkRepView").hidden=!rep; $("tkOpeView").hidden=!ope; $("tkHisView").hidden=!his;
+  $("tkTabHis").classList.toggle("activo",his);
+  if(his) hisInit();
   $("tkTabActual").classList.toggle("activo",act);
   $("tkTabOp").classList.toggle("activo",op);
   $("tkTabRep").classList.toggle("activo",rep);
@@ -3942,7 +3924,7 @@ function ordenarTkOp(col){ if(tkOpSort.col===col) tkOpSort.dir*=-1; else tkOpSor
 function tkOpToggle(id){ if(tkOpMarc[id]) delete tkOpMarc[id]; else tkOpMarc[id]=true; pintarTkOp(); }
 function tkOpPagina(d){ tkOpPag+=d; pintarTkOp(); }
 function tkOpMarcarVisibles(){
-  const act=(TKOP._rows||[]).filter(t=>t.estado==='ACTIVO' && t.id!=null);
+  const act=(TKOP._rows||[]).filter(t=>t.estado==='ACTIVO' && t.id!=null && puedeEditar(TKOP.area));
   const faltan=act.some(t=>!tkOpMarc[t.id]);
   act.forEach(t=>{ if(faltan) tkOpMarc[t.id]=true; else delete tkOpMarc[t.id]; });
   pintarTkOp();
@@ -3970,13 +3952,13 @@ function pintarTkOp(){
   const COLS=[["nombre","Nombre"],["dni","DNI"],["op","Operación"],["hora","Fecha/hora reclamado"],["numeracion","Numeración"],["cant","Cant"],["minutos","Min"],["estado","Estado"]];
   const thead=`<thead><tr><th></th>${COLS.map(c=>`<th class="ord${c[0]==="nombre"?" izq":""}" onclick="ordenarTkOp('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}<th></th></tr></thead>`;
   const body=pag.length? pag.map(t=>`<tr${t.estado==='LIBERADO'?' style="opacity:.55;"':''}>
-      <td>${(t.estado==='ACTIVO'&&t.id!=null)?`<input type="checkbox" class="sw" ${tkOpMarc[t.id]?"checked":""} onclick="tkOpToggle(${Number(t.id)})">`:""}</td>
+      <td>${(t.estado==='ACTIVO'&&t.id!=null&&puedeEditar(TKOP.area))?`<input type="checkbox" class="sw" ${tkOpMarc[t.id]?"checked":""} onclick="tkOpToggle(${Number(t.id)})">`:""}</td>
       <td class="izq">${esc(t.nombre)}</td><td>${esc(t.dni)}</td>
       <td>${esc(t.op)}${t.causa?`<div class="cf-detalle">${esc(t.causa)}</div>`:""}</td>
       <td>${esc(t.hora)}</td><td>${esc(t.numeracion||"—")}</td>
       <td><b>${t.cant!=null?qty(t.cant):"—"}</b></td><td>${t.minutos!=null?t.minutos:"—"}</td>
       <td><span class="pill ${t.estado==='ACTIVO'?'ACTIVO':'FALTA'}">${esc(t.estado)}</span></td>
-      <td>${(t.estado==='ACTIVO'&&t.id!=null)?`<button class="btn-mini rojo" onclick="liberarTkOp(${Number(t.id)})">LIBERAR</button>`:""}</td></tr>`).join("")
+      <td>${(t.estado==='ACTIVO'&&t.id!=null&&puedeEditar(TKOP.area))?`<button class="btn-mini rojo" onclick="liberarTkOp(${Number(t.id)})">LIBERAR</button>`:""}</td></tr>`).join("")
     : `<tr><td colspan="10"><div class="vacio-msg">Sin tickets reclamados para esta OF</div></td></tr>`;
   $("tablaTkOp").innerHTML=thead+"<tbody>"+body+"</tbody>";
   const pg=$("tkOpPager");
@@ -3987,31 +3969,198 @@ function pintarTkOp(){
 }
 /* Liberan por id (parche 60): así vale igual para costura —fn_liberar_ids
    deshace el troceo— y para Acabado / trabajo sin OF, que no tienen código. */
-async function liberarTkOp(id){
-  const t=(TKOP.items||[]).find(x=>Number(x.id)===Number(id));
-  const etq=t?(t.numeracion||t.codigo||`${t.op||"registro"} · ${t.cant} und`):id;
-  const motivo=prompt(`Liberar ${etq} tomado por ${t?t.nombre:""}.\nMotivo:`);
-  if(motivo===null) return;
-  try{
-    const r=await rpc("fn_liberar_ids",{p_dni:ING.dni,p_token:ING.token,
-      p_ids:[Number(id)],p_motivo:(motivo||"").trim()});
-    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
-    mostrarOk(`${etq} liberado${avisoTroceoLote(r)}`);
-    delete tkOpMarc[id]; await cargarTkOp();
-  }catch(e){ mostrarError(e.message); }
+const filasTkOp=()=>(TKOP.items||[]).map(t=>({...t, area:TKOP.area, of:TKOP.of, num:t.numeracion, fecha:String(t.hora||"").slice(0,10)}));
+function liberarTkOp(id){
+  abrirPreviaCambio({accion:"LIBERAR", ids:[Number(id)], filas:filasTkOp(), motivos:MOTIVOS_LIB,
+    alTerminar: async()=>{ delete tkOpMarc[id]; await cargarTkOp(); }});
 }
-async function liberarTkOpLote(){
+function liberarTkOpLote(){
   const ids=Object.keys(tkOpMarc).map(Number).filter(n=>!isNaN(n));
   if(!ids.length){ mostrarError("No hay tickets seleccionados"); return; }
-  const motivo=prompt(`Liberar ${ids.length} ticket(s) seleccionado(s).\nMotivo:`);
-  if(motivo===null) return;
+  abrirPreviaCambio({accion:"LIBERAR", ids, filas:filasTkOp(), motivos:MOTIVOS_LIB,
+    alTerminar: async()=>{ tkOpMarc={}; await cargarTkOp(); }});
+}
+
+/* ================= LIBERAR / MOVER CON VISTA PREVIA (parche 102) =================
+   Antes de liberar o mover se ve qué se toca (persona, OF, operación, día) y,
+   hecho el cambio, queda en el historial con quién lo hizo y se puede deshacer.
+   Sin el parche en la base, la vista previa se arma con lo que ya está en pantalla. */
+const ddmm = f => f ? String(f).slice(8,10)+"/"+String(f).slice(5,7) : "—";
+function previaLocal(accion, ids, filas, fecha){
+  const set=new Set(ids.map(Number));
+  const va=(filas||[]).filter(t=>set.has(Number(t.id)) && t.estado==='ACTIVO' && (accion!=='MOVER' || t.fecha!==fecha));
+  const g={};
+  va.forEach(t=>{
+    const k=[t.nombre,t.area,t.of,t.op,t.fecha].join("|");
+    const e=(g[k]=g[k]||{nombre:t.nombre,area:t.area,of:t.of,op:t.op,fecha:t.fecha,n:0,cant:0,min:0,nums:[]});
+    e.n++; e.cant+=Number(t.cant)||0; e.min+=Number(t.minutos)||0; if(t.num) e.nums.push(t.num);
+  });
+  return {ok:true, local:true, n:va.length, cant:va.reduce((a,t)=>a+(Number(t.cant)||0),0),
+    min:va.reduce((a,t)=>a+(Number(t.minutos)||0),0), personas:new Set(va.map(t=>t.nombre)).size,
+    grupos:Object.values(g).map(e=>({...e,nums:e.nums.join(", ")})),
+    no_activos:(filas||[]).filter(t=>set.has(Number(t.id)) && t.estado!=='ACTIVO').length,
+    misma_fecha:accion==='MOVER'?(filas||[]).filter(t=>set.has(Number(t.id)) && t.estado==='ACTIVO' && t.fecha===fecha).length:0,
+    sin_permiso:[], troceo:[], avisos:[]};
+}
+/* op = {accion:'LIBERAR'|'MOVER', ids, filas, fecha, motivo, motivos:[], alTerminar} */
+async function abrirPreviaCambio(op){
+  const ids=(op.ids||[]).map(Number).filter(n=>!isNaN(n));
+  if(!ids.length){ mostrarError("No hay tickets seleccionados"); return; }
+  abrirModal(cargandoHTML("Revisando lo que se va a "+(op.accion==='MOVER'?"mover":"liberar")+"…"), "modal-ancho");
+  let pv;
   try{
-    const r=await rpc("fn_liberar_ids",{p_dni:ING.dni,p_token:ING.token,
-      p_ids:ids,p_motivo:motivo.trim()});
-    if(!r.ok){ mostrarError(r.error||"No se pudo liberar"); return; }
-    mostrarOk(`${r.liberados||ids.length} ticket(s) liberado(s)${avisoTroceoLote(r)}`);
-    tkOpMarc={}; await cargarTkOp();
+    pv=await rpc("fn_tickets_previa",{p_dni:ING.dni,p_token:ING.token,p_accion:op.accion,p_ids:ids,p_fecha:op.fecha||null});
+  }catch(e){
+    if(/SESION|autoriz|permiso/i.test(e.message)){ cerrarModal(); mostrarError(e.message); return; }
+    pv=previaLocal(op.accion, ids, op.filas, op.fecha);
+  }
+  if(!pv || pv.ok===false){ cerrarModal(); mostrarError((pv&&pv.error)||"No se pudo revisar"); return; }
+  op.ids=ids; PREVIA=op;
+  const mover=op.accion==='MOVER';
+  const n=Number(pv.n)||0;
+  const avisos=[...(pv.avisos||[])];
+  if((pv.troceo||[]).length) avisos.push("También se liberan los residuales que ya tomó "
+    + pv.troceo.map(t=>`${soloApellidos(t.nombre)} (${qty(t.cant)} und)`).join(", ")+": el paquete vuelve entero");
+  const fuera=[];
+  if(pv.no_activos) fuera.push(`${pv.no_activos} ya liberado(s)`);
+  if(pv.misma_fecha) fuera.push(`${pv.misma_fecha} ya está(n) en el ${ddmm(op.fecha)}`);
+  if((pv.sin_permiso||[]).length) fuera.push(`los de ${pv.sin_permiso.join(", ")}: tienes solo lectura`);
+  const filas=(pv.grupos||[]).map(g=>`<tr>
+      <td class="izq"><b>${esc(soloApellidos(g.nombre||""))}</b><div class="cf-detalle">${esc(g.area||"")}</div></td>
+      <td>${esc(g.of||"—")}</td><td class="izq">${esc(g.op||"")}</td>
+      <td>${mover?`<span class="pv-de">${ddmm(g.fecha)}</span> → <b>${ddmm(op.fecha)}</b>`:ddmm(g.fecha)}</td>
+      <td><b>${g.n}</b></td><td>${qty(g.cant)}</td>
+      <td class="izq pv-nums" title="${esc(g.nums||"")}">${esc(g.nums||"—")}</td></tr>`).join("");
+  const mots=(op.motivos||[]).map(m=>`<option value="${esc(m)}">`).join("");
+  abrirModal(`
+    <h2>${mover?`Mover ${n} ticket(s) al ${ddmm(op.fecha)}`:`Liberar ${n} ticket(s)`}</h2>
+    <div class="sub" style="margin-bottom:12px;">Revisa que sea lo que querías. Queda registrado a tu nombre y podrás deshacerlo.</div>
+    <div class="pv-kpis">
+      <div><b>${n}</b><span>tickets</span></div><div><b>${qty(pv.cant)}</b><span>und</span></div>
+      <div><b>${Math.round(Number(pv.min)||0)}</b><span>min</span></div><div><b>${pv.personas||0}</b><span>persona(s)</span></div>
+    </div>
+    ${avisos.length?`<div class="pv-aviso">${avisos.map(a=>`<div>⚠ ${esc(a)}</div>`).join("")}</div>`:""}
+    ${fuera.length?`<div class="pv-fuera">No se tocan: ${esc(fuera.join(" · "))}</div>`:""}
+    ${n?`<div class="tabla-scroll pv-tabla"><table class="tabla"><thead><tr><th class="izq">Persona</th><th>OF</th><th class="izq">Operación</th>
+      <th>${mover?"Día":"Día del ticket"}</th><th>Tickets</th><th>Und</th><th class="izq">Numeración</th></tr></thead>
+      <tbody>${filas}</tbody></table></div>`:`<div class="vacio-msg">Nada de la selección se puede ${mover?"mover":"liberar"}</div>`}
+    ${mover?`<div class="cf-detalle" style="margin-top:10px;">Motivo: <b>${esc(String(op.motivo||"").toUpperCase())}</b></div>`
+      :`<div class="modal-campo" style="margin-top:12px;"><label>Motivo (obligatorio)</label>
+        <input id="pvMotivo" list="pvMotivos" maxlength="120" placeholder="Ej: ERROR DE OP, NO LO REALIZÓ…" value="${esc(op.motivo||"")}">
+        <datalist id="pvMotivos">${mots}</datalist></div>`}
+    ${pv.local?`<div class="cf-detalle">Vista hecha con lo que está en pantalla: falta el parche 102 en la base.</div>`:""}
+    <div class="modal-msg" id="pvMsg"></div>
+    <div class="modal-acciones">
+      ${n?`<button class="btn-principal btn-modal-guardar ${mover?"":"pv-rojo"}" id="pvOk" onclick="confirmarPreviaCambio()">${mover?"MOVER":"LIBERAR"} ${n} TICKET(S)</button>`:""}
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`, "modal-ancho");
+  setTimeout(()=>{ const m=$("pvMotivo"); if(m) m.focus(); }, 50);
+}
+let PREVIA=null;
+async function confirmarPreviaCambio(){
+  const op=PREVIA; if(!op) return;
+  const mover=op.accion==='MOVER';
+  const motivo=mover ? op.motivo : norm($("pvMotivo")?$("pvMotivo").value:"");
+  if(!motivo){ $("pvMsg").textContent="Escribe el motivo"; return; }
+  const b=$("pvOk"); if(b){ b.disabled=true; b.textContent="Guardando…"; }
+  try{
+    const r = mover
+      ? await rpc("fn_reclamos_cambiar_fecha",{p_dni:ING.dni,p_token:ING.token,p_ids:op.ids,p_fecha:op.fecha,p_motivo:motivo})
+      : await rpc("fn_liberar_ids",{p_dni:ING.dni,p_token:ING.token,p_ids:op.ids,p_motivo:motivo});
+    if(!r.ok){ $("pvMsg").textContent=r.error||"No se pudo"; if(b){ b.disabled=false; b.textContent=mover?"MOVER":"LIBERAR"; } return; }
+    cerrarModal(); PREVIA=null;
+    toastDeshacer(mover ? `${r.cambiados} ticket(s) movidos al ${ddmm(op.fecha)}`
+                        : `${r.liberados} ticket(s) liberado(s)${avisoTroceoLote(r)}`, r.cambio, op.alTerminar);
+    if(op.alTerminar) await op.alTerminar();
+  }catch(e){ $("pvMsg").textContent=e.message; if(b){ b.disabled=false; b.textContent=mover?"MOVER":"LIBERAR"; } }
+}
+/* Aviso verde con botón Deshacer: se queda 12 s para dar tiempo a reaccionar. */
+function toastDeshacer(msg, cambio, recargar){
+  if(!cambio){ mostrarOk(msg); return; }
+  const t=document.createElement("div");
+  t.className="toast ok"; t.setAttribute("role","status");
+  t.innerHTML=`<span class="toast-msg">${esc(msg)}</span><button class="toast-deshacer">Deshacer</button><button class="toast-x" aria-label="Cerrar">×</button>`;
+  t.querySelector(".toast-x").onclick=()=>cerrarToast(t);
+  t.querySelector(".toast-deshacer").onclick=async()=>{ cerrarToast(t); await deshacerCambio(cambio, recargar, true); };
+  _toastWrap().appendChild(t);
+  requestAnimationFrame(()=>t.classList.add("visible"));
+  setTimeout(()=>cerrarToast(t), 12000);
+}
+async function deshacerCambio(id, recargar, sinPreguntar){
+  if(!sinPreguntar && !confirm("¿Deshacer este cambio? Los tickets vuelven a como estaban.")) return;
+  try{
+    const r=await rpc("fn_tickets_deshacer",{p_dni:ING.dni,p_token:ING.token,p_id:Number(id)});
+    if(!r.ok){ mostrarError(r.error||"No se pudo deshacer"); return; }
+    mostrarOk(`Deshecho: ${r.n} ticket(s) volvieron a como estaban`);
+    if(recargar) await recargar();
+    if($("tkHisView") && !$("tkHisView").hidden) await cargarHis();
   }catch(e){ mostrarError(e.message); }
+}
+
+/* ---- Tickets · Historial de cambios ---- */
+let HIS=[];
+const HIS_ACC={LIBERAR:"Liberó",MOVER:"Movió de día",PARTIR:"Partió",DESHACER:"Deshizo"};
+function hisInit(){
+  const h=hoyISO(), d=$("hisDesde"), a=$("hisHasta"), s=$("hisArea");
+  if(d && !d.value){ const x=new Date(); x.setDate(x.getDate()-6); d.value=x.toISOString().slice(0,10); }
+  if(a && !a.value) a.value=h;
+  if(s && s.options.length<=1) s.innerHTML=`<option value="">Todas las áreas</option>`+(AREAS_LISTA||[]).map(x=>`<option>${esc(x)}</option>`).join("");
+  cargarHis();
+}
+async function cargarHis(){
+  pintarCargando($("tablaHis"),"Cargando…");
+  try{
+    HIS=await rpc("fn_tickets_cambios_listar",{p_dni:ING.dni,p_token:ING.token,
+      p_desde:$("hisDesde").value,p_hasta:$("hisHasta").value,p_area:$("hisArea").value});
+    if(HIS && HIS.ok===false){ mostrarError(HIS.error||"Error"); HIS=[]; }
+    pintarHis();
+  }catch(e){ $("tablaHis").innerHTML=""; mostrarError(/fn_tickets_cambios_listar/.test(e.message)?"Falta aplicar el parche 102 en la base":e.message); }
+}
+function pintarHis(){
+  const acc=$("hisAccion").value, q=normKey($("hisBuscar").value);
+  const lista=(HIS||[]).filter(c=>(!acc || c.accion===acc)
+    && (!q || normKey(c.nombre+" "+(c.motivo||"")+" "+((c.resumen||{}).personas||[]).join(" ")+" "+((c.resumen||{}).ofs||[]).join(" ")).includes(q)));
+  const quien={}; lista.forEach(c=>{ if(c.accion!=="DESHACER") quien[c.nombre]=(quien[c.nombre]||0)+Number(c.n||0); });
+  $("resumenHis").textContent = `${lista.length} cambio(s) · `
+    + (Object.keys(quien).length ? Object.entries(quien).map(([k,v])=>`${soloApellidos(k)}: ${v} ticket(s)`).join(" · ") : "sin cambios en esas fechas");
+  if(!lista.length){ $("tablaHis").innerHTML=`<tbody><tr><td><div class="vacio-msg">Nadie liberó ni movió tickets en esas fechas</div></td></tr></tbody>`; return; }
+  $("tablaHis").innerHTML=`<thead><tr><th>Cuándo</th><th class="izq">Quién</th><th>Acción</th><th>Tickets</th>
+    <th class="izq">De quién · OF</th><th>Días</th><th class="izq">Motivo</th><th></th></tr></thead><tbody>`
+    + lista.map(c=>{
+      const r=c.resumen||{}, per=(r.personas||[]).map(soloApellidos);
+      const dias = (r.a||[]).length ? `${(r.de||[]).map(ddmm).join(", ")||"—"} → ${r.a.map(ddmm).join(", ")}`
+        : (r.de||[]).map(ddmm).join(", ");
+      const estado = c.deshecho_en ? `<span class="pill LIBERADO" title="${esc(c.deshecho_en)}">Deshecho por ${esc(soloApellidos(c.deshecho_por||""))}</span>`
+        : c.puede_deshacer ? `<button class="btn-mini" onclick="deshacerCambio(${Number(c.id)}, cargarHis)">Deshacer</button>` : "";
+      return `<tr${c.deshecho_en||c.accion==="DESHACER"?' class="his-tenue"':""}>
+        <td>${esc(String(c.creado).slice(8,10)+"/"+String(c.creado).slice(5,7)+" "+String(c.creado).slice(11))}</td>
+        <td class="izq"><b>${esc(soloApellidos(c.nombre))}</b></td>
+        <td><span class="his-acc his-${esc(c.accion)}">${HIS_ACC[c.accion]||esc(c.accion)}</span>${c.deshace_a?`<div class="cf-detalle">el #${Number(c.deshace_a)}</div>`:""}</td>
+        <td><b>${c.n}</b><div class="cf-detalle">${qty(r.cant)} und</div></td>
+        <td class="izq">${esc(per.slice(0,2).join(", "))}${per.length>2?` y ${per.length-2} más`:""}
+          <div class="cf-detalle">${esc((c.areas||[]).join(", "))} · OF ${esc((r.ofs||[]).slice(0,3).join(", ")||"—")}${(r.ofs||[]).length>3?"…":""}</div></td>
+        <td>${esc(dias)}</td><td class="izq">${esc(c.motivo||"")}</td>
+        <td class="his-acciones"><button class="btn-mini gris" onclick="verCambio(${Number(c.id)})">Ver</button> ${estado}</td></tr>`; }).join("")
+    + "</tbody>";
+}
+async function verCambio(id){
+  const c=(HIS||[]).find(x=>Number(x.id)===Number(id)); if(!c) return;
+  abrirModal(cargandoHTML("Cargando…"),"modal-ancho");
+  try{
+    const det=await rpc("fn_tickets_cambio_detalle",{p_dni:ING.dni,p_token:ING.token,p_id:Number(id)});
+    const cambio=(a,b,f)=> a===b||b==null ? esc(f?f(a):a??"—") : `<span class="pv-de">${esc(f?f(a):a??"—")}</span> → <b>${esc(f?f(b):b??"—")}</b>`;
+    abrirModal(`<h2>${HIS_ACC[c.accion]||c.accion} · ${c.n} ticket(s)</h2>
+      <div class="sub" style="margin-bottom:12px;">${esc(c.nombre)} · ${esc(c.creado)}${c.motivo?` · Motivo: <b>${esc(c.motivo)}</b>`:""}</div>
+      <div class="tabla-scroll pv-tabla"><table class="tabla"><thead><tr><th class="izq">Persona</th><th>OF</th><th class="izq">Operación</th>
+        <th>Num.</th><th>Día</th><th>Cant</th><th>Estado</th></tr></thead><tbody>
+        ${(Array.isArray(det)?det:[]).map(d=>`<tr><td class="izq">${esc(soloApellidos(d.nombre||""))}</td><td>${esc(d.of||"—")}</td>
+          <td class="izq">${esc(d.op||"")}</td><td>${esc(d.num||"—")}</td>
+          <td>${d.nuevo?`<b>${ddmm(d.fecha_despues)}</b> (parte nueva)`:cambio(d.fecha_antes,d.fecha_despues,ddmm)}</td>
+          <td>${d.nuevo?qty(d.cant_despues):cambio(qty(d.cant_antes),d.cant_despues==null?null:qty(d.cant_despues))}</td>
+          <td>${d.estado_despues==null?"quitado":cambio(d.estado_antes,d.estado_despues)}</td></tr>`).join("")}
+      </tbody></table></div>
+      <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`,"modal-ancho");
+  }catch(e){ cerrarModal(); mostrarError(e.message); }
 }
 
 /* Tarjetas: suma de cantidades de las 2 últimas operaciones (mayor N°OP
