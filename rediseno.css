@@ -870,3 +870,15 @@ body[data-pagina="supervisora"] .grid-personal{max-width:1100px;width:100%;margi
 .his-tenue td{opacity:.6;}
 .his-acciones{white-space:nowrap;}
 @media (max-width:640px){ .pv-kpis{grid-template-columns:repeat(2,1fr);} }
+
+/* Revisión de datos al cargar OFs, HN y BASES (parche 105) */
+.hn-rev{background:var(--sup-2);border:1px solid var(--linea);border-radius:var(--r-s);padding:10px 12px;margin:8px 0;font-size:13.5px;}
+.hn-rev-tit{font-weight:800;color:var(--texto);margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.hn-rev-l{display:flex;gap:8px;align-items:flex-start;padding:3px 0;font-weight:600;}
+.hn-rev-l i{flex:0 0 20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-weight:800;font-size:12px;}
+.hn-rev-l.ok{color:var(--suave);} .hn-rev-l.ok i{background:var(--exito-t);color:var(--exito);}
+.hn-rev-l.av{color:var(--texto);} .hn-rev-l.av i{background:var(--ocre-t);color:var(--aviso);border:1px solid var(--aviso);}
+.ofs-avisos{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 8px;}
+.ofs-av{border:1px solid var(--linea);background:var(--sup);color:var(--texto);border-radius:999px;padding:5px 12px;font:600 13px var(--sans);cursor:pointer;}
+.ofs-av b{font-family:var(--mono);color:var(--alerta);margin-left:4px;}
+.ofs-av.sel{border-color:var(--azul);background:var(--azul-t);box-shadow:0 0 0 2px var(--azul-t);}
