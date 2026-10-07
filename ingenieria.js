@@ -100,7 +100,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoBolSin","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
+  "pasoBaseLog","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -138,6 +138,8 @@ function activarTab(tab){
   else if(tab==='pasoAudit') audInit();
   else if(tab==='pasoBaseLog') blInit();
   else if(tab==='pasoBolSin') bslInit();
+  else if(tab==='pasoTmpMed') tmInit();
+  else if(tab==='pasoTmpFalta') tfInit();
   else if(tab==='pasoPermisos') cargarPermisosAdmin();
   else if(tab==='pasoCorr') corrInit();
   else if(COSTOS_TABS.includes(tab)) costosEntrar(tab);
@@ -6166,6 +6168,14 @@ async function cargarBaseLog(){
   blPintar();
 }
 const blDif=x=>(x.std_antes!=null&&x.std_despues!=null)?(+x.std_despues)-(+x.std_antes):null;
+/* De dónde salió el cambio (parche 104): a mano en Bases, subida de Excel o
+   aplicado desde Tiempos medidos. Sin el parche todo llega como MANUAL. */
+function blOrigen(x){
+  const o=x.origen||"MANUAL";
+  if(o==="ESTUDIO") return `<span class="lg-tag nu">ESTUDIO</span>`
+    + (x.medido_por?` <span class="sub">${esc(x.medido_por)}${x.operarios?" · "+x.operarios+" op.":""}</span>`:"");
+  return `<span class="lg-tag ed">${esc(o)}</span>`;
+}
 function blPintar(){
   const u=$("blUsuario").value, q=normKey($("blBuscar").value);
   BL_VISTA=BL.filter(x=>(!u||x.dni===u)&&(!q||normKey([x.articulo,x.operacion,x.modulo,x.area].join(" ")).includes(q)));
@@ -6177,13 +6187,14 @@ function blPintar(){
   const TAG={EDITADO:"ed",AGREGADA:"nu",BORRADA:"bo"};
   const n2=v=>v==null?"—":(+v).toFixed(2);
   const head=`<thead><tr><th>Fecha y hora</th><th>Usuario</th><th>Área</th><th>Artículo</th><th>Módulo</th>
-    <th class="izq">Operación</th><th>Cambio</th><th>STD antes</th><th>STD después</th><th>Diferencia</th></tr></thead>`;
+    <th class="izq">Operación</th><th>Cambio</th><th>Origen</th><th>STD antes</th><th>STD después</th><th>Diferencia</th></tr></thead>`;
   const body=ver.length? ver.map(x=>{
     const d=blDif(x), pc=d!=null&&+x.std_antes?Math.round(d/(+x.std_antes)*100):null;
     const f=String(x.fecha||""), fTxt=f.slice(8,10)+"-"+f.slice(5,7)+"-"+f.slice(0,4)+" "+f.slice(11);
     return `<tr><td class="nw">${esc(fTxt)}</td><td class="nw" title="${esc(x.nombre||"")}"><b>${esc(x.dni)}</b></td>
       <td>${esc(x.area||"")}</td><td><b>${esc(x.articulo||"")}</b></td><td>${esc(x.modulo||"")}</td>
       <td class="izq">${esc(x.operacion||"")}</td><td><span class="lg-tag ${TAG[x.accion]||"ed"}">${esc(x.accion)}</span></td>
+      <td class="nw">${blOrigen(x)}</td>
       <td class="lg-d">${n2(x.std_antes)}</td><td class="lg-d">${n2(x.std_despues)}</td>
       <td class="nw lg-d ${d>0?"lg-up":d<0?"lg-dn":""}">${d==null||d===0?"—":(d>0?"▲ +":"▼ ")+d.toFixed(2)+(pc!=null?` (${pc>0?"+":""}${pc}%)`:"")}</td></tr>`;
   }).join("") : `<tr><td colspan="10"><div class="vacio-msg">Sin cambios en el rango</div></td></tr>`;
@@ -6192,8 +6203,9 @@ function blPintar(){
 }
 function descargarBaseLog(){
   if(!BL_VISTA.length){ mostrarError("No hay datos para descargar"); return; }
-  const CAB=["Fecha y hora","Usuario","Nombre","Área","Artículo","Módulo","N° OP","Operación","Cambio","STD antes","STD después","Diferencia"];
+  const CAB=["Fecha y hora","Usuario","Nombre","Área","Artículo","Módulo","N° OP","Operación","Cambio","Origen","Medido por","STD antes","STD después","Diferencia"];
   const filas=BL_VISTA.map(x=>[x.fecha,x.dni,x.nombre||"",x.area,x.articulo,x.modulo,x.n_op>=999999?"":x.n_op,x.operacion,x.accion,
+    x.origen||"MANUAL", x.medido_por||"",
     x.std_antes==null?"":+x.std_antes, x.std_despues==null?"":+x.std_despues, blDif(x)==null?"":+blDif(x).toFixed(4)]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "HISTORIAL_BASE");
@@ -6670,4 +6682,223 @@ async function confirmarEliminarInci(id){
     if(!r.ok){ mostrarError(r.error||"No se pudo borrar"); return; }
     cerrarModal(); await cargarOcurrencias();
   }catch(e){ mostrarError(e.message); }
+}
+/* ================= TIEMPOS (parche 104) =================
+   Lo que midieron los analistas con el aplicativo de estudios de tiempos, al
+   lado del STD de la BASE. La operación es del área (base madre), así que un
+   estudio vale para todos los artículos que la tienen. */
+let TM=[], TM_VISTA=[], TM_MARCA=new Set();
+const TM_DIF=0.05;                       // 5 %: lo que Ruzaad considera distinto
+const tmDif   = x => (x.te_min==null || !+x.std) ? null : (+x.te_min - +x.std);
+const tmDifPc = x => { const d=tmDif(x); return d==null?null:d/(+x.std); };
+const TM_NIVEL={consolidado:["ACTIVO","Consolidado"],en_validacion:["PROCESO","En validación"],provisional:["FALTA","Provisional"]};
+
+function tmInit(){
+  const sa=$("tmArea");
+  if(sa && !sa.options.length){
+    // Sin "Todas las áreas": la comparación es por área, como la BASE.
+    sa.innerHTML=(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+    // Arranca en un área que pueda editar: es donde puede aplicar lo medido.
+    const mia=areasEdita().find(a=>(AREAS_LISTA||[]).includes(a));
+    if(mia) sa.value=mia;
+  }
+  tmArts();
+}
+async function tmArts(){
+  const sel=$("tmArt"); sel.innerHTML=`<option value="">Todos los artículos</option>`;
+  await cargarTmpMed();
+  const arts=[...new Set(TM.map(x=>x.articulo).filter(Boolean))].sort(cmpVal);
+  sel.innerHTML=`<option value="">Todos los artículos</option>`+arts.map(a=>`<option>${esc(a)}</option>`).join("");
+}
+async function cargarTmpMed(){
+  const area=$("tmArea").value;
+  if(!area){ mostrarError("Elige un área"); return; }
+  $("tmTabla").innerHTML=`<tbody><tr><td>${cargandoHTML("Cargando tiempos…")}</td></tr></tbody>`; $("tmKpis").innerHTML="";
+  try{
+    const r=await rpc("fn_tiempos_medidos",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:$("tmArt").value||""});
+    if(!r || !r.ok){ mostrarError((r&&r.error)||"Error"); TM=[]; $("tmTabla").innerHTML=""; return; }
+    TM=r.items||[]; TM_MARCA.clear(); tmPintar();
+  }catch(e){ mostrarError(e.message); $("tmTabla").innerHTML=""; }
+}
+function tmPintar(){
+  const f=$("tmFiltro").value, q=normKey($("tmBuscar").value);
+  TM_VISTA=TM.filter(x=>{
+    if(q && !normKey([x.operacion,x.modulo,x.articulo].join(" ")).includes(q)) return false;
+    const pc=tmDifPc(x);
+    if(f==="sin") return x.te_min==null;
+    if(f==="con") return x.te_min!=null;
+    if(f==="dif") return pc!=null && Math.abs(pc)>=TM_DIF;
+    return true;
+  });
+  const con=TM.filter(x=>x.te_min!=null), cons=TM.filter(x=>x.nivel==="consolidado");
+  const dif=TM.filter(x=>{const pc=tmDifPc(x); return pc!=null && Math.abs(pc)>=TM_DIF;});
+  const k=(n,l,c)=>`<div class="kpi"><div class="kpi-num"${c?` style="color:${c}"`:""}>${n}</div><div class="kpi-lbl">${l}</div></div>`;
+  $("tmKpis").innerHTML=k(TM.length,"Operaciones en la BASE")
+    +k(con.length+(TM.length?" · "+Math.round(con.length/TM.length*100)+"%":""),"Con estudio")
+    +k(cons.length,"Consolidadas (3+ operarios)","var(--exito)")
+    +k(dif.length,"Difieren 5% o más", dif.length?"var(--alerta)":"")
+    +k(TM.length-con.length,"Sin medir", TM.length-con.length?"var(--aviso)":"");
+
+  const n2=v=>v==null?"—":(+v).toFixed(2);
+  const head=`<thead><tr><th>N°</th><th>Módulo</th><th class="izq">Operación</th><th>Artículo</th>
+    <th>STD BASE</th><th>Medido (TE)</th><th>Diferencia</th><th>Confianza</th><th>Operarios</th>
+    <th>Último estudio</th><th>Min. prod. 30 d</th><th></th></tr></thead>`;
+  const body=TM_VISTA.length? TM_VISTA.map(x=>{
+    const d=tmDif(x), pc=tmDifPc(x), marcable=pc!=null && Math.abs(pc)>=TM_DIF;
+    const difTxt = d==null ? "—"
+      : !marcable ? `<span class="sub">≈ igual</span>`
+      : `<b class="${d>0?"lg-up":"lg-dn"}">${d>0?"▲ +":"▼ "}${d.toFixed(2)} (${pc>0?"+":""}${Math.round(pc*100)}%)</b>`;
+    const niv = x.nivel ? `<span class="pill ${TM_NIVEL[x.nivel][0]}">${TM_NIVEL[x.nivel][1]}</span>`
+                        : `<span class="pill SIN_MARCAR">Sin medir</span>`;
+    const chk = marcable && puedeEditar($("tmArea").value)
+      ? `<label class="chk-inline"><input type="checkbox" class="tm-chk" value="${x.op_id}"${TM_MARCA.has(x.op_id)?" checked":""}
+          onchange="tmMarcar(${x.op_id}, this.checked)"> Aplicar ${n2(x.te_min)}</label>` : "";
+    return `<tr><td>${x.n_op??"—"}</td><td>${esc(x.modulo||"")}</td>
+      <td class="izq"><a href="#" onclick="tmDetalle(${x.op_id});return false;">${esc(x.operacion||"")}</a></td>
+      <td><b>${esc(x.articulo||"")}</b></td>
+      <td class="lg-d"><b>${n2(x.std)}</b></td><td class="lg-d">${n2(x.te_min)}</td>
+      <td class="nw">${difTxt}</td><td>${niv}</td><td>${x.n_operarios||"—"}</td>
+      <td class="nw">${x.ultimo?fechaCorta(x.ultimo):"—"}</td><td>${x.min_30d?Math.round(x.min_30d).toLocaleString("es-PE"):"—"}</td>
+      <td class="nw">${chk}</td></tr>`;
+  }).join("") : `<tr><td colspan="12"><div class="vacio-msg">Sin operaciones para este filtro</div></td></tr>`;
+  $("tmTabla").innerHTML=head+"<tbody>"+body+"</tbody>";
+  tmBoton();
+}
+function fechaCorta(f){ const s=String(f||""); return s?s.slice(8,10)+"-"+s.slice(5,7)+"-"+s.slice(0,4):"—"; }
+function tmMarcar(id, on){ if(on) TM_MARCA.add(id); else TM_MARCA.delete(id); tmBoton(); }
+function tmBoton(){
+  const b=$("tmBtnAplicar"); if(!b) return;
+  b.disabled=!TM_MARCA.size;
+  b.textContent=TM_MARCA.size?`Aplicar los ${TM_MARCA.size} marcados`:"Aplicar los marcados";
+}
+/* Aplicar cambia el STD solo del artículo que se está viendo. Tocar todos los
+   artículos del área es una casilla aparte: la misma operación puede tener un
+   tiempo distinto en otro artículo. */
+function tmAplicarMarcados(){
+  if(!TM_MARCA.size) return;
+  const area=$("tmArea").value, art=$("tmArt").value;
+  const ops=[...TM_MARCA], filas=TM.filter(x=>TM_MARCA.has(x.op_id));
+  const lista=[...new Set(filas.map(x=>x.operacion))].slice(0,8);
+  abrirModal(`
+    <h2>Aplicar ${ops.length} tiempo(s) a la BASE</h2>
+    <div class="sub" style="margin-bottom:12px;text-align:left;">${esc(area)}${art?" · "+esc(art):""}. El STD cambia al tiempo medido y queda en
+      Historial de tiempos a tu nombre, con origen ESTUDIO.</div>
+    <ul class="tm-lista" style="text-align:left;">${lista.map(o=>`<li>${esc(o)}</li>`).join("")}${ops.length>lista.length?`<li class="sub">y ${ops.length-lista.length} más…</li>`:""}</ul>
+    ${art?`<label class="chk-inline" style="margin-top:10px;"><input type="checkbox" id="tmTodosArt"> Cambiar también los demás artículos del área que tienen esta operación</label>`:
+         `<div class="sub" style="margin-top:10px;">Estás viendo todos los artículos: el cambio entra en todos los del área que tienen esa operación.</div>`}
+    <div class="modal-msg" id="tmMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="tmAplicarConfirmar()">APLICAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`, "modal-ancho");
+}
+async function tmAplicarConfirmar(){
+  const area=$("tmArea").value, art=$("tmArt").value;
+  const todos=$("tmTodosArt") && $("tmTodosArt").checked;
+  try{
+    const r=await rpc("fn_tiempos_aplicar",{p_dni:ING.dni,p_token:ING.token,p_area:area,
+      p_ops:[...TM_MARCA], p_articulo:(todos||!art)?"":art});
+    if(!r.ok){ $("tmMsg").textContent=r.error||"No se pudo aplicar"; return; }
+    cerrarModal(); TM_MARCA.clear();
+    mostrarOk(r.filas?`Listo: ${r.filas} fila(s) de la BASE con el tiempo medido.`:"Ya estaban con ese tiempo.");
+    await cargarTmpMed();
+  }catch(e){ const m=$("tmMsg"); if(m) m.textContent=e.message; else mostrarError(e.message); }
+}
+async function tmDetalle(opId){
+  abrirModal(`<h2>Operación</h2>${cargandoHTML("Cargando mediciones…")}`, "modal-ancho");
+  try{
+    const r=await rpc("fn_tiempos_detalle",{p_dni:ING.dni,p_token:ING.token,p_op_id:opId});
+    if(!r || !r.ok){ cerrarModal(); mostrarError((r&&r.error)||"Error"); return; }
+    const fila=TM.find(x=>x.op_id===opId)||{};
+    const n2=v=>v==null?"—":(+v).toFixed(2);
+    const cro=(r.estandares||[]).find(s=>s.metodo==="CRONOMETRO");
+    const d=fila.std&&cro?+cro.te_min-+fila.std:null;
+    const k=(n,l,c)=>`<div class="kpi"><div class="kpi-num"${c?` style="color:${c}"`:""}>${n}</div><div class="kpi-lbl">${l}</div></div>`;
+    const est=(r.estudios||[]).map(e=>`<tr><td class="nw">${fechaCorta(e.fecha)}</td><td><b>${esc(e.analista||"")}</b></td>
+      <td>${esc(e.operario||"")}</td><td>${esc(e.articulo||"—")}</td><td>${esc(e.metodo==="CONTEO"?"Conteo":"Cronómetro")}${e.modo==="SIMULTANEO"?" · simultáneo":""}</td>
+      <td>${e.n_ciclos||"—"}</td><td class="lg-d">${n2(e.tn_min)}</td><td class="lg-d"><b>${n2(e.te_min)}</b></td>
+      <td>${e.dispersion_cv?(+e.dispersion_cv).toFixed(1)+"%":"—"}</td>
+      <td>${e.compite?"Compite":`<span class="sub">No compite</span>`}</td></tr>`).join("")
+      || `<tr><td colspan="10"><div class="vacio-msg">Todavía nadie midió esta operación</div></td></tr>`;
+    const log=(r.cambios||[]).map(c=>`<tr><td class="nw">${esc(c.fecha)}</td><td><b>${esc(c.dni)}</b></td>
+      <td>${esc(c.articulo||"")}</td><td><span class="lg-tag ${c.origen==="ESTUDIO"?"nu":"ed"}">${esc(c.origen)}</span></td>
+      <td class="lg-d">${n2(c.std_antes)}</td><td class="lg-d">${n2(c.std_despues)}</td></tr>`).join("")
+      || `<tr><td colspan="6"><div class="vacio-msg">Sin cambios de STD registrados</div></td></tr>`;
+    abrirModal(`
+      <h2>${esc(r.operacion||"")} <span class="sub" style="font-size:14px;font-weight:600">· ${esc(r.area||"")} · ${esc(r.postura||"")}</span></h2>
+      <div class="kpis" style="margin-bottom:14px;">
+        ${k(n2(fila.std),"STD en BASE hoy")}
+        ${k(cro?n2(cro.te_min):"—","Estándar medido (TE)", cro?"var(--exito)":"")}
+        ${k(d==null?"—":(d>0?"▲ +":"▼ ")+Math.abs(d).toFixed(2), "Diferencia", d==null?"":(d>0?"var(--alerta)":"var(--exito)"))}
+        ${k(cro?cro.n_operarios:0,"Operarios que lo sustentan")}
+        ${k((r.estudios||[]).length,"Mediciones")}</div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:38vh;"><table class="tabla">
+        <thead><tr><th>Fecha</th><th>Analista</th><th>Operario</th><th>Artículo</th><th>Método</th><th>Ciclos</th>
+        <th>TN</th><th>TE</th><th>Dispersión</th><th>Estándar</th></tr></thead><tbody>${est}</tbody></table></div>
+      <h3 class="perm-h3">Cambios de STD en la BASE</h3>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:26vh;"><table class="tabla">
+        <thead><tr><th>Fecha</th><th>Usuario</th><th>Artículo</th><th>Origen</th><th>Antes</th><th>Después</th></tr></thead>
+        <tbody>${log}</tbody></table></div>
+      <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`, "modal-ancho");
+  }catch(e){ cerrarModal(); mostrarError(e.message); }
+}
+function tmDescargar(){
+  if(!TM_VISTA.length){ mostrarError("No hay datos para descargar"); return; }
+  const CAB=["Área","Artículo","N° OP","Módulo","Operación","STD BASE","Medido TE","Diferencia","%","Confianza","Operarios","Último estudio","Min. producidos 30 d"];
+  const a=$("tmArea").value;
+  const filas=TM_VISTA.map(x=>{const d=tmDif(x), pc=tmDifPc(x);
+    return [a,x.articulo,x.n_op,x.modulo,x.operacion,+x.std, x.te_min==null?"":+x.te_min,
+      d==null?"":+d.toFixed(2), pc==null?"":Math.round(pc*100), x.nivel||"sin medir", x.n_operarios||0,
+      x.ultimo||"", x.min_30d?Math.round(x.min_30d):0];});
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "TIEMPOS_MEDIDOS");
+  XLSX.writeFile(wb, `TIEMPOS_MEDIDOS_${a.replace(/\s+/g,"_")}.xlsx`);
+}
+
+/* ---- Qué falta medir ---- */
+let TF=[], TF_VISTA=[];
+function tfInit(){
+  const sa=$("tfArea");
+  if(sa && !sa.options.length) sa.innerHTML=opcionesAreaVista();
+  cargarTmpFalta();
+}
+async function cargarTmpFalta(){
+  $("tfTabla").innerHTML=`<tbody><tr><td>${cargandoHTML("Buscando…")}</td></tr></tbody>`; $("tfKpis").innerHTML="";
+  try{
+    const r=await rpc("fn_tiempos_falta",{p_dni:ING.dni,p_token:ING.token,
+      p_area:$("tfArea").value||"", p_dias:+$("tfDias").value||30});
+    if(!r || !r.ok){ mostrarError((r&&r.error)||"Error"); TF=[]; $("tfTabla").innerHTML=""; return; }
+    TF=r.items||[]; tfPintar();
+  }catch(e){ mostrarError(e.message); $("tfTabla").innerHTML=""; }
+}
+function tfPintar(){
+  const q=normKey($("tfBuscar").value);
+  TF_VISTA=TF.filter(x=>!q||normKey([x.articulo,x.operacion,x.area].join(" ")).includes(q));
+  const nunca=TF_VISTA.filter(x=>!x.n_operarios);
+  const min=TF_VISTA.reduce((a,x)=>a+(+x.min_prod||0),0);
+  const k=(n,l,c)=>`<div class="kpi"><div class="kpi-num"${c?` style="color:${c}"`:""}>${n}</div><div class="kpi-lbl">${l}</div></div>`;
+  $("tfKpis").innerHTML=k(TF_VISTA.length,"Operaciones sin estudio consolidado")
+    +k(nunca.length,"Nunca medidas", nunca.length?"var(--alerta)":"")
+    +k(Math.round(min).toLocaleString("es-PE"),"Minutos producidos sin respaldo","var(--aviso)");
+  const head=`<thead><tr><th>Área</th><th>Artículo</th><th class="izq">Operación</th><th>N° OP</th>
+    <th>STD BASE</th><th>Estudio</th><th>Operarios</th><th>Min. producidos</th><th>Unidades</th></tr></thead>`;
+  const TOPE=800, ver=TF_VISTA.slice(0,TOPE);
+  const body=ver.length? ver.map(x=>`<tr><td>${esc(x.area||"")}</td><td><b>${esc(x.articulo||"")}</b></td>
+      <td class="izq">${esc(x.operacion||"")}</td><td>${x.n_op??"—"}</td><td class="lg-d">${x.std==null?"—":(+x.std).toFixed(2)}</td>
+      <td>${x.nivel?`<span class="pill ${TM_NIVEL[x.nivel][0]}">${TM_NIVEL[x.nivel][1]}</span>`:`<span class="pill SIN_MARCAR">Nunca</span>`}
+        ${x.ultimo?`<span class="sub"> ${fechaCorta(x.ultimo)}</span>`:""}</td>
+      <td>${x.n_operarios||"—"}</td><td><b>${Math.round(x.min_prod||0).toLocaleString("es-PE")}</b></td>
+      <td>${Math.round(x.und||0).toLocaleString("es-PE")}</td></tr>`).join("")
+    : `<tr><td colspan="9"><div class="vacio-msg">Todo lo que se produjo tiene estudio consolidado</div></td></tr>`;
+  $("tfTabla").innerHTML=head+"<tbody>"+body+"</tbody>"
+    +(TF_VISTA.length>TOPE?`<caption class="sub" style="caption-side:bottom;">Se muestran ${TOPE} de ${TF_VISTA.length}; la descarga trae todas.</caption>`:"");
+}
+function tfDescargar(){
+  if(!TF_VISTA.length){ mostrarError("No hay datos para descargar"); return; }
+  const CAB=["Área","Artículo","N° OP","Operación","STD BASE","Estudio","Operarios","Último estudio","Min. producidos","Unidades"];
+  const filas=TF_VISTA.map(x=>[x.area,x.articulo,x.n_op,x.operacion,+x.std,x.nivel||"nunca",x.n_operarios||0,
+    x.ultimo||"",Math.round(x.min_prod||0),Math.round(x.und||0)]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "FALTA_MEDIR");
+  XLSX.writeFile(wb, `FALTA_MEDIR_${$("tfDias").value}d.xlsx`);
 }
