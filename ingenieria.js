@@ -19,6 +19,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
      quita la pestaña de la vista: sus RPC validan con _admin igual. */
   if(!ES_ADMIN()) quitarTabsAdmin();
   await cargarPermisos();               // parche 95: áreas y pestañas que dio el administrador
+  if(tabPermitida("pasoBolSin")) bslContador();   // parche 103: número junto al menú
   $("quienBadge").textContent = ING.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
@@ -99,7 +100,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
+  "pasoBaseLog","pasoBolSin","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -136,6 +137,7 @@ function activarTab(tab){
   else if(tab==='pasoVista') cargarVista();
   else if(tab==='pasoAudit') audInit();
   else if(tab==='pasoBaseLog') blInit();
+  else if(tab==='pasoBolSin') bslInit();
   else if(tab==='pasoPermisos') cargarPermisosAdmin();
   else if(tab==='pasoCorr') corrInit();
   else if(COSTOS_TABS.includes(tab)) costosEntrar(tab);
@@ -5851,6 +5853,87 @@ function descargarBaseLog(){
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "HISTORIAL_BASE");
   XLSX.writeFile(wb, `HISTORIAL_BASE_${$("blDesde").value}_a_${$("blHasta").value}.xlsx`);
+}
+/* ---- Boletas sin llenar (parche 103) ----
+   Por área, quién no llenó su boleta el día elegido; el cálculo y los avisos
+   viven en app.js (bolTira, bolAvisar), compartidos con la supervisora.
+   Área vacía = todas las que el usuario lee según Permisos. */
+let BSL=null, BSL_AREA="";
+function bslInit(){
+  if(!$("bslFecha").value) $("bslFecha").value=hoyLima();
+  const sa=$("bslArea");
+  if(sa && !sa.options.length) sa.innerHTML='<option value="">Todas mis áreas</option>'+(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+  cargarBolSin();
+}
+function bslNav(n){ const c=$("bslNavCnt"); if(c){ c.textContent=n; c.hidden=!n; c.title=n+" sin boleta hoy"; } }
+async function bslContador(){
+  try{
+    const r=await rpc("fn_boletas_sin_llenar",{p_dni:ING.dni,p_token:ING.token,p_fecha:hoyLima(),p_area:null});
+    if(r && r.ok) bslNav((r.personas||[]).length);
+  }catch(e){ /* base sin el parche 103: sin número */ }
+}
+async function cargarBolSin(){
+  const f=$("bslFecha").value||hoyLima();
+  $("bslTabla").innerHTML=`<tbody><tr><td>${cargandoHTML("Revisando boletas…")}</td></tr></tbody>`;
+  $("bslKpis").innerHTML=""; $("bslAreas").innerHTML="";
+  try{
+    const r=await rpc("fn_boletas_sin_llenar",{p_dni:ING.dni,p_token:ING.token,p_fecha:f,p_area:$("bslArea").value||null});
+    if(!r || !r.ok){ mostrarError((r&&r.error)||"Error"); BSL=null; $("bslTabla").innerHTML=""; return; }
+    BSL=r; BSL_AREA="";
+    if(r.fecha===hoyLima() && !$("bslArea").value) bslNav((r.personas||[]).length);
+  }catch(e){ mostrarError(e.message); BSL=null; $("bslTabla").innerHTML=""; return; }
+  pintarBolSin();
+}
+function pintarBolSin(){
+  const r=BSL; if(!r) return;
+  const per=r.personas||[], ar=r.areas||[];
+  const pend=ar.reduce((a,x)=>a+x.pendientes,0), ent=ar.reduce((a,x)=>a+x.entregados,0), exige=pend+ent;
+  const falta=bolFaltaCierre(r.fecha), hz=$("bslHora");
+  hz.style.display=falta!=null?"":"none"; if(falta!=null) hz.textContent=`⏱ Cierre ${FIN_JORNADA} · faltan ${falta} min`;
+  const k=(n,l,c)=>`<div class="kpi"><div class="kpi-num"${c?` style="color:${c}"`:""}>${n}</div><div class="kpi-lbl">${l}</div></div>`;
+  $("bslKpis").innerHTML=k(pend,"Sin boleta",pend?"var(--alerta)":"var(--exito)")
+    +k(ent,"Entregaron"+(exige?` · ${Math.round(ent/exige*100)}%`:""))
+    +k(per.filter(p=>!p.ultimo).length,"Nunca han registrado",per.some(p=>!p.ultimo)?"var(--alerta)":"")
+    +k(per.filter(p=>p.aviso).length,"Ya avisados","var(--exito)");
+  $("bslAreas").innerHTML=ar.map(a=>{
+    const ex=a.pendientes+a.entregados;
+    if(!ex) return `<div class="bsl-ar no"><div class="t">${esc(a.area)}</div><div class="n">No se exige boleta</div><div class="s">Sin tickets ese día · ${a.total} personas</div></div>`;
+    const pc=Math.round(a.entregados/ex*100);
+    return `<button class="bsl-ar${a.area===BSL_AREA?" sel":""}${a.pendientes?"":" cero"}" data-a="${esc(a.area)}"><div class="t">${esc(a.area)}</div>
+      <div class="n">${a.pendientes} <small>de ${ex} sin boleta</small></div><div class="bar"><i style="width:${pc}%"></i></div><div class="s">${pc}% entregó</div></button>`;
+  }).join("");
+  $("bslAreas").querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{ BSL_AREA=BSL_AREA===b.dataset.a?"":b.dataset.a; pintarBolSin(); });
+  const q=normKey($("bslBuscar").value);
+  const vis=per.filter(p=>(!BSL_AREA||p.area===BSL_AREA)&&(!q||normKey(p.nombre).includes(q)));
+  const nd=(per[0]&&per[0].dias||[]).length||11;
+  const cab=`<thead><tr><th class="izq">Operario</th><th>Último ticket</th><th>Últimos ${nd} días laborables</th><th>Días sin boleta</th><th></th><th>Aviso</th></tr></thead>`;
+  if(!vis.length){ $("bslTabla").innerHTML=cab+`<tbody><tr><td colspan="6"><div class="vacio-msg">${exige?"Todos llenaron su boleta 👏":"Ese día no se exigía boleta en estas áreas"}</div></td></tr></tbody>`; return; }
+  const areas=[...new Set(vis.map(p=>p.area))];
+  $("bslTabla").innerHTML=cab+"<tbody>"+areas.map(a=>{
+    const g=vis.filter(p=>p.area===a);
+    return `<tr class="grupo-area"><td colspan="6">${esc(a)} · ${g.length} sin boleta</td></tr>`+g.map(p=>{
+      const i=per.indexOf(p), n=p.pend11;
+      const tag=!p.ultimo?`<span class="lg-tag bo">Nunca registró</span>`:n>=5?`<span class="lg-tag bo">Reincide</span>`:"";
+      return `<tr><td class="izq"><b>${esc(p.nombre)}</b> <span class="sub">${esc(p.dni)}</span></td><td class="nw">${bolDM(p.ultimo)}</td>
+        <td class="nw">${bolTira(p.dias,r.fecha)}</td><td><b style="color:${n>=5?"var(--alerta)":"inherit"}">${n}</b> <span class="sub">de ${(p.dias||[]).length}</span></td>
+        <td>${tag}</td><td class="nw">${p.aviso?`<span class="bsl-av">${bolAvisoTxt(p.aviso)}</span> <button class="btn-mini gris" data-bq="${i}">Quitar</button>`
+          :`<button class="btn-mini" data-ba="${i}">Marcar avisado</button>`}</td></tr>`;
+    }).join("");
+  }).join("")+"</tbody>";
+  $("bslTabla").querySelectorAll("[data-ba],[data-bq]").forEach(b=>b.onclick=async()=>{
+    const p=per[+(b.dataset.ba??b.dataset.bq)], quitar=b.dataset.bq!=null;
+    b.disabled=true;
+    const av=await bolAvisar(ING, p.dni, r.fecha, quitar);
+    if(av){ p.aviso=quitar?null:av; pintarBolSin(); } else b.disabled=false;
+  });
+}
+function descargarBolSin(){
+  const r=BSL; if(!r || !(r.personas||[]).length){ mostrarError("No hay datos para descargar"); return; }
+  const CAB=["Área","DNI","Operario","Cargo","Último ticket","Días sin boleta (últimos laborables)","Días evaluados","Avisado por","Hora aviso"];
+  const filas=r.personas.map(p=>[p.area,p.dni,p.nombre,p.cargo,p.ultimo||"Nunca",p.pend11,(p.dias||[]).length,p.aviso?p.aviso.por:"",p.aviso?p.aviso.hora:""]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "SIN_BOLETA");
+  XLSX.writeFile(wb, `BOLETAS_SIN_LLENAR_${r.fecha}.xlsx`);
 }
 /* ---- Correcciones (parche 101, solo administrador) ----
    Qué corrigieron los usuarios de oficina en las pantallas que ahora se reparten

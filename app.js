@@ -2085,6 +2085,7 @@ function bindSupervisoraUI(){
   { const tb=$("tabSupBases"); if(tb) tb.onclick = ()=>{ pararAvance(); marcarTab("tabSupBases"); irA("pasoSupBases"); cargarBasesSup(); }; }
   $("tabIncidencias").onclick = ()=>{ pararAvance(); marcarTab("tabIncidencias"); irA("pasoIncidencias"); cargarIncidencias(); };
   { const te=$("tabEfPersonal"); if(te) te.onclick = ()=>{ pararAvance(); marcarTab("tabEfPersonal"); irA("pasoEfPersonal"); cargarEfPersonal(); }; }
+  { const tbo=$("tabBoletas"); if(tbo) tbo.onclick = ()=>{ pararAvance(); marcarTab("tabBoletas"); irA("pasoBoletasSup"); cargarBoletasSup(); }; }
   { const tr=$("tabReclamos"); if(tr) tr.onclick = ()=>{ pararAvance(); marcarTab("tabReclamos"); irA("pasoSupRec"); cargarSupRec(true); }; }   // vuelve con la OF/módulo/operación que ya tenía
   cargarEstadosSup();
 }
@@ -2248,6 +2249,7 @@ function initSupervisora(){
   bindSupervisoraUI();
   cargarPersonal(s);
   marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisInit();   // vista principal
+  if($("tabBoletas")) cargarBoletasSup(true);   // solo el contador de la pestaña
   window.VOLVER_MAP = {
     pasoAlcance:"pasoPersonal", pasoSeleccion:"pasoAlcance",
     pasoTipo:"pasoPersonal", pasoMinutos:"pasoTipo",
@@ -2265,7 +2267,77 @@ function recargarSupervisora(){
   else if($("pasoSupBases") && $("pasoSupBases").classList.contains("activa")) cargarBasesSup(true);
   else if($("pasoIncidencias").classList.contains("activa")) cargarIncidencias();
   else if($("pasoEfPersonal") && $("pasoEfPersonal").classList.contains("activa")) cargarEfPersonal();
+  else if($("pasoBoletasSup") && $("pasoBoletasSup").classList.contains("activa")) cargarBoletasSup();
   else cargarPersonal(s);
+}
+
+/* ================= BOLETAS SIN LLENAR (parche 103) =================
+   Mismo cálculo que Mi boleta, por área: quién trabajó el día y no registró
+   tickets ni una incidencia de jornada completa. Lo usan la supervisora
+   (pestaña BOLETAS) e Ingeniería (Tickets › Boletas sin llenar). */
+const BOL_EST={ENTREGADO:"entregó",PENDIENTE:"sin boleta",AUSENTE:"no se exige (ausente u otra área)",SIN_LABOR:"no se exige"};
+const bolDM = f => f ? f.slice(8,10)+"/"+f.slice(5,7) : "—";
+const bolHoy = () => new Date().toLocaleDateString("sv-SE",{timeZone:"America/Lima"});
+function bolTira(dias, fecha){
+  return `<span class="tira" aria-label="Últimos días laborables">${(dias||[]).map(d=>
+    `<i class="${d.e==="PENDIENTE"?"p":d.e==="ENTREGADO"?"":"n"}${d.f===fecha?" hoy":""}" title="${bolDM(d.f)} · ${BOL_EST[d.e]||d.e}"></i>`).join("")}</span>`;
+}
+/* Minutos que faltan para el cierre del turno (null si ya pasó o no es hoy). */
+function bolFaltaCierre(fecha){
+  if(fecha!==bolHoy()) return null;
+  const [h,m]=FIN_JORNADA.split(":").map(Number);
+  const ahora=new Date(new Date().toLocaleString("en-US",{timeZone:"America/Lima"}));
+  const f=h*60+m-(ahora.getHours()*60+ahora.getMinutes());
+  return f>0 ? f : null;
+}
+const bolAvisoTxt = a => `✓ Avisado ${esc(a.hora)} · ${esc(a.por)}`;
+async function bolAvisar(ses, dni, fecha, quitar){
+  const r=await rpc("fn_boleta_avisar",{p_dni:ses.dni,p_token:ses.token,p_dni_op:dni,p_fecha:fecha,p_quitar:!!quitar});
+  if(!r || !r.ok){ mostrarError((r&&r.error)||"No se pudo guardar el aviso"); return null; }
+  return quitar ? {} : {por:r.por,hora:r.hora};
+}
+
+let BOLSUP=null;
+async function cargarBoletasSup(soloContador){
+  const s=sesionActual(); if(!s) return;
+  const fd=$("bolSupFecha"); if(fd && !fd.value) fd.value=bolHoy();
+  const fecha=(fd&&fd.value)||bolHoy(), lista=$("bolSupLista");
+  if(!soloContador && lista) lista.innerHTML=cargandoHTML("Revisando boletas…");
+  try{
+    const r=await rpc("fn_boletas_sin_llenar",{p_dni:s.dni,p_token:s.token,p_fecha:fecha,p_area:areaSup()});
+    if(!r || !r.ok){ if(!soloContador){ mostrarError((r&&r.error)||"Error"); if(lista) lista.innerHTML=""; } return; }
+    BOLSUP=r;
+  }catch(e){ if(!soloContador){ mostrarError(e.message); if(lista) lista.innerHTML=""; } return; }
+  pintarBoletasSup();
+}
+function pintarBoletasSup(){
+  const r=BOLSUP; if(!r) return;
+  const pend=r.personas||[], a=(r.areas||[])[0]||{pendientes:0,entregados:0,total:0};
+  const tb=$("tabBoletas");
+  if(tb) tb.innerHTML="BOLETAS"+(r.fecha===bolHoy() && pend.length ? `<span class="cnt">${pend.length}</span>` : "");
+  const lista=$("bolSupLista"); if(!lista) return;
+  const falta=bolFaltaCierre(r.fecha);
+  $("bolSupSub").textContent=(areaSup()||"")+" · "+bolDM(r.fecha)
+    +(falta!=null ? ` · el turno cierra ${FIN_JORNADA} (faltan ${falta} min)` : "");
+  const exige=a.pendientes+a.entregados;
+  $("bolSupRes").innerHTML = exige
+    ? `<div class="p${pend.length?"":" cero"}"><b>${pend.length}</b>sin boleta</div><div class="e"><b>${a.entregados}</b>entregaron</div>`
+    : `<div class="cero"><b>—</b>Hoy no se exige boleta en esta área</div>`;
+  if(!pend.length){ lista.innerHTML=exige?`<div class="vacio-msg">Todos llenaron su boleta 👏</div>`:""; return; }
+  lista.innerHTML=pend.map((p,i)=>`<div class="bs-card${p.aviso?" av":""}">
+    <div class="bs-nom">${esc(p.nombre)}</div>
+    <div class="bs-sub">${p.ultimo?`Último ticket ${bolDM(p.ultimo)}`:"Nunca ha registrado un ticket"} · ${p.pend11} de ${(p.dias||[]).length} días sin boleta</div>
+    ${bolTira(p.dias, r.fecha)}
+    <div class="bs-pie">${p.aviso
+      ? `<span class="bsl-av">${bolAvisoTxt(p.aviso)}</span><button class="btn-mini gris" data-bsq="${i}">Quitar</button>`
+      : `<button class="bs-btn" data-bsa="${i}">Ya le avisé</button>`}</div></div>`).join("")
+    +`<p class="sub" style="margin-top:6px">Rojo = día sin boleta, gris = no se le exigía. El cuadro marcado es el día elegido.</p>`;
+  lista.querySelectorAll("[data-bsa],[data-bsq]").forEach(b=>b.onclick=async()=>{
+    const p=pend[+(b.dataset.bsa??b.dataset.bsq)], q=b.dataset.bsq!=null;
+    b.disabled=true;
+    const av=await bolAvisar(sesionActual(), p.dni, r.fecha, q);
+    if(av){ p.aviso=q?null:av; pintarBoletasSup(); } else b.disabled=false;
+  });
 }
 
 /* --- Estados de asistencia (para el swipe de la vista Asistencia) --- */
@@ -2514,7 +2586,7 @@ async function asisGuardar(){
   }catch(e){ mostrarError(e.message); }
 }
 function marcarTab(id){
-  ["tabAsistencia","tabPersonal","tabAvance","tabSupBases","tabIncidencias","tabEfPersonal","tabReclamos"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });
+  ["tabAsistencia","tabBoletas","tabPersonal","tabAvance","tabSupBases","tabIncidencias","tabEfPersonal","tabReclamos"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });
 }
 function pararAvance(){ clearInterval(timerAvance); timerAvance=null; }
 
