@@ -572,6 +572,85 @@ async function genConfirmarOF(){
 }
 function celTxt(v){ return v==null?"":String(v).trim(); }
 
+/* Qué prendas hace cada área de costura (lo dijo Ruzaad el 7-oct). ACABADO
+   las hace todas. Sirve para avisar, nunca para bloquear. */
+const PRENDA_AREAS=[
+  ["CAMISA COSTURA",/CAMISA|BLUSA/,"blusas y camisas"],
+  ["PANTALON COSTURA",/PANTALON|FALDA|VESTIDO/,"pantalones, faldas y vestidos"],
+  ["SACO COSTURA",/SACO|CASACA|CHALECO|TERNO|ABRIGO|BLAZER/,"sacos, casacas, chalecos y ternos"]];
+const HN_PAQ_MAX=60;   // en lo registrado ningún paquete pasa de 53 und
+function areasDePrenda(pr){
+  const k=normKey(pr); if(!k) return null;
+  const c=PRENDA_AREAS.find(x=>x[1].test(k));
+  return c?["ACABADO",c[0]]:null;
+}
+const areaHace=a=>(PRENDA_AREAS.find(x=>x[0]===a)||[])[2]||"";
+/* Revisión de una HN antes de registrarla: a qué áreas va, si allí hay BASE
+   con STD, y datos raros de la hoja. Todo es aviso; la OF se registra igual
+   aunque no haya BASE todavía. */
+function ofsRevision(j){
+  const out=[], ok=t=>out.push({ok:true,t}), av=t=>out.push({ok:false,t});
+  const pre=j.pre||j.hn.prenda||"", ars=areasDePrenda(pre), rev=j.rev;
+  if(!pre) av("Sin prenda: no sé a qué áreas va.");
+  else if(!ars) av(`No sé a qué área de costura va "${pre}": solo ACABADO hace todo tipo de prendas.`);
+  else ok(`${pre} va a ${ars.slice(1).join(", ")} y ACABADO.`);
+  if(rev){
+    (ars||[]).forEach(a=>{
+      const r=rev.find(x=>x.area===a);
+      if(!r) av(`${a}: sin BASE todavía. Se registra igual; sus tickets se generan cuando subas la BASE.`);
+      else if(+r.sin_std) av(`${a}: ${r.sin_std} de ${r.ops} operaciones de la BASE sin STD.`);
+      else ok(`${a}: BASE con ${r.ops} operaciones, todas con STD.`);
+    });
+    if(ars && !rev.some(r=>r.area===ars[1])) rev.filter(r=>areaHace(r.area)).forEach(r=>
+      av(`El artículo tiene BASE en ${r.area}${(r.prendas||[]).length?` (${r.prendas.join(", ")})`:""}, pero esa área hace ${areaHace(r.area)} y la HN dice ${pre}: revisa el artículo o la prenda.`));
+  }
+  const terno=ofsTernoPar(j);
+  if(terno) (terno.dif.length?av:ok)(terno.dif.length
+    ? `Terno: no calza con la hoja ${terno.de} (${terno.dif.join("; ")}). Lo normal es que solo cambie la talla.`
+    : `Terno: calza con la hoja ${terno.de} (${terno.n} paquetes, mismos colores y cantidades; solo cambia la talla).`);
+  const vivos=j.hn.tallas.map((t,i)=>Object.assign({n:i+1},t)).filter(t=>t.cant>0);
+  vivos.filter(t=>t.cant>HN_PAQ_MAX).forEach(t=>av(`Fila ${t.n} (talla ${t.talla}): ${t.cant} und, más de lo normal (ningún paquete registrado pasa de ${HN_PAQ_MAX}).`));
+  const sinColor=vivos.filter(t=>!t.color).length;
+  if(sinColor) av(`${sinColor} fila(s) sin color.`);
+  const tallasReg=new Set(OFS.flatMap(o=>(o.detalle||[]).map(d=>normKey(d.talla))));
+  if(tallasReg.size){
+    const raras=[...new Set(vivos.map(t=>t.talla).filter(t=>!tallasReg.has(normKey(t))))];
+    if(raras.length) av(`Talla(s) que no aparecen en ninguna OF registrada: ${raras.join(", ")}. Revisa si están bien escritas.`);
+  }
+  const nums=OFS.map(o=>+o.of).filter(n=>n>0), of=+j.hn.of;
+  if(of && nums.length && !OFS.some(o=>String(o.of)===String(j.hn.of))){
+    const max=Math.max(...nums);
+    if(of>max*1.5 || of<max*0.5) av(`La OF ${j.hn.of} está lejos de las últimas registradas (van por ${max}): revisa el número.`);
+  }
+  return out;
+}
+/* Terno = saco + pantalón con la misma OF: las dos HN suelen ser iguales y
+   solo cambia la talla. Se compara esta hoja con la otra prenda, cargada a la
+   vez o ya registrada: paquetes, color y cantidad de cada uno. */
+function ofsTernoPar(j){
+  const pre=j.pre||j.hn.prenda||"", mi=(areasDePrenda(pre)||[])[1];
+  if(!j.hn.of || (mi!=="SACO COSTURA" && mi!=="PANTALON COSTURA")) return null;
+  const otra=p=>{ const a=(areasDePrenda(p)||[])[1]; return a && a!==mi && (a==="SACO COSTURA"||a==="PANTALON COSTURA"); };
+  let de="", par=null;
+  const x=OFS_JOBS.find(y=>y!==j && y.hn && y.hn.of===j.hn.of && otra(y.pre||y.hn.prenda));
+  if(x){ de=x.pre||x.hn.prenda; par=hnDetalle(x.hn.tallas).det; }
+  else{
+    const o=OFS.find(y=>String(y.of)===String(j.hn.of));
+    const d=((o&&o.detalle)||[]).filter(y=>otra(y.prenda));
+    if(d.length){ de=d[0].prenda; par=d; }
+  }
+  if(!par) return null;
+  de=(areasDePrenda(de)||[])[1]==="SACO COSTURA"?"del saco":"del pantalón";
+  const a=hnDetalle(j.hn.tallas).det.filter(t=>t.cant>0), b=par.filter(t=>+t.cant>0), dif=[];
+  if(a.length!==b.length) dif.push(`${a.length} paquetes aquí y ${b.length} allá`);
+  const ua=a.reduce((s,t)=>s+t.cant,0), ub=b.reduce((s,t)=>s+(+t.cant),0);
+  if(ua!==ub) dif.push(`${ua} und aquí y ${Math.round(ub)} allá`);
+  const malos=[];
+  for(let i=0;i<Math.min(a.length,b.length);i++)
+    if(+a[i].cant!==+b[i].cant || normKey(a[i].color)!==normKey(b[i].color)) malos.push(i+1);
+  if(malos.length) dif.push(`paquete(s) ${malos.slice(0,6).join(", ")}${malos.length>6?" …":""} con otro color o cantidad`);
+  return {de, n:a.length, dif};
+}
 function parseHN(rows){
   const get=(r,c)=> (rows[r]&&rows[r][c]!=null)?rows[r][c]:null;
   let prenda="", articulo="", of="";
@@ -2511,18 +2590,46 @@ function ofsPaqDesglose(o){
   if(p.length<2) return "";
   return ` <span class="cf-detalle">(${p.map(x=>x.paquetes).join("+")})</span>`;
 }
+/* Solo las áreas que hacen esa prenda (parche 105): una camisa ya no sale
+   "SACO COSTURA · sin BASE". Con prenda desconocida se muestran todas. */
+function ofsAreasVan(o){
+  const prs=ofsPrendas(o).map(x=>x.prenda).filter(Boolean); if(!prs.length && o.prenda) prs.push(o.prenda);
+  const van=prs.map(areasDePrenda);
+  if(!prs.length || van.some(v=>!v)) return {areas:o.areas||[], sinArea:true};
+  const set=new Set(van.flat());
+  return {areas:(o.areas||[]).filter(a=>set.has(a.area)), sinArea:false};
+}
+const OFS_AVISOS=[
+  ["sinBase","Sin BASE",o=>ofsAreasVan(o).areas.some(a=>!a.base)],
+  ["sinStd","BASE sin STD",o=>ofsAreasVan(o).areas.some(a=>a.base && +a.sin_std>0)],
+  ["sinDesglose","Sin desglose (alta a mano)",o=>!+o.paquetes],
+  ["sinArea","Prenda sin área",o=>ofsAreasVan(o).sinArea]];
+let OFS_FILTRO="";
+function ofsFiltro(k){ OFS_FILTRO=OFS_FILTRO===k?"":k; ofsPintar(); }
 function ofsPintar(){
   const q=normKey($("ofsBuscar")?$("ofsBuscar").value:"");
-  const rows=OFS.filter(o=>!q||normKey((o.of||"")+" "+(o.articulo||"")).includes(q));
+  const base=OFS.filter(o=>!q||normKey((o.of||"")+" "+(o.articulo||"")).includes(q));
+  const av=$("ofsAvisos");
+  if(av){
+    const chips=OFS_AVISOS.map(([k,t,f])=>[k,t,base.filter(f).length]).filter(x=>x[2]);
+    if(OFS_FILTRO && !chips.some(x=>x[0]===OFS_FILTRO)) OFS_FILTRO="";
+    av.innerHTML=chips.length?`<span class="sub">Con avisos:</span> `+chips.map(([k,t,n])=>
+      `<button class="ofs-av${OFS_FILTRO===k?" sel":""}" onclick="ofsFiltro('${k}')">${esc(t)} <b>${n}</b></button>`).join("")
+      +(OFS_FILTRO?` <button class="btn-mini gris" onclick="ofsFiltro('')">Ver todas</button>`:"")
+      :`<span class="of-area lista">Sin avisos</span>`;
+  }
+  const fil=OFS_AVISOS.find(x=>x[0]===OFS_FILTRO);
+  const rows=fil?base.filter(fil[2]):base;
   OFS_VISTA=rows;
   const und=rows.reduce((a,o)=>a+(Number(o.cant_prog)||0),0);
   $("ofsResumen").textContent=`${rows.length} OF · ${Math.round(und)} und programadas`;
   /* En vez de la división (casi siempre vacía), el estado por área: donde ya
      está servida, donde falta generar y donde falta subir la BASE. */
   const areasTxt=o=>{
-    const a=(o.areas||[]); if(!a.length) return "—";
+    const a=ofsAreasVan(o).areas; if(!a.length) return "—";
     return a.map(x=>{
       if(!x.base) return `<span class="of-area sin-base" title="Falta subir la BASE de ${esc(o.articulo)} en ${esc(x.area)}">${esc(x.area)} · sin BASE</span>`;
+      if(+x.sin_std>0) return `<span class="of-area pendiente" title="La BASE de ${esc(o.articulo)} en ${esc(x.area)} tiene operaciones sin STD">${esc(x.area)} · ${x.sin_std} op. sin STD</span>`;
       if(x.acabado) return `<span class="of-area lista">${esc(x.area)} · activa</span>`;
       return x.generada
         ? `<span class="of-area lista">${esc(x.area)} · generada</span>`
@@ -2615,6 +2722,10 @@ async function ofsCargarPrendas(){
       j.prendas = Array.isArray(r) ? r : [];
     }catch(e){ j.prendas = []; }
     j.sug = ofsSugerirPrenda(j.hn.prenda, j.prendas);
+    try{
+      const r=await rpc("fn_of_revisar_articulo",{p_dni:ING.dni,p_token:ING.token,p_articulo:j.hn.articulo});
+      j.rev = r && r.ok ? r.areas||[] : null;
+    }catch(e){ j.rev = null; }   // sin el parche 105 solo falta esta parte
   }
 }
 /* Encaje por contención normalizada: "PANTALON" está dentro de "TERNOPANTALON".
@@ -2662,7 +2773,8 @@ function ofsCancelarHN(){ OFS_JOBS=[]; renderOfsJobs(); }
 function ofsJobCampo(id, k, v){
   const j=OFS_JOBS.find(x=>x.id===id); if(!j) return;
   if(k==="of") j.hn.of=String(v||"").replace(/\D/g,"");
-  else if(k==="art") j.hn.articulo=norm(v).toUpperCase();
+  else if(k==="art"){ j.hn.articulo=norm(v).toUpperCase(); j.prendas=null; j.rev=undefined;
+    ofsCargarPrendas().then(renderOfsJobs); }
   else if(k==="pre") j.pre=norm(v).toUpperCase();
   else if(k==="rep") j.reemplazar=!!v;
   renderOfsJobs();
@@ -2696,10 +2808,15 @@ function renderOfsJobs(){
     if(j.hoja && normKey(j.hoja)!=="HN") avisos.push(`El libro no tiene hoja "HN": se leyó "${j.hoja}".`);
     if((j.prendas||[]).length>1 && !j.pre)
       avisos.push(`El artículo tiene varias prendas en la BASE (${j.prendas.join(" · ")}) y ninguna encaja con "${j.hn.prenda||"—"}": elígela a mano.`);
-    if((j.prendas||[]).length===0 && j.hn.articulo)
+    if((j.prendas||[]).length===0 && j.hn.articulo && j.rev==null)
       avisos.push("Ese artículo no tiene BASE cargada con prenda: se guardará lo que escribas.");
     const dupe=OFS_JOBS.some(x=>x!==j && x.hn && x.hn.of && x.hn.of===j.hn.of && normKey(x.pre)===normKey(j.pre));
     if(dupe) avisos.push("Otra hoja cargada tiene la misma OF y prenda.");
+    const rv=ofsRevision(j), nAv=rv.filter(x=>!x.ok).length;
+    const revBox=`<div class="hn-rev"><div class="hn-rev-tit">Revisión de datos
+        <span class="of-area ${nAv?"pendiente":"lista"}">${nAv?`${nAv} aviso(s)`:"Todo en orden"}</span></div>
+      ${rv.map(x=>`<div class="hn-rev-l ${x.ok?"ok":"av"}"><i>${x.ok?"✓":"!"}</i><span>${esc(x.t)}</span></div>`).join("")}
+      ${nAv?`<div class="sub">Son avisos: puedes registrar igual.</div>`:""}</div>`;
     const estado = !k ? "" : k.tipo==="nueva" ? `<span class="of-area lista">Nueva</span>`
       : k.tipo==="prenda" ? `<span class="of-area lista">OF ${esc(k.o.of)} registrada · se agrega esta prenda</span>`
       : k.tipo==="igual" ? `<span class="of-area">Ya registrada igual · se omite</span>`
@@ -2730,6 +2847,7 @@ function renderOfsJobs(){
         <span class="sub" style="align-self:flex-end;">${j.hn.bloques} bloque(s) · ${det.filter(x=>x.cant>0).length} paquete(s) · <b>${Math.round(total)}</b> und</span>
       </div>
       ${avisos.length?`<div class="hn-aviso">${avisos.map(esc).join("<br>")}</div>`:""}
+      ${revBox}
       ${bloqueDif}
       <details><summary class="sub" style="cursor:pointer;">Ver las ${j.hn.tallas.length} filas leídas</summary>
       <div class="contenedor-ancho tabla-scroll" style="max-height:28vh;">
@@ -5989,6 +6107,8 @@ async function mostrarDiff(filas){
     if(cambiadas.length) html+=`<div class="diff-mod">≈ Cambian (STD/orden): ${cambiadas.map(x=>esc(x.operacion)).join(" · ")}</div>`;
     if(!agregadas.length&&!quitadas.length&&!cambiadas.length)
       html+=`<div class="cf-detalle">Sin diferencias con lo existente.</div>`;
+    const avB=baseAvisos(nuevas, $("areaBase").value);
+    if(avB.length) html+=`<div class="hn-rev">${avB.map(t=>`<div class="hn-rev-l av"><i>!</i><span>${esc(t)}</span></div>`).join("")}<div class="sub">Son avisos: puedes subir igual.</div></div>`;
     html+=`</div>`;
   });
   html+=`<div class="fila-filtros">
@@ -5997,6 +6117,21 @@ async function mostrarDiff(filas){
   PENDIENTE=filas;
   $("zonaDiff").innerHTML=html; $("zonaDiff").style.display="block";
   window.scrollTo(0,0);
+}
+/* Parche 105: lo que deja una OF "sin STD" o en el área que no le toca se
+   avisa al subir la BASE, antes de que llegue a los tickets. */
+function baseAvisos(filas, area){
+  const av=[], sinStd=filas.filter(f=>!(f.std>0)), sinPre=filas.filter(f=>!f.prenda);
+  if(sinStd.length) av.push(`${sinStd.length} operación(es) sin STD: ${sinStd.slice(0,4).map(f=>f.operacion).join(" · ")}${sinStd.length>4?" …":""}`);
+  if(sinPre.length) av.push(`${sinPre.length} fila(s) sin PRENDA.`);
+  if(areaHace(area)){
+    const malas=[...new Set(filas.map(f=>f.prenda).filter(p=>p && (areasDePrenda(p)||[])[1]!==area))];
+    if(malas.length) av.push(`${area} hace ${areaHace(area)}; esta BASE trae ${malas.join(", ")}: revisa el área elegida.`);
+  }
+  const vistos={}, rep=[];
+  filas.forEach(f=>{ if(f.n_op>0){ if(vistos[f.n_op]) rep.push(f.n_op); vistos[f.n_op]=1; } });
+  if(rep.length) av.push(`N°OP repetido: ${[...new Set(rep)].join(", ")}.`);
+  return av;
 }
 function cancelarSubida(){ PENDIENTE=null; $("zonaDiff").style.display="none"; }
 async function confirmarSubida(){
