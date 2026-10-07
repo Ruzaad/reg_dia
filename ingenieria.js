@@ -600,6 +600,10 @@ function ofsRevision(j){
     if(ars && !rev.some(r=>r.area===ars[1])) rev.filter(r=>areaHace(r.area)).forEach(r=>
       av(`El artículo tiene BASE en ${r.area}${(r.prendas||[]).length?` (${r.prendas.join(", ")})`:""}, pero esa área hace ${areaHace(r.area)} y la HN dice ${pre}: revisa el artículo o la prenda.`));
   }
+  const terno=ofsTernoPar(j);
+  if(terno) (terno.dif.length?av:ok)(terno.dif.length
+    ? `Terno: no calza con la hoja ${terno.de} (${terno.dif.join("; ")}). Lo normal es que solo cambie la talla.`
+    : `Terno: calza con la hoja ${terno.de} (${terno.n} paquetes, mismos colores y cantidades; solo cambia la talla).`);
   const vivos=j.hn.tallas.map((t,i)=>Object.assign({n:i+1},t)).filter(t=>t.cant>0);
   vivos.filter(t=>t.cant>HN_PAQ_MAX).forEach(t=>av(`Fila ${t.n} (talla ${t.talla}): ${t.cant} und, más de lo normal (ningún paquete registrado pasa de ${HN_PAQ_MAX}).`));
   const sinColor=vivos.filter(t=>!t.color).length;
@@ -615,6 +619,33 @@ function ofsRevision(j){
     if(of>max*1.5 || of<max*0.5) av(`La OF ${j.hn.of} está lejos de las últimas registradas (van por ${max}): revisa el número.`);
   }
   return out;
+}
+/* Terno = saco + pantalón con la misma OF: las dos HN suelen ser iguales y
+   solo cambia la talla. Se compara esta hoja con la otra prenda, cargada a la
+   vez o ya registrada: paquetes, color y cantidad de cada uno. */
+function ofsTernoPar(j){
+  const pre=j.pre||j.hn.prenda||"", mi=(areasDePrenda(pre)||[])[1];
+  if(!j.hn.of || (mi!=="SACO COSTURA" && mi!=="PANTALON COSTURA")) return null;
+  const otra=p=>{ const a=(areasDePrenda(p)||[])[1]; return a && a!==mi && (a==="SACO COSTURA"||a==="PANTALON COSTURA"); };
+  let de="", par=null;
+  const x=OFS_JOBS.find(y=>y!==j && y.hn && y.hn.of===j.hn.of && otra(y.pre||y.hn.prenda));
+  if(x){ de=x.pre||x.hn.prenda; par=hnDetalle(x.hn.tallas).det; }
+  else{
+    const o=OFS.find(y=>String(y.of)===String(j.hn.of));
+    const d=((o&&o.detalle)||[]).filter(y=>otra(y.prenda));
+    if(d.length){ de=d[0].prenda; par=d; }
+  }
+  if(!par) return null;
+  de=(areasDePrenda(de)||[])[1]==="SACO COSTURA"?"del saco":"del pantalón";
+  const a=hnDetalle(j.hn.tallas).det.filter(t=>t.cant>0), b=par.filter(t=>+t.cant>0), dif=[];
+  if(a.length!==b.length) dif.push(`${a.length} paquetes aquí y ${b.length} allá`);
+  const ua=a.reduce((s,t)=>s+t.cant,0), ub=b.reduce((s,t)=>s+(+t.cant),0);
+  if(ua!==ub) dif.push(`${ua} und aquí y ${Math.round(ub)} allá`);
+  const malos=[];
+  for(let i=0;i<Math.min(a.length,b.length);i++)
+    if(+a[i].cant!==+b[i].cant || normKey(a[i].color)!==normKey(b[i].color)) malos.push(i+1);
+  if(malos.length) dif.push(`paquete(s) ${malos.slice(0,6).join(", ")}${malos.length>6?" …":""} con otro color o cantidad`);
+  return {de, n:a.length, dif};
 }
 function parseHN(rows){
   const get=(r,c)=> (rows[r]&&rows[r][c]!=null)?rows[r][c]:null;
