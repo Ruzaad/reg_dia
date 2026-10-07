@@ -106,10 +106,13 @@ const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","p
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
+const URL_TOMAR_TIEMPOS="https://estudios-tiempos.vercel.app/entrar";
 
 /* Activa una sección del sidebar (misma lógica que el clic, reutilizable por
    el ruteo por hash). Actualiza el hash sin recargar. */
 function activarTab(tab){
+  // Tomar tiempos no es una pantalla de aquí: abre el aplicativo del cronómetro.
+  if(tab==='pasoTmpTomar'){ window.open(URL_TOMAR_TIEMPOS,"_blank","noopener"); return; }
   document.querySelectorAll(".nav-item[data-tab]").forEach(x=>x.classList.toggle("activo", x.dataset.tab===tab));
   { const it=document.querySelector('.nav-item[data-tab="'+tab+'"]'); const d=it&&it.closest("details.nav-group"); if(d) d.open=true; }
   pararAvance();
