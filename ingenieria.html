@@ -43,6 +43,10 @@
         <a class="nav-item" data-tab="pasoVista" href="#pasoVista">Vista del personal</a>
       </details>
       <details class="nav-group" open>
+        <summary class="nav-sep">Planificación</summary>
+        <a class="nav-item" data-tab="pasoCarga" href="#pasoCarga">Carga vs capacidad</a>
+      </details>
+      <details class="nav-group" open>
         <summary class="nav-sep">Eficiencia</summary>
         <a class="nav-item" data-tab="pasoEf" href="#pasoEf">Eficiencia</a>
         <a class="nav-item" data-tab="pasoAudit" href="#pasoAudit">Auditoría</a>
@@ -940,6 +944,22 @@
       </div>
       <div class="kpis" id="tfKpis" style="margin-bottom:14px;"></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="tfTabla"></table></div>
+    </section>
+
+    <!-- ===================== CARGA vs CAPACIDAD (preview, parche 107) ===================== -->
+    <section class="pantalla" id="pasoCarga">
+      <div class="seccion-cab">
+        <h1>Carga vs capacidad</h1>
+        <p class="seccion-sub">Cuántos días de trabajo le quedan a cada área con las OFs que ya tiene generadas y el ritmo
+        real de su gente. Sirve para ver con anticipación a quién le va a faltar o sobrar trabajo.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="ccArea" onchange="ccPintar()"></select></label>
+        <label class="cc-chk"><input type="checkbox" id="ccEmp" checked onchange="ccPintar()"> Contar las OFs generadas que aún no empiezan</label>
+        <button class="btn-mini" onclick="cargarCarga()">Actualizar</button>
+        <span class="cc-corte" id="ccCorte"></span>
+      </div>
+      <div id="ccZona"></div>
     </section>
 
     <!-- ===================== BOLETAS SIN LLENAR (parche 103) ===================== -->
