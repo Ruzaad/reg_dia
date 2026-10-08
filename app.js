@@ -2248,8 +2248,9 @@ function initSupervisora(){
   { const rc=$("btnRecargar"); if(rc) rc.onclick=()=>{ recargarSupervisora(); }; }
   bindSupervisoraUI();
   cargarPersonal(s);
-  marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisEntrar();   // vista principal
-  if($("tabBoletas")) cargarBoletasSup(true);   // solo el contador de la pestaña
+  if($("pasoHoy") && typeof shInit==="function") shInit();   // celular: "Hoy" con 4 botones abajo
+  else { marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisEntrar();   // vista principal
+    if($("tabBoletas")) cargarBoletasSup(true); }   // solo el contador de la pestaña
   window.VOLVER_MAP = {
     pasoAlcance:"pasoPersonal", pasoSeleccion:"pasoAlcance",
     pasoTipo:"pasoPersonal", pasoMinutos:"pasoTipo",
@@ -2262,7 +2263,9 @@ function initSupervisora(){
 function recargarSupervisora(){
   const s=sesionActual(); if(!s) return;
   const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),500); }
-  if($("pasoAsistencia") && $("pasoAsistencia").classList.contains("activa")) asisEntrar(true);
+  if($("pasoHoy") && $("pasoHoy").classList.contains("activa")) shCargar(true);
+  else if($("pasoHE") && $("pasoHE").classList.contains("activa")) sheCargar();
+  else if($("pasoAsistencia") && $("pasoAsistencia").classList.contains("activa")) asisEntrar(true);
   else if($("pasoAvance").classList.contains("activa")) cargarAvance();
   else if($("pasoSupBases") && $("pasoSupBases").classList.contains("activa")) cargarBasesSup(true);
   else if($("pasoIncidencias").classList.contains("activa")) cargarIncidencias();
@@ -2594,6 +2597,7 @@ async function asisGuardar(){
 const ASY_SIN_TICKETS=["CORTE","REPROCESO","REPROCESOS","UDP"];
 const ASY_DIAS=["dom","lun","mar","mié","jue","vie","sáb"];
 let ASY={modo:null, fecha:null, list:[], dec:{}, hasta:{}, sinTk:false};
+let ASY_PREF=null;   // día que pidió quien abrió la pantalla (tarjetas de Hoy)
 function asyIso(f){ return f.toLocaleDateString("sv-SE"); }
 function asyFecha(iso){ const [y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d); }
 function asyTxt(iso){ const f=asyFecha(iso); return `${ASY_DIAS[f.getDay()]} ${iso.slice(8,10)}/${iso.slice(5,7)}`; }
@@ -2619,7 +2623,7 @@ function asyArranque(){
       if(!ASY.sinTk && ASY.list.length && !ASY.list.some(p=>Number(p.tickets)>0)) ASY.sinTk=true;  // área que no usa tickets
       const n=asyPendientes();
       $("asySegAyer").innerHTML=`Ayer · ${esc(asyTxt(ayer))}${n?` <b class="asy-badge">${n}</b>`:""}`;
-      if(ASY.modo===null) asyModo(n?"ayer":"hoy"); else if(ASY.modo==="ayer") asyPintar();
+      if(ASY.modo===null){ asyModo(ASY_PREF||(n?"ayer":"hoy")); ASY_PREF=null; } else if(ASY.modo==="ayer") asyPintar();
     })
     .catch(e=>{ mostrarError(e.message); asyModo("hoy"); });
 }
@@ -2744,8 +2748,10 @@ async function asyGuardar(todos){
   }catch(e){ mostrarError(e.message); }
 }
 /* La pestaña Asistencia: con Ayer/Hoy (supervisora.html) o la lista sola (otras pantallas). */
-function asisEntrar(recargar){
+function asisEntrar(recargar, modo){
   if(!$("asySegAyer")) return asisInit();
+  if(modo==="hoy"){ asyArranque(); asyModo("hoy"); return; }
+  if(modo==="ayer") ASY_PREF="ayer";
   if(recargar && ASY.modo==="hoy") return asisInit();
   const m=ASY.modo; asyArranque(); if(recargar && m) ASY.modo=m;
 }
