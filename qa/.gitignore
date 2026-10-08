@@ -1,6 +1,7 @@
 # Copias de producción y todo lo generado: nunca a GitHub
 raw/
-node_modules/
+node_modules
+__pycache__/
 build/esquema.sql
 build/esquema_stmts.json
 build/wal.json
