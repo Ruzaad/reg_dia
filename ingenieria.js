@@ -19,7 +19,8 @@ document.addEventListener("DOMContentLoaded", async ()=>{
      quita la pestaña de la vista: sus RPC validan con _admin igual. */
   if(!ES_ADMIN()) quitarTabsAdmin();
   await cargarPermisos();               // parche 95: áreas y pestañas que dio el administrador
-  if(tabPermitida("pasoBolSin")) bslContador();   // parche 103: número junto al menú
+  const _iniLanding=["","#pasoInicio"].includes(location.hash||"") && tabPermitida("pasoInicio");
+  if(tabPermitida("pasoBolSin") && !_iniLanding) bslContador();   // parche 103 (con Inicio, lo pide Inicio)
   $("quienBadge").textContent = ING.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
@@ -78,7 +79,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   cargarEstadosAsis();
   // Landing: sección del hash si es válida; si no, Tickets · Actual.
   const hashTab=(location.hash||"").replace(/^#/,"");
-  activarTab(NAV_TABS.includes(hashTab) ? hashTab : "pasoTk");
+  activarTab(NAV_TABS.includes(hashTab) ? hashTab : (tabPermitida("pasoInicio") ? "pasoInicio" : "pasoTk"));
   mostrarNovedades();   // parche 58: cambios de área y avisos sin leer
 });
 
@@ -100,7 +101,7 @@ function cmpVal(va, vb){
 }
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
+const NAV_TABS=["pasoInicio","pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
   "pasoBaseLog","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
@@ -121,6 +122,7 @@ function activarTab(tab){
   if(!tabPermitida(tab)){ const t=primeraTab(); if(t && t!==tab){ activarTab(t); } else irA("pasoSinPermiso"); return; }
   aplicarSoloLectura();
   if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
+  if(tab==='pasoInicio'){ irA(tab); iniCargar(); return; }
   if(tab==='pasoEf' || tab==='pasoDia'){ efVista(tab==='pasoDia'?'dia':'area'); TABS_VISTAS.add(tab); return; }
   irA(tab);
   if(TABS_VISTAS.has(tab)) return;      // reentrada: conserva filtros y datos
@@ -207,6 +209,7 @@ function puedeEditar(a){
 /* Subpestañas que no están en el menú: siguen el permiso de su pestaña madre. */
 const TAB_MADRE={pasoDia:"pasoEf",pasoOpsOF:"pasoGen",pasoExtra:"pasoGen",pasoOpAd:"pasoGen",pasoCausas:"pasoGen"};
 function tabPermitida(tab){
+  if(tab==='pasoInicio') return typeof iniHayAlgo==="function" && iniHayAlgo();
   if(TABS_ADMIN.includes(tab)) return ES_ADMIN();
   if(PERM_LIBRE()) return true;
   return PERM.pestanas.includes(TAB_MADRE[tab]||tab);
@@ -370,7 +373,8 @@ function poblarSelectsArea(){
 function recargarIngenieria(){
   const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),600); }
   const act = id => $(id) && $(id).classList.contains("activa");
-  if(act("pasoEf")) cargarEf();
+  if(act("pasoInicio")) iniCargar();
+  else if(act("pasoEf")) cargarEf();
   else if(act("pasoDia")){ if(EFR.personal.length) cargarEfRango(); }
   else if(act("pasoTk")) cargarTk();
   else if(act("pasoMod")) cargarMod();
@@ -6366,7 +6370,7 @@ function bslInit(){
   if(sa && !sa.options.length) sa.innerHTML='<option value="">Todas mis áreas</option>'+(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
   cargarBolSin();
 }
-function bslNav(n){ const c=$("bslNavCnt"); if(c){ c.textContent=n; c.hidden=!n; c.title=n+" sin boleta hoy"; } }
+function bslNav(n,f){ const c=$("bslNavCnt"); if(c){ c.textContent=n; c.hidden=!n; c.title=n+" sin boleta "+(f&&f!==hoyLima()?"el "+f:"hoy"); } }
 async function bslContador(){
   try{
     const r=await rpc("fn_boletas_sin_llenar",{p_dni:ING.dni,p_token:ING.token,p_fecha:hoyLima(),p_area:null});

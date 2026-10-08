@@ -31,6 +31,7 @@
   <!-- ===== SIDEBAR (solo PC) ===== -->
   <aside class="ing-sidebar">
     <nav class="ing-nav" aria-label="Secciones de ingeniería">
+      <a class="nav-item nav-inicio" data-tab="pasoInicio" href="#pasoInicio">Inicio</a>
       <details class="nav-group" open>
         <summary class="nav-sep">Tickets</summary>
         <a class="nav-item" data-tab="pasoBolSin" href="#pasoBolSin">Boletas sin llenar<b class="dyn-cnt" id="bslNavCnt" hidden></b></a>
@@ -330,7 +331,7 @@
     </section>
 
     <!-- ===================== TICKETS · ACTUAL ===================== -->
-    <section class="pantalla activa" id="pasoTk">
+    <section class="pantalla" id="pasoTk">
       <div class="seccion-cab">
         <h1>Tickets</h1>
         <p class="seccion-sub">Registro del día por persona; y tickets reclamados por OF/operación.</p>
@@ -945,6 +946,18 @@
       </div>
     </section>
 
+    <!-- ===================== INICIO: el día de mis áreas (solo lectura) ===================== -->
+    <section class="pantalla" id="pasoInicio">
+      <div class="ini-cab">
+        <div><h1 id="iniFecha"></h1><p class="ini-alcance" id="iniAlcance"></p></div>
+      </div>
+      <h2 class="ini-h2">Necesita tu atención</h2>
+      <div class="ini-avisos" id="iniAvisos" aria-live="polite"></div>
+      <h2 class="ini-h2">Cómo va cada área</h2>
+      <div class="contenedor-ancho tabla-scroll"><table class="tabla ini-tabla" id="iniAreasTab"></table></div>
+      <p class="ini-pie" id="iniPie"></p>
+    </section>
+
     <!-- ===================== COSTOS (parche 96): todo de solo lectura ===================== -->
     <section class="pantalla" id="pasoCostosBase">
       <div class="seccion-cab">
@@ -1465,6 +1478,7 @@
 <script src="app.js"></script>
 <script src="ingenieria.js"></script>
 <script src="costos.js"></script>
+<script src="inicio.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>
