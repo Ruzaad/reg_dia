@@ -724,7 +724,7 @@ function initOperario(){
   window.onCambioPaso = (id)=>{
     // Al retroceder, limpiar la selección más profunda para que el
     // breadcrumb del encabezado no deje pasos viejos colgados.
-    if(id==="pasoOF"){ sel.of=null; sel.modulo=null; sel.op=null; }
+    if(id==="pasoOF"){ sel.of=null; sel.modulo=null; sel.op=null; if(typeof opiPintar==="function") opiPintar(); }
     else if(id==="pasoModulos"){ sel.modulo=null; sel.op=null; }
     else if(id==="pasoOps"){ sel.op=null; }
     pintarCrumb(id);
@@ -919,6 +919,7 @@ async function cargarTodo(s){
     setAvance(dia);
     if(alm.duplicados.length) console.warn("Códigos duplicados en almacén:", alm.duplicados);
     irA("pasoOF");
+    if(typeof opInicio==="function") opInicio();   // inicio con el día y "Sigue donde te quedaste"
   }catch(e){
     $("zonaCarga").innerHTML = `<div class="vacio-msg">${esc(e.message)}</div>`;
     mostrarError("No se pudo cargar. Revisa la conexión y vuelve a intentar.");
@@ -1397,6 +1398,7 @@ function setAvance(d){
   const ef = EF_CENSURADA ? "****" : (ULTIMO_DIA.eficiencia + "%");
   b.textContent = `Hoy: ${ef} · ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
   b.classList.add("visible");
+  if(typeof opPintarHoy==="function") opPintarHoy();
 }
 /* ACABADO: badge con su eficiencia (igual que costura) MÁS las unidades del día,
    que es el dato con el que se guían.
@@ -1526,7 +1528,7 @@ async function recargarMiEficiencia(){
       else if(act==="pasoOps"){ if(sel.modulo) pintarOperaciones(); else volverAOF(); }
       else if(act==="pasoModulos"){ if(sel.of) pintarModulos(); else volverAOF(); }
       else if(act==="pasoMisPaq") pintarMisPaq();
-      else if(act==="pasoOF") pintarSugerencias();
+      else if(act==="pasoOF"){ pintarSugerencias(); if(typeof opInicio==="function") opInicio(); }
     }
   }catch(e){ mostrarError(e.message); }
   finally{ if(b) setTimeout(()=>b.classList.remove("girando"),500); }
@@ -1698,13 +1700,45 @@ function pintarOperaciones(){
   /* Orden de RUTA (N°OP), no alfabético: la costurera ve las operaciones en el
      orden en que se cosen. Las que no traen N°OP van al final, entre ellas
      alfabéticas (el ALMACÉN de las OF viejas no siempre lo tiene). */
-  Object.keys(ops).sort((a,b)=>{
+  const orden=Object.keys(ops).sort((a,b)=>{
     const na=ops[a].nop, nb=ops[b].nop;
     if(na==null && nb==null) return a.localeCompare(b,"es",{numeric:true});
     if(na==null) return 1;
     if(nb==null) return -1;
     return na-nb || a.localeCompare(b,"es",{numeric:true});
-  }).forEach(op=>{
+  });
+  /* Costura: primero "Tus operaciones" (las que hizo hoy o ayer), después el
+     resto con libres y al final, plegadas, las que no tienen libres. */
+  let grupos=[[null,orden]];
+  if(!ES_ACABADO){
+    const mias=new Set((MISPAQ||[]).map(p=>normKey(p.op)));
+    const tus=orden.filter(op=>mias.has(normKey(op)) && ops[op].libres>0);
+    const otras=orden.filter(op=>!tus.includes(op) && ops[op].libres>0);
+    const sin=orden.filter(op=>ops[op].libres===0);
+    grupos=[];
+    if(tus.length) grupos.push(["Tus operaciones",tus,"las que sueles hacer"]);
+    if(otras.length) grupos.push([tus.length?"Otras operaciones del módulo":null,otras,tus.length?"en orden de ruta":""]);
+    if(sin.length) grupos.push(["sin",sin]);
+  }
+  grupos.forEach(([titulo,lista,nota])=>{
+  if(titulo==="sin"){
+    const d=document.createElement("button");
+    d.type="button"; d.className="opi-plegado";
+    d.innerHTML=`<span>${lista.length} operaci${lista.length===1?"ón":"ones"} sin paquetes libres</span><b>ver ▾</b>`;
+    const caja=document.createElement("div"); caja.hidden=true; caja.className="lista-cards";
+    d.onclick=()=>{ caja.hidden=!caja.hidden; d.querySelector("b").textContent=caja.hidden?"ver ▾":"ocultar ▴"; };
+    l.appendChild(d); l.appendChild(caja);
+    lista.forEach(op=>caja.appendChild(tarjetaOp(op)));
+    return;
+  }
+  if(titulo){
+    const h=document.createElement("div"); h.className="opi-h";
+    h.innerHTML=`<span>${esc(titulo)}</span>${nota?`<small>${esc(nota)}</small>`:""}`;
+    l.appendChild(h);
+  }
+  lista.forEach(op=>l.appendChild(tarjetaOp(op)));
+  });
+  function tarjetaOp(op){
     const o=ops[op];
     const c=document.createElement("div");
     c.className="card-fila";
@@ -1718,9 +1752,10 @@ function pintarOperaciones(){
         </div>
         <div class="badge-disp ${o.libres===0?'vacio':''}">${o.libres} de ${o.total} libres</div>`;
     }
-    c.onclick=()=>{ sel.op=op; modoSel=false; marcados={}; pintarTickets(); irA("pasoTickets"); };
-    l.appendChild(c);
-  });
+    // Costura: los paquetes abren en modo marcar (marcar es lo normal).
+    c.onclick=()=>{ sel.op=op; modoSel=!ES_ACABADO; marcados={}; if(typeof OPI!=="undefined") OPI.tomados=false; pintarTickets(); irA("pasoTickets"); };
+    return c;
+  }
 }
 
 /* --- paso tickets (numeración protagonista + selección múltiple) --- */
@@ -1749,11 +1784,25 @@ function pintarTickets(){
   $("tituloTickets").textContent = sel.op;
   pintarBarraSel();
   const l=$("listaTickets"); l.innerHTML="";
-  ticketsActuales().forEach(t=>{
+  let lista=ticketsActuales(), sigue=null, tomados=[];
+  if(!ES_ACABADO && typeof opiSigue==="function"){
+    const sg=opiSigue(sel.of, sel.modulo, sel.op); sigue=sg&&sg.t?{t:sg.t,ult:sg.ult}:null;
+    const lib=lista.filter(t=>!RECL[t.codigo]);
+    tomados=lista.filter(t=>RECL[t.codigo]);
+    if(sigue){ const k=lib.indexOf(sigue.t); if(k>0) lib.unshift(...lib.splice(k)); }
+    lista=lib;
+    $("subTickets").textContent = lib.length
+      ? `${lib.length} libre${lib.length===1?"":"s"}${sigue?". Arriba el que sigue al último que registraste":""}. Toca todos los que hiciste.`
+      : "No quedan paquetes libres en esta operación.";
+  }
+  const pintar=t=>{
     const r = RECL[t.codigo];
     const marcado = modoSel && marcados[t.codigo];
     const c=document.createElement("div");
-    c.className="card-ticket"+(r?" tomado":"")+(marcado?" marcada":"");
+    c.className="card-ticket"+(r?" tomado":"")+(marcado?" marcada":"")+(sigue&&sigue.t===t?" sigue":"");
+    if(!r){ c.setAttribute("role", modoSel?"checkbox":"button"); c.tabIndex=0;
+      if(modoSel) c.setAttribute("aria-checked", !!marcado);
+      c.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); c.click(); } }; }
     const pph = t.std>0 ? Math.round(60/t.std) : "—";
     // En el módulo final la numeración ya está tapada por la costura: manda la
     // cantidad, con el color debajo. El nº de paquete no se muestra nunca.
@@ -1780,6 +1829,7 @@ function pintarTickets(){
          ${tkVer("std")?`<div>STD <b>${t.std.toFixed(2)}</b> min</div>`:""}
          ${tkVer("nop")?`<div>N°OP <b>${t.nop ?? "—"}</b></div>`:""}`;
     c.innerHTML=`
+      ${sigue&&sigue.t===t?`<div class="tk-sigue">Sigue a tu ${esc(sigue.ult)}</div>`:""}
       ${cab}
       <div class="tk-fila">
         ${col && normKey(col)!=="C" && tkVer("color")
@@ -1795,6 +1845,8 @@ function pintarTickets(){
           pintarTickets();
         } else {
           sel.ticket=t;
+          $("confLabel").textContent = ES_ACABADO ? "Cantidad" : "Numeración";
+          { const h=document.querySelector("#pasoConf h1"); if(h) h.textContent="¿Este es tu paquete?"; }
           if(ES_ACABADO){
             $("confNum").textContent=qty(t.cant)+" und";
             $("confDet").innerHTML=
@@ -1820,14 +1872,35 @@ function pintarTickets(){
         }
       };
     }
-    l.appendChild(c);
-  });
+    return c;
+  };
+  lista.forEach(t=>l.appendChild(pintar(t)));
+  if(tomados.length){
+    const d=document.createElement("button"); d.type="button"; d.className="opi-plegado";
+    const ab=typeof OPI!=="undefined" && OPI.tomados;
+    d.innerHTML=`<span>${tomados.length} ya tomado${tomados.length===1?"":"s"} por otras personas</span><b>${ab?"ocultar ▴":"ver ▾"}</b>`;
+    d.onclick=()=>{ OPI.tomados=!OPI.tomados; pintarTickets(); };
+    l.appendChild(d);
+    if(ab) tomados.forEach(t=>l.appendChild(pintar(t)));
+  }
 }
 function pintarBarraSel(){
   const libres = ticketsActuales().filter(t=>!RECL[t.codigo]);
   const nSel = Object.keys(marcados).length;
   const minSel = Object.values(marcados).reduce((a,t)=>a+t.minutos,0);
   const b=$("barraSel");
+  /* Costura: botón fijo abajo con lo marcado; "marcar todos" queda arriba. */
+  if(!ES_ACABADO && modoSel){
+    const cant=Object.values(marcados).reduce((a,t)=>a+(+t.cant||0),0);
+    b.innerHTML = libres.length>1 ? `<button class="btn-sel" onclick="marcarTodos()">MARCAR TODOS (${libres.length})</button>` : "";
+    const f=$("opiRegistrar");
+    if(f){ f.hidden=false; f.disabled=!nSel;
+      f.innerHTML = nSel
+        ? `REGISTRAR ${nSel} PAQUETE${nSel===1?"":"S"}<small>${qty(cant)} und${tkVer("minutos")?` · ${Math.round(minSel*10)/10} min`:""}</small>`
+        : `MARCA TUS PAQUETES<small>toca todos los que hiciste</small>`; }
+    return;
+  }
+  { const f=$("opiRegistrar"); if(f) f.hidden=true; }
   if(!modoSel){
     b.innerHTML = libres.length>1
       ? `<button class="btn-sel" onclick="activarSel()">MARCAR VARIOS</button>`
@@ -1857,6 +1930,8 @@ function aNombreDe(){
 function confirmarLote(){
   const lista=Object.values(marcados);
   if(!lista.length) return;
+  { const h=document.querySelector("#pasoConf h1"); if(h) h.textContent="¿Este es tu paquete?"; }
+  $("confLabel").textContent = ES_ACABADO ? "Cantidad" : "Numeración";
   if(ES_ACABADO){
     const cant = lista.reduce((a,t)=>a+(+t.cant||0),0);
     $("confNum").textContent = qty(cant) + " und";
@@ -1866,12 +1941,18 @@ function confirmarLote(){
       `Total: <b>${qty(cant)} und</b> ` + aNombreDe();
   } else {
     const min = Math.round(lista.reduce((a,t)=>a+t.minutos,0)*10)/10;
-    const nums = lista.slice(0,6).map(t=>t.num).join(", ") + (lista.length>6?"…":"");
-    $("confNum").textContent = lista.length + " paquetes";
+    const cant = lista.reduce((a,t)=>a+(+t.cant||0),0);
+    /* La operación va de titular: el error número uno al liberar es haber
+       elegido la operación equivocada (82% de los liberados por error). */
+    const col = typeof opiColor==="function" ? opiColor(sel.op) : "var(--azul)";
+    const art = (lista[0]&&lista[0].articulo)||"";
+    $("confLabel").textContent = "Operación";
+    { const h=document.querySelector("#pasoConf h1"); if(h) h.textContent="¿Es tu trabajo?"; }
+    $("confNum").innerHTML = `<span class="conf-op" style="--opc:${col}">${esc(sel.op)}</span>`;
     $("confDet").innerHTML =
-      `${esc(sel.op)} · OF ${esc(sel.of)}<br>`+
-      `<span style="color:#5a6270">${esc(nums)}</span><br>`+
-      `Total: <b>${min} min</b> ` + aNombreDe();
+      `<div class="conf-sub">${esc(sel.modulo)} · OF ${esc(sel.of)}${art?` · ${esc(art)}`:""}</div>`+
+      `<div class="conf-nums">${lista.map(t=>`<span>${esc(t.num)}</span>`).join("")}</div>`+
+      `<div class="conf-tot"><b>${lista.length} paquete${lista.length===1?"":"s"} · ${qty(cant)} und${tkVer("minutos")?` · ${min} min`:""}</b><br>` + aNombreDe() + `</div>`;
   }
   $("btnRegistrar").disabled=false;
   irA("pasoConf");
@@ -1974,6 +2055,10 @@ function mostrarExito(){
        operaciones `refrescarAcabado`. Aquí solo se cierra el aviso. */
     if(ES_ACABADO) return;
     if(OPADX.volver){ const v=OPADX.volver; OPADX.volver=null; irA(v); return; }
+    // Costura: vuelve al inicio con el día al día (antes volvía a los paquetes).
+    if($("opSigue") && typeof opiTrasRegistrar==="function"){
+      sel.of=null; sel.modulo=null; sel.op=null; $("inputOF").value=""; pintarSugerencias();
+      irA("pasoOF"); window.scrollTo(0,0); opPintarHoy(); opiTrasRegistrar(); return; }
     pintarTickets(); irA("pasoTickets");
   }, 2500);
 }

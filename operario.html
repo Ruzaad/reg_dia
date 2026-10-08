@@ -43,13 +43,17 @@
 
   <!-- OF -->
   <section class="pantalla" id="pasoOF">
-    <h1>¿En qué OF trabajas?</h1>
+    <!-- Inicio (operario-inicio.js): cómo va el día y "Sigue donde te quedaste" -->
+    <div class="opi-hoy" id="opHoy"></div>
+    <div id="opSigue" aria-live="polite"></div>
+    <h1 id="opOtraH">¿En qué OF trabajas?</h1>
     <div class="sub">Escribe los números de la OF</div>
     <button type="button" class="btn-secundario btn-area-chip" id="btnCambiarAreaEst"
       style="display:none;">CAMBIAR ÁREA</button>
     <div class="zona-of">
       <input class="input-grande" id="inputOF" inputmode="numeric" placeholder="Ej: 9424" maxlength="6" autocomplete="off">
       <div class="sugerencias" id="sugerenciasOF"></div>
+      <div class="opi-recientes" id="opRecientes"></div>
     </div>
     <button type="button" class="btn-secundario" id="btnMisPaq"
       style="max-width:300px;margin:14px auto 0;" onclick="abrirMisPaquetes()">MIS PAQUETES</button>
@@ -94,9 +98,10 @@
   <!-- Tickets -->
   <section class="pantalla" id="pasoTickets">
     <h1 id="tituloTickets"></h1>
-    <div class="sub">Busca la numeración de tu paquete</div>
+    <div class="sub" id="subTickets">Busca la numeración de tu paquete</div>
     <div class="barra-sel" id="barraSel"></div>
     <div class="lista-tickets" id="listaTickets"></div>
+    <button type="button" class="opi-registrar" id="opiRegistrar" onclick="confirmarLote()" hidden disabled></button>
   </section>
 
   <!-- ACABADO: OF (artículo · color) → operación → cantidad -->
@@ -216,6 +221,7 @@
   <div class="ex-timer" id="exTimer"></div>
 </div>
 <script src="app.js"></script>
+<script src="operario-inicio.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>
