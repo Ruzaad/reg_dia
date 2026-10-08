@@ -58,6 +58,7 @@
     <button type="button" class="sh-card" onclick="shAbrir('tabBoletas')"><span class="sh-ic hoja" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span><span class="sh-tx"><b>Boletas del día</b><span>Quién no llenó y avisarle</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" onclick="shIrBuscar()"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg></span><span class="sh-tx"><b>Buscar OF o prenda</b><span>Por dónde pasó un paquete y quién lo tuvo</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" onclick="shIrSueltos()"><span class="sh-ic hoja" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg></span><span class="sh-tx"><b>Paquetes sueltos</b><span>OFs con paquetes que nadie reclamó</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" id="shMasLotes" hidden onclick="shIrLotes()"><span class="sh-ic reloj" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.5M9.5 3h5"/></svg></span><span class="sh-tx"><b>Trabajo por tiempo</b><span>Lotes de despacho, reproceso o corte</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <div class="sh-h">Mi cuenta</div>
     <button type="button" class="sh-card" id="shMasPin"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2 2"/></svg></span><span class="sh-tx"><b>Cambiar mi PIN</b></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" id="shMasSalir"><span class="sh-ic hoja" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h4M14 8l-4 4 4 4M10 12h10"/></svg></span><span class="sh-tx"><b>Salir</b></span><span class="sh-fl" aria-hidden="true">›</span></button>
@@ -73,6 +74,13 @@
     </div>
     <div class="bus-rec" id="busRec" hidden></div>
     <div id="busCuerpo"></div>
+  </section>
+
+  <!-- Trabajo por tiempo (parche 116): lotes sin OF -->
+  <section class="pantalla" id="pasoLotesSup">
+    <h1>Trabajo por tiempo</h1>
+    <div class="sub">Crea los lotes para que tu gente marque empezar y terminar. Lo que quedó sin cantidad lo pones aquí.</div>
+    <div id="ltSupZona" aria-live="polite"></div>
   </section>
 
   <!-- Paquetes sueltos (parche 115), solo su área -->
@@ -380,6 +388,7 @@
 <script src="pedidos.js"></script>
 <script src="buscar.js"></script>
 <script src="sueltos.js"></script>
+<script src="lotes.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>

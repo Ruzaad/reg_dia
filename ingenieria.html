@@ -38,6 +38,7 @@
         <a class="nav-item" data-tab="pasoAsisConf" href="#pasoAsisConf">Asistencia por confirmar</a>
         <a class="nav-item" data-tab="pasoBolSin" href="#pasoBolSin">Boletas sin llenar<b class="dyn-cnt" id="bslNavCnt" hidden></b></a>
         <a class="nav-item" data-tab="pasoSueltos" href="#pasoSueltos">Paquetes sueltos</a>
+        <a class="nav-item" data-tab="pasoLotes" href="#pasoLotes">Trabajo por tiempo</a>
         <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
         <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Avance por módulo</a>
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
@@ -965,6 +966,23 @@
       <div id="ccZona"></div>
     </section>
 
+    <!-- ===================== TRABAJO POR TIEMPO (parche 116) ===================== -->
+    <section class="pantalla" id="pasoLotes">
+      <div class="seccion-cab">
+        <h1>Trabajo por tiempo</h1>
+        <p class="seccion-sub">Lotes de DESPACHO, REPROCESO y CORTE, que no tienen OF ni BASE. La gente marca EMPEZAR y TERMINAR en su celular;
+        aquí ves las horas, las prendas y los minutos por prenda reales. Solo ves las áreas que tienes en Permisos (DESPACHO y REPROCESO van con ACABADO).</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Día</span><input type="date" id="ltFecha" onchange="ltCargarIng()"></label>
+        <label class="campo"><span>Área</span><select id="ltArea" onchange="ltCargarIng()"><option value="">Todas mis áreas</option><option>DESPACHO</option><option>REPROCESO</option><option>CORTE</option></select></label>
+        <span style="flex:1"></span>
+        <button class="btn-mini verde" id="ltNuevoBtn" hidden onclick="ltNuevoIng()">+ Nuevo lote</button>
+        <button class="btn-mini gris" onclick="ltDescargar()">⬇ Descargar XLSX</button>
+      </div>
+      <div id="ltIngZona" aria-live="polite"></div>
+    </section>
+
     <!-- ===================== PAQUETES SUELTOS (parche 115) ===================== -->
     <section class="pantalla" id="pasoSueltos" data-area-sel="psArea">
       <div class="seccion-cab">
@@ -1587,6 +1605,7 @@
 <script src="buscar.js"></script>
 <script src="incidencias.js"></script>
 <script src="sueltos.js"></script>
+<script src="lotes.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>

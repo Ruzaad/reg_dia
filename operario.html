@@ -44,6 +44,7 @@
   <!-- OF -->
   <section class="pantalla" id="pasoOF">
     <!-- Inicio (operario-inicio.js): cómo va el día y "Sigue donde te quedaste" -->
+    <div id="ltAviso" hidden></div>
     <div class="opi-hoy" id="opHoy"></div>
     <div id="opSigue" aria-live="polite"></div>
     <h1 id="opOtraH">¿En qué OF trabajas?</h1>
@@ -106,6 +107,7 @@
 
   <!-- ACABADO: OF (artículo · color) → operación → cantidad -->
   <section class="pantalla" id="pasoAcabOF">
+    <div id="ltAvisoAcab" hidden></div>
     <h1>¿En qué OF trabajas?</h1>
     <div class="sub">Escribe la OF o el artículo para filtrar, o toca directamente</div>
     <div class="zona-of">
@@ -190,6 +192,22 @@
     <div id="bolCuerpo"></div>
   </section>
 
+  <!-- Trabajo por tiempo (parche 116): DESPACHO, REPROCESO y CORTE -->
+  <section class="pantalla" id="pasoLotes">
+    <div id="ltZona" aria-live="polite"></div>
+  </section>
+  <section class="pantalla" id="pasoLoteFin">
+    <h1>¿Cuántas prendas hiciste?</h1>
+    <div class="sub" id="ltFinSub"></div>
+    <div class="lt-res" id="ltFinRes"></div>
+    <input class="lt-cant" id="ltCant" type="number" inputmode="numeric" min="0" aria-label="Prendas que hiciste" placeholder="0"
+      onkeydown="if(event.key==='Enter')ltTerminar(false)">
+    <div class="lt-chips"><button type="button" onclick="ltSumar(-10)">−10</button><button type="button" onclick="ltSumar(10)">+10</button><button type="button" onclick="ltSumar(50)">+50</button></div>
+    <button type="button" class="lt-go azul" onclick="ltTerminar(false)">GUARDAR</button>
+    <button type="button" class="lt-sec" onclick="ltTerminar(true)">No las conté · que lo ponga mi supervisora</button>
+    <button type="button" class="lt-sec" onclick="irA('pasoLotes')">Volver, sigo trabajando</button>
+  </section>
+
   <!-- Mis pedidos de tiempo (parche 114) -->
   <section class="pantalla" id="pasoPedidos">
     <h1>Mis pedidos de tiempo</h1>
@@ -231,6 +249,7 @@
 <script src="app.js"></script>
 <script src="operario-inicio.js"></script>
 <script src="pedidos.js"></script>
+<script src="lotes.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>

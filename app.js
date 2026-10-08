@@ -615,7 +615,7 @@ const VOLVER_OPERARIO = {
   pasoModulos:"pasoOF", pasoOps:"pasoModulos",
   pasoTickets:"pasoOps", pasoConf:"pasoTickets",
   pasoAcabPrenda:"pasoAcabOF", pasoAcabOp:"pasoAcabOF",
-  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF", pasoBoleta:"pasoOF", pasoPedidos:"pasoOF",
+  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF", pasoBoleta:"pasoOF", pasoPedidos:"pasoOF", pasoLoteFin:"pasoLotes",
   pasoOpAd:"pasoModulos", pasoOpAdCant:"pasoOpAd"
 };
 
@@ -882,7 +882,7 @@ function initOperario(){
   }
   window.VOLVER_MAP = VOLVER_OPERARIO;
   // Atrás siempre devuelve a la lista de OF (o a la de Acabado, según el área).
-  window.VOLVER_INICIO = ES_ACABADO ? "pasoAcabOF" : "pasoOF";
+  if(window.VOLVER_INICIO!=="pasoLotes") window.VOLVER_INICIO = ES_ACABADO ? "pasoAcabOF" : "pasoOF";   // CORTE/REPROCESO: lotes (parche 116)
   window.onSalirApp = confirmarSalir;
   initBackTrap();
 }
@@ -1007,6 +1007,9 @@ async function cargarTodo(s){
   pintarCargando($("zonaCarga"),"Cargando "+(ES_ACABADO?"OFs":"almacén")+" de "+area+"…");
   try{
     // ACABADO ya no lee el almacén: registra por cantidad contra el corte real.
+    // Parche 116: CORTE y REPROCESO no tienen OF: trabajan por lotes.
+    if(typeof ltEntrar==="function" && ["CORTE","REPROCESO"].includes(area)){ await ltEntrar(s, true); return; }
+    if(typeof ltAvisoHoy==="function") ltAvisoHoy(s);   // EN DESPACHO/REPROCESO/CORTE hoy: aviso arriba, sin esperar
     if(ES_ACABADO){ await cargarAcabado(s, area); return; }
     // Las OF generadas en el sistema (parche 29) se derivan de of_detalle × bases:
     // no están en el Sheet. Las anteriores siguen saliendo del almacén, así que

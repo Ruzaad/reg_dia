@@ -104,7 +104,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoInicio","pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoAsisConf","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
+  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -148,6 +148,7 @@ function activarTab(tab){
   else if(tab==='pasoBolSin') bslInit();
   else if(tab==='pasoBuscar') buscarInit();
   else if(tab==='pasoSueltos') psCargar();
+  else if(tab==='pasoLotes') ltCargarIng();
   else if(tab==='pasoAsisConf') acfInit();
   else if(tab==='pasoCalBase') calidadInit();
   else if(tab==='pasoTmpMed') tmInit();
@@ -396,6 +397,7 @@ function recargarIngenieria(){
   else if(act("pasoAvOF")){ if(AVOF.items.length) cargarAvof(); }
   else if(act("pasoIncid")) cargarIncidI();
   else if(act("pasoSueltos")) psCargar();
+  else if(act("pasoLotes")) ltCargarIng();
   else if(act("pasoBaseLog")) cargarBaseLog();
   else if(act("pasoAudit")) cargarAudit();
   else if(act("pasoOpAd")) cargarOpad();

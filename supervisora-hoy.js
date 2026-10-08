@@ -59,11 +59,12 @@ function shInit(){
   Object.assign(window.VOLVER_MAP||(window.VOLVER_MAP={}),{
     pasoMas:"pasoHoy", pasoAsistencia:"pasoHoy", pasoHE:"pasoHoy", pasoIncidencias:"pasoHoy",
     pasoPersonal:"pasoHoy", pasoAvance:"pasoHoy",
-    pasoSupBases:"pasoMas", pasoBuscar:"pasoMas", pasoEfPersonal:"pasoMas", pasoSupRec:"pasoMas", pasoBoletasSup:"pasoMas", pasoSueltosSup:"pasoMas"});
+    pasoSupBases:"pasoMas", pasoBuscar:"pasoMas", pasoEfPersonal:"pasoMas", pasoSupRec:"pasoMas", pasoBoletasSup:"pasoMas", pasoSueltosSup:"pasoMas", pasoLotesSup:"pasoMas"});
   const s=sesionActual()||{};
   const mp=$("shMasPin"); if(mp) mp.onclick=abrirCambioPin;
   const ms=$("shMasSalir"); if(ms) ms.onclick=cerrarSesion;
   $("shMasSub").textContent=areaSup();
+  { const lc=$("shMasLotes"); if(lc) lc.hidden=!["CORTE","ACABADO"].includes(areaSup()); }   // parche 116
   irA("pasoHoy"); shCargar(true);
 }
 
@@ -163,6 +164,7 @@ function shIrAsis(modo){
 }
 
 function shIrBuscar(){ pararAvance(); irA("pasoBuscar"); window.scrollTo(0,0); buscarInit(); }
+function shIrLotes(){ pararAvance(); irA("pasoLotesSup"); window.scrollTo(0,0); ltCargarSup(); }
 function shIrSueltos(){ pararAvance(); irA("pasoSueltosSup"); window.scrollTo(0,0); psCargarSup(); }
 
 /* ---------- Horas extra ---------- */
