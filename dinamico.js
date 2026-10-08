@@ -191,6 +191,8 @@ const VISTAS=PAG==="ingenieria"?[
    cargar:()=>llamar("cargarPendientesInci"),ocultar:["areaInciPend"]},
   {id:"sueltos",tab:"pasoSueltos",m:"pasoSueltos",modo:null,area:1,t:"Paquetes sueltos",
    aplicar(){return areaSel("psArea");},cargar:()=>llamar("psCargar"),ocultar:["psArea"]},
+  {id:"prestadas",tab:"pasoPrestadas",m:"pasoPrestadas",modo:"dia",area:1,t:"Sesiones prestadas",
+   aplicar(){let c=put("prFecha",G.fecha);c=areaSel("prArea")||c;return c;},cargar:()=>llamar("prCargar"),ocultar:["prFecha","prArea"]},
   {id:"lotes",tab:"pasoLotes",m:"pasoLotes",modo:"dia",area:0,t:"Trabajo por tiempo",
    aplicar(){return put("ltFecha",G.fecha);},cargar:()=>llamar("ltCargarIng"),ocultar:["ltFecha"]},
   {id:"inciRep",tab:"pasoIncid",m:"inciRep",modo:"rango",def:"d30",area:1,t:"Incidencias · reprocesos y apoyo",
@@ -647,7 +649,7 @@ function contadores(){
 /* =====================================================================
    ARRANQUE · INGENIERÍA
    ===================================================================== */
-const GRUPOS={pasoBuscar:"Tickets",pasoSueltos:"Tickets",pasoLotes:"Tickets",pasoAsisConf:"Tickets",pasoTk:"Tickets",pasoMod:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
+const GRUPOS={pasoBuscar:"Tickets",pasoSueltos:"Tickets",pasoLotes:"Tickets",pasoPrestadas:"Gestión",pasoAsisConf:"Tickets",pasoTk:"Tickets",pasoMod:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
   pasoEf:"Eficiencia",pasoAudit:"Eficiencia",pasoInc:"Eficiencia",pasoDash:"Dashboards",pasoCarga:"Planificación",
   pasoAsis:"Gestión",pasoBases:"Gestión",pasoBaseLog:"Gestión",pasoCalBase:"Gestión",pasoIncid:"Gestión",pasoFechas:"Gestión",pasoPermisos:"Gestión",
   pasoCostosBase:"Costos",pasoCostosHoy:"Costos",pasoCostosInc:"Costos",pasoCostosAsis:"Costos",

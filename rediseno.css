@@ -1599,3 +1599,12 @@ input.lt-cant{display:block;box-sizing:border-box}
 .lt-rev-f input{width:96px;border:1.5px solid var(--linea);border-radius:10px;padding:8px 10px;font:600 15px var(--mono);background:var(--sup);color:var(--texto)}
 @media (max-width:720px){.lt-areas{grid-template-columns:1fr}}
 .lt-form .inp[hidden]{display:none}
+
+/* ===== Sesiones prestadas (parche 109) ===== */
+.nav-item[data-tab="pasoPrestadas"]{--ni:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='8' r='3.5'/%3E%3Cpath d='M3 20a6 6 0 0 1 12 0'/%3E%3Cpath d='M16 11l2 2 4-4'/%3E%3C/svg%3E")!important;}
+.franja-prestada{position:sticky;top:0;z-index:60;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  background:var(--violeta);color:#fff;padding:8px 14px;font-size:13px;font-weight:600;line-height:1.35}
+.franja-prestada b{font-weight:800}
+.franja-prestada button{border:0;border-radius:999px;background:#fff;color:var(--violeta);font:800 12.5px var(--sans);padding:7px 12px;cursor:pointer;white-space:nowrap}
+body.prestada::after{content:"";position:fixed;inset:0;border:4px solid var(--violeta);pointer-events:none;z-index:59}
+.pr-h3{font-size:14px;color:var(--azul);margin:12px 0 6px}

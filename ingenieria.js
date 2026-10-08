@@ -104,7 +104,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoInicio","pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
+  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -149,6 +149,7 @@ function activarTab(tab){
   else if(tab==='pasoBuscar') buscarInit();
   else if(tab==='pasoSueltos') psCargar();
   else if(tab==='pasoLotes') ltCargarIng();
+  else if(tab==='pasoPrestadas') prCargar();
   else if(tab==='pasoAsisConf') acfInit();
   else if(tab==='pasoCalBase') calidadInit();
   else if(tab==='pasoTmpMed') tmInit();
@@ -398,6 +399,7 @@ function recargarIngenieria(){
   else if(act("pasoIncid")) cargarIncidI();
   else if(act("pasoSueltos")) psCargar();
   else if(act("pasoLotes")) ltCargarIng();
+  else if(act("pasoPrestadas")) prCargar();
   else if(act("pasoBaseLog")) cargarBaseLog();
   else if(act("pasoAudit")) cargarAudit();
   else if(act("pasoOpAd")) cargarOpad();
@@ -439,7 +441,15 @@ function ingSupVolverAreas(){
 /* Entra a supervisora.html con la sesión de ingeniería y el área elegida, igual
    que "Operar como operario". El panel embebido se quedaba desactualizado cada
    vez que cambiaba supervisora.html; así siempre es la pantalla real. */
-function ingSupElegirArea(area){
+async function ingSupElegirArea(area){
+  // Parche 109: sesión prestada aparte, para que lo que se registre quede marcado.
+  if(typeof prAbrir==="function" && !(typeof PR!=="undefined" && PR.falta)){
+    try{ const r=await prAbrir("SUP", "", area, ""); if(r && !r.ok) mostrarError(r.error||"No se pudo abrir supervisión"); return; }
+    catch(e){
+      if(!prFalta(e)){ mostrarError(/NO_AUTORIZADA/.test(e.message)?"No tienes permiso para operar como supervisora en "+area:e.message); return; }
+      PR.falta=true;   // sin el parche: como antes
+    }
+  }
   try{
     const s=sesionActual();
     sessionStorage.setItem("stx_volver_ing", localStorage.getItem("stx_sesion")||"1");
@@ -1296,6 +1306,10 @@ function pintarOpArea(){
   });
 }
 function opPinModal(dni, nombre){
+  if(typeof opPrestarModal==="function") return opPrestarModal(dni, nombre);   // parche 109
+  opPinModalPin(dni, nombre);
+}
+function opPinModalPin(dni, nombre){
   abrirModal(`
     <h2>Entrar como ${esc(soloApellidos(nombre))}</h2>
     <div class="sub" style="margin-bottom:12px;">Con permiso del operario. Verifica su DNI e ingresa su PIN.</div>

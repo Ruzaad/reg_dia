@@ -301,6 +301,12 @@ function cerrarSesion(){
    6 veces y se encadenaban 6 redirecciones (las ráfagas de los logs). */
 function sesionVencida(){
   if(_cerrandoSesion) return;
+  // Sesión prestada (parche 109) cerrada o vencida: vuelve a Ingeniería, no al login.
+  try{ const prev=sessionStorage.getItem("stx_volver_ing"), s=JSON.parse(sessionStorage.getItem("stx_sesion")||"null");
+    if(prev && s && s.prestada){ _cerrandoSesion=true; mostrarError("La sesión prestada se cerró. Vuelves a Ingeniería.");
+      sessionStorage.removeItem("stx_sesion"); sessionStorage.removeItem("stx_volver_ing");
+      if(!localStorage.getItem("stx_sesion") && prev!=="1") localStorage.setItem("stx_sesion", prev);
+      setTimeout(()=>location.href="ingenieria.html", 1500); return; } }catch(e){}
   try{ _ses().removeItem("stx_sesion"); }catch(e){}
   try{ mostrarError("Tu sesión venció. Vuelve a ingresar."); }catch(e){}
   setTimeout(cerrarSesion, 1200);
@@ -313,14 +319,32 @@ function botonVolverIng(){
     const prevIng = sessionStorage.getItem("stx_volver_ing");
     const badges = document.querySelector("header .badges");
     if(!prevIng || !badges || $("btnVolverIng")) return;
+    const s = sesionActual();
+    // Parche 109: franja fija "Operas como…" con borde de color; la sesión prestada
+    // se cierra en la base al volver.
+    if(s && s.prestada && !$("franjaPrestada")){
+      const f=document.createElement("div");
+      f.id="franjaPrestada"; f.className="franja-prestada"; f.setAttribute("role","status");
+      f.innerHTML=`<span>Operas como <b>${esc(s.prestada.tipo==="SUP" ? "supervisora de "+(s.area||"") : soloApellidos(s.nombre))}</b> · lo que registres queda a nombre de ${esc(s.prestada.ing_nombre||s.prestada.ing)}</span>
+        <button type="button" id="btnVolverIng">Volver a Ingeniería</button>`;
+      document.body.prepend(f); document.body.classList.add("prestada");
+      $("btnVolverIng").onclick=()=>volverIng(prevIng, s);
+      return;
+    }
     const b=document.createElement("button");
     b.type="button"; b.className="btn-hdr-icon"; b.id="btnVolverIng";
     b.title="Volver a Ingeniería"; b.textContent="🏭";
-    b.onclick=()=>{ sessionStorage.removeItem("stx_sesion"); sessionStorage.removeItem("stx_volver_ing");
-      if(!localStorage.getItem("stx_sesion")) localStorage.setItem("stx_sesion", prevIng);
-      location.href="ingenieria.html"; };
+    b.onclick=()=>volverIng(prevIng, s);
     badges.insertBefore(b, badges.firstChild);
   }catch(e){}
+}
+async function volverIng(prevIng, s){
+  if(s && s.prestada){   // cierra la prestada; si no hay señal, igual vence sola a los 60 min
+    try{ await Promise.race([rpc("fn_prestada_cerrar",{p_dni:s.dni,p_token:s.token,p_id:s.prestada.id}), new Promise(r=>setTimeout(r,2500))]); }catch(e){}
+  }
+  sessionStorage.removeItem("stx_sesion"); sessionStorage.removeItem("stx_volver_ing");
+  if(!localStorage.getItem("stx_sesion") && prevIng && prevIng!=="1") localStorage.setItem("stx_sesion", prevIng);
+  location.href="ingenieria.html";
 }
 
 /* ---------------- SUPABASE (RPC) ---------------- */

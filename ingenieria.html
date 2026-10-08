@@ -76,6 +76,7 @@
         <a class="nav-item" data-tab="pasoFechas" href="#pasoFechas">Corregir fechas</a>
         <a class="nav-item" data-tab="pasoPermisos" href="#pasoPermisos">Permisos</a>
         <a class="nav-item" data-tab="pasoCorr" href="#pasoCorr">Correcciones</a>
+        <a class="nav-item" data-tab="pasoPrestadas" href="#pasoPrestadas">Sesiones prestadas</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Costos</summary>
@@ -966,6 +967,20 @@
       <div id="ccZona"></div>
     </section>
 
+    <!-- ===================== SESIONES PRESTADAS (parche 109) ===================== -->
+    <section class="pantalla" id="pasoPrestadas" data-area-sel="prArea">
+      <div class="seccion-cab">
+        <h1>Sesiones prestadas</h1>
+        <p class="seccion-sub">Quién entró como un operario o como supervisora, cuándo, por qué y qué registró. Se cierran solas a los 60 min sin uso.
+        Para entrar como otra persona hace falta la pestaña "Operario" o "Supervisora" de Operar como y Edición en esa área.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Día</span><input type="date" id="prFecha" onchange="prCargar()"></label>
+        <label class="campo"><span>Área</span><select id="prArea" onchange="prCargar()"></select></label>
+      </div>
+      <div id="prZona" aria-live="polite"></div>
+    </section>
+
     <!-- ===================== TRABAJO POR TIEMPO (parche 116) ===================== -->
     <section class="pantalla" id="pasoLotes">
       <div class="seccion-cab">
@@ -1606,6 +1621,7 @@
 <script src="incidencias.js"></script>
 <script src="sueltos.js"></script>
 <script src="lotes.js"></script>
+<script src="prestadas.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>
