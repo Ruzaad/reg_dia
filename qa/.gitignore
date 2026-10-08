@@ -1,0 +1,14 @@
+# Copias de producción y todo lo generado: nunca a GitHub
+raw/
+node_modules/
+build/esquema.sql
+build/esquema_stmts.json
+build/wal.json
+build/datos.*
+build/tickets_cache.*
+build/dd/
+sim/pg/
+sim/datos/
+sim/maqueta.html
+sim/app/*
+!sim/app/shim.js

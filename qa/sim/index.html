@@ -1,0 +1,338 @@
+<title>Samitex QA</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+/* Mesa de pruebas: barra azul de la app, columna de perfiles, celular y PC lado a lado, registro abajo. */
+:root{
+  --hdr:#0D3B85; --azul:#0D3B85; --ocre:#D49D53; --exito:#1E7B3C; --alerta:#B3261E; --aviso:#B45309;
+  --fondo:#EEF1F6; --sup:#FFFFFF; --sup-2:#F6F8FB; --linea:#DCE3EE; --texto:#1B2433; --suave:#566178; --tenue:#8791A4;
+  --azul-t:#E8EEF9; --exito-t:#E7F4EC; --aviso-t:#FDF1E3; --alerta-t:#FCECEA; --marco:#1B2433;
+  --sans:"Fira Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif; --mono:"Fira Code",ui-monospace,Menlo,Consolas,monospace;
+  --r:14px; --r-s:10px; --sombra:0 1px 2px rgba(13,59,133,.06),0 6px 18px rgba(13,59,133,.08);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark; --azul:#6E9CF0; --exito:#4DB874; --alerta:#EF7A70; --aviso:#E0A94A;
+  --fondo:#0B1220; --sup:#131C2E; --sup-2:#182238; --linea:#28344E; --texto:#E4E9F2; --suave:#A1ACC0; --tenue:#707C93;
+  --azul-t:#1B2B4C; --exito-t:#173327; --aviso-t:#332513; --alerta-t:#3A1B1D; --marco:#000000; --sombra:0 8px 22px rgba(0,0,0,.35);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark; --azul:#6E9CF0; --exito:#4DB874; --alerta:#EF7A70; --aviso:#E0A94A;
+  --fondo:#0B1220; --sup:#131C2E; --sup-2:#182238; --linea:#28344E; --texto:#E4E9F2; --suave:#A1ACC0; --tenue:#707C93;
+  --azul-t:#1B2B4C; --exito-t:#173327; --aviso-t:#332513; --alerta-t:#3A1B1D; --marco:#000000; --sombra:0 8px 22px rgba(0,0,0,.35);
+}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+body{background:var(--fondo);color:var(--texto);font:14px/1.45 var(--sans);margin:0}
+button{font:inherit;cursor:pointer}
+button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--ocre);outline-offset:2px}
+.hdr{background:var(--hdr);color:#fff;padding:10px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+.hdr h1{font-size:17px;font-weight:800;margin:0;letter-spacing:.2px}
+.hdr .sello{background:var(--ocre);color:#1B2433;font-weight:700;font-size:11.5px;padding:3px 9px;border-radius:99px;letter-spacing:.3px}
+.hdr nav{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+.hdr nav button{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:99px;padding:5px 12px;font-weight:600;font-size:13px}
+.hdr nav button[aria-pressed="true"]{background:#fff;color:#0D3B85}
+main{padding:14px 16px 24px;display:grid;gap:14px}
+.vista[hidden]{display:none!important}
+.carga{background:var(--sup);border:1px solid var(--linea);border-radius:var(--r);padding:16px;display:grid;gap:8px;box-shadow:var(--sombra)}
+.barra{height:8px;background:var(--sup-2);border-radius:99px;overflow:hidden;border:1px solid var(--linea)}
+.barra i{display:block;height:100%;width:0;background:var(--azul);transition:width .3s}
+.mesa{display:grid;grid-template-columns:250px minmax(0,380px) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:1100px){.mesa{grid-template-columns:minmax(0,1fr) minmax(0,380px)}.pc{grid-column:1/-1}}
+@media (max-width:720px){.mesa{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--sup);border:1px solid var(--linea);border-radius:var(--r);box-shadow:var(--sombra);min-width:0}
+.panel>h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--suave);margin:0;padding:12px 14px 8px;font-weight:700}
+.perfiles{display:grid;gap:10px;padding:0 12px 12px}
+.grupo h3{font-size:13px;margin:6px 0 6px;font-weight:700}
+.grupo p{margin:0 0 6px;color:var(--suave);font-size:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--linea);background:var(--sup-2);color:var(--texto);border-radius:9px;padding:6px 9px;font-size:12.5px;text-align:left;display:grid;line-height:1.25}
+.chip small{color:var(--tenue);font-family:var(--mono);font-size:11px}
+.chip:hover{border-color:var(--azul)}
+.dest{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--suave);padding:0 12px 10px}
+.dest select{font:inherit;border:1px solid var(--linea);border-radius:8px;padding:4px 6px;background:var(--sup);color:var(--texto)}
+.dispo{display:grid;gap:8px;justify-items:center;padding:0 12px 12px}
+.dispo .cab{display:flex;gap:8px;align-items:center;justify-content:space-between;width:100%;padding:12px 2px 0}
+.dispo .cab h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--suave);margin:0;font-weight:700}
+.quien{font-size:12px;color:var(--suave);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.btn-s{border:1px solid var(--linea);background:var(--sup-2);color:var(--texto);border-radius:8px;padding:4px 9px;font-size:12px;font-weight:600}
+.tel{width:100%;max-width:360px;aspect-ratio:9/18.5;border:10px solid var(--marco);border-radius:34px;overflow:hidden;background:#fff}
+.tel iframe,.pcmarco iframe{width:100%;height:100%;border:0;display:block;background:#fff}
+.pcmarco{width:100%;height:760px;border:1px solid var(--linea);border-radius:10px;overflow:hidden;background:#fff}
+.pc .barra-pc{display:flex;gap:6px;align-items:center;width:100%;background:var(--sup-2);border:1px solid var(--linea);border-bottom:0;border-radius:10px 10px 0 0;padding:6px 10px;font:12px var(--mono);color:var(--tenue)}
+.pc .barra-pc i{width:9px;height:9px;border-radius:50%;background:var(--linea);display:inline-block}
+.pc .pcmarco{border-radius:0 0 10px 10px}
+.reg{display:grid;gap:0}
+.reg-cab{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:12px 14px 8px}
+.reg-cab h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--suave);margin:0;font-weight:700}
+.cont{display:flex;gap:6px;flex-wrap:wrap;font-size:12px}
+.pill{border-radius:99px;padding:2px 9px;font-weight:600;font-variant-numeric:tabular-nums}
+.p-lee{background:var(--azul-t);color:var(--azul)}.p-esc{background:var(--aviso-t);color:var(--aviso)}.p-err{background:var(--alerta-t);color:var(--alerta)}.p-ok{background:var(--exito-t);color:var(--exito)}
+.tabla{overflow:auto;max-height:280px;border-top:1px solid var(--linea)}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+td,th{padding:6px 10px;border-bottom:1px solid var(--linea);text-align:left;white-space:nowrap}
+th{position:sticky;top:0;background:var(--sup-2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--suave)}
+td.fn{font-family:var(--mono)}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+td.det{white-space:normal;color:var(--suave);max-width:420px}
+.marco-maq{width:100%;height:calc(100vh - 150px);min-height:600px;border:1px solid var(--linea);border-radius:var(--r);overflow:hidden;background:#fff}
+.marco-maq iframe{width:100%;height:100%;border:0}
+.doc{max-width:760px;display:grid;gap:12px}
+.doc .panel{padding:16px 18px}
+.doc h2{font-size:18px;margin:0 0 4px;text-wrap:balance}
+.doc h3{font-size:14px;margin:6px 0 4px}
+.doc p,.doc li{color:var(--texto);line-height:1.55}
+.doc ol{padding-left:20px;margin:6px 0;display:grid;gap:6px}
+.doc code{font-family:var(--mono);font-size:12.5px;background:var(--sup-2);border:1px solid var(--linea);border-radius:6px;padding:1px 5px}
+.flujo{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-weight:600;font-size:13px}
+.flujo span{background:var(--azul-t);color:var(--azul);border-radius:9px;padding:6px 10px}
+.flujo b{color:var(--tenue)}
+.nota{font-size:12.5px;color:var(--suave)}
+.aviso-fijo{background:var(--aviso-t);color:var(--aviso);border-radius:var(--r-s);padding:8px 12px;font-size:13px;font-weight:600}
+@media (prefers-reduced-motion:reduce){.barra i{transition:none}}
+</style>
+
+<header class="hdr">
+  <h1>SAMITEX · Simulador QA</h1>
+  <span class="sello">Copia del 8-oct · no toca la base real</span>
+  <nav aria-label="Secciones">
+    <button id="t-app" aria-pressed="true" data-vista="v-app">App real</button>
+    <button id="t-maq" aria-pressed="false" data-vista="v-maq">Maqueta del rediseño</button>
+    <button id="t-qa" aria-pressed="false" data-vista="v-qa">De QA a main</button>
+  </nav>
+</header>
+
+<main>
+  <section id="v-app" class="vista">
+    <div class="carga" id="carga">
+      <strong id="carga-txt">Preparando la base de prueba…</strong>
+      <div class="barra"><i id="carga-bar"></i></div>
+      <span class="nota">Se baja una sola vez una copia de la base (unos 30 MB) y corre dentro de este navegador. Personal con nombres y DNI cambiados; PIN 1234 para todos.</span>
+    </div>
+
+    <div class="mesa" id="mesa" hidden>
+      <aside class="panel" aria-label="Perfiles">
+        <h2>Entrar como</h2>
+        <div class="dest">
+          <label for="destino">Abrir en</label>
+          <select id="destino"><option value="auto">el equipo que usa</option><option value="cel">el celular</option><option value="pc">la PC</option></select>
+        </div>
+        <div class="perfiles" id="perfiles"></div>
+      </aside>
+
+      <section class="panel dispo" aria-label="Celular">
+        <div class="cab"><h2>Celular</h2><span class="quien" id="quien-cel">Sin sesión</span><button class="btn-s" id="salir-cel">Salir</button></div>
+        <div class="tel"><iframe name="cel" id="f-cel" title="App en el celular"></iframe></div>
+      </section>
+
+      <section class="panel dispo pc" aria-label="PC">
+        <div class="cab"><h2>PC de oficina</h2><span class="quien" id="quien-pc">Sin sesión</span><button class="btn-s" id="salir-pc">Salir</button></div>
+        <div class="barra-pc"><i></i><i></i><i></i><span id="url-pc">ingenieria.html</span></div>
+        <div class="pcmarco"><iframe name="pc" id="f-pc" title="App en la PC"></iframe></div>
+      </section>
+    </div>
+
+    <section class="panel reg" id="registro" hidden aria-label="Registro">
+      <div class="reg-cab">
+        <h2>Lo que la app le pidió a la base</h2>
+        <div class="cont" id="contadores"></div>
+        <span style="flex:1"></span>
+        <button class="btn-s" id="reiniciar">Volver a la copia del 8-oct</button>
+      </div>
+      <div class="tabla"><table><thead><tr><th>Hora</th><th>Equipo</th><th>Función</th><th>Tipo</th><th>ms</th><th>Detalle</th></tr></thead><tbody id="reg-filas"></tbody></table></div>
+    </section>
+  </section>
+
+  <section id="v-maq" class="vista" hidden>
+    <div class="marco-maq"><iframe id="f-maq" title="Maqueta del rediseño" data-src="maqueta.html"></iframe></div>
+  </section>
+
+  <section id="v-qa" class="vista doc" hidden>
+    <div class="panel">
+      <h2>Cómo se usa el QA</h2>
+      <p>Cada mejora se arma primero aquí: la app de verdad, con sus pantallas y las mismas funciones de la base de producción, pero contra una copia que vive en el navegador. Lo que se registra, aprueba o borra en el simulador no llega a Supabase.</p>
+      <div class="flujo"><span>Mejora en la rama qa</span><b>→</b><span>Simulador QA</span><b>→</b><span>Tú lo pruebas</span><b>→</b><span>"Despliega en main"</span></div>
+    </div>
+    <div class="panel">
+      <h3>Cuando digas "despliega en main"</h3>
+      <ol>
+        <li>Claude fusiona la rama <code>qa</code> en <code>main</code> y Vercel publica solo, como hoy.</li>
+        <li>Si la mejora trae parche de base, te pasa el SQL (<code>sql/parche_N.sql</code>) para que lo corras tú en el SQL Editor, igual que siempre.</li>
+        <li>El simulador se vuelve a armar desde <code>main</code> con una copia nueva de la base.</li>
+      </ol>
+    </div>
+    <div class="panel">
+      <h3>Qué no corre en el simulador</h3>
+      <ol>
+        <li>La IA de auditoría (Gemini): responde que no está disponible.</li>
+        <li>La escritura al Google Sheet ALMACÉN: se da por hecha sin escribir nada.</li>
+        <li>La hora: es la de tu reloj. Los datos llegan hasta el 8-oct, así que "hoy" empieza vacío y se llena con lo que registres.</li>
+        <li>Al recargar la página o tocar "Volver a la copia del 8-oct", todo lo hecho se borra.</li>
+      </ol>
+      <p class="nota">Datos: personal de planta con nombres y DNI cambiados y PIN 1234; usuarios de oficina con su usuario de siempre y PIN 1234. Reclamos desde el 16-set, todas las OFs, BASES y tickets.</p>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { PGlite, pgcrypto, uuid_ossp } from "./pg/pglite.js";
+const $ = id => document.getElementById(id);
+let db = null, FN = {}, REG = [], cont = {lee:0, esc:0, err:0};
+const ESTADO = { cel:null, pc:null };
+
+/* ---------- vistas ---------- */
+document.querySelectorAll(".hdr nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".hdr nav button").forEach(x => x.setAttribute("aria-pressed", x===b));
+  document.querySelectorAll(".vista").forEach(v => v.hidden = v.id !== b.dataset.vista);
+  if (b.dataset.vista === "v-maq" && !$("f-maq").src) $("f-maq").src = $("f-maq").dataset.src;
+});
+
+/* ---------- carga de la base ---------- */
+async function bajar(url, peso, desde, hasta) {
+  const r = await fetch(url); if (!r.ok) throw new Error("No se pudo bajar " + url);
+  const total = +r.headers.get("content-length") || peso; const lector = r.body.getReader(); const partes = []; let n = 0;
+  for (;;) { const { done, value } = await lector.read(); if (done) break; partes.push(value); n += value.length;
+    $("carga-bar").style.width = (desde + (hasta - desde) * Math.min(1, n / total)) + "%"; }
+  return new Blob(partes);
+}
+async function gunzip(blob) { return await new Response(blob.stream().pipeThrough(new DecompressionStream("gzip"))).blob(); }
+async function arrancar() {
+  $("carga").hidden = false; $("mesa").hidden = true; $("registro").hidden = true;
+  $("carga-txt").textContent = "Bajando la copia de la base…";
+  const datos = await bajar("datos/datos.tgz", 9.9e6, 0, 60);
+  const tickets = await bajar("datos/tickets.csv.gz", 1.8e6, 60, 70);
+  $("carga-txt").textContent = "Arrancando Postgres dentro del navegador…";
+  if (db) { try { await db.close(); } catch (e) {} }
+  db = await PGlite.create({ loadDataDir: datos, extensions: { pgcrypto, uuid_ossp } });
+  $("carga-bar").style.width = "85%";
+  $("carga-txt").textContent = "Cargando 174 mil tickets…";
+  await db.query("truncate tickets_cache");
+  await db.query("copy tickets_cache from '/dev/blob' with (format csv)", [], { blob: await gunzip(tickets) });
+  await catalogo();
+  $("carga-bar").style.width = "100%";
+  await perfiles();
+  $("carga").hidden = true; $("mesa").hidden = false; $("registro").hidden = false;
+  limpiarSesiones();
+  abrir("cel", "index.html"); abrir("pc", "index.html");
+}
+
+/* ---------- catálogo de funciones (como PostgREST) ---------- */
+async function catalogo() {
+  const r = await db.query(`select p.proname n, p.proretset s, p.prorettype::regtype::text ret, p.pronargs na, p.pronargdefaults nd,
+      coalesce(p.proargnames,'{}') nombres, coalesce(p.proargmodes::text[],'{}') modos,
+      array(select format_type(t,null) from unnest(p.proargtypes::oid[]) t) tipos
+    from pg_proc p join pg_namespace s on s.oid=p.pronamespace where s.nspname='public'`);
+  FN = {};
+  for (const f of r.rows) {
+    const ent = f.modos.length ? f.nombres.filter((_, i) => ["i","b","v"].includes(f.modos[i])) : f.nombres.slice(0, f.na);
+    (FN[f.n] ||= []).push({ set: f.s, ret: f.ret, args: ent.map((n, i) => ({ n, t: f.tipos[i], def: i >= f.na - f.nd })) });
+  }
+}
+function elegir(fn, cuerpo) {
+  const llaves = Object.keys(cuerpo);
+  const cands = (FN[fn] || []).filter(o => llaves.every(k => o.args.some(a => a.n === k)) && o.args.every(a => a.def || llaves.includes(a.n)));
+  cands.sort((a, b) => a.args.length - b.args.length);
+  return cands[0];
+}
+function valor(v, t) {
+  if (v === null || v === undefined) return null;
+  if (t === "json" || t === "jsonb") return JSON.stringify(v);
+  if (t.endsWith("[]")) return Array.isArray(v) ? v : v;
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+async function llamar(fn, cuerpo) {
+  const o = elegir(fn, cuerpo);
+  if (!o) return { status: 404, body: { code: "PGRST202", message: `No existe la función ${fn} con esos parámetros` } };
+  const usados = o.args.filter(a => a.n in cuerpo);
+  const params = usados.map(a => valor(cuerpo[a.n], a.t));
+  const lista = usados.map((a, i) => `"${a.n}" => $${i + 1}::${a.t}`).join(", ");
+  const llamada = `public."${fn}"(${lista})`;
+  const sql = o.set ? `select coalesce(json_agg(_t), '[]'::json) as r from ${llamada} _t`
+            : o.ret === "void" ? `select ${llamada} as v, null::json as r`
+            : `select to_json(${llamada}) as r`;
+  try {
+    let escribio = false, res;
+    await db.transaction(async tx => {
+      res = await tx.query(sql, params);
+      escribio = (await tx.query("select pg_current_xact_id_if_assigned() is not null as w")).rows[0].w;
+    });
+    return { status: 200, body: res.rows[0].r, escribio };
+  } catch (e) {
+    return { status: 400, body: { code: e.code || "P0001", message: e.message, hint: e.hint || null, details: e.detail || null } };
+  }
+}
+/* edge functions que en producción salen a Google: aquí no salen */
+function edge(nombre, cuerpo) {
+  if (nombre === "ef-gemini") return { status: 200, body: { ok: false, error: "La revisión con IA no corre en el simulador." }, nota: "IA no disponible en QA" };
+  const acc = cuerpo.accion || "append";
+  const body = acc === "borrar" ? { ok: true, borradas: (cuerpo.codigos || []).length } : acc === "actualizar" ? { ok: true, actualizadas: 0 } : { ok: true, escritas: (cuerpo.filas || []).length };
+  return { status: 200, body, nota: "Sheet ALMACÉN: no se escribe en QA" };
+}
+window.SIM = {
+  async atender(ruta, cuerpo, marco) {
+    const t0 = performance.now(); let r, fn, nota = "";
+    if (ruta.startsWith("/rest/v1/rpc/")) { fn = ruta.slice(13).split("?")[0]; r = await llamar(fn, cuerpo); }
+    else if (ruta.startsWith("/functions/v1/")) { fn = "edge:" + ruta.slice(14); r = edge(ruta.slice(14), cuerpo); nota = r.nota; }
+    else { fn = ruta; r = { status: 404, body: { message: "Ruta no simulada" } }; }
+    const ms = Math.round(performance.now() - t0);
+    const tipo = r.status >= 400 ? "err" : r.escribio ? "esc" : "lee";
+    if (!nota && r.status >= 400) nota = r.body.message;
+    if (!nota && fn === "fn_login" && r.body && r.body.ok) { nota = "Entró " + r.body.nombre; quien(marco, r.body.nombre + " · " + r.body.cargo); }
+    anotar({ hora: new Date().toLocaleTimeString("es-PE"), marco, fn, tipo, ms, nota });
+    return { status: r.status, body: JSON.stringify(r.body ?? null) };
+  },
+  pantalla(marco, pag) { if (marco === "pc") $("url-pc").textContent = pag || "index.html"; }
+};
+
+/* ---------- registro ---------- */
+function anotar(e) {
+  cont[e.tipo]++; REG.unshift(e); if (REG.length > 300) REG.pop();
+  $("contadores").innerHTML = `<span class="pill p-lee">${cont.lee} lecturas</span><span class="pill p-esc">${cont.esc} escrituras en la copia</span><span class="pill p-err">${cont.err} errores</span><span class="pill p-ok">0 envíos a la base real</span>`;
+  const tr = document.createElement("tr");
+  const et = { lee: "<span class='pill p-lee'>lee</span>", esc: "<span class='pill p-esc'>escribe</span>", err: "<span class='pill p-err'>error</span>" }[e.tipo];
+  tr.innerHTML = `<td class="num">${e.hora}</td><td>${e.marco === "cel" ? "Celular" : "PC"}</td><td class="fn"></td><td>${et}</td><td class="num">${e.ms}</td><td class="det"></td>`;
+  tr.children[2].textContent = e.fn; tr.children[5].textContent = e.nota || "";
+  $("reg-filas").prepend(tr);
+  while ($("reg-filas").children.length > 300) $("reg-filas").lastChild.remove();
+}
+
+/* ---------- perfiles ---------- */
+const AREAS_APP = ["CAMISA COSTURA", "PANTALON COSTURA", "SACO COSTURA", "ACABADO", "CORTE", "REPROCESO"];
+async function perfiles() {
+  const ops = (await db.query(`select o.dni, o.nombres_apellidos n, o.area_actual a, count(r.id)::int k
+     from operarios o left join reclamos r on r.dni=o.dni and r.fecha >= _hoy()-10
+     where o.estado='ACTIVO' and o.cargo='OPERARIO' group by 1,2,3 order by a, k desc`)).rows;
+  const sups = (await db.query(`select dni, nombres_apellidos n, area_actual a from operarios where estado='ACTIVO' and cargo='SUPERVISORA' order by a`)).rows;
+  const ofi = (await db.query(`select dni, nombres_apellidos n, cargo c, es_admin adm from operarios where estado='ACTIVO' and cargo not in ('OPERARIO','ESTAJERO','SUPERVISORA') order by es_admin desc, dni`)).rows;
+  const g = $("perfiles"); g.innerHTML = "";
+  const grupo = (tit, txt, items) => { const d = document.createElement("div"); d.className = "grupo";
+    d.innerHTML = `<h3>${tit}</h3><p>${txt}</p><div class="chips"></div>`;
+    items.forEach(it => { const b = document.createElement("button"); b.className = "chip";
+      b.innerHTML = `<span></span><small></small>`; b.children[0].textContent = it.t; b.children[1].textContent = it.s;
+      b.onclick = () => entrar(it.dni, it.area, it.dev); d.querySelector(".chips").append(b); });
+    g.append(d); };
+  grupo("Supervisoras", "Abren su pantalla en el celular.", sups.map(s => ({ t: s.n.split(",")[1]?.trim() + " " + s.n.split(" ")[0], s: s.a, dni: s.dni, area: s.a, dev: "cel" })));
+  grupo("Oficina", "Ingeniería y Costos en la PC.", ofi.map(o => ({ t: o.dni + (o.adm ? " · admin" : ""), s: o.c, dni: o.dni, dev: "pc" })));
+  for (const a of AREAS_APP) {
+    const lista = ops.filter(o => o.a === a).slice(0, 3);
+    if (lista.length) grupo("Operarios " + a.replace(" COSTURA", "").toLowerCase(), "Los que más registraron en los últimos 10 días.", lista.map(o => ({ t: o.n.split(",")[1]?.trim() + " " + o.n.split(" ")[0], s: o.dni + " · " + o.k + " tickets", dni: o.dni, area: a, dev: "cel" })));
+  }
+}
+function limpiarSesiones() { try { Object.keys(localStorage).filter(k => k.startsWith("sim:")).forEach(k => localStorage.removeItem(k)); } catch (e) {} }
+function abrir(marco, pag) { $("f-" + marco).src = "app/" + pag; }
+function quien(marco, txt) { $("quien-" + marco).textContent = txt; }
+async function entrar(dni, area, dev) {
+  const marco = $("destino").value === "auto" ? dev : $("destino").value;
+  const r = await window.SIM.atender("/rest/v1/rpc/fn_login", { p_dni: dni, p_pin: "1234" }, marco);
+  const j = JSON.parse(r.body); if (!j || !j.ok) return;
+  const ahora = Date.now();
+  const ses = { dni: j.dni, nombre: j.nombre, cargo: j.cargo, token: j.token, area: area || null, admin: j.es_admin === true, ini: ahora, exp: ahora + 4 * 3600 * 1000 };
+  const pre = "sim:" + marco + ":";
+  try { Object.keys(localStorage).filter(k => k.startsWith(pre)).forEach(k => localStorage.removeItem(k)); localStorage.setItem(pre + "stx_sesion", JSON.stringify(ses)); } catch (e) {}
+  try { $("f-" + marco).contentWindow.sessionStorage.clear(); } catch (e) {}
+  const oficina = !["OPERARIO", "ESTAJERO", "SUPERVISORA"].includes(j.cargo);
+  abrir(marco, oficina ? "ingenieria.html" : j.cargo === "SUPERVISORA" ? "supervisora.html" : "operario.html");
+}
+["cel", "pc"].forEach(m => $("salir-" + m).onclick = () => { try { Object.keys(localStorage).filter(k => k.startsWith("sim:" + m + ":")).forEach(k => localStorage.removeItem(k)); $("f-" + m).contentWindow.sessionStorage.clear(); } catch (e) {} quien(m, "Sin sesión"); abrir(m, "index.html"); });
+$("reiniciar").onclick = async () => { REG = []; cont = { lee: 0, esc: 0, err: 0 }; $("reg-filas").innerHTML = ""; $("contadores").innerHTML = ""; quien("cel", "Sin sesión"); quien("pc", "Sin sesión"); await arrancar(); };
+arrancar().catch(e => { $("carga-txt").textContent = "No se pudo arrancar la base de prueba: " + e.message; });
+</script>

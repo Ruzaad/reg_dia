@@ -1,0 +1,19 @@
+{
+  "name": "samitex-qa",
+  "private": true,
+  "type": "module",
+  "description": "Simulador QA: la app real contra una copia de la base que corre en el navegador",
+  "scripts": {
+    "base": "python3 build/ddl.py && node build/build.mjs dump && python3 build/podar.py",
+    "pglite": "sh build/pglite.sh",
+    "sim": "sh build/armar_sim.sh ..",
+    "todo": "npm run base && npm run pglite && npm run sim"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "esbuild": "0.24.0",
+    "flatpickr": "4.6.13",
+    "xlsx": "0.18.5",
+    "chart.js": "4.4.1"
+  }
+}
