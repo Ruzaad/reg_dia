@@ -7040,7 +7040,9 @@ async function cargarCarga(){
     const r=await rpc("fn_carga_capacidad",{p_dni:ING.dni,p_token:ING.token,p_area:""});
     if(!r || !r.ok){ mostrarError((r&&r.error)||"Error"); $("ccZona").innerHTML=""; return; }
     CC=r; ccPintar();
-  }catch(e){ mostrarError(e.message); $("ccZona").innerHTML=""; }
+  }catch(e){
+    if(/Could not find the function|PGRST202/i.test(e.message||"")){ $("ccZona").innerHTML=`<div class="acf-falta"><b>Falta correr el parche 107 en la base.</b> Con él, esta pantalla calcula cuántos días de trabajo le quedan a cada área frente a su ritmo real.</div>`; return; }
+    mostrarError(e.message); $("ccZona").innerHTML=""; }
 }
 /* Simula los próximos días hábiles: cada área de costura gasta su ritmo por día hasta
    acabar su carga; lo que gasta se convierte en llegada a ACABADO. */

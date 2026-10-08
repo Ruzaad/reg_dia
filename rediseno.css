@@ -1608,3 +1608,10 @@ input.lt-cant{display:block;box-sizing:border-box}
 .franja-prestada button{border:0;border-radius:999px;background:#fff;color:var(--violeta);font:800 12.5px var(--sans);padding:7px 12px;cursor:pointer;white-space:nowrap}
 body.prestada::after{content:"";position:fixed;inset:0;border:4px solid var(--violeta);pointer-events:none;z-index:59}
 .pr-h3{font-size:14px;color:var(--azul);margin:12px 0 6px}
+
+/* ===== Modo sin señal (parche 110) ===== */
+.ss-aviso{display:flex;flex-direction:column;gap:4px;background:var(--ocre-t);border:1.5px solid color-mix(in srgb,var(--aviso) 45%,transparent);border-radius:14px;padding:12px 14px;margin:0 0 12px;font-size:13.5px;color:var(--texto);line-height:1.4}
+.ss-aviso b{color:var(--aviso);font-size:14.5px}
+.ss-aviso.ok{background:var(--exito-t);border-color:color-mix(in srgb,var(--exito) 40%,transparent)} .ss-aviso.ok b{color:var(--exito)}
+.ss-aviso.mal{background:var(--alerta-t);border-color:color-mix(in srgb,var(--alerta) 40%,transparent)} .ss-aviso.mal b{color:var(--alerta)}
+.ss-aviso button{align-self:flex-start;margin-top:6px;border:0;border-radius:999px;padding:8px 14px;font:800 13px var(--sans);background:var(--sup);color:var(--texto);cursor:pointer;box-shadow:var(--sombra-1)}

@@ -1069,6 +1069,7 @@ async function cargarTodo(s){
     if(alm.duplicados.length) console.warn("Códigos duplicados en almacén:", alm.duplicados);
     irA("pasoOF");
     if(typeof opInicio==="function") opInicio();   // inicio con el día y "Sigue donde te quedaste"
+    if(typeof ssEnviar==="function"){ ssPintar(); ssEnviar(); }   // parche 110: lo que quedó sin señal
   }catch(e){
     $("zonaCarga").innerHTML = `<div class="vacio-msg">${esc(e.message)}</div>`;
     mostrarError("No se pudo cargar. Revisa la conexión y vuelve a intentar.");
@@ -2123,6 +2124,8 @@ function confirmarLote(){
 /* El reclamo es de quien está registrando (compara nombres sin tildes ni espacios). */
 const esMio = (nombre, s) => !!nombre && !!s && normKey(nombre).replace(/\s+/g," ")===normKey(s.nombre).replace(/\s+/g," ");
 
+/* Modo sin señal (parche 110, sinsenal.js): no en ACABADO, que registra por cantidad. */
+const ssListo = () => typeof ssEncolar==="function" && !ES_ACABADO;
 /* --- reclamar (individual o lote) --- */
 async function registrar(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
@@ -2130,6 +2133,7 @@ async function registrar(){
   const btn=$("btnRegistrar");
   btn.disabled=true; btn.textContent="REGISTRANDO…";
   const esLote = modoSel && Object.keys(marcados).length>0;
+  const SS_OK = ssListo();
   try{
     let r;
     if(esLote){
@@ -2141,8 +2145,11 @@ async function registrar(){
       let reclamados=0, conflictos=[], ult=null;
       for(let i=0;i<lote.length;i+=LOTE_MAX){
         let x;
-        try{ x = await rpc("fn_reclamar_lote",{p_dni:s.dni,p_token:s.token,p_area:area,p_tickets:lote.slice(i,i+LOTE_MAX)}); }
-        catch(e){ x = {ok:false, error:e.message}; }
+        try{ if(SS_OK && !navigator.onLine) throw new Error(MSG_SIN_SENAL);
+          x = await rpc("fn_reclamar_lote",{p_dni:s.dni,p_token:s.token,p_area:area,p_tickets:lote.slice(i,i+LOTE_MAX)}); }
+        catch(e){ x = {ok:false, error:e.message, sinSenal: SS_OK && ssEsSinSenal(e)}; }
+        // Parche 110: sin señal, lo que falta se guarda en el celular y se manda solo después.
+        if(x.sinSenal){ r = {ok:true, cola:ssEncolar(s, area, lote.slice(i), sel.op), reclamados}; break; }
         if(!x.ok){
           if(!reclamados){ r=x; break; }
           x.error = `Solo se registraron ${reclamados} de ${lote.length} paquetes. `
@@ -2154,9 +2161,26 @@ async function registrar(){
       if(!r) r = Object.assign({}, ult, {reclamados, conflictos});
     } else {
       const t=sel.ticket;
-      r = await rpc("fn_reclamar", {p_dni:s.dni,p_token:s.token,p_area:area,
-        p_codigo:t.codigo,p_of:t.of,p_modulo:t.modulo,p_op:t.op,p_std:t.std,p_cant:t.cant,
-        p_numeracion:t.num,p_articulo:t.articulo,p_color:t.color,p_talla:t.talla,p_corte:t.corte,p_nop:t.nop});
+      try{
+        if(SS_OK && !navigator.onLine) throw new Error(MSG_SIN_SENAL);
+        r = await rpc("fn_reclamar", {p_dni:s.dni,p_token:s.token,p_area:area,
+          p_codigo:t.codigo,p_of:t.of,p_modulo:t.modulo,p_op:t.op,p_std:t.std,p_cant:t.cant,
+          p_numeracion:t.num,p_articulo:t.articulo,p_color:t.color,p_talla:t.talla,p_corte:t.corte,p_nop:t.nop});
+      }catch(e){
+        if(!(SS_OK && ssEsSinSenal(e))) throw e;
+        r = {ok:true, cola:ssEncolar(s, area, [{codigo:t.codigo,of:t.of,modulo:t.modulo,op:t.op,std:t.std,cant:t.cant,num:t.num,
+          articulo:t.articulo,color:t.color,talla:t.talla,corte:t.corte,nop:t.nop}], sel.op)};
+      }
+    }
+    if(r && r.cola!=null){
+      const tk = esLote ? Object.values(marcados) : [sel.ticket];
+      tk.forEach(t=>{ if(!RECL[t.codigo]) RECL[t.codigo]={nombre:s.nombre,hora:"sin señal"}; });
+      btn.textContent="SÍ, REGISTRAR"; btn.disabled=false;
+      $("exTitulo").textContent="Guardado en tu celular";
+      $("exDetalle").innerHTML=(r.reclamados?`<b>${r.reclamados}</b> ya se registraron. `:"")
+        +`<b>${r.cola}</b> paquete${r.cola===1?"":"s"} de ${esc(sel.op)} se enviarán solos cuando vuelva la señal.<br>No los registres otra vez.`;
+      $("exAvance").textContent=""; modoSel=false; marcados={};
+      mostrarExito(); return;
     }
     btn.textContent="SÍ, REGISTRAR";
     if(!r.ok){
