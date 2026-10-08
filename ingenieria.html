@@ -61,6 +61,7 @@
         <summary class="nav-sep">Gestión</summary>
         <a class="nav-item" data-tab="pasoAsis" href="#pasoAsis">Personal</a>
         <a class="nav-item" data-tab="pasoBases" href="#pasoBases">Bases</a>
+        <a class="nav-item" data-tab="pasoCalBase" href="#pasoCalBase">Calidad de BASES</a>
         <a class="nav-item" data-tab="pasoBaseLog" href="#pasoBaseLog">Historial de tiempos</a>
         <a class="nav-item" data-tab="pasoIncid" href="#pasoIncid">Incidencias</a>
         <a class="nav-item" data-tab="pasoFechas" href="#pasoFechas">Corregir fechas</a>
@@ -874,6 +875,25 @@
       </div>
     </section>
 
+    <!-- ===================== CALIDAD DE BASES (preview): solo lectura, todo son avisos ===================== -->
+    <section class="pantalla" id="pasoCalBase">
+      <div class="seccion-cab">
+        <h1>Calidad de BASES</h1>
+        <p class="seccion-sub">Dónde la BASE está mal antes de que arruine eficiencias, balances y planificación. Todo son avisos:
+        nada se bloquea y aquí no se edita; cada aviso te lleva a la BASE para corregirlo.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="cqArea" onchange="cqPintar()"></select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="cqBuscar" placeholder="Artículo u operación…" oninput="cqPintar()"></label>
+        <span style="flex:1"></span>
+        <button class="btn-mini" onclick="cargarCalidadBases()">↻ Revisar de nuevo</button>
+      </div>
+      <div class="cq-areas" id="cqAreas"></div>
+      <div class="cq-tipos" id="cqTipos" role="group" aria-label="Tipo de aviso"></div>
+      <section class="cq-grupo cq-acab-box" id="cqAcab" hidden></section>
+      <div id="cqLista"></div>
+    </section>
+
     <!-- ===================== TIEMPOS MEDIDOS vs BASE (parche 104) ===================== -->
     <section class="pantalla" id="pasoTmpMed">
       <div class="seccion-cab">
@@ -1465,6 +1485,7 @@
 <script src="app.js"></script>
 <script src="ingenieria.js"></script>
 <script src="costos.js"></script>
+<script src="calidad.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>
