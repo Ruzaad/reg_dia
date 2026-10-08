@@ -59,7 +59,7 @@ function shInit(){
   Object.assign(window.VOLVER_MAP||(window.VOLVER_MAP={}),{
     pasoMas:"pasoHoy", pasoAsistencia:"pasoHoy", pasoHE:"pasoHoy", pasoIncidencias:"pasoHoy",
     pasoPersonal:"pasoHoy", pasoAvance:"pasoHoy",
-    pasoSupBases:"pasoMas", pasoBuscar:"pasoMas", pasoEfPersonal:"pasoMas", pasoSupRec:"pasoMas", pasoBoletasSup:"pasoMas"});
+    pasoSupBases:"pasoMas", pasoBuscar:"pasoMas", pasoEfPersonal:"pasoMas", pasoSupRec:"pasoMas", pasoBoletasSup:"pasoMas", pasoSueltosSup:"pasoMas"});
   const s=sesionActual()||{};
   const mp=$("shMasPin"); if(mp) mp.onclick=abrirCambioPin;
   const ms=$("shMasSalir"); if(ms) ms.onclick=cerrarSesion;
@@ -163,6 +163,7 @@ function shIrAsis(modo){
 }
 
 function shIrBuscar(){ pararAvance(); irA("pasoBuscar"); window.scrollTo(0,0); buscarInit(); }
+function shIrSueltos(){ pararAvance(); irA("pasoSueltosSup"); window.scrollTo(0,0); psCargarSup(); }
 
 /* ---------- Horas extra ---------- */
 const SHE={dia:"hoy", h:2, items:[], marc:new Set(), ultima:null, guardando:false, falta:false};

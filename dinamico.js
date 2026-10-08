@@ -189,6 +189,8 @@ const VISTAS=PAG==="ingenieria"?[
   {id:"inciPend",tab:"pasoIncid",m:"inciPendientes",modo:null,area:1,live:1,t:"Incidencias · por aprobar",
    despues(){const a=$("areaInciPend");if(a&&a.options.length){conOpcion(a);if(a.value!==G.area){a.value=G.area;llamar("pintarPendientesInci");}}},
    cargar:()=>llamar("cargarPendientesInci"),ocultar:["areaInciPend"]},
+  {id:"sueltos",tab:"pasoSueltos",m:"pasoSueltos",modo:null,area:1,t:"Paquetes sueltos",
+   aplicar(){return areaSel("psArea");},cargar:()=>llamar("psCargar"),ocultar:["psArea"]},
   {id:"inciRep",tab:"pasoIncid",m:"inciRep",modo:"rango",def:"d30",area:1,t:"Incidencias · reprocesos y apoyo",
    aplicar(){const [d,h]=rangoDe(this);let c=put("irRepDesde",d);c=put("irRepHasta",h)||c;c=areaSel("irRepArea")||c;return c;},
    cargar:()=>llamar("repCargar"),ocultar:["irRepDesde","irRepHasta","irRepArea"]},
@@ -258,7 +260,7 @@ const selArea=v=>{const id=v.sel||(v.ocultar||[]).find(x=>/area/i.test(x));retur
    luego el área, y la respuesta que llegaba última, a veces "Todas", era la
    que quedaba en pantalla con el chip marcando otra cosa). Mismo formato que
    el que usa cada una. */
-const LLENAR={repArea:"Todas las áreas",irRepArea:"Todas las áreas",opeArea:"Todas las áreas",audArea:"Todas las áreas",blArea:"Todas las áreas",
+const LLENAR={repArea:"Todas las áreas",irRepArea:"Todas las áreas",psArea:"Todas mis áreas",opeArea:"Todas las áreas",audArea:"Todas las áreas",blArea:"Todas las áreas",
   incArea:"Todas las áreas",modArea:"Todas las áreas",efmArea:"Todas las áreas",consArea:"Todas las áreas",tkOpArea:"— Elige área —",heArea:null,
   cbArea:null,chArea:"Todas las áreas",ciArea:"Todas las áreas",caArea:"Todas las áreas"};
 function llenarArea(v){
@@ -643,7 +645,7 @@ function contadores(){
 /* =====================================================================
    ARRANQUE · INGENIERÍA
    ===================================================================== */
-const GRUPOS={pasoBuscar:"Tickets",pasoAsisConf:"Tickets",pasoTk:"Tickets",pasoMod:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
+const GRUPOS={pasoBuscar:"Tickets",pasoSueltos:"Tickets",pasoAsisConf:"Tickets",pasoTk:"Tickets",pasoMod:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
   pasoEf:"Eficiencia",pasoAudit:"Eficiencia",pasoInc:"Eficiencia",pasoDash:"Dashboards",pasoCarga:"Planificación",
   pasoAsis:"Gestión",pasoBases:"Gestión",pasoBaseLog:"Gestión",pasoCalBase:"Gestión",pasoIncid:"Gestión",pasoFechas:"Gestión",pasoPermisos:"Gestión",
   pasoCostosBase:"Costos",pasoCostosHoy:"Costos",pasoCostosInc:"Costos",pasoCostosAsis:"Costos",

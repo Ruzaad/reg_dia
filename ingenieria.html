@@ -37,6 +37,7 @@
         <a class="nav-item" data-tab="pasoBuscar" href="#pasoBuscar">Buscar y seguir</a>
         <a class="nav-item" data-tab="pasoAsisConf" href="#pasoAsisConf">Asistencia por confirmar</a>
         <a class="nav-item" data-tab="pasoBolSin" href="#pasoBolSin">Boletas sin llenar<b class="dyn-cnt" id="bslNavCnt" hidden></b></a>
+        <a class="nav-item" data-tab="pasoSueltos" href="#pasoSueltos">Paquetes sueltos</a>
         <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
         <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Avance por módulo</a>
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
@@ -964,6 +965,26 @@
       <div id="ccZona"></div>
     </section>
 
+    <!-- ===================== PAQUETES SUELTOS (parche 115) ===================== -->
+    <section class="pantalla" id="pasoSueltos" data-area-sel="psArea">
+      <div class="seccion-cab">
+        <h1>Paquetes sueltos</h1>
+        <p class="seccion-sub">Paquetes que nadie reclamó en OFs que ya avanzaron. Sale una OF cuando lleva <b>7 días hábiles sin ningún reclamo</b> en el área,
+        o cuando una operación siguió con paquetes posteriores hace <b>3 días hábiles</b> y dejó atrás algunos. Es solo lectura: no reasigna ni cierra nada.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="psArea" onchange="psCargar()"></select></label>
+        <label class="campo"><span>Antigüedad</span><select id="psEdad" onchange="psPintar()">
+          <option value="">Todas</option><option value="5">De 5 a 10 días hábiles</option><option value="11">De 11 a 20</option><option value="21">Más de 20</option></select></label>
+        <label class="campo"><span>Por qué</span><select id="psMot" onchange="psPintar()">
+          <option value="">Todos los motivos</option><option value="saltados">Saltados</option><option value="sin_registrar">Operación sin registrar en la OF</option><option value="nadie">Operación que nadie registra</option></select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="psQ" placeholder="OF o artículo…" oninput="psPintar()"></label>
+        <span style="flex:1"></span>
+        <button class="btn-mini verde" onclick="psDescargar()">⬇ Descargar XLSX</button>
+      </div>
+      <div id="psZona" aria-live="polite"></div>
+    </section>
+
     <!-- ===================== BOLETAS SIN LLENAR (parche 103) ===================== -->
     <section class="pantalla" id="pasoBuscar">
       <div class="seccion-cab">
@@ -1565,6 +1586,7 @@
 <script src="asistencia.js"></script>
 <script src="buscar.js"></script>
 <script src="incidencias.js"></script>
+<script src="sueltos.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>
