@@ -104,7 +104,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoInicio","pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
+  "pasoBaseLog","pasoCalBase","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -146,6 +146,7 @@ function activarTab(tab){
   else if(tab==='pasoAudit') audInit();
   else if(tab==='pasoBaseLog') blInit();
   else if(tab==='pasoBolSin') bslInit();
+  else if(tab==='pasoCalBase') calidadInit();
   else if(tab==='pasoTmpMed') tmInit();
   else if(tab==='pasoTmpFalta') tfInit();
   else if(tab==='pasoPermisos') cargarPermisosAdmin();
