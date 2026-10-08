@@ -2078,7 +2078,7 @@ let timerAvance=null;
    y por ingeniería operando "como supervisora"). */
 function bindSupervisoraUI(){
   $("filtroNombre").addEventListener("input", pintarPersonal);
-  { const ta=$("tabAsistencia"); if(ta) ta.onclick = ()=>{ pararAvance(); marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisInit(); }; }
+  { const ta=$("tabAsistencia"); if(ta) ta.onclick = ()=>{ pararAvance(); marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisEntrar(); }; }
   { const af=$("asisFecha"); if(af) af.onchange = asisInit; }
   $("tabPersonal").onclick = ()=>{ pararAvance(); marcarTab("tabPersonal"); irA("pasoPersonal"); };
   $("tabAvance").onclick  = ()=>{ pararAvance(); marcarTab("tabAvance"); irA("pasoAvance"); cargarAvance(); timerAvance=setInterval(cargarAvance, 60000); };
@@ -2248,7 +2248,7 @@ function initSupervisora(){
   { const rc=$("btnRecargar"); if(rc) rc.onclick=()=>{ recargarSupervisora(); }; }
   bindSupervisoraUI();
   cargarPersonal(s);
-  marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisInit();   // vista principal
+  marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisEntrar();   // vista principal
   if($("tabBoletas")) cargarBoletasSup(true);   // solo el contador de la pestaña
   window.VOLVER_MAP = {
     pasoAlcance:"pasoPersonal", pasoSeleccion:"pasoAlcance",
@@ -2262,7 +2262,7 @@ function initSupervisora(){
 function recargarSupervisora(){
   const s=sesionActual(); if(!s) return;
   const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),500); }
-  if($("pasoAsistencia") && $("pasoAsistencia").classList.contains("activa")) asisInit();
+  if($("pasoAsistencia") && $("pasoAsistencia").classList.contains("activa")) asisEntrar(true);
   else if($("pasoAvance").classList.contains("activa")) cargarAvance();
   else if($("pasoSupBases") && $("pasoSupBases").classList.contains("activa")) cargarBasesSup(true);
   else if($("pasoIncidencias").classList.contains("activa")) cargarIncidencias();
@@ -2584,6 +2584,170 @@ async function asisGuardar(){
     mostrarOk(`Asistencia guardada (${(r&&r.afectados)||marcas.length}) para ${ASIS.fecha}.`);
     asisInit();
   }catch(e){ mostrarError(e.message); }
+}
+/* --- Supervisora · Asistencia de AYER (QA) ---------------------------------
+   El 91% de los reclamos llega después de las 6 pm, así que recién a la mañana
+   siguiente se sabe quién no registró nada. La pestaña abre en "Ayer" y solo
+   pregunta por quien no tiene tickets ni estado: quien registró ya vino.
+   Áreas sin tickets (CORTE, REPROCESO, UDP): un toque "Vinieron todos".
+   Usa las mismas RPC de siempre (fn_asistencia_marcar_lista / _guardar). */
+const ASY_SIN_TICKETS=["CORTE","REPROCESO","REPROCESOS","UDP"];
+const ASY_DIAS=["dom","lun","mar","mié","jue","vie","sáb"];
+let ASY={modo:null, fecha:null, list:[], dec:{}, hasta:{}, sinTk:false};
+function asyIso(f){ return f.toLocaleDateString("sv-SE"); }
+function asyFecha(iso){ const [y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d); }
+function asyTxt(iso){ const f=asyFecha(iso); return `${ASY_DIAS[f.getDay()]} ${iso.slice(8,10)}/${iso.slice(5,7)}`; }
+/* Día hábil anterior: el lunes mira el viernes. */
+function asyAyerIso(){ const f=asyFecha(aswHoy()); do{ f.setDate(f.getDate()-1); }while(f.getDay()===0||f.getDay()===6); return asyIso(f); }
+/* Días hábiles de un rango (lunes a viernes), ambos incluidos. */
+function asyHabiles(desde, hasta){ const L=[], f=asyFecha(desde), h=asyFecha(hasta);
+  while(f<=h){ if(f.getDay()!==0&&f.getDay()!==6) L.push(asyIso(f)); f.setDate(f.getDate()+1); } return L; }
+const asyPorConf = p => !(Number(p.tickets)>0) && !p.estado_guardado;
+
+/* Al entrar: carga ayer; si hay a quién confirmar abre ahí, si no en Hoy. */
+function asyArranque(){
+  const s=sesionActual(); if(!s) return;
+  const ayer=asyAyerIso();
+  ASY={modo:null, fecha:ayer, list:[], dec:{}, hasta:{}, sinTk:ASY_SIN_TICKETS.includes(norm(areaSup()).toUpperCase())};
+  $("asySegAyer").innerHTML=`Ayer · ${esc(asyTxt(ayer))}`;
+  $("asySegHoy").innerHTML=`Hoy · ${esc(asyTxt(aswHoy()))}`;
+  const box=$("asyAyer"); pintarCargando(box,"Cargando asistencia de ayer…");
+  rpc("fn_asistencia_marcar_lista",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),p_fecha:ayer})
+    .then(r=>{
+      if(r&&r.ok===false){ mostrarError(r.error||"Error"); asyModo("hoy"); return; }
+      ASY.list=(r&&r.personal)||[];
+      if(!ASY.sinTk && ASY.list.length && !ASY.list.some(p=>Number(p.tickets)>0)) ASY.sinTk=true;  // área que no usa tickets
+      const n=asyPendientes();
+      $("asySegAyer").innerHTML=`Ayer · ${esc(asyTxt(ayer))}${n?` <b class="asy-badge">${n}</b>`:""}`;
+      if(ASY.modo===null) asyModo(n?"ayer":"hoy"); else if(ASY.modo==="ayer") asyPintar();
+    })
+    .catch(e=>{ mostrarError(e.message); asyModo("hoy"); });
+}
+function asyPendientes(){ return ASY.list.filter(asyPorConf).length; }
+function asyModo(m){
+  ASY.modo=m;
+  $("asySegAyer").classList.toggle("sel",m==="ayer"); $("asySegAyer").setAttribute("aria-selected",m==="ayer");
+  $("asySegHoy").classList.toggle("sel",m==="hoy"); $("asySegHoy").setAttribute("aria-selected",m==="hoy");
+  $("asyAyer").hidden = m!=="ayer"; $("asyHoy").hidden = m!=="hoy";
+  if(m==="ayer") asyPintar();
+  else { const f=$("asisFecha"); if(f) f.value=aswHoy(); asisInit(); }
+}
+
+function asyPintar(){
+  const box=$("asyAyer"); if(!box) return;
+  if(ASY.sinTk) return asyPintarSinTickets(box);
+  const vin=ASY.list.filter(p=>Number(p.tickets)>0).length;
+  const pend=ASY.list.filter(asyPorConf);
+  const dec=Object.keys(ASY.dec).length;
+  const btn=(p,e,t,cls)=>`<button type="button" class="asy-b${cls||""}${ASY.dec[p.dni]===e?" sel":""}" onclick="asyMarcar('${esc(p.dni)}','${esc(e)}')">${t}</button>`;
+  const tarjeta=p=>{
+    const d=ASY.dec[p.dni], otro=d && !["ACTIVO","FALTA","DM","VACACIONES"].includes(d);
+    const nota = d==="ACTIVO" ? `<div class="asy-nota">Vino sin llenar: queda en Boletas para que le avises.</div>`
+      : d==="VACACIONES" && ASY.hasta[p.dni] ? `<div class="asy-nota">Vacaciones hasta el ${esc(asyTxt(ASY.hasta[p.dni]))}.</div>`
+      : otro ? `<div class="asy-nota">Marcado: ${esc(d)}.</div>` : "";
+    return `<div class="asy-card${d?" lista":""}">
+      <div class="asy-nom">${esc(p.nombre)}</div>
+      <div class="asy-sub">Ayer sin tickets ni estado · DNI ${esc(p.dni)}</div>
+      <div class="asy-bots">
+        ${btn(p,"ACTIVO","✓ Vino"," vino")}${btn(p,"FALTA","Faltó")}${btn(p,"DM","DM")}
+        <button type="button" class="asy-b${d==="VACACIONES"?" sel":""}" onclick="asyVacaciones('${esc(p.dni)}')">Vacaciones</button>
+        <button type="button" class="asy-b${otro?" sel":""}" onclick="asyOtro('${esc(p.dni)}')">${otro?esc(d):"Otro ▾"}</button>
+      </div>${nota}</div>`;
+  };
+  box.innerHTML=`
+    <div class="asy-vin"><b>${vin}</b><div><div class="t">vinieron: registraron tickets</div>
+      <div class="s">Ya están como presentes. No hace falta marcarlos.</div></div></div>
+    ${pend.length?`<div class="asy-h">Por confirmar · no registraron nada ni tienen estado</div>
+      <div class="asy-lista">${pend.map(tarjeta).join("")}</div>
+      <button type="button" class="asy-guardar" onclick="asyGuardar()" ${dec?"":"disabled"}>Guardar (${dec} de ${pend.length})</button>`
+    :`<div class="asy-ok">✓ Ayer está todo confirmado.</div>`}`;
+}
+function asyPintarSinTickets(box){
+  const L=ASY.list, falt=L.filter(p=>(ASY.dec[p.dni]||p.estado_guardado||"ACTIVO")!=="ACTIVO").length;
+  const guardados=L.filter(p=>p.estado_guardado).length;
+  const fila=p=>{ const e=ASY.dec[p.dni]||p.estado_guardado||"ACTIVO", m=e!=="ACTIVO";
+    return `<button type="button" class="asy-fila${m?" marcada":""}" onclick="asyOtro('${esc(p.dni)}',true)">
+      <span>${esc(p.nombre)}</span><span class="pill ${esc(e)}">${esc(e)}</span></button>`; };
+  box.innerHTML=`
+    <p class="asy-intro">${esc(areaSup())} trabaja sin tickets, así que la app no puede saber quién vino. Un toque si vinieron todos; si alguien faltó, tócalo primero.</p>
+    ${guardados===L.length&&L.length?`<div class="asy-ok">✓ Ayer ya está guardado.</div>`:""}
+    <button type="button" class="asy-todos" onclick="asyGuardar(true)">✓ Vinieron ${falt?`los otros ${L.length-falt}`:`los ${L.length}`}</button>
+    <div class="asy-h">O toca a quien no vino</div>
+    <div class="asy-lista">${L.map(fila).join("")}</div>`;
+}
+function asyMarcar(dni,e){
+  if(ASY.dec[dni]===e){ delete ASY.dec[dni]; delete ASY.hasta[dni]; } else { ASY.dec[dni]=e; if(e!=="VACACIONES") delete ASY.hasta[dni]; }
+  asyPintar();
+}
+function asyOtro(dni, todos){
+  const p=ASY.list.find(x=>x.dni===dni); if(!p) return;
+  const cur=ASY.dec[dni]||p.estado_guardado||"ACTIVO", g=estadosGrupos(ESTADOS_SUP,areaSup());
+  const chip=e=>`<button class="asis-chip${esOtraArea(e)?" otra":""} ${e===cur?"sel":""}" onclick="asySet('${esc(dni)}','${esc(e)}')">${esc(e)}</button>`;
+  abrirModal(`<h2>${esc(p.nombre)}</h2>
+    <div class="sub" style="margin-bottom:10px;">Estado del ${esc(asyTxt(ASY.fecha))}</div>
+    <div class="asis-chips">${todos?chip("ACTIVO"):""}${g.aus.map(chip).join("")}</div>
+    ${g.otra.length?`<div class="asis-grupo">Apoya en otra área con tickets · cuenta su eficiencia</div><div class="asis-chips">${g.otra.map(chip).join("")}</div>`:""}
+    ${g.otraSin.length?`<div class="asis-grupo">Apoya en un área sin tickets · no se le exige</div><div class="asis-chips">${g.otraSin.map(chip).join("")}</div>`:""}
+    <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`);
+}
+function asySet(dni,e){
+  if(e==="VACACIONES"){ cerrarModal(); return asyVacaciones(dni); }
+  ASY.dec[dni]=e; delete ASY.hasta[dni]; cerrarModal(); asyPintar();
+}
+/* Vacaciones con "hasta": se marcan de una vez todos los días hábiles. */
+function asyVacaciones(dni){
+  const p=ASY.list.find(x=>x.dni===dni); if(!p) return;
+  const hoy=aswHoy(), f=asyFecha(hoy);
+  const vie=new Date(f); do{ vie.setDate(vie.getDate()+1); }while(vie.getDay()!==5);
+  const finQ=f.getDate()<=15 ? new Date(f.getFullYear(),f.getMonth(),15) : new Date(f.getFullYear(),f.getMonth()+1,0);
+  const ops=[[ASY.fecha,"ya volvió"],[asyIso(vie),asyHabiles(ASY.fecha,asyIso(vie)).length+" días"],[asyIso(finQ),"fin de quincena"]]
+    .filter((o,i,a)=>a.findIndex(x=>x[0]===o[0])===i);
+  const sel=ASY.hasta[dni]||ops[Math.min(1,ops.length-1)][0];
+  abrirModal(`<h2>Vacaciones · ${esc(p.nombre.split(",")[0])}</h2>
+    <div class="sub" style="margin-bottom:12px;">Se marcan todos los días hábiles desde el ${esc(asyTxt(ASY.fecha))}.</div>
+    <div class="asy-opc" id="asyOpc">${ops.map(([d,t])=>`<button type="button" class="${d===sel?"sel":""}" data-d="${d}" onclick="asyVacSel(this.dataset.d)">
+      <span>Hasta ${d===ASY.fecha?"ayer, ":"el "}${esc(asyTxt(d))}</span><small>${esc(t)}</small></button>`).join("")}
+      <label class="asy-otra">Elegir otra fecha <input type="date" id="asyVacFecha" min="${ASY.fecha}" onchange="asyVacSel(this.value)"></label></div>
+    <button type="button" class="asy-guardar" id="asyVacOk" data-d="${sel}" onclick="asyVacOk('${esc(dni)}')"></button>
+    <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
+  asyVacSel(sel);
+}
+function asyVacSel(d){
+  if(!d) return; const b=$("asyVacOk"); if(!b) return;
+  const n=asyHabiles(ASY.fecha,d).length;
+  if(n>23){ mostrarError("Máximo un mes de vacaciones de una vez"); return; }
+  b.dataset.d=d;
+  document.querySelectorAll("#asyOpc button").forEach(x=>x.classList.toggle("sel",x.dataset.d===d));
+  b.textContent = d===ASY.fecha ? `Marcar vacaciones del ${asyTxt(d)}` : `Marcar vacaciones del ${ASY.fecha.slice(8,10)}/${ASY.fecha.slice(5,7)} al ${d.slice(8,10)}/${d.slice(5,7)} (${n} días)`;
+}
+function asyVacOk(dni){ const d=$("asyVacOk").dataset.d; ASY.dec[dni]="VACACIONES"; ASY.hasta[dni]=d; cerrarModal(); asyPintar(); }
+
+async function asyGuardar(todos){
+  const s=sesionActual(); if(!s) return;
+  let marcas;
+  if(todos) marcas=ASY.list.map(p=>({dni:p.dni, estado:ASY.dec[p.dni]||p.estado_guardado||"ACTIVO"}));
+  else marcas=Object.keys(ASY.dec).map(d=>({dni:d, estado:ASY.dec[d]}));
+  if(!marcas.length){ mostrarError("Marca al menos a una persona"); return; }
+  try{
+    const r=await rpc("fn_asistencia_marcar_guardar",{p_dni:s.dni,p_token:s.token,p_fecha:ASY.fecha,p_marcas:marcas});
+    if(r&&r.ok===false){ mostrarError(r.error||"No se pudo guardar"); return; }
+    /* Vacaciones con "hasta": los días siguientes, agrupados por fecha. */
+    const porDia={};
+    Object.keys(ASY.hasta).forEach(dni=>asyHabiles(ASY.fecha,ASY.hasta[dni]).slice(1)
+      .forEach(f=>(porDia[f]=porDia[f]||[]).push({dni,estado:"VACACIONES"})));
+    for(const f of Object.keys(porDia)){
+      const r2=await rpc("fn_asistencia_marcar_guardar",{p_dni:s.dni,p_token:s.token,p_fecha:f,p_marcas:porDia[f]});
+      if(r2&&r2.ok===false){ mostrarError(`Vacaciones del ${asyTxt(f)}: ${r2.error||"no se guardó"}`); return; }
+    }
+    mostrarOk(`Asistencia del ${asyTxt(ASY.fecha)} guardada (${(r&&r.afectados)||marcas.length}).`);
+    ASY.modo="ayer"; asyArranque();
+  }catch(e){ mostrarError(e.message); }
+}
+/* La pestaña Asistencia: con Ayer/Hoy (supervisora.html) o la lista sola (otras pantallas). */
+function asisEntrar(recargar){
+  if(!$("asySegAyer")) return asisInit();
+  if(recargar && ASY.modo==="hoy") return asisInit();
+  const m=ASY.modo; asyArranque(); if(recargar && m) ASY.modo=m;
 }
 function marcarTab(id){
   ["tabAsistencia","tabBoletas","tabPersonal","tabAvance","tabSupBases","tabIncidencias","tabEfPersonal","tabReclamos"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });

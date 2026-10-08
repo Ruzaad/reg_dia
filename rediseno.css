@@ -1089,3 +1089,66 @@ body[data-pagina="supervisora"] .grid-personal{max-width:1100px;width:100%;margi
   .cc-n{font-size:30px}
   .cc-tabla .cc-oc{display:none}
 }
+
+/* ===================== Asistencia de AYER · supervisora (QA) ===================== */
+#pasoAsistencia > h1{text-align:center;}
+.asy-seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--sup-2);border:1px solid var(--linea);border-radius:14px;padding:4px;margin:6px 0 14px;}
+.asy-seg button{border:0;background:transparent;border-radius:10px;padding:11px 6px;font:600 15.5px var(--sans);color:var(--suave);cursor:pointer;min-height:44px;}
+.asy-seg button.sel{background:var(--sup);color:var(--texto);box-shadow:var(--sombra-1);}
+.asy-badge{display:inline-block;min-width:22px;padding:1px 7px;margin-left:4px;border-radius:999px;background:var(--alerta);color:#fff;font:700 12.5px var(--mono);vertical-align:1px;}
+.asy-vin{display:flex;gap:14px;align-items:center;background:var(--exito-t);border-radius:var(--r);padding:12px 16px;margin-bottom:16px;}
+.asy-vin > b{font:700 34px/1 var(--mono);color:var(--exito);}
+.asy-vin .t{font-weight:700;color:var(--exito);font-size:15.5px;}
+.asy-vin .s{color:var(--exito);font-size:13px;opacity:.9;}
+.asy-h{font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--suave);margin:4px 0 8px;}
+.asy-lista{display:flex;flex-direction:column;gap:10px;}
+.asy-card{background:var(--sup);border-radius:var(--r);border-left:5px solid var(--ocre);box-shadow:var(--sombra-1);padding:14px 16px;}
+.asy-card.lista{border-left-color:var(--exito);}
+.asy-nom{font-size:16px;font-weight:700;line-height:1.25;}
+.asy-sub{font-size:13px;color:var(--suave);margin:2px 0 10px;}
+.asy-bots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.asy-b{min-height:44px;border-radius:10px;border:1.5px solid var(--linea);background:var(--sup-2);color:var(--texto);font:600 15px var(--sans);cursor:pointer;padding:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.asy-b.vino{border-color:var(--exito);color:var(--exito);background:var(--sup);}
+.asy-b.sel{background:var(--azul);border-color:var(--azul);color:#fff;}
+.asy-b.vino.sel{background:var(--exito);border-color:var(--exito);}
+.asy-b:focus-visible,.asy-seg button:focus-visible,.asy-fila:focus-visible{outline:3px solid var(--ocre);outline-offset:2px;}
+.asy-nota{margin-top:10px;font-size:13px;color:var(--suave);}
+.asy-guardar,.asy-todos{display:block;width:100%;min-height:52px;margin:16px 0 4px;border:0;border-radius:14px;background:var(--exito);color:#fff;font:700 17px var(--sans);cursor:pointer;}
+.asy-guardar:disabled{opacity:.45;cursor:default;}
+.asy-todos{min-height:60px;font-size:20px;margin:10px 0 18px;}
+.asy-ok{background:var(--exito-t);color:var(--exito);font-weight:700;border-radius:var(--r);padding:14px 16px;text-align:center;}
+.asy-intro{text-align:center;color:var(--suave);font-size:15px;line-height:1.45;margin:0 0 4px;}
+.asy-fila{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;background:var(--sup);border:1px solid var(--linea);border-radius:12px;padding:14px 16px;font:600 15px var(--sans);color:var(--texto);cursor:pointer;min-height:52px;}
+.asy-fila.marcada{border-color:var(--alerta);background:var(--alerta-t);}
+.asy-opc{display:flex;flex-direction:column;gap:8px;}
+.asy-opc button,.asy-otra{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:52px;border:1.5px solid var(--linea);border-radius:12px;background:var(--sup);color:var(--texto);font:600 16px var(--sans);padding:10px 16px;cursor:pointer;text-align:left;}
+.asy-opc button small{color:var(--suave);font-weight:600;font-size:13px;}
+.asy-opc button.sel{border-color:var(--azul);box-shadow:0 0 0 2px var(--azul-t);}
+.asy-otra input{font:inherit;border:1px solid var(--linea);border-radius:8px;padding:4px 6px;background:var(--sup);color:var(--texto);}
+
+/* ===================== Ingeniería · Asistencia por confirmar (QA) ===================== */
+.nav-item[data-tab="pasoAsisConf"]{--ni:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='8' r='3.5'/%3E%3Cpath d='M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6'/%3E%3Cpath d='M17 8l1.5 1.5L21 7'/%3E%3C/svg%3E")!important;}
+.acf-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:0 0 16px;}
+.acf-k{background:var(--sup);border:1px solid var(--linea);border-radius:var(--r);padding:14px 16px;box-shadow:var(--sombra-1);display:flex;flex-direction:column;gap:6px;}
+.acf-k b{font:700 30px/1 var(--mono);} .acf-k b.rojo{color:var(--alerta);} .acf-k b.verde{color:var(--exito);}
+.acf-k span{font-size:13.5px;color:var(--suave);line-height:1.4;}
+.acf-tabla th[scope=row]{white-space:nowrap;text-align:left;font-size:14px;}
+.acf-tabla th[scope=row] small{display:block;font-weight:500;color:var(--suave);font-size:12.5px;text-transform:none;letter-spacing:0;}
+.acf-quien{min-width:170px;white-space:normal;line-height:1.35;}
+.acf-quien small{display:block;color:var(--suave);font-size:12px;}
+.acf-q{font-weight:700;font-size:13px;} .acf-q.ok{color:var(--exito);} .acf-q.mal{color:var(--alerta);}
+.acf-c{text-align:center;padding-left:4px!important;padding-right:4px!important;}
+th.acf-c.ult{color:var(--texto);}
+.acf-n{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:28px;padding:0 6px;border-radius:7px;font:700 13px var(--mono);}
+.acf-n.ok{background:var(--exito-t);color:var(--exito);font-size:11px;}
+.acf-n.poco{background:var(--ocre-t);color:var(--aviso);}
+.acf-n.alto{background:var(--alerta-t);color:var(--alerta);}
+.acf-n.grave{background:var(--alerta);color:#fff;}
+.acf-btn{white-space:nowrap;}
+.acf-ley{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:10px;font-size:12.5px;color:var(--suave);}
+.acf-falta{background:var(--ocre-t);color:var(--texto);border-radius:var(--r);padding:16px 18px;line-height:1.5;}
+.acf-todos{display:flex;gap:8px;margin:0 0 10px;}
+.acf-lista{display:flex;flex-direction:column;gap:8px;max-height:56vh;overflow:auto;}
+.acf-p{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--sup-2);border-radius:10px;padding:10px 12px;}
+.acf-p small{display:block;color:var(--suave);font-family:var(--mono);font-size:12px;}
+.acf-pb{display:grid;grid-template-columns:repeat(4,minmax(84px,1fr));gap:6px;}

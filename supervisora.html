@@ -38,18 +38,26 @@
 
   <!-- Asistencia (vista principal) — todos presentes; marca solo excepciones -->
   <section class="pantalla activa" id="pasoAsistencia">
-    <h1>Asistencia de hoy</h1>
-    <div class="sub">Todos cuentan como presentes. Marca solo a quien faltó, tiene otro estado o vino pero apoya en otra área.</div>
-    <div class="fila-filtros" style="margin-top:10px;">
-      <label class="sub" style="margin:0;">Día: <input type="date" id="asisFecha" style="margin-left:4px;"></label>
-      <span class="sub" id="asisProg" style="margin:0;"></span>
-      <button class="btn-mini verde" id="asisGuardar" onclick="asisGuardar()">Guardar</button>
+    <h1>Asistencia</h1>
+    <!-- Ayer: solo quien no registró nada ni tiene estado. Hoy: la lista de siempre. -->
+    <div class="asy-seg" role="tablist" aria-label="Día de asistencia">
+      <button type="button" role="tab" id="asySegAyer" onclick="asyModo('ayer')">Ayer</button>
+      <button type="button" role="tab" id="asySegHoy" onclick="asyModo('hoy')">Hoy</button>
     </div>
-    <div class="zona-of" style="margin-bottom:12px;">
-      <input class="input-grande" id="asisBuscar" placeholder="Buscar persona…" oninput="asisPintar()"
-             autocomplete="off" style="font-size:20px;letter-spacing:normal;text-align:left;">
+    <div id="asyAyer" hidden></div>
+    <div id="asyHoy">
+      <div class="sub">Todos cuentan como presentes. Marca solo a quien faltó, tiene otro estado o vino pero apoya en otra área.</div>
+      <div class="fila-filtros" style="margin-top:10px;">
+        <label class="sub" style="margin:0;">Día: <input type="date" id="asisFecha" style="margin-left:4px;"></label>
+        <span class="sub" id="asisProg" style="margin:0;"></span>
+        <button class="btn-mini verde" id="asisGuardar" onclick="asisGuardar()">Guardar</button>
+      </div>
+      <div class="zona-of" style="margin-bottom:12px;">
+        <input class="input-grande" id="asisBuscar" placeholder="Buscar persona…" oninput="asisPintar()"
+               autocomplete="off" style="font-size:20px;letter-spacing:normal;text-align:left;">
+      </div>
+      <div id="asisLista" class="asis-lista"></div>
     </div>
-    <div id="asisLista" class="asis-lista"></div>
   </section>
 
   <!-- Personal -->

@@ -34,6 +34,7 @@
       <a class="nav-item nav-inicio" data-tab="pasoInicio" href="#pasoInicio">Inicio</a>
       <details class="nav-group" open>
         <summary class="nav-sep">Tickets</summary>
+        <a class="nav-item" data-tab="pasoAsisConf" href="#pasoAsisConf">Asistencia por confirmar</a>
         <a class="nav-item" data-tab="pasoBolSin" href="#pasoBolSin">Boletas sin llenar<b class="dyn-cnt" id="bslNavCnt" hidden></b></a>
         <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
         <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Avance por módulo</a>
@@ -963,6 +964,16 @@
     </section>
 
     <!-- ===================== BOLETAS SIN LLENAR (parche 103) ===================== -->
+    <section class="pantalla" id="pasoAsisConf">
+      <div class="seccion-cab">
+        <h1>Asistencia por confirmar</h1>
+        <p class="seccion-sub">Quien registró tickets ya cuenta como presente. Aquí sale solo quien no registró nada y nadie le marcó
+        estado. Mientras nadie lo confirme, el sistema le exige sus 575 minutos y en Incentivos su día sale NO ENTREGÓ.</p>
+      </div>
+      <div class="acf-kpis" id="acfKpis"></div>
+      <div id="acfCuerpo"></div>
+    </section>
+
     <section class="pantalla" id="pasoBolSin">
       <div class="seccion-cab">
         <h1>Boletas sin llenar</h1>
@@ -1520,6 +1531,7 @@
 <script src="costos.js"></script>
 <script src="inicio.js"></script>
 <script src="calidad.js"></script>
+<script src="asistencia.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>
