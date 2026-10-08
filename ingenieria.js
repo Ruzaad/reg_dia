@@ -6611,11 +6611,13 @@ function pintarPendientesInci(){
 async function resolverIncidI(id, aprobar){
   let mf=null;
   if(aprobar){ mf=parseInt($("inci_"+id).value,10); if(!mf){ mostrarError("Minutos inválidos"); return; } }
+  return unaVez("sol"+id, botonesDe(`[onclick^="resolverIncidI(${id},"]`), async ()=>{
   try{
     const r=await rpc("fn_solicitud_resolver",{p_dni:ING.dni,p_token:ING.token,p_id:id,p_aprobar:aprobar,p_minutos_final:mf});
     if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
     await cargarIncidI();
   }catch(e){ mostrarError(e.message); }
+  });
 }
 
 /* ---- Ocurrencias aplicadas (tabla + resumen + CRUD) ---- */

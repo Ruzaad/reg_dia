@@ -516,7 +516,7 @@ function abrirCmdk(){
     $("dynCk").addEventListener("input",()=>{sel=0;listaCk();});
     $("dynCk").addEventListener("keydown",e=>{if(e.key==="ArrowDown"){sel=Math.min(items.length-1,sel+1);listaCk();e.preventDefault();}else if(e.key==="ArrowUp"){sel=Math.max(0,sel-1);listaCk();e.preventDefault();}else if(e.key==="Enter"&&items[sel])ir(items[sel]);else if(e.key==="Escape")cerrarCmdk();});}
   cmdk.classList.add("on");$("dynCk").value="";sel=0;listaCk();setTimeout(()=>$("dynCk").focus(),10);
-  try{if(!PERS&&ING)rpc("fn_personal_listar",{p_dni:ING.dni,p_token:ING.token,p_area:""}).then(r=>{PERS=(r.items||r||[]).filter?(r.items||r):[];listaCk();}).catch(()=>{});}catch(e){}
+  try{if(!PERS&&ING)rpc("fn_personal_listar",{p_dni_ing:ING.dni,p_token:ING.token,p_area:""}).then(r=>{PERS=(r.items||r||[]).filter?(r.items||r):[];listaCk();}).catch(()=>{});}catch(e){}
   try{if(!OFSL&&ING)rpc("fn_ofs_listar",{p_dni:ING.dni,p_token:ING.token,p_buscar:""}).then(r=>{OFSL=Array.isArray(r)?r:[];listaCk();}).catch(()=>{});}catch(e){}
 }
 function cerrarCmdk(){if(cmdk)cmdk.classList.remove("on");}

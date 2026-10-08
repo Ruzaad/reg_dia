@@ -325,13 +325,29 @@ function botonVolverIng(){
 
 /* ---------------- SUPABASE (RPC) ---------------- */
 const MSG_FUERA_HORARIO = "El sistema está fuera de horario. Vuelve dentro del horario de trabajo.";
+/* Mensajes que la persona entiende (robustez): sin señal, sin respuesta y
+   base ocupada, en vez de "Failed to fetch" o el texto crudo de Postgres. */
+const MSG_SIN_SENAL = "Se cortó la señal y no se pudo enviar. Vuelve a intentar cuando tengas internet.";
+const MSG_SIN_RESPUESTA = "No hubo respuesta en 30 segundos. Si estabas registrando, revisa si quedó antes de volver a intentar.";
+const MSG_BASE_OCUPADA = "El sistema está ocupado en este momento. Vuelve a intentar en unos segundos.";
+const RPC_LIMITE_MS = 30000;
+const traducirError = m => /statement timeout|canceling statement/i.test(m||"") ? MSG_BASE_OCUPADA : m;
 async function rpc(fn, args){
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
-    method:"POST",
-    headers:{ "Content-Type":"application/json",
-      "apikey":SUPABASE_ANON, "Authorization":"Bearer "+SUPABASE_ANON },
-    body: JSON.stringify(args)
-  });
+  const ctl = typeof AbortController==="function" ? new AbortController() : null;
+  const tm = ctl ? setTimeout(()=>ctl.abort(), RPC_LIMITE_MS) : null;
+  let r;
+  try{
+    r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json",
+        "apikey":SUPABASE_ANON, "Authorization":"Bearer "+SUPABASE_ANON },
+      body: JSON.stringify(args),
+      signal: ctl ? ctl.signal : undefined
+    });
+  }catch(e){
+    const err = new Error(e && e.name==="AbortError" ? MSG_SIN_RESPUESTA : MSG_SIN_SENAL);
+    err.red = true; throw err;
+  }finally{ if(tm) clearTimeout(tm); }
   if(!r.ok){
     let detalle = "";
     try{ const j = await r.json(); detalle = j.message || j.hint || ""; }catch(e){}
@@ -339,14 +355,30 @@ async function rpc(fn, args){
     if(detalle.includes("FUERA_DE_HORARIO")) throw new Error(MSG_FUERA_HORARIO);
     if(detalle.includes("NO_AUTORIZADA_AREA")) throw new Error(detalle.replace(/^.*NO_AUTORIZADA_AREA:\s*/,"No tienes permiso: "));
     if(detalle.includes("NO_AUTORIZADA")) throw new Error("No autorizada para esta acción");
+    if(/statement timeout|canceling statement/i.test(detalle)) throw new Error(MSG_BASE_OCUPADA);
     throw new Error("Servidor: " + (detalle || ("error " + r.status)));
   }
   renovarSesion();
   const j = await r.json();
+  if(j && typeof j.error==="string") j.error = traducirError(j.error);
   if(j && typeof j.error==="string" && j.error.includes("NO_AUTORIZADA_AREA"))
     j.error = j.error.replace(/^.*NO_AUTORIZADA_AREA:\s*/,"No tienes permiso: ");
   return j;
 }
+
+/* Un toque a la vez (robustez): mientras una escritura espera respuesta, sus
+   botones quedan bloqueados y un segundo toque no hace nada. Desde el 4-ago
+   llegaron 52 pedidos repetidos, hasta 11 copias en 0.25 s. */
+const EN_CURSO=new Set();
+async function unaVez(clave, botones, fn){
+  if(EN_CURSO.has(clave)) return;
+  EN_CURSO.add(clave);
+  const bs=[...(botones||[])].filter(Boolean);
+  bs.forEach(b=>{ b.disabled=true; b.setAttribute("aria-busy","true"); });
+  try{ return await fn(); }
+  finally{ EN_CURSO.delete(clave); bs.forEach(b=>{ b.disabled=false; b.removeAttribute("aria-busy"); }); }
+}
+const botonesDe = sel => document.querySelectorAll(sel);
 
 /* ---------------- EDGE FUNCTIONS (Supabase) ---------------- */
 async function edgeFn(nombre, body){
@@ -611,7 +643,7 @@ function abrirSolicitudAjuste(){
       <div class="sa-ayuda" id="saMotivoAyuda"></div></div>
     <div class="modal-msg" id="saMsg"></div>
     <div class="modal-acciones">
-      <button class="btn-principal btn-modal-guardar" onclick="enviarSolicitudAjuste()">ENVIAR</button>
+      <button class="btn-principal btn-modal-guardar" id="saEnviar" onclick="enviarSolicitudAjuste()">ENVIAR</button>
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
     </div>`);
 }
@@ -642,17 +674,24 @@ async function enviarSolicitudAjuste(){
      escribió nada, el servidor pone el nombre del tipo como detalle y el
      desglose de Incidencias lo reconoce como eco y no lo lista. */
   const motivo = libre || sa.motivo;
+  const b=$("saEnviar");
+  return unaVez("solicitud", [b], async ()=>{
+  if(b) b.textContent="ENVIANDO…";
   try{
     const r=await rpc("fn_solicitud_ajuste_crear",{p_dni:s.dni,p_token:s.token,p_area:AREA_ESTAJERO||s.area,
       p_minutos:-Math.abs(v),p_motivo:motivo,p_tipo:sa.tipo});
     if(!r.ok){ $("saMsg").textContent=r.error||"No se pudo enviar"; return; }
     cerrarModal();
-    $("exTitulo").textContent="Solicitud enviada";
-    $("exDetalle").innerHTML=`−${v} min · ${esc(motivo)} · esperando aprobación`;
+    $("exTitulo").textContent = r.repetido ? "Ya lo enviaste" : "Solicitud enviada";
+    $("exDetalle").innerHTML = r.repetido
+      ? `Este mismo pedido llegó hace ${r.hace_s} s: no se envía otra vez`
+      : `−${v} min · ${esc(motivo)} · esperando aprobación`;
     $("exAvance").textContent=""; $("exTimer").textContent="";
     const ex=$("exito"); ex.classList.add("visible");
     setTimeout(()=>ex.classList.remove("visible"),2200);
   }catch(e){ $("saMsg").textContent=e.message; }
+  finally{ if(b && b.isConnected) b.textContent="ENVIAR"; }
+  });
 }
 /* Artículo de una OF, desde los tickets ya cargados. */
 function artDeOF(of){
@@ -1178,11 +1217,21 @@ function acabPedirCant(solo){
   irA("pasoAcabCant");
   if(!ACAB.ver) setTimeout(()=>$("acabCant").focus(),150);
 }
+let ACAB_GUARDANDO=false, ACAB_ULT=null;
 async function acabRegistrar(){
   const cant=parseFloat(String($("acabCant").value).replace(/[^\d.]/g,""));
   if(!cant || cant<=0){ mostrarError("Escribe la cantidad que hiciste"); return; }
   const s=sesionActual(), area=AREA_ESTAJERO||s.area;
   const btn=document.querySelector("#pasoAcabCant .btn-principal");
+  if(ACAB_GUARDANDO) return;   // un toque a la vez
+  /* Robustez: la misma cantidad en la misma operación en menos de 1 min suele
+     ser un reintento (ARMAR CAMISA 700 und dos veces en 18 s). Se pregunta. */
+  const clave=(ACAB.tipo?"t"+ACAB.tipo.id:(ACAB.of&&ACAB.of.of)+"|"+(ACAB.op&&ACAB.op.n_op))+"|"+cant;
+  if(ACAB_ULT && ACAB_ULT.clave===clave && Date.now()-ACAB_ULT.t<60000){
+    const seg=Math.round((Date.now()-ACAB_ULT.t)/1000);
+    if(!confirm(`¿Otra vez ${qty(cant)}?\nHace ${seg} s ya registraste ${qty(cant)} und en esta operación.\n\nAcepta solo si hiciste otras ${qty(cant)} und.`)) return;
+  }
+  ACAB_GUARDANDO=true;
   if(btn){ btn.disabled=true; btn.textContent="REGISTRANDO…"; }
   try{
     const r = ACAB.tipo
@@ -1191,8 +1240,9 @@ async function acabRegistrar(){
           p_of:ACAB.of.of,p_nop:ACAB.op.n_op,p_cant:cant,
           p_causa:(($("acabCausa")||{}).value||"")});
     if(!r.ok){ mostrarError(r.error||"No se pudo registrar"); return; }
-    $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
-    $("exDetalle").innerHTML = `${qty(cant)} und · `
+    ACAB_ULT={clave, t:Date.now()};
+    $("exTitulo").textContent = r.repetido ? "Ya estaba registrado" : "¡Listo, "+s.nombre.split(" ")[0]+"!";
+    $("exDetalle").innerHTML = (r.repetido ? "No se registró dos veces · " : "") + `${qty(cant)} und · `
       + (ACAB.tipo ? esc(ACAB.tipo.operacion) : `${esc(ACAB.op.operacion)} · OF ${esc(ACAB.of.of)}`)
       + (r.causa ? `<br>${esc(r.causa)}` : "")
       + (r.hecho!=null ? `<br>Van ${qty(r.hecho)} de ${qty(r.cant_prog)} und` : "");
@@ -1204,7 +1254,7 @@ async function acabRegistrar(){
        que es donde estaba. */
     await refrescarAcabado(s, area, ACAB.tipo ? "extra" : "ops");
   }catch(e){ mostrarError(e.message); }
-  finally{ if(btn){ btn.disabled=false; btn.textContent="REGISTRAR"; } }
+  finally{ ACAB_GUARDANDO=false; if(btn){ btn.disabled=false; btn.textContent="REGISTRAR"; } }
 }
 
 /* ================= MI BOLETA (parche 93) =================
@@ -1382,6 +1432,7 @@ async function declararParcial(i){
   const resto=p.asignada-v;
   if(!confirm(`¿Hiciste ${qty(v)} de ${qty(p.asignada)} und?\nLas ${qty(resto)} restantes quedarán libres para quien las termine.`)) return;
   const s=sesionActual(), area=AREA_ESTAJERO||s.area;
+  return unaVez("parcial"+p.codigo, botonesDe(`[onclick^="declararParcial(${i})"]`), async ()=>{
   try{
     const r=await rpc("fn_declarar_parcial",{p_dni:s.dni,p_token:s.token,p_area:area,p_codigo:p.codigo,p_cant_hecha:v});
     if(!r.ok){ mostrarError(r.error||"No se pudo ajustar"); return; }
@@ -1389,6 +1440,7 @@ async function declararParcial(i){
     await abrirMisPaquetes();
     try{ setAvance(await rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token})); }catch(e){}
   }catch(e){ mostrarError(e.message); }
+  });
 }
 
 let ULTIMO_DIA = {eficiencia:0,minutos_prod:0,minutos_disp:0};
@@ -1958,6 +2010,9 @@ function confirmarLote(){
   irA("pasoConf");
 }
 
+/* El reclamo es de quien está registrando (compara nombres sin tildes ni espacios). */
+const esMio = (nombre, s) => !!nombre && !!s && normKey(nombre).replace(/\s+/g," ")===normKey(s.nombre).replace(/\s+/g," ");
+
 /* --- reclamar (individual o lote) --- */
 async function registrar(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
@@ -1995,13 +2050,25 @@ async function registrar(){
     }
     btn.textContent="SÍ, REGISTRAR";
     if(!r.ok){
-      mostrarError(r.error||"No se pudo registrar");
+      if(!r.conflicto) mostrarError(r.error||"No se pudo registrar");
       if(r.parcial){
         await refrescarReclamos(s);
         Object.keys(marcados).forEach(c=>{ if(RECL[c]) delete marcados[c]; });
         pintarTickets(); irA("pasoTickets"); btn.disabled=false; return;
       }
-      if(r.conflicto){ await refrescarReclamos(s); pintarTickets(); irA("pasoTickets"); }
+      if(r.conflicto){
+        await refrescarReclamos(s);
+        /* Robustez: si se perdió la respuesta y reintentó, el paquete ya está a
+           SU nombre. Antes leía "Ya lo tomó (su propio nombre)" y parecía error. */
+        const t=sel.ticket, ya=t&&RECL[t.codigo];
+        if(ya && esMio(ya.nombre, s)){
+          $("exTitulo").textContent="Ya estaba registrado";
+          $("exDetalle").innerHTML=`${esc(sel.op)}<br>Numeración <b>${esc(t.num)}</b> ya está a tu nombre (${esc(ya.hora)}). No se registró dos veces.`;
+          $("exAvance").textContent=""; btn.disabled=false; mostrarExito(); return;
+        }
+        mostrarError(r.error||"No se pudo registrar");
+        pintarTickets(); irA("pasoTickets");
+      }
       btn.disabled=false; return;
     }
     const cantLote = esLote ? Object.values(marcados).reduce((a,t)=>a+(+t.cant||0),0) : 0;
@@ -2009,13 +2076,22 @@ async function registrar(){
     if(esLote){
       const nLote = Object.keys(marcados).length;
       Object.values(marcados).forEach(t=>{ RECL[t.codigo]={nombre:s.nombre,hora:"ahora"}; });
-      const conf = (r.conflictos||[]);
-      $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
+      let conf = (r.conflictos||[]), mios = 0;
+      if(conf.length){
+        /* Robustez: los que "ya estaban tomados" por la misma persona son un
+           reintento que sí había entrado; se cuentan aparte, no como error. */
+        const lote=Object.values(marcados);
+        await refrescarReclamos(s);
+        const mio = t => RECL[t.codigo] && esMio(RECL[t.codigo].nombre, s);
+        mios = lote.filter(t=>conf.includes(t.num) && mio(t)).length;
+        conf = conf.filter(n=>!lote.some(t=>t.num===n && mio(t)));
+      }
+      $("exTitulo").textContent = r.reclamados || mios ? "¡Listo, "+s.nombre.split(" ")[0]+"!" : "No se registró";
       $("exDetalle").innerHTML =
         `<b>${r.reclamados}</b>${r.reclamados<nLote?` de ${nLote}`:""} paquete(s) registrados${ES_ACABADO?` · <b>${qty(cantLote)} und</b>`:""} · ${esc(sel.op)}`+
+        (mios?`<br>${mios} ya estaba${mios===1?"":"n"} registrado${mios===1?"":"s"} a tu nombre: no se duplicó`:"")+
         (conf.length?`<br><span style="opacity:.85">No se pudieron (ya tomados): ${esc(conf.join(", "))}</span>`:"");
       modoSel=false; marcados={};
-      if(conf.length) await refrescarReclamos(s);
     } else {
       const t=sel.ticket;
       RECL[t.codigo]={nombre:s.nombre,hora:"ahora"};
@@ -2117,12 +2193,14 @@ async function confirmarRetorno(i, regreso){
   if(!confirm(regreso
       ? `¿${soloApellidos(x.nombre)} regresó a las ${hora}?`
       : `¿${soloApellidos(x.nombre)} NO regresó a planta?\nSe le descuenta desde su salida hasta el fin de la jornada.`)) return;
+  return unaVez("ret"+x.id, botonesDe(`[onclick^="confirmarRetorno(${i},"]`), async ()=>{
   try{
     const r=await rpc("fn_retorno_confirmar",{p_dni:s.dni,p_token:s.token,p_id:x.id,p_retorno:hora});
     if(!r.ok){ mostrarError(r.error||"No se pudo confirmar"); return; }
     mostrarOk(`Confirmado · ${Math.abs(r.minutos)} min de descuento`);
     await recargarSupervisora(); cargarRetornos();
   }catch(e){ mostrarError(e.message); }
+  });
 }
 function pintarIncidencias(items, z, pref, fn){
   if(!items.length){ z.innerHTML=`<div class="vacio-msg">Sin incidencias pendientes</div>`; return; }
@@ -2151,11 +2229,13 @@ async function resolverIncidencia(id, aprobar){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   let mf=null;
   if(aprobar){ mf=parseInt($("inc_"+id).value,10); if(!mf){ mostrarError("Minutos inválidos"); return; } }
+  return unaVez("sol"+id, botonesDe(`[onclick^="resolverIncidencia(${id},"]`), async ()=>{
   try{
     const r=await rpc("fn_solicitud_resolver",{p_dni:s.dni,p_token:s.token,p_id:id,p_aprobar:aprobar,p_minutos_final:mf});
     if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
     await cargarIncidencias();
   }catch(e){ mostrarError(e.message); }
+  });
 }
 
 let timerAvance=null;
@@ -3430,6 +3510,28 @@ async function moverAreaConfirmar(area){
     },2200);
   }catch(e){ mostrarError(e.message); }
 }
+
+/* ---------------- AVISO DE VERSIÓN NUEVA ----------------
+   Una pestaña abierta desde la mañana seguía con el JS viejo todo el día. Al
+   volver a la app (como mucho cada 5 min) se compara la ETag de app.js con la
+   del arranque: es un HEAD sin cuerpo, sin consultas a la base. */
+let VER_ETAG=null, VER_ULT=0;
+async function revisarVersion(){
+  if(Date.now()-VER_ULT<5*60000) return;
+  VER_ULT=Date.now();
+  let e=null;
+  try{ const r=await fetch("app.js",{method:"HEAD",cache:"no-store"}); e=r.ok?(r.headers.get("etag")||r.headers.get("last-modified")):null; }catch(x){}
+  if(!e) return;
+  if(!VER_ETAG){ VER_ETAG=e; return; }
+  if(e!==VER_ETAG && !$("avisoVersion")){
+    const d=document.createElement("div");
+    d.id="avisoVersion"; d.className="aviso-version"; d.setAttribute("role","status");
+    d.innerHTML=`<span>Hay una versión nueva de la app.</span><button type="button" onclick="location.reload()">Actualizar</button>`;
+    document.body.appendChild(d);
+  }
+}
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") revisarVersion(); });
+window.addEventListener("load",()=>{ setTimeout(revisarVersion, 3000); });
 
 /* ---------------- PWA ---------------- */
 if("serviceWorker" in navigator){
