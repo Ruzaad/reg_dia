@@ -615,7 +615,7 @@ const VOLVER_OPERARIO = {
   pasoModulos:"pasoOF", pasoOps:"pasoModulos",
   pasoTickets:"pasoOps", pasoConf:"pasoTickets",
   pasoAcabPrenda:"pasoAcabOF", pasoAcabOp:"pasoAcabOF",
-  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF", pasoBoleta:"pasoOF",
+  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF", pasoBoleta:"pasoOF", pasoPedidos:"pasoOF",
   pasoOpAd:"pasoModulos", pasoOpAdCant:"pasoOpAd"
 };
 
@@ -624,62 +624,144 @@ let sa={signo:-1};
    ocurrencia (se guarda en solicitudes_ajuste.tipo y llega intacto a
    ocurrencias.tipo al aprobar); "OTROS" es el único que abre el texto libre, que
    se guarda en mayúsculas como detalle. Par [tipo, etiqueta]: MAQUINA ya existía
-   en el catálogo con ese nombre. */
+   en el catálogo con ese nombre.
+   Parche 114: "TRABAJÉ EN OTRA ÁREA" dice dónde y cuánto (no es tiempo perdido)
+   y REPROCESOS pregunta de qué área vino y la OF. Si ya pidió algo parecido
+   hoy, se le avisa con lo que ya pidió (fn_solicitudes_mias), sin esperar. */
 const SA_MOTIVOS=[["MAQUINA","MÁQUINA PARADA"],["ARREGLOS","ARREGLOS"],["MUESTRAS","MUESTRAS"],
-                  ["REPROCESOS","REPROCESOS"],["DESCOSER","DESCOSER"],["OTROS","OTROS"]];
+                  ["REPROCESOS","REPROCESOS"],["DESCOSER","DESCOSER"],["OTRA","TRABAJÉ EN OTRA ÁREA"],["OTROS","OTROS"]];
+const SA_CAUSA=[["CAMISA COSTURA","CAMISA"],["PANTALON COSTURA","PANTALÓN"],["SACO COSTURA","SACO"],["ACABADO","ACABADO"],["CORTE","CORTE"],["CLIENTE","CLIENTE"],["","NO SÉ"]];
+const SA_DONDE=[["DESPACHO","DESPACHO"],["REPROCESO","REPROCESO"],["ALMACEN","ALMACÉN"],["CORTE","CORTE"],["ACABADO","ACABADO"],["COSTURA","OTRA COSTURA"]];
+const SA_CUANTO=[[60,"1 h"],[120,"2 h"],[180,"3 h"],[288,"Medio día"],[575,"Todo el día"],[0,"Otro"]];
+let SA_V2=null, SA_MIAS=null;   // SA_V2: la base tiene el parche 114 (null = aún no se sabe)
+const saChips=(id,lista,fn)=>`<div class="op-chips" id="${id}" role="group">${lista.map((x,i)=>
+  `<button type="button" aria-pressed="false" onclick="${fn}(${i})">${esc(x[1])}</button>`).join("")}</div>`;
+const saPulsar=(id,i)=>{ const g=$(id); if(g) [...g.children].forEach((b,k)=>b.setAttribute("aria-pressed",k===i?"true":"false")); };
 function abrirSolicitudAjuste(){
-  sa={signo:-1, tipo:null, motivo:null};
+  sa={signo:-1, tipo:null, motivo:null, causa:null, donde:null};
+  const mia=AREA_ESTAJERO||((sesionActual()||{}).area)||"";
   abrirModal(`
     <h2>Solicitar descuento de tiempo</h2>
-    <div class="sub" style="margin-bottom:12px;">Pides a supervisión restar minutos de tu día</div>
+    <div class="sub" style="margin-bottom:12px;">Pides a supervisión restar minutos de tu día${SA_V2===false?"":` · <a href="#" onclick="cerrarModal();abrirMisPedidos();return false;">Ver mis pedidos</a>`}</div>
     <div class="sa-motivos" id="saMotivos">
-      ${SA_MOTIVOS.map((m,i)=>`<button type="button" class="sa-mot" id="saMot${i}" onclick="saElegir(${i})">${esc(m[1])}</button>`).join("")}
+      ${SA_MOTIVOS.map((m,i)=>`<button type="button" class="sa-mot" id="saMot${i}" onclick="saElegir(${i})"${m[0]==="OTROS"?' style="grid-column:1/-1"':""}>${esc(m[1])}</button>`).join("")}
     </div>
-    <div class="modal-campo"><label>Minutos a descontar</label>
-      <input id="saMin" inputmode="numeric" maxlength="3" placeholder="Ej: 30" disabled></div>
+    <div class="op-campo" id="saCausaCampo" hidden><span class="op-lbl">¿De qué área vino el reproceso?</span>
+      ${saChips("saCausa",SA_CAUSA.filter(x=>x[0]!==mia),"saCausa")}</div>
+    <div class="modal-campo" id="saOfCampo" hidden><label for="saOf">OF (si la sabes)</label>
+      <input id="saOf" inputmode="numeric" maxlength="12" placeholder="Ej: 10443"></div>
+    <div class="op-campo" id="saDondeCampo" hidden><span class="op-lbl">¿Dónde trabajaste?</span>
+      ${saChips("saDonde",SA_DONDE.filter(x=>x[0]!==mia),"saDonde")}</div>
+    <div class="op-campo" id="saCuantoCampo" hidden><span class="op-lbl">¿Cuánto tiempo?</span>
+      ${saChips("saCuanto",SA_CUANTO,"saCuanto")}</div>
+    <div class="modal-campo" id="saMinCampo"><label for="saMin">Minutos a descontar</label>
+      <input id="saMin" inputmode="numeric" maxlength="3" placeholder="Ej: 30" disabled oninput="saAvisoRep()"></div>
     <div class="modal-campo" id="saMotivoCampo" hidden>
-      <label id="saMotivoLbl">Detalle</label>
+      <label id="saMotivoLbl" for="saMotivo">Detalle</label>
       <input id="saMotivo" maxlength="140" placeholder="Escribe el detalle">
       <div class="sa-ayuda" id="saMotivoAyuda"></div></div>
+    <div class="op-aviso" id="saAviso" hidden></div>
+    <div class="op-aviso" id="saAvisoRep" hidden></div>
     <div class="modal-msg" id="saMsg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" id="saEnviar" onclick="enviarSolicitudAjuste()">ENVIAR</button>
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
     </div>`);
+  saCargarMias();
+}
+/* Lo que ya pidió (para el aviso de repetido). Si la base no tiene el parche
+   114 no hay aviso y todo sigue igual. */
+async function saCargarMias(){
+  const s=sesionActual(); if(!s || SA_V2===false) return;
+  try{
+    const r=await rpc("fn_solicitudes_mias",{p_dni:s.dni,p_token:s.token});
+    if(r && r.ok){ SA_V2=true; SA_MIAS=r.items||[]; saAvisoRep(); }
+  }catch(e){ if(/Could not find the function|PGRST202/i.test(e.message)) SA_V2=false; }
 }
 function saElegir(i){
-  sa.tipo=SA_MOTIVOS[i][0]; sa.motivo=SA_MOTIVOS[i][1];
+  const [tipo,etq]=SA_MOTIVOS[i];
+  const otra=tipo==="OTRA", rep=tipo==="REPROCESOS", otros=tipo==="OTROS";
+  sa.tipo=tipo; sa.motivo=etq; sa.causa=null; sa.donde=null;
   SA_MOTIVOS.forEach((_,k)=>{ const b=$("saMot"+k); if(b) b.classList.toggle("activo",k===i); });
   /* El detalle se pide SIEMPRE, no solo en OTROS: describe qué pasó y NO cambia
      el tipo elegido (parche 53). En OTROS es obligatorio porque ahí es lo único
      que explica el descuento. */
-  const otros = sa.tipo==="OTROS";
+  $("saCausaCampo").hidden=!rep; $("saOfCampo").hidden=!rep;
+  $("saDondeCampo").hidden=!otra; $("saCuantoCampo").hidden=!otra;
+  ["saCausa","saDonde","saCuanto"].forEach(g=>saPulsar(g,-1));
   $("saMotivoCampo").hidden=false;
   $("saMotivoLbl").textContent = otros ? "¿Cuál fue el motivo?" : "Detalle (opcional)";
-  $("saMotivo").placeholder = otros ? "Escribe el motivo" : "Ej: OF 9880, máquina 12";
-  $("saMotivoAyuda").textContent = otros ? "" : "Queda registrado como " + sa.motivo + ": el detalle no cambia el tipo.";
-  $("saMotivo").value="";
+  $("saMotivo").placeholder = otros ? "Escribe el motivo" : otra ? "Ej: despacho Scotiabank" : "Ej: OF 9880, máquina 12";
+  $("saMotivoAyuda").textContent = otros||otra ? "" : "Queda registrado como " + etq + ": el detalle no cambia el tipo.";
+  $("saMotivo").value=""; $("saOf").value="";
   $("saMin").disabled=false;
+  $("saAviso").hidden=true;
   $("saMsg").textContent="";
-  setTimeout(()=>{ const el=otros?$("saMotivo"):$("saMin"); if(el) el.focus(); },80);
+  saAvisoRep();
+  setTimeout(()=>{ const el=otros?$("saMotivo"):otra||rep?null:$("saMin"); if(el) el.focus(); },80);
+}
+function saCausa(i){
+  const mia=AREA_ESTAJERO||((sesionActual()||{}).area)||"";
+  const l=SA_CAUSA.filter(x=>x[0]!==mia); sa.causa=l[i][0]||null; saPulsar("saCausa",i);
+}
+function saDonde(i){
+  const mia=AREA_ESTAJERO||((sesionActual()||{}).area)||"";
+  const l=SA_DONDE.filter(x=>x[0]!==mia); sa.donde=l[i][0]; saPulsar("saDonde",i);
+  const av=$("saAviso"); av.hidden=false;
+  av.innerHTML=`Esto <b>no es tiempo perdido</b>: queda como trabajo en ${esc(l[i][1])} y tu supervisora lo confirma.`;
+}
+function saCuanto(i){
+  const m=SA_CUANTO[i][0]; saPulsar("saCuanto",i);
+  if(m){ $("saMin").value=m; } else { $("saMin").value=""; $("saMin").focus(); }
+  saAvisoRep();
+}
+/* Aviso si hoy ya pidió lo mismo (mismo tipo, o los mismos minutos). */
+function saAvisoRep(){
+  const z=$("saAvisoRep"); if(!z) return;
+  const hoy=hoyLimaApp(), v=parseInt(($("saMin")||{}).value,10);
+  const tipo=sa.tipo==="OTRA" ? (sa.donde==="REPROCESO"?"REPROCESOS":"OTROS") : sa.tipo;
+  const ya=(SA_MIAS||[]).filter(x=>x.fecha===hoy && ["PENDIENTE","APROBADO"].includes(x.estado)
+    && (x.tipo===tipo || (v && Math.abs(x.minutos)===v)));
+  if(!sa.tipo || !ya.length){ z.hidden=true; return; }
+  const x=ya[0];
+  z.hidden=false;
+  z.innerHTML=`<b>Ya pediste hoy ${x.minutos} min</b> por ${esc(x.motivo||x.tipo)} a las ${esc(String(x.pidio||"").slice(11,16))}`
+    +`${ya.length>1?` (y ${ya.length-1} más)`:""}. Si es el mismo trabajo no lo envíes otra vez.`;
 }
 async function enviarSolicitudAjuste(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   if(!sa.tipo){ $("saMsg").textContent="Elige el motivo"; return; }
+  const otra=sa.tipo==="OTRA";
+  if(otra && !sa.donde){ $("saMsg").textContent="Elige dónde trabajaste"; return; }
   const v=parseInt($("saMin").value,10);
   const libre=($("saMotivo").value||"").trim().toUpperCase();
   if(!v||v<=0){ $("saMsg").textContent="Ingresa los minutos"; return; }
+  if(v>575){ $("saMsg").textContent="No puede pasar de 575 min (la jornada)"; return; }
   if(sa.tipo==="OTROS" && !libre){ $("saMsg").textContent="Escribe cuál fue el motivo"; return; }
+  const tipo = otra ? (sa.donde==="REPROCESO"?"REPROCESOS":"OTROS") : sa.tipo;
+  const donde = otra ? SA_DONDE.find(x=>x[0]===sa.donde)[1] : "";
+  const of = sa.tipo==="REPROCESOS" ? ($("saOf").value||"").trim().toUpperCase() : "";
   /* El detalle viaja solo, sin repetir el tipo (que va aparte en p_tipo). Si no
      escribió nada, el servidor pone el nombre del tipo como detalle y el
      desglose de Incidencias lo reconoce como eco y no lo lista. */
-  const motivo = libre || sa.motivo;
+  let motivo = otra ? ("TRABAJÉ EN "+donde+(libre?": "+libre:"")) : (libre || sa.motivo);
   const b=$("saEnviar");
   return unaVez("solicitud", [b], async ()=>{
   if(b) b.textContent="ENVIANDO…";
   try{
-    const r=await rpc("fn_solicitud_ajuste_crear",{p_dni:s.dni,p_token:s.token,p_area:AREA_ESTAJERO||s.area,
-      p_minutos:-Math.abs(v),p_motivo:motivo,p_tipo:sa.tipo});
+    const base={p_dni:s.dni,p_token:s.token,p_area:AREA_ESTAJERO||s.area,p_minutos:-Math.abs(v),p_tipo:tipo};
+    let r;
+    if(SA_V2!==false){
+      try{ r=await rpc("fn_solicitud_ajuste_crear",{...base,p_motivo:motivo,
+             p_area_trabajo:otra?sa.donde:null,p_area_causa:sa.tipo==="REPROCESOS"?sa.causa:null,p_of:of||null}); SA_V2=true; }
+      catch(e){ if(!/Could not find the function|PGRST202/i.test(e.message)) throw e; SA_V2=false; }
+    }
+    if(SA_V2===false){
+      // Sin el parche 114 lo que sabe va escrito en el detalle.
+      if(sa.tipo==="REPROCESOS" && (sa.causa||of))
+        motivo=[sa.causa?"DE "+sa.causa:"", of?"OF "+of:"", libre].filter(Boolean).join(" · ");
+      r=await rpc("fn_solicitud_ajuste_crear",{...base,p_motivo:motivo});
+    }
     if(!r.ok){ $("saMsg").textContent=r.error||"No se pudo enviar"; return; }
     cerrarModal();
     $("exTitulo").textContent = r.repetido ? "Ya lo enviaste" : "Solicitud enviada";
@@ -689,6 +771,7 @@ async function enviarSolicitudAjuste(){
     $("exAvance").textContent=""; $("exTimer").textContent="";
     const ex=$("exito"); ex.classList.add("visible");
     setTimeout(()=>ex.classList.remove("visible"),2200);
+    SA_MIAS=null;
   }catch(e){ $("saMsg").textContent=e.message; }
   finally{ if(b && b.isConnected) b.textContent="ENVIAR"; }
   });
@@ -2151,6 +2234,8 @@ function areaSup(){ return SUP_AREA_OVERRIDE || ((sesionActual()||{}).area) || "
 
 async function cargarIncidencias(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  // Parche 114: por revisar / en Ingeniería / listas (pedidos.js). Sin el parche, lo de antes.
+  if(typeof pedCargarSup==="function" && PED.v2!==false && await pedCargarSup()) return;
   const z=$("listaIncidencias"); pintarCargando(z,"Cargando incidencias…");
   try{
     const r=await rpc("fn_solicitudes_listar",{p_dni:s.dni,p_token:s.token,p_area:areaSup()});

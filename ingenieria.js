@@ -272,9 +272,11 @@ async function cargarPermisosAdmin(){
 }
 function permResumen(u){
   if(u.admin) return `<span class="pill CERRADO">Administrador: todo</span>`;
-  const ed=Object.keys(u.areas).filter(a=>u.areas[a]==="EDITAR").map(a=>a==="*"?"todas":a);
+  const ap=(u.aprueba||[]).map(a=>a==="*"?"todas":a);
+  const ed=Object.keys(u.areas).filter(a=>u.areas[a]==="EDITAR" && !(u.aprueba||[]).includes(a)).map(a=>a==="*"?"todas":a);
   const le=Object.keys(u.areas).filter(a=>u.areas[a]==="LEER").map(a=>a==="*"?"todas":a);
   const p=[];
+  if(ap.length) p.push(`<b>Aprueba:</b> ${esc(ap.join(", "))}`);
   if(ed.length) p.push(`<b>Edita:</b> ${esc(ed.join(", "))}`);
   if(le.length) p.push(`<b>Lee:</b> ${esc(le.join(", "))}`);
   return p.join("<br>") || `<span class="perm-nada">Sin acceso</span>`;
@@ -297,12 +299,14 @@ function pintarPermisosAdmin(){
 function abrirModalPermisos(dni){
   const u=PERMU.find(x=>x.dni===dni); if(!u) return;
   const areas=["*", ...AREAS_LISTA];
-  const nivel=a=>u.areas[a]||"";
+  // "Aprueba" (parche 114) = edita y además aprueba las incidencias del área.
+  const hayAprueba=Array.isArray(u.aprueba);
+  const nivel=a=>hayAprueba && u.aprueba.includes(a) ? "APRUEBA" : (u.areas[a]||"");
   const filaArea=a=>{
     const n="pa_"+areas.indexOf(a);
     const r=(v,t)=>`<label><input type="radio" name="${n}" value="${v}" data-area="${esc(a)}"${nivel(a)===v?" checked":""}> ${t}</label>`;
     return `<tr><td class="izq">${a==="*"?"<b>Todas las áreas</b>":esc(a)}</td>
-      <td>${r("","Sin acceso")}</td><td>${r("LEER","Lectura")}</td><td>${r("EDITAR","Edición")}</td></tr>`;
+      <td>${r("","Sin acceso")}</td><td>${r("LEER","Lectura")}</td><td>${r("EDITAR","Edición")}</td>${hayAprueba?`<td>${r("APRUEBA","Aprueba")}</td>`:""}</tr>`;
   };
   const grupos=[...document.querySelectorAll("details.nav-group")].map(d=>{
     const items=[...d.querySelectorAll(".nav-item[data-tab]")].filter(x=>!TABS_ADMIN.includes(x.dataset.tab));
@@ -313,7 +317,7 @@ function abrirModalPermisos(dni){
   }).join("");
   abrirModal(`
     <h2>Permisos de ${esc(u.dni)}</h2>
-    <div class="sub" style="margin-bottom:12px;">${esc(u.nombre||"")} · ${esc(u.cargo)}. "Todas las áreas" vale para las que se agreguen después. Un área suelta manda sobre "Todas" solo si da más permiso.</div>
+    <div class="sub" style="margin-bottom:12px;">${esc(u.nombre||"")} · ${esc(u.cargo)}. "Todas las áreas" vale para las que se agreguen después. Un área suelta manda sobre "Todas" solo si da más permiso.${hayAprueba?" <b>Aprueba</b> es Edición más aprobar las incidencias de esa área.":""}</div>
     <h3 class="perm-h3">Áreas</h3>
     <div class="perm-areas"><table class="tabla"><tbody>${areas.map(filaArea).join("")}</tbody></table></div>
     <h3 class="perm-h3">Pestañas</h3>
@@ -6184,11 +6188,13 @@ const hoyLima = ()=> new Date().toLocaleDateString("sv-SE",{timeZone:"America/Li
 let OCURR=[], inciSort={col:"fecha",dir:-1}, INCI_PERSONAL=[];
 
 function inciVista(v){
-  const apl=v==="apl", he=v==="he", pend=!apl&&!he;
+  const apl=v==="apl", he=v==="he", rep=v==="rep", pend=!apl&&!he&&!rep;
   $("inciAplicadas").hidden=!apl; $("inciPendientes").hidden=!pend; $("inciHE").hidden=!he;
+  { const z=$("inciRep"); if(z) z.hidden=!rep; }
   $("inciTabApl").classList.toggle("activo",apl); $("inciTabPend").classList.toggle("activo",pend);
   $("inciTabHE").classList.toggle("activo",he);
-  if(apl) cargarOcurrencias(); else if(pend) cargarPendientesInci(); else heInit();
+  { const t=$("inciTabRep"); if(t) t.classList.toggle("activo",rep); }
+  if(apl) cargarOcurrencias(); else if(pend) cargarPendientesInci(); else if(rep) repCargar(); else heInit();
 }
 
 /* ---- Horas extras en lote (parche 87) ----
@@ -6549,76 +6555,14 @@ async function cargarIncidI(){        // pendientes + tabla aplicada
     $("fechaInciD").value = desde;
     $("fechaInciH").value = hasta;
   }
-  await Promise.all([cargarPendientesInci(), cargarOcurrencias()]);
+  // Solo la vista que está a la vista: POR APROBAR es la primera.
+  if(!$("inciAplicadas").hidden) await cargarOcurrencias();
+  else if($("inciRep") && !$("inciRep").hidden) await repCargar();
+  else if(!$("inciHE").hidden) heCargar();
+  else await cargarPendientesInci();
 }
 
-let INCI_PEND=[];
-async function cargarPendientesInci(){
-  const z=$("listaIncidI"); pintarCargando(z,"Cargando pendientes…");
-  try{
-    const r=await rpc("fn_solicitudes_listar",{p_dni:ING.dni,p_token:ING.token,p_area:""});
-    if(!r.ok){ mostrarError(r.error||"Error"); z.innerHTML=""; return; }
-    INCI_PEND=r.items||[];
-    // El select de área se llena con lo que hay pendiente, no con todas las áreas.
-    const sel=$("areaInciPend");
-    if(sel){
-      const prev=sel.value;
-      const areas=[...new Set(INCI_PEND.map(x=>x.area).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
-      // El área elegida se queda aunque ya no tenga pendientes: "nada en esta área", no "todas".
-      if(prev && !areas.includes(prev)) areas.push(prev);
-      sel.innerHTML=`<option value="">Todas</option>`+areas.map(a=>`<option>${esc(a)}</option>`).join("");
-      sel.value=prev;
-    }
-    pintarPendientesInci();
-  }catch(e){ z.innerHTML=""; mostrarError(e.message); }
-}
-function pintarPendientesInci(){
-  const z=$("listaIncidI"); if(!z) return;
-  const ar=(($("areaInciPend")||{}).value||"");
-  const q=normKey((($("filtroInciPend")||{}).value||""));
-  const items=INCI_PEND.filter(it=>
-    (!ar || it.area===ar) &&
-    (!q || normKey((it.nombre||"")+" "+(it.tipo||"")+" "+(it.motivo||"")+" "+(it.solicitante||"")).includes(q)));
-  { const rp=$("resumenInciPend");
-    if(rp) rp.textContent = `${items.length} de ${INCI_PEND.length} pendiente(s)`; }
-  if(!items.length){
-    z.innerHTML=`<div class="vacio-msg">${INCI_PEND.length?"Nada con ese filtro":"Sin incidencias pendientes"}</div>`;
-    return;
-  }
-  z.innerHTML="";
-  {
-    const items_=items; items_.forEach(it=>{
-      const d=document.createElement("div");
-      d.className="card-fila"; d.style.cursor="default"; d.style.flexWrap="wrap";
-      const tipoTxt = it.tipo ? TIPO_LBL(it.tipo) : "";
-      d.innerHTML=`
-        <div style="flex:1;min-width:220px;">
-          <div class="cf-titulo">${esc(it.nombre)}${tipoTxt?` · <span style="font-weight:700;color:var(--azul);">${esc(tipoTxt)}</span>`:""}</div>
-          <div class="cf-detalle">${esc(it.motivo)}</div>
-          <div class="cf-detalle">${esc(it.area)} · aplica el <b>${esc(it.fecha)}</b> ${esc(it.hora)}${it.solicitante?` · Solicitó: ${esc(it.solicitante)}`:""}</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <input type="number" id="inci_${it.id}" value="${it.minutos}"
-            style="width:90px;background:var(--gris-fondo);border:2px solid var(--azul);border-radius:10px;font-size:16px;font-weight:800;padding:8px;text-align:center;">
-          <span class="cf-detalle">min</span>
-          <button class="btn-mini verde" onclick="resolverIncidI(${it.id},true)">APROBAR</button>
-          <button class="btn-mini rojo" onclick="resolverIncidI(${it.id},false)">RECHAZAR</button>
-        </div>`;
-      z.appendChild(d);
-    });
-  }
-}
-async function resolverIncidI(id, aprobar){
-  let mf=null;
-  if(aprobar){ mf=parseInt($("inci_"+id).value,10); if(!mf){ mostrarError("Minutos inválidos"); return; } }
-  return unaVez("sol"+id, botonesDe(`[onclick^="resolverIncidI(${id},"]`), async ()=>{
-  try{
-    const r=await rpc("fn_solicitud_resolver",{p_dni:ING.dni,p_token:ING.token,p_id:id,p_aprobar:aprobar,p_minutos_final:mf});
-    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
-    await cargarIncidI();
-  }catch(e){ mostrarError(e.message); }
-  });
-}
+/* Pendientes (POR APROBAR) y REPROCESOS Y APOYO: incidencias.js. */
 
 /* ---- Ocurrencias aplicadas (tabla + resumen + CRUD) ---- */
 async function cargarOcurrencias(){

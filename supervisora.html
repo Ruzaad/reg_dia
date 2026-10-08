@@ -327,11 +327,18 @@
 
   <!-- Incidencias del personal -->
   <section class="pantalla" id="pasoIncidencias">
-    <h1>Incidencias del personal</h1>
-    <div class="sub">Solicitudes de ajuste de tiempo enviadas por el personal</div>
-    <button type="button" class="btn-recargar" onclick="cargarIncidencias()">↻ RECARGAR</button>
+    <h1>Pedidos del personal</h1>
+    <div class="sub" id="pedSubSup">Ajustes de tiempo que pidió tu personal</div>
+    <div class="cel-sub" id="pedTabsSup" role="group" aria-label="Ver" hidden>
+      <button type="button" aria-pressed="true" onclick="pedVistaSup('rev')">POR REVISAR <span id="pedNRev"></span></button>
+      <button type="button" aria-pressed="false" onclick="pedVistaSup('ing')">EN INGENIERÍA <span id="pedNIng"></span></button>
+      <button type="button" aria-pressed="false" onclick="pedVistaSup('ok')">LISTAS</button>
+    </div>
+    <div class="cel-res" id="pedResSup" hidden></div>
     <div id="zonaRetornos" style="margin-top:14px;"></div>
-    <div class="lista-cards" id="listaIncidencias" style="margin-top:14px;"></div>
+    <div class="lista-cards" id="listaIncidencias" style="margin-top:14px;" aria-live="polite"></div>
+    <div class="cel-l" id="pedPieSup" hidden style="margin:4px 2px 0">VISTO BUENO la manda a Ingeniería. DEVOLVER le dice al operario por qué, y la puede volver a pedir. MÁQUINA, MUESTRAS, ARREGLOS o DESCOSER de hasta 60 min los apruebas tú.</div>
+    <button type="button" class="btn-recargar" onclick="cargarIncidencias()">↻ RECARGAR</button>
   </section>
 </main>
 
@@ -362,6 +369,7 @@
 </div>
 <script src="app.js"></script>
 <script src="supervisora-hoy.js"></script>
+<script src="pedidos.js"></script>
 <script src="buscar.js"></script>
 <script src="dinamico.js"></script>
 </body>

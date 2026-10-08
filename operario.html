@@ -186,7 +186,15 @@
       </div>
       <label class="bol-solo"><input type="checkbox" id="bolSoloPend" onchange="pintarBoleta()"> Solo mis días pendientes</label>
     </div>
+    <button type="button" class="btn-secundario btn-boleta" onclick="abrirMisPedidos()">MIS PEDIDOS DE TIEMPO</button>
     <div id="bolCuerpo"></div>
+  </section>
+
+  <!-- Mis pedidos de tiempo (parche 114) -->
+  <section class="pantalla" id="pasoPedidos">
+    <h1>Mis pedidos de tiempo</h1>
+    <div class="sub">Lo que pediste estos días y en qué va</div>
+    <div id="pedCuerpo" aria-live="polite"></div>
   </section>
 
   <!-- Confirmación -->
@@ -222,6 +230,7 @@
 </div>
 <script src="app.js"></script>
 <script src="operario-inicio.js"></script>
+<script src="pedidos.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>

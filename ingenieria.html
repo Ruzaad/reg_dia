@@ -1236,15 +1236,16 @@
     <section class="pantalla" id="pasoIncid" data-area-sel="areaInci">
       <div class="seccion-cab">
         <h1>Incidencias</h1>
-        <p class="seccion-sub">Ajustes de tiempo del personal: aplicadas (editar/borrar) y pendientes por resolver.</p>
+        <p class="seccion-sub">El operario pide, su supervisora da el visto bueno desde el celular y aquí lo aprueba quien tiene <b>Aprueba</b> en esa área (Gestión › Permisos). Las alertas no bloquean: avisan antes de aprobar.</p>
       </div>
       <div class="tabs sup-subtabs">
-        <button id="inciTabApl" class="tab activo" onclick="inciVista('apl')">APLICADAS</button>
-        <button id="inciTabPend" class="tab" onclick="inciVista('pend')">PENDIENTES</button>
+        <button id="inciTabPend" class="tab activo" onclick="inciVista('pend')">POR APROBAR <span class="ir-cnt" id="inciPendN" hidden></span></button>
+        <button id="inciTabApl" class="tab" onclick="inciVista('apl')">APLICADAS</button>
+        <button id="inciTabRep" class="tab" onclick="inciVista('rep')">REPROCESOS Y APOYO</button>
         <button id="inciTabHE" class="tab" onclick="inciVista('he')">HORAS EXTRAS EN LOTE</button>
       </div>
 
-      <div id="inciAplicadas">
+      <div id="inciAplicadas" hidden>
         <div class="barra-control">
           <label class="campo"><span>Desde</span><input type="date" id="fechaInciD" onchange="cargarOcurrencias()"></label>
           <label class="campo"><span>Hasta</span><input type="date" id="fechaInciH" onchange="cargarOcurrencias()"></label>
@@ -1261,15 +1262,29 @@
         </div>
       </div>
 
-      <div id="inciPendientes" hidden>
-        <h2 class="tk-ops-title">Pendientes por resolver (aprobar / rechazar)</h2>
+      <div id="inciPendientes">
         <div class="barra-control">
           <label class="campo"><span>Área</span><select id="areaInciPend" onchange="pintarPendientesInci()"></select></label>
-          <label class="campo"><span>Buscar</span><input type="text" id="filtroInciPend" placeholder="Nombre / tipo / motivo…" oninput="pintarPendientesInci()"></label>
+          <label class="campo"><span>Mostrar</span><select id="verInciPend" onchange="pintarPendientesInci()">
+            <option value="">Todas las pendientes</option><option value="vb">Con visto bueno</option>
+            <option value="sin">Sin visto bueno</option><option value="alerta">Con alerta</option></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="filtroInciPend" placeholder="Nombre, motivo u OF…" oninput="pintarPendientesInci()"></label>
           <button class="btn-mini" onclick="cargarPendientesInci()">↻ CARGAR</button>
           <span class="sub" id="resumenInciPend" style="align-self:flex-end;"></span>
         </div>
-        <div class="lista-cards" id="listaIncidI" style="margin-bottom:22px;"></div>
+        <div id="listaIncidI"></div>
+      </div>
+
+      <!-- Reprocesos y apoyo (parche 114): en qué se fueron los minutos -->
+      <div id="inciRep" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Desde</span><input type="date" id="irRepDesde" onchange="repCargar()"></label>
+          <label class="campo"><span>Hasta</span><input type="date" id="irRepHasta" onchange="repCargar()"></label>
+          <label class="campo"><span>Área</span><select id="irRepArea" onchange="repCargar()"></select></label>
+          <span style="flex:1"></span>
+          <button class="btn-mini verde" onclick="repDescargar()">⬇ Descargar XLSX</button>
+        </div>
+        <div id="repZona"></div>
       </div>
 
       <!-- Horas extras en lote (parche 87): un día, un área, varias personas -->
@@ -1549,6 +1564,7 @@
 <script src="calidad.js"></script>
 <script src="asistencia.js"></script>
 <script src="buscar.js"></script>
+<script src="incidencias.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>
