@@ -104,7 +104,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoInicio","pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoCalBase","pasoAsisConf","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
+  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoAsisConf","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -146,6 +146,7 @@ function activarTab(tab){
   else if(tab==='pasoAudit') audInit();
   else if(tab==='pasoBaseLog') blInit();
   else if(tab==='pasoBolSin') bslInit();
+  else if(tab==='pasoBuscar') buscarInit();
   else if(tab==='pasoAsisConf') acfInit();
   else if(tab==='pasoCalBase') calidadInit();
   else if(tab==='pasoTmpMed') tmInit();
@@ -214,6 +215,7 @@ function puedeEditar(a){
 const TAB_MADRE={pasoAsisConf:"pasoBolSin",pasoDia:"pasoEf",pasoOpsOF:"pasoGen",pasoExtra:"pasoGen",pasoOpAd:"pasoGen",pasoCausas:"pasoGen"};
 function tabPermitida(tab){
   if(tab==='pasoInicio') return typeof iniHayAlgo==="function" && iniHayAlgo();
+  if(tab==='pasoBuscar') return true;   // solo lectura; el servidor limita a las áreas de Permisos
   if(TABS_ADMIN.includes(tab)) return ES_ADMIN();
   if(PERM_LIBRE()) return true;
   return PERM.pestanas.includes(TAB_MADRE[tab]||tab);

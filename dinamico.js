@@ -525,6 +525,9 @@ function listaCk(){
   const q=norm($("dynCk").value);const out=[];
   const tabs=[...document.querySelectorAll(".nav-item[data-tab]")].map(a=>({g:"Pestañas",t:a.textContent.trim(),k:a.closest("details")?a.closest("details").querySelector("summary").textContent.trim():"",go:()=>activarTab(a.dataset.tab)}));
   VISTAS.filter(v=>/·|Reclamados|Reporte|Resumen x/.test(v.t)).forEach(v=>tabs.push({g:"Pestañas",t:v.t,k:"",go:()=>irVista(v)}));
+  { const raw=$("dynCk").value.trim();   // parche 106: seguir OF, prenda o persona
+    if(raw.length>=3 && typeof busDesde==="function" && document.querySelector('.nav-item[data-tab="pasoBuscar"]'))
+      out.push({g:"Buscar y seguir",t:`Seguir «${raw}»`,k:"OF, prenda, OF/prenda, artículo o persona",go:()=>busDesde(raw)}); }
   tabs.filter(x=>!q||norm(x.t+" "+x.k).includes(q)).slice(0,q?8:12).forEach(x=>out.push(x));
   if(q&&PERS)PERS.filter(p=>norm((p.nombres||p.nombre)+" "+p.dni).includes(q)).slice(0,6).forEach(p=>out.push({g:"Personas",t:p.nombres||p.nombre,k:(p.area_actual||p.area||"")+" · "+p.dni,go:()=>{activarTab("pasoAsis");setTimeout(()=>{try{perTab("crud");}catch(e){}const b=$("perBuscar");if(b){b.value=p.dni;b.dispatchEvent(new Event("input",{bubbles:true}));}},250);}}));
   if(q&&OFSL)OFSL.filter(o=>norm(o.of+" "+o.articulo+" "+(o.cliente||"")).includes(q)).slice(0,6).forEach(o=>out.push({g:"OF",t:"OF "+o.of+" · "+o.articulo,k:(o.prenda||"")+" · "+(o.cant_prog||o.cantidad||"")+" und",go:()=>{activarTab("pasoAvOF");setTimeout(()=>{const b=$("avofBuscar");if(b){b.value=String(o.of);b.dispatchEvent(new Event("input",{bubbles:true}));}},400);}}));
@@ -637,7 +640,7 @@ function contadores(){
 /* =====================================================================
    ARRANQUE · INGENIERÍA
    ===================================================================== */
-const GRUPOS={pasoAsisConf:"Tickets",pasoTk:"Tickets",pasoMod:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
+const GRUPOS={pasoBuscar:"Tickets",pasoAsisConf:"Tickets",pasoTk:"Tickets",pasoMod:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
   pasoEf:"Eficiencia",pasoAudit:"Eficiencia",pasoInc:"Eficiencia",pasoDash:"Dashboards",pasoCarga:"Planificación",
   pasoAsis:"Gestión",pasoBases:"Gestión",pasoBaseLog:"Gestión",pasoCalBase:"Gestión",pasoIncid:"Gestión",pasoFechas:"Gestión",pasoPermisos:"Gestión",
   pasoCostosBase:"Costos",pasoCostosHoy:"Costos",pasoCostosInc:"Costos",pasoCostosAsis:"Costos",

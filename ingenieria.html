@@ -34,6 +34,7 @@
       <a class="nav-item nav-inicio" data-tab="pasoInicio" href="#pasoInicio">Inicio</a>
       <details class="nav-group" open>
         <summary class="nav-sep">Tickets</summary>
+        <a class="nav-item" data-tab="pasoBuscar" href="#pasoBuscar">Buscar y seguir</a>
         <a class="nav-item" data-tab="pasoAsisConf" href="#pasoAsisConf">Asistencia por confirmar</a>
         <a class="nav-item" data-tab="pasoBolSin" href="#pasoBolSin">Boletas sin llenar<b class="dyn-cnt" id="bslNavCnt" hidden></b></a>
         <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
@@ -964,6 +965,21 @@
     </section>
 
     <!-- ===================== BOLETAS SIN LLENAR (parche 103) ===================== -->
+    <section class="pantalla" id="pasoBuscar">
+      <div class="seccion-cab">
+        <h1>Buscar y seguir</h1>
+        <p class="seccion-sub">Un solo buscador para OF, hoja de numeración, prenda, paquete y persona (arriba, o tecla /).
+        Muestra únicamente las áreas que tu usuario puede ver en Permisos. Es solo lectura.</p>
+      </div>
+      <div class="bus-caja" role="search">
+        <input id="busQ" type="search" placeholder="OF, artículo, N° de prenda, OF/prenda, nombre o DNI" autocomplete="off"
+          aria-label="Buscar OF, prenda, artículo o persona" aria-controls="busDrop" aria-autocomplete="list">
+        <div class="bus-drop" id="busDrop" role="listbox" hidden></div>
+      </div>
+      <div class="bus-rec" id="busRec" hidden></div>
+      <div id="busCuerpo"></div>
+    </section>
+
     <section class="pantalla" id="pasoAsisConf">
       <div class="seccion-cab">
         <h1>Asistencia por confirmar</h1>
@@ -1532,6 +1548,7 @@
 <script src="inicio.js"></script>
 <script src="calidad.js"></script>
 <script src="asistencia.js"></script>
+<script src="buscar.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>

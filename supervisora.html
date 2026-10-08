@@ -56,9 +56,22 @@
     <button type="button" class="sh-card" onclick="shAbrir('tabEfPersonal')"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 16l5-5 4 3 7-7M15 7h5v5"/></svg></span><span class="sh-tx"><b>Eficiencias</b><span>Por persona y por día</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" onclick="shAbrir('tabReclamos')"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 0 0 4v4h16v-4a2 2 0 0 1 0-4V4H4zM10 4v12"/></svg></span><span class="sh-tx"><b>Quién reclamó</b><span>OF, módulo y operación</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" onclick="shAbrir('tabBoletas')"><span class="sh-ic hoja" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span><span class="sh-tx"><b>Boletas del día</b><span>Quién no llenó y avisarle</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" onclick="shIrBuscar()"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg></span><span class="sh-tx"><b>Buscar OF o prenda</b><span>Por dónde pasó un paquete y quién lo tuvo</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <div class="sh-h">Mi cuenta</div>
     <button type="button" class="sh-card" id="shMasPin"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2 2"/></svg></span><span class="sh-tx"><b>Cambiar mi PIN</b></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" id="shMasSalir"><span class="sh-ic hoja" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h4M14 8l-4 4 4 4M10 12h10"/></svg></span><span class="sh-tx"><b>Salir</b></span><span class="sh-fl" aria-hidden="true">›</span></button>
+  </section>
+
+  <!-- Buscar y seguir (parche 106), solo su área -->
+  <section class="pantalla" id="pasoBuscar">
+    <h1>Buscar</h1>
+    <div class="sub">OF, N° de prenda, OF/prenda, artículo o persona de tu área.</div>
+    <div class="bus-caja" role="search">
+      <input id="busQ" type="search" placeholder="Ej: 10397/1350" autocomplete="off" aria-label="Buscar OF, prenda o persona" aria-controls="busDrop">
+      <div class="bus-drop" id="busDrop" role="listbox" hidden></div>
+    </div>
+    <div class="bus-rec" id="busRec" hidden></div>
+    <div id="busCuerpo"></div>
   </section>
 
   <!-- Horas extra de la supervisora (parche 112) -->
@@ -349,6 +362,7 @@
 </div>
 <script src="app.js"></script>
 <script src="supervisora-hoy.js"></script>
+<script src="buscar.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>
