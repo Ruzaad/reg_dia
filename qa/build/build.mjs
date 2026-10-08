@@ -31,6 +31,8 @@ for (const t of lista) {
   }
   console.log(t, (await db.query(`select count(*)::int n from public.${t}`)).rows[0].n);
 }
+// la oficina queda solo con su usuario (sin nombre completo)
+await db.exec(`update operarios set nombres_apellidos = dni where dni !~ '^[0-9]{8}$'`);
 await correr(S.post,'post');
 // secuencias e identidades
 for (const s of S.seqs) { try { await db.query(`select setval('public.${s.s}', greatest($1::bigint,1))`,[s.v]); } catch(e){} }

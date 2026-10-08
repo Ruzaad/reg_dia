@@ -105,7 +105,7 @@ td.det{white-space:normal;color:var(--suave);max-width:420px}
     <div class="carga" id="carga">
       <strong id="carga-txt">Preparando la base de prueba…</strong>
       <div class="barra"><i id="carga-bar"></i></div>
-      <span class="nota">Se baja una sola vez una copia de la base (unos 30 MB) y corre dentro de este navegador. Personal con nombres y DNI cambiados; PIN 1234 para todos.</span>
+      <span class="nota">Se baja una copia de la base (unos 35 MB) y corre dentro de este navegador. Personal con nombres y DNI cambiados; PIN 1234 para todos.</span>
     </div>
 
     <div class="mesa" id="mesa" hidden>
@@ -173,7 +173,7 @@ td.det{white-space:normal;color:var(--suave);max-width:420px}
 </main>
 
 <script type="module">
-import { PGlite, pgcrypto, uuid_ossp } from "./pg/pglite.js";
+import { PGlite } from "./pg/pglite.js";
 const $ = id => document.getElementById(id);
 let db = null, FN = {}, REG = [], cont = {lee:0, esc:0, err:0};
 const ESTADO = { cel:null, pc:null };
@@ -186,23 +186,43 @@ document.querySelectorAll(".hdr nav button").forEach(b => b.onclick = () => {
 });
 
 /* ---------- carga de la base ---------- */
+/* Los binarios vienen en base64 (.txt) porque el artefacto solo sirve tipos web. */
 async function bajar(url, peso, desde, hasta) {
   const r = await fetch(url); if (!r.ok) throw new Error("No se pudo bajar " + url);
   const total = +r.headers.get("content-length") || peso; const lector = r.body.getReader(); const partes = []; let n = 0;
   for (;;) { const { done, value } = await lector.read(); if (done) break; partes.push(value); n += value.length;
     $("carga-bar").style.width = (desde + (hasta - desde) * Math.min(1, n / total)) + "%"; }
-  return new Blob(partes);
+  const txt = await new Blob(partes).text();
+  const bin = atob(txt.trim()); const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return new Blob([u]);
 }
-async function gunzip(blob) { return await new Response(blob.stream().pipeThrough(new DecompressionStream("gzip"))).blob(); }
+async function gunzip(blob) {
+  const cab = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
+  if (cab[0] !== 0x1f || cab[1] !== 0x8b) return blob;
+  return await new Response(blob.stream().pipeThrough(new DecompressionStream("gzip"))).blob();
+}
+let MOTOR = null;
+async function motor() {
+  if (MOTOR) return MOTOR;
+  const [data, cripto, uuid, wasm] = await Promise.all([
+    bajar("pg/pglite.data.b64.txt", 8.4e6, 0, 25), bajar("pg/pgcrypto.tar.gz.b64.txt", 1.5e6, 0, 0),
+    bajar("pg/uuid-ossp.tar.gz.b64.txt", 2.2e4, 0, 0), WebAssembly.compileStreaming(fetch("pg/pglite.wasm"))]);
+  const ext = (nombre, blob) => { const u = URL.createObjectURL(blob); return { name: nombre, setup: async () => ({ bundlePath: new URL(u) }) }; };
+  MOTOR = { fsBundle: data, wasmModule: wasm, extensions: { pgcrypto: ext("pgcrypto", cripto), uuid_ossp: ext("uuid-ossp", uuid) } };
+  return MOTOR;
+}
 async function arrancar() {
   $("carga").hidden = false; $("mesa").hidden = true; $("registro").hidden = true;
+  $("carga-txt").textContent = "Bajando Postgres para el navegador…";
+  const m = await motor();
   $("carga-txt").textContent = "Bajando la copia de la base…";
-  const datos = await bajar("datos/datos.tgz", 9.9e6, 0, 60);
-  const tickets = await bajar("datos/tickets.csv.gz", 1.8e6, 60, 70);
+  const datos = await bajar("datos/datos.b64.txt", 13.2e6, 25, 70);
+  const tickets = await bajar("datos/tickets.b64.txt", 2.5e6, 70, 78);
   $("carga-txt").textContent = "Arrancando Postgres dentro del navegador…";
   if (db) { try { await db.close(); } catch (e) {} }
-  db = await PGlite.create({ loadDataDir: datos, extensions: { pgcrypto, uuid_ossp } });
-  $("carga-bar").style.width = "85%";
+  db = await PGlite.create({ loadDataDir: await gunzip(datos), fsBundle: m.fsBundle, wasmModule: m.wasmModule, extensions: m.extensions });
+  $("carga-bar").style.width = "88%";
   $("carga-txt").textContent = "Cargando 174 mil tickets…";
   await db.query("truncate tickets_cache");
   await db.query("copy tickets_cache from '/dev/blob' with (format csv)", [], { blob: await gunzip(tickets) });
