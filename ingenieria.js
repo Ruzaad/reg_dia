@@ -20,7 +20,8 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   if(!ES_ADMIN()) quitarTabsAdmin();
   await cargarPermisos();               // parche 95: áreas y pestañas que dio el administrador
   const _iniLanding=["","#pasoInicio"].includes(location.hash||"") && tabPermitida("pasoInicio");
-  if(tabPermitida("pasoBolSin") && !_iniLanding) bslContador();   // parche 103 (con Inicio, lo pide Inicio)
+  if(_iniLanding) iniCargar();          // Inicio pide lo suyo ya, en paralelo con la carga de áreas
+  else if(tabPermitida("pasoBolSin")) bslContador();   // parche 103 (con Inicio, lo pide Inicio)
   $("quienBadge").textContent = ING.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
@@ -122,7 +123,7 @@ function activarTab(tab){
   if(!tabPermitida(tab)){ const t=primeraTab(); if(t && t!==tab){ activarTab(t); } else irA("pasoSinPermiso"); return; }
   aplicarSoloLectura();
   if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
-  if(tab==='pasoInicio'){ irA(tab); iniCargar(); return; }
+  if(tab==='pasoInicio'){ irA(tab); if(INI.t0 && performance.now()-INI.t0<15000) iniPintar(); else iniCargar(); return; }
   if(tab==='pasoEf' || tab==='pasoDia'){ efVista(tab==='pasoDia'?'dia':'area'); TABS_VISTAS.add(tab); return; }
   irA(tab);
   if(TABS_VISTAS.has(tab)) return;      // reentrada: conserva filtros y datos
