@@ -1165,6 +1165,8 @@ th.acf-c.ult{color:var(--texto);}
 .fer-lista{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;}
 .fer-lista li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--sup-2);border-radius:10px;padding:8px 10px;}
 .fer-lista li small{color:var(--suave);font-size:12px;margin-left:auto;}
+.fer-regla{margin:0 0 10px;font-size:14px;line-height:1.45;color:var(--texto);background:var(--sup-2);border-radius:10px;padding:10px 12px;}
+.fer-regla.on{background:var(--azul-t);}
 .fer-prog{display:flex;flex-wrap:wrap;gap:8px;}
 .fer-prog .asy-b{min-width:110px;}
 .fer-dia{margin:0 0 12px;}

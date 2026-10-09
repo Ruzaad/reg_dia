@@ -60,7 +60,7 @@ function ferPintar(){
   const tarjetas=dias.map(d=>{
     const pe=ferPend(d), ps=d.personas||[], fut=d.fecha>hoy;
     const tit=d.tipo==="FERIADO" ? `Feriado · ${esc(d.motivo||"")}` : FER_TIPO[d.tipo];
-    const est = d.jornada>0 ? `<span class="fer-est">Antes de la regla: cuenta con 575 min</span>`
+    const est = d.jornada>0 ? `<span class="fer-est">Regla apagada ese día: cuenta con 575 min</span>`
       : !ps.length ? `<span class="fer-est ok">Nadie trabajó</span>`
       : pe.length ? `<span class="fer-est mal">${pe.length} sin horas</span>` : `<span class="fer-est ok">Horas completas</span>`;
     const filas=ps.map(p=>{ const h=Number(p.horas_min)>0, ed=puedeEditar(p.area);
@@ -79,13 +79,37 @@ function ferPintar(){
   $("ferCuerpo").innerHTML=`
     <div class="fer-grid">
       <section class="fer-card"><h2>Feriados</h2>${feriado}${lista?`<ul class="fer-lista">${lista}</ul>`:`<p class="seccion-sub">Ningún feriado marcado en los últimos dos meses.</p>`}</section>
-      <section class="fer-card"><h2>¿Se trabaja este fin de semana?</h2>
-        <p class="seccion-sub">Pon las horas antes o después del día. Quien registre tickets y no tenga horas aparece abajo en rojo.</p>
-        <div class="fer-prog">${[1,2,3,4,5,6,7].map(n=>ferSuma(hoy,n)).filter(f=>ferFinde(f)||(r.feriados||[]).some(x=>x.fecha===f))
-          .map(f=>`<button type="button" class="asy-b" onclick="ferAbrir('${f}')">${esc(ferTxt(f))}</button>`).join("")}</div></section>
+      ${ferRegla(r)}
     </div>
     <h2 class="fer-sub">Últimos 45 días</h2>
     ${tarjetas || `<div class="vacio-msg">Nadie trabajó en sábado, domingo ni feriado en los últimos 45 días.</div>`}`;
+}
+
+/* Regla de fin de semana: apagada hasta que alguien con todas las áreas la prenda. */
+function ferRegla(r){
+  const hoy=r.hoy, on=!!r.regla_desde, act=on && r.regla_desde<=hoy;
+  const prox=[1,2,3,4,5,6,7].map(n=>ferSuma(hoy,n)).filter(f=>(ferFinde(f)&&on&&f>=r.regla_desde)||(r.feriados||[]).some(x=>x.fecha===f));
+  const ctl = !r.puede_feriado ? "" : on
+    ? `<button type="button" class="btn-mini rojo" onclick="ferReglaGuardar(null)">Apagar la regla</button>`
+    : `<form class="barra-control fer-form" onsubmit="event.preventDefault();ferReglaGuardar($('ferReglaDesde').value)">
+        <label class="campo"><span>Desde</span><input type="date" id="ferReglaDesde" required min="${ferSuma(hoy,-7)}"></label>
+        <button class="btn-mini" type="submit">Prender la regla</button></form>`;
+  return `<section class="fer-card"><h2>Sábado y domingo</h2>
+    ${on ? `<p class="fer-regla on"><b>Regla prendida ${act?"desde":"a partir del"} ${esc(ferTxt(r.regla_desde))}.</b> Sábado y domingo no tienen jornada: a quien trabaje hay que ponerle sus horas.</p>`
+         : `<p class="fer-regla"><b>Regla apagada.</b> Sábado y domingo siguen como siempre: quien trabaja recibe 575 min. Al prenderla, desde la fecha que elijas pasan a 0 min y se ponen las horas reales aquí.</p>`}
+    ${ctl}
+    ${prox.length?`<p class="seccion-sub">Poner horas antes del día:</p><div class="fer-prog">${prox.map(f=>`<button type="button" class="asy-b" onclick="ferAbrir('${f}')">${esc(ferTxt(f))}</button>`).join("")}</div>`:""}
+  </section>`;
+}
+async function ferReglaGuardar(desde){
+  if(desde===null && !confirm("¿Apagar la regla? Sábado y domingo vuelven a contar 575 min y las horas puestas en esos días se borran.")) return;
+  if(desde && !confirm(`Desde el ${ferTxt(desde)}, sábado y domingo cuentan 0 min y a quien trabaje hay que ponerle sus horas. ¿Prender la regla?`)) return;
+  try{
+    const r=await rpc("fn_regla_finde_guardar",{p_dni:ING.dni,p_token:ING.token,p_desde:desde||null});
+    if(!r || !r.ok){ mostrarError((r&&r.error)||"No se pudo guardar"); return; }
+    mostrarOk(desde?`Regla prendida desde el ${ferTxt(desde)}.`:`Regla apagada.${r.horas_borradas?` Se borraron ${r.horas_borradas} registros de horas.`:""}`);
+    ferCargar();
+  }catch(e){ mostrarError(e.message); }
 }
 
 async function ferGuardarFeriado(){

@@ -4,12 +4,13 @@
 --    no se exigen los 575 min, nadie sale NO ENTREGÓ ni "por confirmar",
 --    Boletas lo da por SIN_LABOR e Incentivos lo rotula FERIADO y no lo cuenta
 --    en el promedio del modular (igual que un sábado).
--- 2. Sábado, domingo y feriado no tienen jornada (0 min). Si alguien trabaja,
---    Ingeniería está obligada a poner sus horas: entran como HORA_EXTRA
+-- 2. Regla de fin de semana, APAGADA al correr este parche: sábado y domingo
+--    siguen con 575 como hoy. Cuando Ingeniería la prende desde la pantalla
+--    (con la fecha en que empieza), sábado y domingo pasan a 0 min y quien
+--    trabaje necesita que le pongan sus horas: entran como HORA_EXTRA
 --    (detalle "JORNADA SABADO/DOMINGO/FERIADO") y son su disponible del día.
---    Mientras no las ponga, sale en "Feriados y fin de semana" y en el Inicio.
---    Los fines de semana ANTERIORES al sábado 10-oct-2026 conservan los 575
---    con que ya se calcularon: nada de lo pagado cambia.
+--    El feriado siempre es 0 y sus horas se ponen igual. Nada anterior a la
+--    fecha de la regla cambia.
 --
 -- Cómo: tabla `feriados`, tres funciones chicas (_feriado, _laborable, _jornada)
 -- y tres RPC nuevas. Las funciones que tenían "575" o "lunes a viernes" escritos
@@ -35,12 +36,25 @@ create or replace function public._laborable(p date) returns boolean
  language sql stable as
 $$ select extract(isodow from p) < 6 and not exists (select 1 from public.feriados f where f.fecha = p) $$;
 
-/* Jornada base del día: 575 de lunes a viernes; 0 en feriado y, desde el
-   10-oct-2026, en sábado y domingo (lo trabajado ahí entra como HORA_EXTRA). */
+/* Regla de fin de semana: APAGADA al correr el parche (desde = null). Mientras
+   esté apagada, sábado y domingo siguen con sus 575 como siempre. Se prende
+   desde la pantalla (fn_regla_finde_guardar) con la fecha en que empieza. */
+create table if not exists public.regla_finde (
+  id        int primary key default 1 check (id = 1),
+  desde     date,
+  puesto_por text references public.operarios(dni),
+  creado    timestamptz not null default now()
+);
+alter table public.regla_finde enable row level security;
+insert into public.regla_finde (id, desde) values (1, null) on conflict (id) do nothing;
+
+/* Jornada base del día: 575 de lunes a viernes; 0 en feriado; 0 en sábado y
+   domingo solo desde que se prende la regla (antes, 575 como siempre). */
 create or replace function public._jornada(p date) returns numeric
  language sql stable as
 $$ select case when extract(isodow from p) < 6 and not exists (select 1 from public.feriados f where f.fecha = p) then 575
-               when exists (select 1 from public.feriados f where f.fecha = p) or p >= date '2026-10-10' then 0
+               when exists (select 1 from public.feriados f where f.fecha = p) then 0
+               when exists (select 1 from public.regla_finde r where r.desde is not null and p >= r.desde) then 0
                else 575 end::numeric $$;
 
 create table if not exists public.parche_120_respaldo (firma text primary key, def text not null, creado timestamptz default now());
@@ -159,6 +173,29 @@ exception when others then
   return json_build_object('ok', false, 'error', SQLERRM);
 end $function$;
 
+-- Prender (con la fecha de inicio) o apagar (null) la regla de fin de semana.
+-- Solo quien edita todas las áreas. No puede empezar antes de hoy - 7.
+create or replace function public.fn_regla_finde_guardar(p_dni text, p_token uuid, p_desde date)
+ returns json language plpgsql security definer set search_path to 'public'
+as $function$
+declare o operarios; v_n int := 0;
+begin
+  o := _ing(p_dni, p_token);
+  perform _vista_area(o, array['*'], true);
+  if p_desde is not null and p_desde < _hoy() - 7 then
+    return json_build_object('ok', false, 'error', 'La regla no puede empezar antes del ' || to_char(_hoy() - 7, 'DD/MM') || ': cambiaría fines de semana ya cerrados');
+  end if;
+  perform _perm_set(o);
+  update regla_finde set desde = p_desde, puesto_por = o.dni, creado = now() where id = 1;
+  -- Los fines de semana que vuelven a tener 575 no pueden quedar además con sus horas.
+  delete from ocurrencias where tipo = 'HORA_EXTRA' and detalle in ('JORNADA SABADO','JORNADA DOMINGO') and _jornada(fecha) > 0;
+  get diagnostics v_n = row_count;
+  return json_build_object('ok', true, 'desde', to_char(p_desde, 'YYYY-MM-DD'), 'horas_borradas', v_n);
+exception when others then
+  if SQLERRM like '%SESION_INVALIDA%' or SQLERRM like '%NO_AUTORIZADA%' then raise; end if;
+  return json_build_object('ok', false, 'error', SQLERRM);
+end $function$;
+
 -- Horas trabajadas en sábado, domingo o feriado: una HORA_EXTRA por persona.
 -- Volver a guardar reemplaza; 0 minutos las quita.
 create or replace function public.fn_jornada_horas_guardar(p_dni text, p_token uuid, p_fecha date, p_minutos numeric, p_dnis text[])
@@ -172,7 +209,7 @@ begin
     return json_build_object('ok', false, 'error', 'Solo días de los últimos dos meses o de la próxima semana');
   end if;
   if _jornada(p_fecha) > 0 then
-    return json_build_object('ok', false, 'error', 'Ese día ya tiene su jornada de 575 min. Si alguien se quedó más, va como hora extra en Incidencias.');
+    return json_build_object('ok', false, 'error', 'Ese día ya tiene su jornada de 575 min (día hábil, o fin de semana con la regla apagada). Si alguien se quedó más, va como hora extra en Incidencias.');
   end if;
   if p_minutos is null or p_minutos < 0 or p_minutos > 720 then
     return json_build_object('ok', false, 'error', 'Las horas van de 0 a 12 por persona');
@@ -269,13 +306,14 @@ begin
    where f.fecha >= _hoy() - 62;
 
   return json_build_object('ok', true, 'hoy', to_char(_hoy(), 'YYYY-MM-DD'),
-    'desde_regla', '2026-10-10', 'dias', v_dias, 'feriados', v_fer,
+    'regla_desde', (select to_char(r.desde, 'YYYY-MM-DD') from regla_finde r where r.id = 1), 'dias', v_dias, 'feriados', v_fer,
     'puede_feriado', coalesce(o.es_admin, false) or exists (select 1 from permisos_area pa where pa.dni = o.dni and pa.area = '*' and pa.nivel = 'EDITAR'));
 exception when others then
   if SQLERRM like '%SESION_INVALIDA%' or SQLERRM like '%NO_AUTORIZADA%' then raise; end if;
   return json_build_object('ok', false, 'error', SQLERRM);
 end $function$;
 
+grant execute on function public.fn_regla_finde_guardar(text, uuid, date) to anon, authenticated;
 grant execute on function public.fn_feriado_guardar(text, uuid, date, text, boolean) to anon, authenticated;
 grant execute on function public.fn_jornada_horas_guardar(text, uuid, date, numeric, text[]) to anon, authenticated;
 grant execute on function public.fn_dias_no_laborables(text, uuid, date, date) to anon, authenticated;

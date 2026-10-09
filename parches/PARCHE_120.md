@@ -15,8 +15,12 @@
 - **Feriado**: no exige minutos, nadie sale NO ENTREGÓ ni "por confirmar",
   Boletas lo da por sin labor, Incentivos lo rotula FERIADO y no lo cuenta en
   el promedio del modular, igual que un sábado.
-- **Sábado, domingo y feriado no tienen jornada (0 min)** desde el sábado
-  10-oct-2026. Si alguien trabaja, Ingeniería **tiene que** poner sus horas:
+- **Regla de fin de semana, apagada al correr el parche.** Mientras esté
+  apagada, sábado y domingo siguen con 575 como siempre. Quien edita todas
+  las áreas la prende desde la pantalla con la fecha en que empieza (no puede
+  ser más de 7 días atrás). Desde esa fecha, sábado y domingo no tienen
+  jornada (0 min), igual que el feriado. Si alguien trabaja, Ingeniería
+  **tiene que** poner sus horas:
   entran como HORA_EXTRA (detalle `JORNADA SABADO/DOMINGO/FERIADO`) y son su
   disponible del día. Se pueden poner antes ("¿Se trabaja este fin de
   semana?") o después. Quien registró tickets sin horas sale en rojo en la
@@ -24,16 +28,21 @@
 - La supervisora no ve el feriado como "ayer sin confirmar".
 
 ## Qué NO cambia
-- Los fines de semana anteriores al 10-oct conservan sus 575 min: nada de lo
-  ya calculado o pagado se mueve.
+- Con la regla apagada, ningún fin de semana cambia. Prenderla solo cuando
+  esta pantalla ya esté en producción: si no, nadie tendría dónde poner las
+  horas. Apagarla borra las horas `JORNADA SABADO/DOMINGO` de los días que
+  vuelven a tener 575.
 - Lunes a viernes sin feriado sigue igual (575 + incidencias).
-- No toca `fn_carga_capacidad` (la corrige otro hilo); `_dias_hab` sí deja
-  de contar feriados.
+- No toca `fn_carga_capacidad` (la corrige otro hilo; su ritmo ya descarta
+  días flojos como un feriado), ni `fn_avance_modulos`, `fn_ef_auditoria`
+  (la vieja), `fn_reprocesos_apoyo` y `fn_solicitud_ajuste_crear`: los dos
+  primeros no los llama la app y los otros usan 575 como tope, no como
+  jornada. `_dias_hab` sí deja de contar feriados.
 
 ## Base de datos
-- Tabla `feriados`; funciones `_feriado`, `_laborable`, `_jornada`.
+- Tablas `feriados` y `regla_finde` (una fila, `desde` vacío = apagada); funciones `_feriado`, `_laborable`, `_jornada`.
 - RPC nuevas: `fn_dias_no_laborables` (lectura, respeta áreas de Permisos),
-  `fn_feriado_guardar`, `fn_jornada_horas_guardar` (solo áreas que edita).
+  `fn_feriado_guardar`, `fn_regla_finde_guardar`, `fn_jornada_horas_guardar` (solo áreas que edita).
 - 20 funciones existentes cambian solo donde tenían 575 o "lunes a viernes"
   escritos a mano. El parche reescribe esos pedazos desde la definición viva,
   comprueba cada texto (si alguno no calza aborta sin tocar nada) y guarda la
