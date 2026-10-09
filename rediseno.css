@@ -1685,3 +1685,9 @@ body.prestada::after{content:"";position:fixed;inset:0;border:4px solid var(--vi
 .ltt-chk input[type=date]{border:1.5px solid var(--linea);border-radius:10px;padding:6px 8px;background:var(--sup);color:var(--texto);font:600 13px var(--sans)}
 .ltt-guardar .btn-principal{width:auto;margin:0;padding:12px 20px}
 .ltt-guardar .btn-principal:disabled{opacity:.5}
+/* Nuevo lote con varias operaciones (parche 122) */
+.lt-seg button[aria-pressed=true]{background:var(--azul);border-color:var(--azul);color:#fff}
+.lt-fn{font-weight:600;text-transform:none;letter-spacing:0;color:var(--suave)}
+.lt-fsel{font-size:13px;color:var(--texto);margin-top:8px;line-height:1.45}
+.lt-fsel b{color:var(--azul)}
+.lt-form textarea.inp{font:600 14px var(--sans);resize:vertical}
