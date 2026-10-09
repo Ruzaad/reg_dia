@@ -7097,6 +7097,15 @@ function ccAvisos(areas){
     nadie reclamó)${sg&&sg.n?` ni ${sg.n} OFs registradas sin generar (cargadas del ${fechaCorta(sg.desde)} al ${fechaCorta(sg.hasta)})`:""}.
     Un área que “se queda sin trabajo” puede recibir OFs nuevas mañana: el aviso es para generar a tiempo, no un hecho.</div></div>`;
 }
+/* Parche 118: colas que el área casi nunca reclama (ya descontadas del pendiente).
+   Con el 107 no vienen los campos *_bruto y no se muestra nada. */
+function ccColas(a,emp){
+  if(a.curso_bruto==null) return "";
+  const col=(a.curso_bruto-a.curso)+(emp?(a.empezar_bruto-a.empezar):0);
+  if(col<1) return "";
+  return `<div class="cc-colas">No cuenta ${ccN(col)} min de tickets sin reclamar que en las OFs ya terminadas
+    ${a.tasa!=null?`quedan sueltos (aquí se reclama el ${Math.round(a.tasa)}% de lo generado)`:"quedan sueltos"}.</div>`;
+}
 function ccCardBase(a,s){
   const cls=s.dias<5?"r":s.dias>12?"a":"v";
   const est=s.dias<5?`Sin OFs nuevas, se queda sin trabajo el ${ccFecha(s.fin)}`
@@ -7105,7 +7114,7 @@ function ccCardBase(a,s){
   const conf=[]; let nv="alta";
   if(a.quietas.min>0.1*(a.curso+a.quietas.min)){ conf.push(`${ccN(a.quietas.min)} min en ${a.quietas.n} OFs quietas no se cuentan`); nv="media"; }
   if(a.viejas.n){ conf.push(`${a.viejas.n} OFs generadas el ${fechaCorta(a.viejas.gen)} sin ningún ticket (${ccN(a.viejas.min)} min): ¿siguen en planta?`); nv="media"; }
-  if(a.dias_ritmo<9) conf.push(`ritmo de ${a.dias_ritmo} días: ${10-a.dias_ritmo} días cortos (sábados) fuera`);
+  if(a.dias_ritmo<9) conf.push(`ritmo de ${a.dias_ritmo} días: ${10-a.dias_ritmo} con poco registro quedaron fuera`);
   return `<button type="button" class="cc-card ${cls}${a.area===CC_SEL?" sel":""}" onclick="CC_SEL='${esc(a.area)}';ccPintar()">
     <div class="cc-t">${esc(a.area)}</div>
     <div class="cc-n">${s.dias.toFixed(1)}<small>días de trabajo</small></div>
@@ -7115,6 +7124,7 @@ function ccCardBase(a,s){
       ${emp?`<span>Generadas sin empezar</span><b>${ccN(a.empezar)} min</b>`:""}
       <span>Ritmo real</span><b>${ccN(a.ritmo)} min/día</b>
       <span>Registran / activos</span><b>${a.registran} / ${a.activos}</b></div>
+    ${ccColas(a,emp)}
     <div class="cc-conf"><span class="p ${nv}">${nv}</span>${conf.length?esc(conf.join(" · ")):"Los números salen limpios de los tickets."}</div>
   </button>`;
 }
@@ -7130,8 +7140,8 @@ function ccCardAcab(a,llega,pp){
     <div class="cc-dat"><span>Le llega de costura</span><b>≈${ccN(hoy)} min/día</b>
       <span>Registra hacer</span><b>${ccN(a.ritmo)} min/día</b>
       <span>Una persona hace</span><b>${ccN(pp)} min/día</b></div>
-    <div class="cc-conf"><span class="p baja">baja</span>Según la BASE, costura le entrega más de lo que ACABADO registra hacer.
-    Si en planta le falta trabajo, o no registra todo o sus STD están altos. ${a.sin_base_acab.length?`Sin BASE de ACABADO: ${esc(a.sin_base_acab.map(x=>x.articulo+" ("+x.of+")").join(", "))}, no suma llegada.`:""}</div>
+    <div class="cc-conf">${hoy>a.ritmo*1.1?`<span class="p baja">baja</span>Según la BASE, costura le entrega más de lo que ACABADO registra hacer.
+    Si en planta le falta trabajo, o no registra todo o sus STD están altos.`:`<span class="p media">media</span>Lo que le llega sale de la BASE de cada artículo y del ritmo de costura; los presentes salen de la última asistencia marcada.`} ${a.sin_base_acab.length?`Sin BASE de ACABADO: ${esc(a.sin_base_acab.map(x=>x.articulo+" ("+x.of+")").join(", "))}, no suma llegada.`:""}</div>
   </button>`;
 }
 function ccTimeline(areas,sim,pp){
@@ -7161,11 +7171,11 @@ function ccDetalle(a,sim){
       return `<tr><td class="izq"><b>${esc(x.area)}</b></td><td>${ccN(x.ritmo*(x.acab_curso+(e?x.acab_empezar:0))/Math.max(1,s.carga))}</td>
       <td>${ccN(x.acab_curso+(e?x.acab_empezar:0))}</td><td>${s.fin?ccFecha(s.fin):"—"}</td></tr>`;}).join("")}</tbody></table></div></div>`;
   const vis=a.ofs.filter(o=>o.estado!=="QUIETA"), q=a.ofs.filter(o=>o.estado==="QUIETA");
-  const fila=o=>{const av=o.tot?100*(1-o.pend/o.tot):0, st=o.estado==="POR_EMPEZAR"&&o.vieja?"VIEJA":o.estado;
+  const fila=o=>{const av=o.tot?100*(1-(o.bruto??o.pend)/o.tot):0, st=o.estado==="POR_EMPEZAR"&&o.vieja?"VIEJA":o.estado;
     const lb={EN_CURSO:"En curso",POR_EMPEZAR:"Por empezar",QUIETA:"Sin movimiento",VIEJA:"¿Vigente?"}[st];
     return `<tr class="${o.estado==="QUIETA"?"quieta":""}"><td><b>${esc(o.of)}</b></td><td class="izq">${esc(o.articulo)}<div class="cc-sub">${esc(o.prenda||"")} · ${ccN(o.cant)} und</div></td>
       <td><span class="cc-st ${st}">${lb}</span></td><td class="cc-oc"><span class="cc-av"><i style="width:${av}%"></i></span>${Math.round(av)}%</td>
-      <td><b>${ccN(o.pend)}</b></td><td>${(o.pend/a.ritmo).toFixed(1)}</td><td class="cc-oc">${o.ult?fechaCorta(o.ult):"—"}</td><td class="cc-oc">${fechaCorta(o.gen)}</td></tr>`;};
+      <td><b>${ccN(o.pend)}</b>${o.bruto!=null&&o.bruto-o.pend>=1?`<div class="cc-sub">de ${ccN(o.bruto)} sin reclamar</div>`:""}</td><td>${a.ritmo?(o.pend/a.ritmo).toFixed(1):"—"}</td><td class="cc-oc">${o.ult?fechaCorta(o.ult):"—"}</td><td class="cc-oc">${fechaCorta(o.gen)}</td></tr>`;};
   const head=`<thead><tr><th>OF</th><th class="izq">Artículo</th><th>Estado</th><th class="cc-oc">Avance</th><th>Pendiente (min)</th><th>Días</th><th class="cc-oc">Último ticket</th><th class="cc-oc">Generada</th></tr></thead>`;
   return `<div class="cc-bloque"><h2>${esc(a.area)}: OFs que forman la carga</h2>
     <p class="cc-sub">Ordenadas por minutos pendientes. “Días” es lo que esa OF le ocupa al área a su ritmo de ${ccN(a.ritmo)} min/día.</p>
@@ -7179,6 +7189,7 @@ function ccDetalle(a,sim){
 function ccDeDonde(){
   return `<div class="cc-bloque"><details class="cc-de"><summary>De dónde sale cada número</summary><ol>
     <li><b>Pendiente</b>: STD × cantidad de cada ticket ya generado que nadie reclamó (tickets del área sin reclamo activo). Solo cuenta lo generado: una OF que no se generó en el área no suma.</li>
+    <li><b>Colas que no se cuentan</b>: en las OFs ya terminadas siempre quedan operaciones sin reclamar (nadie las marca). Por cada operación se mira qué parte se reclamó en las OFs terminadas del área y lo que suele quedar suelto se descuenta del pendiente; si la operación casi no tiene historia, se usa el porcentaje del área. Debajo de cada OF se ve el total sin reclamar.</li>
     <li><b>En curso</b>: la OF tuvo al menos un ticket reclamado en los últimos 7 días hábiles. <b>Por empezar</b>: generada y sin ningún ticket reclamado; si se generó hace más de 3 semanas sale como <i>¿Vigente?</i>. <b>Sin movimiento</b>: tuvo reclamos pero nada en 7 días hábiles; no se cuenta.</li>
     <li><b>Ritmo real</b>: promedio de minutos reclamados por día en los últimos 10 días hábiles con registro. Se descartan los días con menos de la mitad de lo normal (sábados cortos, feriados). Ya trae dentro las faltas, los permisos y la eficiencia real de la gente.</li>
     <li><b>Días de trabajo</b> = pendiente ÷ ritmo real, en días de lunes a viernes.</li>

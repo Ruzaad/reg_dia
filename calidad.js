@@ -24,7 +24,10 @@ async function cargarCalidadBases(){
     const r=await rpc("fn_bases_calidad",{p_dni:ING.dni,p_token:ING.token});
     if(!r||!r.ok){ mostrarError((r&&r.error)||"Error"); return; }
     CQ=r;
-  }catch(e){ mostrarError(e.message); $("cqLista").innerHTML=""; return; }
+  }catch(e){
+    if(/Could not find the function|PGRST202/i.test(String(e&&e.message||e))){
+      $("cqLista").innerHTML=`<div class="acf-falta"><b>Falta correr el parche 121 en la base.</b> Esta pantalla revisa las BASES y avisa dónde están mal antes de que arruinen eficiencias y balances.</div>`; return; }
+    mostrarError(e.message); $("cqLista").innerHTML=""; return; }
   cqPintar();
 }
 function cqPintar(){
