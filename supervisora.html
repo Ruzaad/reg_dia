@@ -37,19 +37,102 @@
   </div>
 
   <!-- Asistencia (vista principal) — todos presentes; marca solo excepciones -->
-  <section class="pantalla activa" id="pasoAsistencia">
-    <h1>Asistencia de hoy</h1>
-    <div class="sub">Todos cuentan como presentes. Marca solo a quien faltó, tiene otro estado o vino pero apoya en otra área.</div>
-    <div class="fila-filtros" style="margin-top:10px;">
-      <label class="sub" style="margin:0;">Día: <input type="date" id="asisFecha" style="margin-left:4px;"></label>
-      <span class="sub" id="asisProg" style="margin:0;"></span>
-      <button class="btn-mini verde" id="asisGuardar" onclick="asisGuardar()">Guardar</button>
+  <!-- Hoy: lo que le toca a la supervisora según la hora (supervisora-hoy.js) -->
+  <section class="pantalla activa" id="pasoHoy" aria-labelledby="shSaludo">
+    <h1 id="shSaludo">Hoy</h1>
+    <div class="sub" id="shFecha"></div>
+    <div id="shCuerpo" aria-live="polite"></div>
+  </section>
+
+  <!-- Más: las pantallas de consulta que no van en la barra de abajo -->
+  <section class="pantalla" id="pasoMas">
+    <h1>Más</h1>
+    <div class="sub" id="shMasSub"></div>
+    <div class="sh-h">Consultar</div>
+    <button type="button" class="sh-card" onclick="shIrAsis('hoy')"><span class="sh-ic cal" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M9 15l2 2 4-4"/></svg></span><span class="sh-tx"><b>Asistencia</b><span>Ayer y hoy, persona por persona</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" onclick="shAbrir('tabIncidencias')"><span class="sh-ic mano" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V11M11 11V5a1.5 1.5 0 0 1 3 0v6M14 11V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-.5A5.5 5.5 0 0 1 6 17l-2-3.5a1.5 1.5 0 0 1 2.6-1.5L8 14"/></svg></span><span class="sh-tx"><b>Pedidos del personal</b><span>Ajustes de tiempo y regresos</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" onclick="shIrHE('hoy')"><span class="sh-ic reloj" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><span class="sh-tx"><b>Horas extra</b><span>Hoy o ayer, hasta 4 h por persona</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" onclick="shAbrir('tabSupBases')"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/></svg></span><span class="sh-tx"><b>Bases del área</b><span>Artículos y tiempos STD</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" onclick="shAbrir('tabEfPersonal')"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 16l5-5 4 3 7-7M15 7h5v5"/></svg></span><span class="sh-tx"><b>Eficiencias</b><span>Por persona y por día</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" onclick="shAbrir('tabReclamos')"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 0 0 4v4h16v-4a2 2 0 0 1 0-4V4H4zM10 4v12"/></svg></span><span class="sh-tx"><b>Quién reclamó</b><span>OF, módulo y operación</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" onclick="shAbrir('tabBoletas')"><span class="sh-ic hoja" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span><span class="sh-tx"><b>Boletas del día</b><span>Quién no llenó y avisarle</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" onclick="shIrBuscar()"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg></span><span class="sh-tx"><b>Buscar OF o prenda</b><span>Por dónde pasó un paquete y quién lo tuvo</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" onclick="shIrSueltos()"><span class="sh-ic hoja" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg></span><span class="sh-tx"><b>Paquetes sueltos</b><span>OFs con paquetes que nadie reclamó</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" id="shMasLotes" hidden onclick="shIrLotes()"><span class="sh-ic reloj" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.5M9.5 3h5"/></svg></span><span class="sh-tx"><b>Trabajo por tiempo</b><span>Lotes de despacho, reproceso o corte</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <div class="sh-h">Mi cuenta</div>
+    <button type="button" class="sh-card" id="shMasPin"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2 2"/></svg></span><span class="sh-tx"><b>Cambiar mi PIN</b></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" id="shMasSalir"><span class="sh-ic hoja" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h4M14 8l-4 4 4 4M10 12h10"/></svg></span><span class="sh-tx"><b>Salir</b></span><span class="sh-fl" aria-hidden="true">›</span></button>
+  </section>
+
+  <!-- Buscar y seguir (parche 106), solo su área -->
+  <section class="pantalla" id="pasoBuscar">
+    <h1>Buscar</h1>
+    <div class="sub">OF, N° de prenda, OF/prenda, artículo o persona de tu área.</div>
+    <div class="bus-caja" role="search">
+      <input id="busQ" type="search" placeholder="Ej: 10397/1350" autocomplete="off" aria-label="Buscar OF, prenda o persona" aria-controls="busDrop">
+      <div class="bus-drop" id="busDrop" role="listbox" hidden></div>
     </div>
-    <div class="zona-of" style="margin-bottom:12px;">
-      <input class="input-grande" id="asisBuscar" placeholder="Buscar persona…" oninput="asisPintar()"
-             autocomplete="off" style="font-size:20px;letter-spacing:normal;text-align:left;">
+    <div class="bus-rec" id="busRec" hidden></div>
+    <div id="busCuerpo"></div>
+  </section>
+
+  <!-- Trabajo por tiempo (parche 116): lotes sin OF -->
+  <section class="pantalla" id="pasoLotesSup">
+    <h1>Trabajo por tiempo</h1>
+    <div class="sub">Crea los lotes para que tu gente marque empezar y terminar. Lo que quedó sin cantidad lo pones aquí.</div>
+    <div id="ltSupZona" aria-live="polite"></div>
+  </section>
+
+  <!-- Paquetes sueltos (parche 115), solo su área -->
+  <section class="pantalla" id="pasoSueltosSup">
+    <h1>Paquetes sueltos</h1>
+    <div class="sub">OFs de tu área con paquetes que nadie reclamó: paradas 7 días hábiles o con operaciones que siguieron y dejaron paquetes atrás.</div>
+    <div id="psSupZona"></div>
+  </section>
+
+  <!-- Horas extra de la supervisora (parche 112) -->
+  <section class="pantalla" id="pasoHE">
+    <h1>Horas extra</h1>
+    <div class="sub" id="sheSub"></div>
+    <div class="asy-seg she-seg" role="tablist" aria-label="Día de las horas extra">
+      <button type="button" role="tab" id="sheSegHoy" onclick="sheDia('hoy')">Hoy</button>
+      <button type="button" role="tab" id="sheSegAyer" onclick="sheDia('ayer')">Ayer</button>
     </div>
-    <div id="asisLista" class="asis-lista"></div>
+    <div class="she-horas">
+      <button type="button" id="sheMenos" onclick="sheHorasMas(-0.5)" aria-label="Media hora menos">−</button>
+      <div><b id="sheHoras" aria-live="polite">2 h</b><span id="sheHorasSub"></span></div>
+      <button type="button" id="sheMas" onclick="sheHorasMas(0.5)" aria-label="Media hora más">+</button>
+    </div>
+    <button type="button" class="sh-card she-mismos" id="sheMismos" onclick="sheMismos()" hidden></button>
+    <input class="she-buscar" id="sheBuscar" type="search" placeholder="Buscar persona…" autocomplete="off" oninput="shePintar()" aria-label="Buscar persona">
+    <div id="sheLista" class="she-lista"></div>
+    <div class="she-pie">
+      <div class="she-nota">Entra al instante en su eficiencia. Ingeniería lo ve y puede corregirlo.</div>
+      <button type="button" class="she-ok" id="sheGuardar" onclick="sheRegistrar()" disabled>Marca a quién se quedó</button>
+    </div>
+  </section>
+
+  <section class="pantalla" id="pasoAsistencia">
+    <h1>Asistencia</h1>
+    <!-- Ayer: solo quien no registró nada ni tiene estado. Hoy: la lista de siempre. -->
+    <div class="asy-seg" role="tablist" aria-label="Día de asistencia">
+      <button type="button" role="tab" id="asySegAyer" onclick="asyModo('ayer')">Ayer</button>
+      <button type="button" role="tab" id="asySegHoy" onclick="asyModo('hoy')">Hoy</button>
+    </div>
+    <div id="asyAyer" hidden></div>
+    <div id="asyHoy">
+      <div class="sub">Todos cuentan como presentes. Marca solo a quien faltó, tiene otro estado o vino pero apoya en otra área.</div>
+      <div class="fila-filtros" style="margin-top:10px;">
+        <label class="sub" style="margin:0;">Día: <input type="date" id="asisFecha" style="margin-left:4px;"></label>
+        <span class="sub" id="asisProg" style="margin:0;"></span>
+        <button class="btn-mini verde" id="asisGuardar" onclick="asisGuardar()">Guardar</button>
+      </div>
+      <div class="zona-of" style="margin-bottom:12px;">
+        <input class="input-grande" id="asisBuscar" placeholder="Buscar persona…" oninput="asisPintar()"
+               autocomplete="off" style="font-size:20px;letter-spacing:normal;text-align:left;">
+      </div>
+      <div id="asisLista" class="asis-lista"></div>
+    </div>
   </section>
 
   <!-- Personal -->
@@ -260,13 +343,27 @@
 
   <!-- Incidencias del personal -->
   <section class="pantalla" id="pasoIncidencias">
-    <h1>Incidencias del personal</h1>
-    <div class="sub">Solicitudes de ajuste de tiempo enviadas por el personal</div>
-    <button type="button" class="btn-recargar" onclick="cargarIncidencias()">↻ RECARGAR</button>
+    <h1>Pedidos del personal</h1>
+    <div class="sub" id="pedSubSup">Ajustes de tiempo que pidió tu personal</div>
+    <div class="cel-sub" id="pedTabsSup" role="group" aria-label="Ver" hidden>
+      <button type="button" aria-pressed="true" onclick="pedVistaSup('rev')">POR REVISAR <span id="pedNRev"></span></button>
+      <button type="button" aria-pressed="false" onclick="pedVistaSup('ing')">EN INGENIERÍA <span id="pedNIng"></span></button>
+      <button type="button" aria-pressed="false" onclick="pedVistaSup('ok')">LISTAS</button>
+    </div>
+    <div class="cel-res" id="pedResSup" hidden></div>
     <div id="zonaRetornos" style="margin-top:14px;"></div>
-    <div class="lista-cards" id="listaIncidencias" style="margin-top:14px;"></div>
+    <div class="lista-cards" id="listaIncidencias" style="margin-top:14px;" aria-live="polite"></div>
+    <div class="cel-l" id="pedPieSup" hidden style="margin:4px 2px 0">VISTO BUENO la manda a Ingeniería. DEVOLVER le dice al operario por qué, y la puede volver a pedir. MÁQUINA, MUESTRAS, ARREGLOS o DESCOSER de hasta 60 min los apruebas tú.</div>
+    <button type="button" class="btn-recargar" onclick="cargarIncidencias()">↻ RECARGAR</button>
   </section>
 </main>
+
+<nav class="sh-nav" aria-label="Secciones">
+  <button type="button" data-ir="hoy" onclick="shIr('hoy')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Hoy<b class="sh-n" id="shNavHoyN" hidden></b></button>
+  <button type="button" data-ir="personal" onclick="shIr('personal')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a5 5 0 0 1 3 6"/></svg>Personal</button>
+  <button type="button" data-ir="avance" onclick="shIr('avance')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M7 20V11M12 20V5M17 20v-6"/></svg>Avance</button>
+  <button type="button" data-ir="mas" onclick="shIr('mas')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</button>
+</nav>
 
 <footer class="pie-app">
   <div class="disclaimer">Developed by Lead Developer Adamari Lopez, with support from Analysts Luis Fabian, James Mayta, and Maycool Vega.
@@ -287,6 +384,11 @@
   <div class="modal-box" id="modalBox"></div>
 </div>
 <script src="app.js"></script>
+<script src="supervisora-hoy.js"></script>
+<script src="pedidos.js"></script>
+<script src="buscar.js"></script>
+<script src="sueltos.js"></script>
+<script src="lotes.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>

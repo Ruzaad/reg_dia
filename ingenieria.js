@@ -19,7 +19,9 @@ document.addEventListener("DOMContentLoaded", async ()=>{
      quita la pestaña de la vista: sus RPC validan con _admin igual. */
   if(!ES_ADMIN()) quitarTabsAdmin();
   await cargarPermisos();               // parche 95: áreas y pestañas que dio el administrador
-  if(tabPermitida("pasoBolSin")) bslContador();   // parche 103: número junto al menú
+  const _iniLanding=["","#pasoInicio"].includes(location.hash||"") && tabPermitida("pasoInicio");
+  if(_iniLanding) iniCargar();          // Inicio pide lo suyo ya, en paralelo con la carga de áreas
+  else if(tabPermitida("pasoBolSin")) bslContador();   // parche 103 (con Inicio, lo pide Inicio)
   $("quienBadge").textContent = ING.nombre; $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
@@ -78,7 +80,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   cargarEstadosAsis();
   // Landing: sección del hash si es válida; si no, Tickets · Actual.
   const hashTab=(location.hash||"").replace(/^#/,"");
-  activarTab(NAV_TABS.includes(hashTab) ? hashTab : "pasoTk");
+  activarTab(NAV_TABS.includes(hashTab) ? hashTab : (tabPermitida("pasoInicio") ? "pasoInicio" : "pasoTk"));
   mostrarNovedades();   // parche 58: cambios de área y avisos sin leer
 });
 
@@ -100,9 +102,9 @@ function cmpVal(va, vb){
 }
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
+const NAV_TABS=["pasoInicio","pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoOpAd","pasoPermisos","pasoCorr","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
+  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoFeriados","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -121,6 +123,7 @@ function activarTab(tab){
   if(!tabPermitida(tab)){ const t=primeraTab(); if(t && t!==tab){ activarTab(t); } else irA("pasoSinPermiso"); return; }
   aplicarSoloLectura();
   if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
+  if(tab==='pasoInicio'){ irA(tab); if(INI.t0 && performance.now()-INI.t0<15000) iniPintar(); else iniCargar(); return; }
   if(tab==='pasoEf' || tab==='pasoDia'){ efVista(tab==='pasoDia'?'dia':'area'); TABS_VISTAS.add(tab); return; }
   irA(tab);
   if(TABS_VISTAS.has(tab)) return;      // reentrada: conserva filtros y datos
@@ -143,8 +146,16 @@ function activarTab(tab){
   else if(tab==='pasoAudit') audInit();
   else if(tab==='pasoBaseLog') blInit();
   else if(tab==='pasoBolSin') bslInit();
+  else if(tab==='pasoBuscar') buscarInit();
+  else if(tab==='pasoSueltos') psCargar();
+  else if(tab==='pasoLotes') ltCargarIng();
+  else if(tab==='pasoPrestadas') prCargar();
+  else if(tab==='pasoAsisConf') acfInit();
+  else if(tab==='pasoFeriados') ferInit();
+  else if(tab==='pasoCalBase') calidadInit();
   else if(tab==='pasoTmpMed') tmInit();
   else if(tab==='pasoTmpFalta') tfInit();
+  else if(tab==='pasoCarga') ccInit();
   else if(tab==='pasoPermisos') cargarPermisosAdmin();
   else if(tab==='pasoCorr') corrInit();
   else if(COSTOS_TABS.includes(tab)) costosEntrar(tab);
@@ -205,10 +216,13 @@ function puedeEditar(a){
   return PERM.areas[a]==="EDITAR";
 }
 /* Subpestañas que no están en el menú: siguen el permiso de su pestaña madre. */
-const TAB_MADRE={pasoDia:"pasoEf",pasoOpsOF:"pasoGen",pasoExtra:"pasoGen",pasoOpAd:"pasoGen",pasoCausas:"pasoGen"};
+const TAB_MADRE={pasoAsisConf:"pasoBolSin",pasoFeriados:"pasoBolSin",pasoDia:"pasoEf",pasoOpsOF:"pasoGen",pasoExtra:"pasoGen",pasoOpAd:"pasoGen",pasoCausas:"pasoGen"};
 function tabPermitida(tab){
+  if(tab==='pasoInicio') return typeof iniHayAlgo==="function" && iniHayAlgo();
+  if(tab==='pasoBuscar') return true;   // solo lectura; el servidor limita a las áreas de Permisos
   if(TABS_ADMIN.includes(tab)) return ES_ADMIN();
   if(PERM_LIBRE()) return true;
+  if(tab==='pasoSueltos' && PERM.pestanas.includes('pasoAudit')) return true;   // parche 115: quien audita también lo ve
   return PERM.pestanas.includes(TAB_MADRE[tab]||tab);
 }
 function primeraTab(){
@@ -263,9 +277,11 @@ async function cargarPermisosAdmin(){
 }
 function permResumen(u){
   if(u.admin) return `<span class="pill CERRADO">Administrador: todo</span>`;
-  const ed=Object.keys(u.areas).filter(a=>u.areas[a]==="EDITAR").map(a=>a==="*"?"todas":a);
+  const ap=(u.aprueba||[]).map(a=>a==="*"?"todas":a);
+  const ed=Object.keys(u.areas).filter(a=>u.areas[a]==="EDITAR" && !(u.aprueba||[]).includes(a)).map(a=>a==="*"?"todas":a);
   const le=Object.keys(u.areas).filter(a=>u.areas[a]==="LEER").map(a=>a==="*"?"todas":a);
   const p=[];
+  if(ap.length) p.push(`<b>Aprueba:</b> ${esc(ap.join(", "))}`);
   if(ed.length) p.push(`<b>Edita:</b> ${esc(ed.join(", "))}`);
   if(le.length) p.push(`<b>Lee:</b> ${esc(le.join(", "))}`);
   return p.join("<br>") || `<span class="perm-nada">Sin acceso</span>`;
@@ -288,12 +304,14 @@ function pintarPermisosAdmin(){
 function abrirModalPermisos(dni){
   const u=PERMU.find(x=>x.dni===dni); if(!u) return;
   const areas=["*", ...AREAS_LISTA];
-  const nivel=a=>u.areas[a]||"";
+  // "Aprueba" (parche 114) = edita y además aprueba las incidencias del área.
+  const hayAprueba=Array.isArray(u.aprueba);
+  const nivel=a=>hayAprueba && u.aprueba.includes(a) ? "APRUEBA" : (u.areas[a]||"");
   const filaArea=a=>{
     const n="pa_"+areas.indexOf(a);
     const r=(v,t)=>`<label><input type="radio" name="${n}" value="${v}" data-area="${esc(a)}"${nivel(a)===v?" checked":""}> ${t}</label>`;
     return `<tr><td class="izq">${a==="*"?"<b>Todas las áreas</b>":esc(a)}</td>
-      <td>${r("","Sin acceso")}</td><td>${r("LEER","Lectura")}</td><td>${r("EDITAR","Edición")}</td></tr>`;
+      <td>${r("","Sin acceso")}</td><td>${r("LEER","Lectura")}</td><td>${r("EDITAR","Edición")}</td>${hayAprueba?`<td>${r("APRUEBA","Aprueba")}</td>`:""}</tr>`;
   };
   const grupos=[...document.querySelectorAll("details.nav-group")].map(d=>{
     const items=[...d.querySelectorAll(".nav-item[data-tab]")].filter(x=>!TABS_ADMIN.includes(x.dataset.tab));
@@ -304,7 +322,7 @@ function abrirModalPermisos(dni){
   }).join("");
   abrirModal(`
     <h2>Permisos de ${esc(u.dni)}</h2>
-    <div class="sub" style="margin-bottom:12px;">${esc(u.nombre||"")} · ${esc(u.cargo)}. "Todas las áreas" vale para las que se agreguen después. Un área suelta manda sobre "Todas" solo si da más permiso.</div>
+    <div class="sub" style="margin-bottom:12px;">${esc(u.nombre||"")} · ${esc(u.cargo)}. "Todas las áreas" vale para las que se agreguen después. Un área suelta manda sobre "Todas" solo si da más permiso.${hayAprueba?" <b>Aprueba</b> es Edición más aprobar las incidencias de esa área.":""}</div>
     <h3 class="perm-h3">Áreas</h3>
     <div class="perm-areas"><table class="tabla"><tbody>${areas.map(filaArea).join("")}</tbody></table></div>
     <h3 class="perm-h3">Pestañas</h3>
@@ -370,7 +388,8 @@ function poblarSelectsArea(){
 function recargarIngenieria(){
   const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),600); }
   const act = id => $(id) && $(id).classList.contains("activa");
-  if(act("pasoEf")) cargarEf();
+  if(act("pasoInicio")) iniCargar();
+  else if(act("pasoEf")) cargarEf();
   else if(act("pasoDia")){ if(EFR.personal.length) cargarEfRango(); }
   else if(act("pasoTk")) cargarTk();
   else if(act("pasoMod")) cargarMod();
@@ -378,7 +397,10 @@ function recargarIngenieria(){
   else if(act("pasoAsis")) perReload();
   else if(act("pasoDash")) dashTab(DASH_TAB||'asis');
   else if(act("pasoAvOF")){ if(AVOF.items.length) cargarAvof(); }
-  else if(act("pasoIncid")){ if($("inciHE") && !$("inciHE").hidden) heCargar(); else cargarIncidI(); }
+  else if(act("pasoIncid")) cargarIncidI();
+  else if(act("pasoSueltos")) psCargar();
+  else if(act("pasoLotes")) ltCargarIng();
+  else if(act("pasoPrestadas")) prCargar();
   else if(act("pasoBaseLog")) cargarBaseLog();
   else if(act("pasoAudit")) cargarAudit();
   else if(act("pasoOpAd")) cargarOpad();
@@ -420,7 +442,15 @@ function ingSupVolverAreas(){
 /* Entra a supervisora.html con la sesión de ingeniería y el área elegida, igual
    que "Operar como operario". El panel embebido se quedaba desactualizado cada
    vez que cambiaba supervisora.html; así siempre es la pantalla real. */
-function ingSupElegirArea(area){
+async function ingSupElegirArea(area){
+  // Parche 109: sesión prestada aparte, para que lo que se registre quede marcado.
+  if(typeof prAbrir==="function" && !(typeof PR!=="undefined" && PR.falta)){
+    try{ const r=await prAbrir("SUP", "", area, ""); if(r && !r.ok) mostrarError(r.error||"No se pudo abrir supervisión"); return; }
+    catch(e){
+      if(!prFalta(e)){ mostrarError(/NO_AUTORIZADA/.test(e.message)?"No tienes permiso para operar como supervisora en "+area:e.message); return; }
+      PR.falta=true;   // sin el parche: como antes
+    }
+  }
   try{
     const s=sesionActual();
     sessionStorage.setItem("stx_volver_ing", localStorage.getItem("stx_sesion")||"1");
@@ -1277,6 +1307,10 @@ function pintarOpArea(){
   });
 }
 function opPinModal(dni, nombre){
+  if(typeof opPrestarModal==="function") return opPrestarModal(dni, nombre);   // parche 109
+  opPinModalPin(dni, nombre);
+}
+function opPinModalPin(dni, nombre){
   abrirModal(`
     <h2>Entrar como ${esc(soloApellidos(nombre))}</h2>
     <div class="sub" style="margin-bottom:12px;">Con permiso del operario. Verifica su DNI e ingresa su PIN.</div>
@@ -4896,7 +4930,7 @@ function incPintar(){
     const celdas = dias.map(d=>{
       const c=(p.dias||{})[d.fecha]||{};
       if(c.etiqueta){
-        const finde = c.etiqueta==="SABADO"||c.etiqueta==="DOMINGO";
+        const finde = ["SABADO","DOMINGO","FERIADO"].includes(c.etiqueta);
         return `<td class="inc-etq${finde?" inc-finde":""}" title="${esc(c.etiqueta)}">${esc(c.etiqueta.slice(0,3))}</td>`;
       }
       /* Sin eficiencia y sin etiqueta: día activo cuyo disponible quedó en cero
@@ -6174,11 +6208,13 @@ const hoyLima = ()=> new Date().toLocaleDateString("sv-SE",{timeZone:"America/Li
 let OCURR=[], inciSort={col:"fecha",dir:-1}, INCI_PERSONAL=[];
 
 function inciVista(v){
-  const apl=v==="apl", he=v==="he", pend=!apl&&!he;
+  const apl=v==="apl", he=v==="he", rep=v==="rep", pend=!apl&&!he&&!rep;
   $("inciAplicadas").hidden=!apl; $("inciPendientes").hidden=!pend; $("inciHE").hidden=!he;
+  { const z=$("inciRep"); if(z) z.hidden=!rep; }
   $("inciTabApl").classList.toggle("activo",apl); $("inciTabPend").classList.toggle("activo",pend);
   $("inciTabHE").classList.toggle("activo",he);
-  if(apl) cargarOcurrencias(); else if(pend) cargarPendientesInci(); else heInit();
+  { const t=$("inciTabRep"); if(t) t.classList.toggle("activo",rep); }
+  if(apl) cargarOcurrencias(); else if(pend) cargarPendientesInci(); else if(rep) repCargar(); else heInit();
 }
 
 /* ---- Horas extras en lote (parche 87) ----
@@ -6366,7 +6402,7 @@ function bslInit(){
   if(sa && !sa.options.length) sa.innerHTML='<option value="">Todas mis áreas</option>'+(AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
   cargarBolSin();
 }
-function bslNav(n){ const c=$("bslNavCnt"); if(c){ c.textContent=n; c.hidden=!n; c.title=n+" sin boleta hoy"; } }
+function bslNav(n,f){ const c=$("bslNavCnt"); if(c){ c.textContent=n; c.hidden=!n; c.title=n+" sin boleta "+(f&&f!==hoyLima()?"el "+f:"hoy"); } }
 async function bslContador(){
   try{
     const r=await rpc("fn_boletas_sin_llenar",{p_dni:ING.dni,p_token:ING.token,p_fecha:hoyLima(),p_area:null});
@@ -6539,74 +6575,14 @@ async function cargarIncidI(){        // pendientes + tabla aplicada
     $("fechaInciD").value = desde;
     $("fechaInciH").value = hasta;
   }
-  await Promise.all([cargarPendientesInci(), cargarOcurrencias()]);
+  // Solo la vista que está a la vista: POR APROBAR es la primera.
+  if(!$("inciAplicadas").hidden) await cargarOcurrencias();
+  else if($("inciRep") && !$("inciRep").hidden) await repCargar();
+  else if(!$("inciHE").hidden) heCargar();
+  else await cargarPendientesInci();
 }
 
-let INCI_PEND=[];
-async function cargarPendientesInci(){
-  const z=$("listaIncidI"); pintarCargando(z,"Cargando pendientes…");
-  try{
-    const r=await rpc("fn_solicitudes_listar",{p_dni:ING.dni,p_token:ING.token,p_area:""});
-    if(!r.ok){ mostrarError(r.error||"Error"); z.innerHTML=""; return; }
-    INCI_PEND=r.items||[];
-    // El select de área se llena con lo que hay pendiente, no con todas las áreas.
-    const sel=$("areaInciPend");
-    if(sel){
-      const prev=sel.value;
-      const areas=[...new Set(INCI_PEND.map(x=>x.area).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
-      // El área elegida se queda aunque ya no tenga pendientes: "nada en esta área", no "todas".
-      if(prev && !areas.includes(prev)) areas.push(prev);
-      sel.innerHTML=`<option value="">Todas</option>`+areas.map(a=>`<option>${esc(a)}</option>`).join("");
-      sel.value=prev;
-    }
-    pintarPendientesInci();
-  }catch(e){ z.innerHTML=""; mostrarError(e.message); }
-}
-function pintarPendientesInci(){
-  const z=$("listaIncidI"); if(!z) return;
-  const ar=(($("areaInciPend")||{}).value||"");
-  const q=normKey((($("filtroInciPend")||{}).value||""));
-  const items=INCI_PEND.filter(it=>
-    (!ar || it.area===ar) &&
-    (!q || normKey((it.nombre||"")+" "+(it.tipo||"")+" "+(it.motivo||"")+" "+(it.solicitante||"")).includes(q)));
-  { const rp=$("resumenInciPend");
-    if(rp) rp.textContent = `${items.length} de ${INCI_PEND.length} pendiente(s)`; }
-  if(!items.length){
-    z.innerHTML=`<div class="vacio-msg">${INCI_PEND.length?"Nada con ese filtro":"Sin incidencias pendientes"}</div>`;
-    return;
-  }
-  z.innerHTML="";
-  {
-    const items_=items; items_.forEach(it=>{
-      const d=document.createElement("div");
-      d.className="card-fila"; d.style.cursor="default"; d.style.flexWrap="wrap";
-      const tipoTxt = it.tipo ? TIPO_LBL(it.tipo) : "";
-      d.innerHTML=`
-        <div style="flex:1;min-width:220px;">
-          <div class="cf-titulo">${esc(it.nombre)}${tipoTxt?` · <span style="font-weight:700;color:var(--azul);">${esc(tipoTxt)}</span>`:""}</div>
-          <div class="cf-detalle">${esc(it.motivo)}</div>
-          <div class="cf-detalle">${esc(it.area)} · aplica el <b>${esc(it.fecha)}</b> ${esc(it.hora)}${it.solicitante?` · Solicitó: ${esc(it.solicitante)}`:""}</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <input type="number" id="inci_${it.id}" value="${it.minutos}"
-            style="width:90px;background:var(--gris-fondo);border:2px solid var(--azul);border-radius:10px;font-size:16px;font-weight:800;padding:8px;text-align:center;">
-          <span class="cf-detalle">min</span>
-          <button class="btn-mini verde" onclick="resolverIncidI(${it.id},true)">APROBAR</button>
-          <button class="btn-mini rojo" onclick="resolverIncidI(${it.id},false)">RECHAZAR</button>
-        </div>`;
-      z.appendChild(d);
-    });
-  }
-}
-async function resolverIncidI(id, aprobar){
-  let mf=null;
-  if(aprobar){ mf=parseInt($("inci_"+id).value,10); if(!mf){ mostrarError("Minutos inválidos"); return; } }
-  try{
-    const r=await rpc("fn_solicitud_resolver",{p_dni:ING.dni,p_token:ING.token,p_id:id,p_aprobar:aprobar,p_minutos_final:mf});
-    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
-    await cargarIncidI();
-  }catch(e){ mostrarError(e.message); }
-}
+/* Pendientes (POR APROBAR) y REPROCESOS Y APOYO: incidencias.js. */
 
 /* ---- Ocurrencias aplicadas (tabla + resumen + CRUD) ---- */
 async function cargarOcurrencias(){
@@ -7045,4 +7021,180 @@ function tfDescargar(){
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "FALTA_MEDIR");
   XLSX.writeFile(wb, `FALTA_MEDIR_${$("tfDias").value}d.xlsx`);
+}
+
+/* ---- Carga vs capacidad (preview del pendiente 9; la RPC es del parche 107) ----
+   Por área: minutos de los tickets generados que nadie reclamó, frente al ritmo real
+   (minutos reclamados por día). ACABADO no tiene tickets por adelantado: su trabajo
+   es lo que costura va terminando, pasado a minutos de su propia BASE. */
+let CC=null, CC_SEL="";
+const ccN=n=>Math.round(+n||0).toLocaleString("es-PE");
+const CC_DIA=["dom","lun","mar","mié","jue","vie","sáb"];
+const ccFecha=f=>{const d=new Date(f+"T12:00:00"); return CC_DIA[d.getDay()]+" "+f.slice(8,10)+"-"+f.slice(5,7);};
+function ccInit(){
+  const s=$("ccArea"); if(s && !s.options.length) s.innerHTML=opcionesAreaVista();
+  cargarCarga();
+}
+async function cargarCarga(){
+  $("ccZona").innerHTML=cargandoHTML("Calculando carga…");
+  try{
+    const r=await rpc("fn_carga_capacidad",{p_dni:ING.dni,p_token:ING.token,p_area:""});
+    if(!r || !r.ok){ mostrarError((r&&r.error)||"Error"); $("ccZona").innerHTML=""; return; }
+    CC=r; ccPintar();
+  }catch(e){
+    if(/Could not find the function|PGRST202/i.test(e.message||"")){ $("ccZona").innerHTML=`<div class="acf-falta"><b>Falta correr el parche 107 en la base.</b> Con él, esta pantalla calcula cuántos días de trabajo le quedan a cada área frente a su ritmo real.</div>`; return; }
+    mostrarError(e.message); $("ccZona").innerHTML=""; }
+}
+/* Simula los próximos días hábiles: cada área de costura gasta su ritmo por día hasta
+   acabar su carga; lo que gasta se convierte en llegada a ACABADO. */
+function ccSimular(){
+  const emp=$("ccEmp").checked, dias=CC.dias, out={};
+  let llega=dias.map(()=>0);
+  CC.areas.filter(a=>a.tipo==="BASE").forEach(a=>{
+    const carga=a.curso+(emp?a.empezar:0), acab=a.acab_curso+(emp?a.acab_empezar:0);
+    let rem=carga; const fr=[];
+    dias.forEach((d,i)=>{ const f=a.ritmo? Math.min(1,rem/a.ritmo):0; rem-=f*a.ritmo; fr.push(f);
+      llega[i]+= carga? f*a.ritmo*acab/carga : 0; });
+    const k=fr.findIndex(f=>f<1);
+    out[a.area]={carga, dias:a.ritmo?carga/a.ritmo:0, fr, fin:k<0?null:dias[k]};
+  });
+  out.llega=llega;
+  return out;
+}
+function ccPintar(){
+  if(!CC) return;
+  $("ccCorte").textContent="Datos al "+CC.corte;
+  const sim=ccSimular(), ver=$("ccArea").value;
+  const areas=CC.areas.filter(a=>!ver||a.area===ver);
+  if(!CC_SEL || !areas.some(a=>a.area===CC_SEL)){
+    const b=areas.filter(a=>a.tipo==="BASE").sort((x,y)=>sim[x.area].dias-sim[y.area].dias)[0];
+    CC_SEL=(b||areas[0]||{}).area||"";
+  }
+  const ac=CC.areas.find(a=>a.tipo==="ACABADO");
+  const pp=ac? ac.ritmo/Math.max(1,ac.presentes):0;
+  const tarj=areas.map(a=>{
+    if(a.tipo==="BASE") return ccCardBase(a,sim[a.area]);
+    if(a.tipo==="ACABADO") return ccCardAcab(a,sim.llega,pp);
+    return "";
+  }).join("");
+  const sinBase=areas.filter(a=>a.tipo==="SIN_BASE");
+  const cardSin=sinBase.length?`<div class="cc-card g"><div class="cc-t">Sin BASE · personas activas</div>
+    <div class="cc-n cc-nm">No medible</div>
+    <div class="cc-dat">${sinBase.map(a=>`<span>${esc(a.area)}</span><b>${a.activos}${a.prestados_aqui?` + ${a.prestados_aqui} de ACABADO`:""}</b>`).join("")}</div>
+    <div class="cc-conf">Trabajan por tiempo, sin OF ni BASE: no hay minutos pendientes que sumar. Aquí solo se puede mostrar
+    cuánta gente tienen. Para medirlas haría falta registrar sus lotes pendientes (es el pendiente 3, boleta por tiempo).</div></div>`:"";
+  $("ccZona").innerHTML=ccAvisos(areas)
+    +`<div class="cc-cards">${tarj}${cardSin}</div>`
+    +ccTimeline(areas,sim,pp)
+    +ccDetalle(CC.areas.find(a=>a.area===CC_SEL),sim)
+    +ccDeDonde();
+}
+function ccAvisos(areas){
+  const b=areas.filter(a=>a.tipo==="BASE"), q=b.reduce((s,a)=>s+a.quietas.min,0), nq=b.reduce((s,a)=>s+a.quietas.n,0);
+  const sg=CC.sin_generar;
+  return `<div class="cc-aviso"><span>⚠</span><div><b>Qué tan confiable es hoy:</b> los días salen solo de las OFs que ya tienen
+    tickets generados. No se cuentan ${nq} OFs sin movimiento hace más de 7 días hábiles (${ccN(q)} min, casi siempre colas que
+    nadie reclamó)${sg&&sg.n?` ni ${sg.n} OFs registradas sin generar (cargadas del ${fechaCorta(sg.desde)} al ${fechaCorta(sg.hasta)})`:""}.
+    Un área que “se queda sin trabajo” puede recibir OFs nuevas mañana: el aviso es para generar a tiempo, no un hecho.</div></div>`;
+}
+/* Parche 118: colas que el área casi nunca reclama (ya descontadas del pendiente).
+   Con el 107 no vienen los campos *_bruto y no se muestra nada. */
+function ccColas(a,emp){
+  if(a.curso_bruto==null) return "";
+  const col=(a.curso_bruto-a.curso)+(emp?(a.empezar_bruto-a.empezar):0);
+  if(col<1) return "";
+  return `<div class="cc-colas">No cuenta ${ccN(col)} min de tickets sin reclamar que en las OFs ya terminadas
+    ${a.tasa!=null?`quedan sueltos (aquí se reclama el ${Math.round(a.tasa)}% de lo generado)`:"quedan sueltos"}.</div>`;
+}
+function ccCardBase(a,s){
+  const cls=s.dias<5?"r":s.dias>12?"a":"v";
+  const est=s.dias<5?`Sin OFs nuevas, se queda sin trabajo el ${ccFecha(s.fin)}`
+    :s.dias>12?`Carga para más de dos semanas`:s.fin?`Trabajo hasta el ${ccFecha(s.fin)}`:`Trabajo para más de ${CC.dias.length} días hábiles`;
+  const emp=$("ccEmp").checked, tot=s.carga||1;
+  const conf=[]; let nv="alta";
+  if(a.quietas.min>0.1*(a.curso+a.quietas.min)){ conf.push(`${ccN(a.quietas.min)} min en ${a.quietas.n} OFs quietas no se cuentan`); nv="media"; }
+  if(a.viejas.n){ conf.push(`${a.viejas.n} OFs generadas el ${fechaCorta(a.viejas.gen)} sin ningún ticket (${ccN(a.viejas.min)} min): ¿siguen en planta?`); nv="media"; }
+  if(a.dias_ritmo<9) conf.push(`ritmo de ${a.dias_ritmo} días: ${10-a.dias_ritmo} con poco registro quedaron fuera`);
+  return `<button type="button" class="cc-card ${cls}${a.area===CC_SEL?" sel":""}" onclick="CC_SEL='${esc(a.area)}';ccPintar()">
+    <div class="cc-t">${esc(a.area)}</div>
+    <div class="cc-n">${s.dias.toFixed(1)}<small>días de trabajo</small></div>
+    <div class="cc-est">${est}</div>
+    <div class="cc-bar" title="En curso / por empezar"><i class="c1" style="width:${100*a.curso/tot}%"></i>${emp?`<i class="c2" style="width:${100*a.empezar/tot}%"></i>`:""}</div>
+    <div class="cc-dat"><span>Pendiente en curso</span><b>${ccN(a.curso)} min</b>
+      ${emp?`<span>Generadas sin empezar</span><b>${ccN(a.empezar)} min</b>`:""}
+      <span>Ritmo real</span><b>${ccN(a.ritmo)} min/día</b>
+      <span>Registran / activos</span><b>${a.registran} / ${a.activos}</b></div>
+    ${ccColas(a,emp)}
+    <div class="cc-conf"><span class="p ${nv}">${nv}</span>${conf.length?esc(conf.join(" · ")):"Los números salen limpios de los tickets."}</div>
+  </button>`;
+}
+function ccCardAcab(a,llega,pp){
+  const hoy=llega[0], nec=Math.round(hoy/pp), k=llega.findIndex(x=>Math.round(x/pp)<nec-1);
+  const prest=Object.entries(a.prestados).map(([e,n])=>`${n} ${e.replace("EN ","en ").toLowerCase()}`).join(", ");
+  const cls=nec<a.presentes-2?"a":nec>a.presentes+2?"r":"v";
+  return `<button type="button" class="cc-card ${cls}${a.area===CC_SEL?" sel":""}" onclick="CC_SEL='ACABADO';ccPintar()">
+    <div class="cc-t">ACABADO</div>
+    <div class="cc-n">${nec}<small>personas necesita hoy</small><span class="cc-n2">${k>0?`Desde el ${ccFecha(CC.dias[k])}: ${Math.round(llega[k]/pp)}`:"Igual los próximos días"}</span></div>
+    <div class="cc-est">Hoy tiene ${a.presentes} en el área y ${a.activos-a.presentes} prestadas</div>
+    <div class="cc-pres">${esc(prest)}</div>
+    <div class="cc-dat"><span>Le llega de costura</span><b>≈${ccN(hoy)} min/día</b>
+      <span>Registra hacer</span><b>${ccN(a.ritmo)} min/día</b>
+      <span>Una persona hace</span><b>${ccN(pp)} min/día</b></div>
+    <div class="cc-conf">${hoy>a.ritmo*1.1?`<span class="p baja">baja</span>Según la BASE, costura le entrega más de lo que ACABADO registra hacer.
+    Si en planta le falta trabajo, o no registra todo o sus STD están altos.`:`<span class="p media">media</span>Lo que le llega sale de la BASE de cada artículo y del ritmo de costura; los presentes salen de la última asistencia marcada.`} ${a.sin_base_acab.length?`Sin BASE de ACABADO: ${esc(a.sin_base_acab.map(x=>x.articulo+" ("+x.of+")").join(", "))}, no suma llegada.`:""}</div>
+  </button>`;
+}
+function ccTimeline(areas,sim,pp){
+  const ac=CC.areas.find(a=>a.tipo==="ACABADO");
+  const filas=areas.filter(a=>a.tipo!=="SIN_BASE").map(a=>{
+    if(a.tipo==="ACABADO") return `<tr><td class="ar">ACABADO<small>personas que necesita · tiene ${ac.presentes}</small></td>${sim.llega.map(x=>{
+      const n=Math.round(x/pp), c=n<ac.presentes-2?"so":n>ac.presentes+2?"fa":"ok"; return `<td class="${c}">${n}</td>`;}).join("")}</tr>`;
+    const s=sim[a.area];
+    return `<tr><td class="ar">${esc(a.area)}<small>${s.dias.toFixed(1)} días</small></td>${s.fr.map(f=>
+      f>=0.999?`<td class="ll"></td>`:f>0?`<td class="pa" style="--f:${Math.round(f*100)}%">${Math.round(f*100)}%</td>`:`<td class="va">sin OF</td>`).join("")}</tr>`;
+  }).join("");
+  if(!filas) return "";
+  return `<div class="cc-bloque"><h2>Próximos ${CC.dias.length} días hábiles</h2>
+    <p class="cc-sub">Cada área gasta su ritmo real por día hasta acabar lo que tiene generado. ACABADO recibe lo que costura termina.</p>
+    <div class="cc-tl-wrap"><table class="cc-tl"><tbody><tr><td class="hd"></td>${CC.dias.map(d=>`<td class="hd">${ccFecha(d)}</td>`).join("")}</tr>${filas}</tbody></table></div>
+    <div class="cc-ley"><span><i style="background:color-mix(in srgb,var(--exito) 22%,transparent)"></i>Día lleno</span>
+      <span><i style="background:color-mix(in srgb,var(--aviso) 45%,transparent)"></i>Se acaba ese día (% del día cubierto)</span>
+      <span><i style="background:var(--alerta-t)"></i>Sin OFs generadas</span>
+      <span><i style="background:var(--ocre-t)"></i>ACABADO: le sobra gente</span></div></div>`;
+}
+function ccDetalle(a,sim){
+  if(!a || a.tipo==="SIN_BASE") return "";
+  if(a.tipo==="ACABADO") return `<div class="cc-bloque"><h2>ACABADO: de dónde le llega el trabajo</h2>
+    <p class="cc-sub">Minutos de ACABADO que cada costura le entrega al día a su ritmo actual, y lo que le falta entregar de lo que ya está generado.</p>
+    <div class="contenedor-ancho tabla-scroll"><table class="tabla cc-tabla"><thead><tr><th class="izq">Costura</th><th>Entrega hoy</th><th>Por entregar (min ACABADO)</th><th>Se acaba</th></tr></thead><tbody>
+    ${CC.areas.filter(x=>x.tipo==="BASE").map(x=>{const s=sim[x.area], e=$("ccEmp").checked;
+      return `<tr><td class="izq"><b>${esc(x.area)}</b></td><td>${ccN(x.ritmo*(x.acab_curso+(e?x.acab_empezar:0))/Math.max(1,s.carga))}</td>
+      <td>${ccN(x.acab_curso+(e?x.acab_empezar:0))}</td><td>${s.fin?ccFecha(s.fin):"—"}</td></tr>`;}).join("")}</tbody></table></div></div>`;
+  const vis=a.ofs.filter(o=>o.estado!=="QUIETA"), q=a.ofs.filter(o=>o.estado==="QUIETA");
+  const fila=o=>{const av=o.tot?100*(1-(o.bruto??o.pend)/o.tot):0, st=o.estado==="POR_EMPEZAR"&&o.vieja?"VIEJA":o.estado;
+    const lb={EN_CURSO:"En curso",POR_EMPEZAR:"Por empezar",QUIETA:"Sin movimiento",VIEJA:"¿Vigente?"}[st];
+    return `<tr class="${o.estado==="QUIETA"?"quieta":""}"><td><b>${esc(o.of)}</b></td><td class="izq">${esc(o.articulo)}<div class="cc-sub">${esc(o.prenda||"")} · ${ccN(o.cant)} und</div></td>
+      <td><span class="cc-st ${st}">${lb}</span></td><td class="cc-oc"><span class="cc-av"><i style="width:${av}%"></i></span>${Math.round(av)}%</td>
+      <td><b>${ccN(o.pend)}</b>${o.bruto!=null&&o.bruto-o.pend>=1?`<div class="cc-sub">de ${ccN(o.bruto)} sin reclamar</div>`:""}</td><td>${a.ritmo?(o.pend/a.ritmo).toFixed(1):"—"}</td><td class="cc-oc">${o.ult?fechaCorta(o.ult):"—"}</td><td class="cc-oc">${fechaCorta(o.gen)}</td></tr>`;};
+  const head=`<thead><tr><th>OF</th><th class="izq">Artículo</th><th>Estado</th><th class="cc-oc">Avance</th><th>Pendiente (min)</th><th>Días</th><th class="cc-oc">Último ticket</th><th class="cc-oc">Generada</th></tr></thead>`;
+  return `<div class="cc-bloque"><h2>${esc(a.area)}: OFs que forman la carga</h2>
+    <p class="cc-sub">Ordenadas por minutos pendientes. “Días” es lo que esa OF le ocupa al área a su ritmo de ${ccN(a.ritmo)} min/día.</p>
+    <div class="contenedor-ancho tabla-scroll" style="max-height:60vh"><table class="tabla cc-tabla">${head}<tbody>${vis.map(fila).join("")}</tbody></table></div>
+    ${q.length?`<details class="cc-q"><summary>${q.length} OFs sin movimiento hace más de 7 días hábiles · ${ccN(a.quietas.min)} min que no se cuentan</summary>
+      <p class="cc-sub" style="margin-top:6px">Tuvieron tickets reclamados pero nada en la última semana y media. Casi siempre son operaciones sueltas que nadie marcó;
+      si de verdad están terminadas, cerrar el módulo las saca de aquí.</p>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:40vh"><table class="tabla cc-tabla">${head}<tbody>${q.map(fila).join("")}</tbody></table></div></details>`:""}
+  </div>`;
+}
+function ccDeDonde(){
+  return `<div class="cc-bloque"><details class="cc-de"><summary>De dónde sale cada número</summary><ol>
+    <li><b>Pendiente</b>: STD × cantidad de cada ticket ya generado que nadie reclamó (tickets del área sin reclamo activo). Solo cuenta lo generado: una OF que no se generó en el área no suma.</li>
+    <li><b>Colas que no se cuentan</b>: en las OFs ya terminadas siempre quedan operaciones sin reclamar (nadie las marca). Por cada operación se mira qué parte se reclamó en las OFs terminadas del área y lo que suele quedar suelto se descuenta del pendiente; si la operación casi no tiene historia, se usa el porcentaje del área. Debajo de cada OF se ve el total sin reclamar.</li>
+    <li><b>En curso</b>: la OF tuvo al menos un ticket reclamado en los últimos 7 días hábiles. <b>Por empezar</b>: generada y sin ningún ticket reclamado; si se generó hace más de 3 semanas sale como <i>¿Vigente?</i>. <b>Sin movimiento</b>: tuvo reclamos pero nada en 7 días hábiles; no se cuenta.</li>
+    <li><b>Ritmo real</b>: promedio de minutos reclamados por día en los últimos 10 días hábiles con registro. Se descartan los días con menos de la mitad de lo normal (sábados cortos, feriados). Ya trae dentro las faltas, los permisos y la eficiencia real de la gente.</li>
+    <li><b>Días de trabajo</b> = pendiente ÷ ritmo real, en días de lunes a viernes.</li>
+    <li><b>ACABADO</b>: no recibe tickets por adelantado. Lo que le llega es lo que costura reclama cada día, pasado a minutos de ACABADO con la BASE del artículo (STD de ACABADO ÷ STD de costura). Personas que necesita = llegada ÷ lo que hace una persona de ACABADO al día (su ritmo ÷ los presentes). Los prestados salen de la asistencia (EN REPROCESO, EN CAMISAS…).</li>
+    <li><b>CORTE, REPROCESO, DESPACHO y UDP</b>: sin OF ni BASE, no hay minutos que sumar. Solo se muestra su gente.</li>
+    <li>Cada analista ve solo las áreas que tiene en Permisos; la pestaña se reparte en Gestión › Permisos como las demás.</li>
+  </ol></details></div>`;
 }

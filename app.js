@@ -301,6 +301,12 @@ function cerrarSesion(){
    6 veces y se encadenaban 6 redirecciones (las ráfagas de los logs). */
 function sesionVencida(){
   if(_cerrandoSesion) return;
+  // Sesión prestada (parche 109) cerrada o vencida: vuelve a Ingeniería, no al login.
+  try{ const prev=sessionStorage.getItem("stx_volver_ing"), s=JSON.parse(sessionStorage.getItem("stx_sesion")||"null");
+    if(prev && s && s.prestada){ _cerrandoSesion=true; mostrarError("La sesión prestada se cerró. Vuelves a Ingeniería.");
+      sessionStorage.removeItem("stx_sesion"); sessionStorage.removeItem("stx_volver_ing");
+      if(!localStorage.getItem("stx_sesion") && prev!=="1") localStorage.setItem("stx_sesion", prev);
+      setTimeout(()=>location.href="ingenieria.html", 1500); return; } }catch(e){}
   try{ _ses().removeItem("stx_sesion"); }catch(e){}
   try{ mostrarError("Tu sesión venció. Vuelve a ingresar."); }catch(e){}
   setTimeout(cerrarSesion, 1200);
@@ -313,25 +319,59 @@ function botonVolverIng(){
     const prevIng = sessionStorage.getItem("stx_volver_ing");
     const badges = document.querySelector("header .badges");
     if(!prevIng || !badges || $("btnVolverIng")) return;
+    const s = sesionActual();
+    // Parche 109: franja fija "Operas como…" con borde de color; la sesión prestada
+    // se cierra en la base al volver.
+    if(s && s.prestada && !$("franjaPrestada")){
+      const f=document.createElement("div");
+      f.id="franjaPrestada"; f.className="franja-prestada"; f.setAttribute("role","status");
+      f.innerHTML=`<span>Operas como <b>${esc(s.prestada.tipo==="SUP" ? "supervisora de "+(s.area||"") : soloApellidos(s.nombre))}</b> · lo que registres queda a nombre de ${esc(s.prestada.ing_nombre||s.prestada.ing)}</span>
+        <button type="button" id="btnVolverIng">Volver a Ingeniería</button>`;
+      document.body.prepend(f); document.body.classList.add("prestada");
+      $("btnVolverIng").onclick=()=>volverIng(prevIng, s);
+      return;
+    }
     const b=document.createElement("button");
     b.type="button"; b.className="btn-hdr-icon"; b.id="btnVolverIng";
     b.title="Volver a Ingeniería"; b.textContent="🏭";
-    b.onclick=()=>{ sessionStorage.removeItem("stx_sesion"); sessionStorage.removeItem("stx_volver_ing");
-      if(!localStorage.getItem("stx_sesion")) localStorage.setItem("stx_sesion", prevIng);
-      location.href="ingenieria.html"; };
+    b.onclick=()=>volverIng(prevIng, s);
     badges.insertBefore(b, badges.firstChild);
   }catch(e){}
+}
+async function volverIng(prevIng, s){
+  if(s && s.prestada){   // cierra la prestada; si no hay señal, igual vence sola a los 60 min
+    try{ await Promise.race([rpc("fn_prestada_cerrar",{p_dni:s.dni,p_token:s.token,p_id:s.prestada.id}), new Promise(r=>setTimeout(r,2500))]); }catch(e){}
+  }
+  sessionStorage.removeItem("stx_sesion"); sessionStorage.removeItem("stx_volver_ing");
+  if(!localStorage.getItem("stx_sesion") && prevIng && prevIng!=="1") localStorage.setItem("stx_sesion", prevIng);
+  location.href="ingenieria.html";
 }
 
 /* ---------------- SUPABASE (RPC) ---------------- */
 const MSG_FUERA_HORARIO = "El sistema está fuera de horario. Vuelve dentro del horario de trabajo.";
+/* Mensajes que la persona entiende (robustez): sin señal, sin respuesta y
+   base ocupada, en vez de "Failed to fetch" o el texto crudo de Postgres. */
+const MSG_SIN_SENAL = "Se cortó la señal y no se pudo enviar. Vuelve a intentar cuando tengas internet.";
+const MSG_SIN_RESPUESTA = "No hubo respuesta en 30 segundos. Si estabas registrando, revisa si quedó antes de volver a intentar.";
+const MSG_BASE_OCUPADA = "El sistema está ocupado en este momento. Vuelve a intentar en unos segundos.";
+const RPC_LIMITE_MS = 30000;
+const traducirError = m => /statement timeout|canceling statement/i.test(m||"") ? MSG_BASE_OCUPADA : m;
 async function rpc(fn, args){
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
-    method:"POST",
-    headers:{ "Content-Type":"application/json",
-      "apikey":SUPABASE_ANON, "Authorization":"Bearer "+SUPABASE_ANON },
-    body: JSON.stringify(args)
-  });
+  const ctl = typeof AbortController==="function" ? new AbortController() : null;
+  const tm = ctl ? setTimeout(()=>ctl.abort(), RPC_LIMITE_MS) : null;
+  let r;
+  try{
+    r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json",
+        "apikey":SUPABASE_ANON, "Authorization":"Bearer "+SUPABASE_ANON },
+      body: JSON.stringify(args),
+      signal: ctl ? ctl.signal : undefined
+    });
+  }catch(e){
+    const err = new Error(e && e.name==="AbortError" ? MSG_SIN_RESPUESTA : MSG_SIN_SENAL);
+    err.red = true; throw err;
+  }finally{ if(tm) clearTimeout(tm); }
   if(!r.ok){
     let detalle = "";
     try{ const j = await r.json(); detalle = j.message || j.hint || ""; }catch(e){}
@@ -339,14 +379,30 @@ async function rpc(fn, args){
     if(detalle.includes("FUERA_DE_HORARIO")) throw new Error(MSG_FUERA_HORARIO);
     if(detalle.includes("NO_AUTORIZADA_AREA")) throw new Error(detalle.replace(/^.*NO_AUTORIZADA_AREA:\s*/,"No tienes permiso: "));
     if(detalle.includes("NO_AUTORIZADA")) throw new Error("No autorizada para esta acción");
+    if(/statement timeout|canceling statement/i.test(detalle)) throw new Error(MSG_BASE_OCUPADA);
     throw new Error("Servidor: " + (detalle || ("error " + r.status)));
   }
   renovarSesion();
   const j = await r.json();
+  if(j && typeof j.error==="string") j.error = traducirError(j.error);
   if(j && typeof j.error==="string" && j.error.includes("NO_AUTORIZADA_AREA"))
     j.error = j.error.replace(/^.*NO_AUTORIZADA_AREA:\s*/,"No tienes permiso: ");
   return j;
 }
+
+/* Un toque a la vez (robustez): mientras una escritura espera respuesta, sus
+   botones quedan bloqueados y un segundo toque no hace nada. Desde el 4-ago
+   llegaron 52 pedidos repetidos, hasta 11 copias en 0.25 s. */
+const EN_CURSO=new Set();
+async function unaVez(clave, botones, fn){
+  if(EN_CURSO.has(clave)) return;
+  EN_CURSO.add(clave);
+  const bs=[...(botones||[])].filter(Boolean);
+  bs.forEach(b=>{ b.disabled=true; b.setAttribute("aria-busy","true"); });
+  try{ return await fn(); }
+  finally{ EN_CURSO.delete(clave); bs.forEach(b=>{ b.disabled=false; b.removeAttribute("aria-busy"); }); }
+}
+const botonesDe = sel => document.querySelectorAll(sel);
 
 /* ---------------- EDGE FUNCTIONS (Supabase) ---------------- */
 async function edgeFn(nombre, body){
@@ -583,7 +639,7 @@ const VOLVER_OPERARIO = {
   pasoModulos:"pasoOF", pasoOps:"pasoModulos",
   pasoTickets:"pasoOps", pasoConf:"pasoTickets",
   pasoAcabPrenda:"pasoAcabOF", pasoAcabOp:"pasoAcabOF",
-  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF", pasoBoleta:"pasoOF",
+  pasoAcabCant:"pasoAcabOp", pasoMisPaq:"pasoOF", pasoBoleta:"pasoOF", pasoPedidos:"pasoOF", pasoLoteFin:"pasoLotes",
   pasoOpAd:"pasoModulos", pasoOpAdCant:"pasoOpAd"
 };
 
@@ -592,67 +648,157 @@ let sa={signo:-1};
    ocurrencia (se guarda en solicitudes_ajuste.tipo y llega intacto a
    ocurrencias.tipo al aprobar); "OTROS" es el único que abre el texto libre, que
    se guarda en mayúsculas como detalle. Par [tipo, etiqueta]: MAQUINA ya existía
-   en el catálogo con ese nombre. */
+   en el catálogo con ese nombre.
+   Parche 114: "TRABAJÉ EN OTRA ÁREA" dice dónde y cuánto (no es tiempo perdido)
+   y REPROCESOS pregunta de qué área vino y la OF. Si ya pidió algo parecido
+   hoy, se le avisa con lo que ya pidió (fn_solicitudes_mias), sin esperar. */
 const SA_MOTIVOS=[["MAQUINA","MÁQUINA PARADA"],["ARREGLOS","ARREGLOS"],["MUESTRAS","MUESTRAS"],
-                  ["REPROCESOS","REPROCESOS"],["DESCOSER","DESCOSER"],["OTROS","OTROS"]];
+                  ["REPROCESOS","REPROCESOS"],["DESCOSER","DESCOSER"],["OTRA","TRABAJÉ EN OTRA ÁREA"],["OTROS","OTROS"]];
+const SA_CAUSA=[["CAMISA COSTURA","CAMISA"],["PANTALON COSTURA","PANTALÓN"],["SACO COSTURA","SACO"],["ACABADO","ACABADO"],["CORTE","CORTE"],["CLIENTE","CLIENTE"],["","NO SÉ"]];
+const SA_DONDE=[["DESPACHO","DESPACHO"],["REPROCESO","REPROCESO"],["ALMACEN","ALMACÉN"],["CORTE","CORTE"],["ACABADO","ACABADO"],["COSTURA","OTRA COSTURA"]];
+const SA_CUANTO=[[60,"1 h"],[120,"2 h"],[180,"3 h"],[288,"Medio día"],[575,"Todo el día"],[0,"Otro"]];
+let SA_V2=null, SA_MIAS=null;   // SA_V2: la base tiene el parche 114 (null = aún no se sabe)
+const saChips=(id,lista,fn)=>`<div class="op-chips" id="${id}" role="group">${lista.map((x,i)=>
+  `<button type="button" aria-pressed="false" onclick="${fn}(${i})">${esc(x[1])}</button>`).join("")}</div>`;
+const saPulsar=(id,i)=>{ const g=$(id); if(g) [...g.children].forEach((b,k)=>b.setAttribute("aria-pressed",k===i?"true":"false")); };
 function abrirSolicitudAjuste(){
-  sa={signo:-1, tipo:null, motivo:null};
+  sa={signo:-1, tipo:null, motivo:null, causa:null, donde:null};
+  const mia=AREA_ESTAJERO||((sesionActual()||{}).area)||"";
   abrirModal(`
     <h2>Solicitar descuento de tiempo</h2>
-    <div class="sub" style="margin-bottom:12px;">Pides a supervisión restar minutos de tu día</div>
+    <div class="sub" style="margin-bottom:12px;">Pides a supervisión restar minutos de tu día${SA_V2===false?"":` · <a href="#" onclick="cerrarModal();abrirMisPedidos();return false;">Ver mis pedidos</a>`}</div>
     <div class="sa-motivos" id="saMotivos">
-      ${SA_MOTIVOS.map((m,i)=>`<button type="button" class="sa-mot" id="saMot${i}" onclick="saElegir(${i})">${esc(m[1])}</button>`).join("")}
+      ${SA_MOTIVOS.map((m,i)=>`<button type="button" class="sa-mot" id="saMot${i}" onclick="saElegir(${i})"${m[0]==="OTROS"?' style="grid-column:1/-1"':""}>${esc(m[1])}</button>`).join("")}
     </div>
-    <div class="modal-campo"><label>Minutos a descontar</label>
-      <input id="saMin" inputmode="numeric" maxlength="3" placeholder="Ej: 30" disabled></div>
+    <div class="op-campo" id="saCausaCampo" hidden><span class="op-lbl">¿De qué área vino el reproceso?</span>
+      ${saChips("saCausa",SA_CAUSA.filter(x=>x[0]!==mia),"saCausa")}</div>
+    <div class="modal-campo" id="saOfCampo" hidden><label for="saOf">OF (si la sabes)</label>
+      <input id="saOf" inputmode="numeric" maxlength="12" placeholder="Ej: 10443"></div>
+    <div class="op-campo" id="saDondeCampo" hidden><span class="op-lbl">¿Dónde trabajaste?</span>
+      ${saChips("saDonde",SA_DONDE.filter(x=>x[0]!==mia),"saDonde")}</div>
+    <div class="op-campo" id="saCuantoCampo" hidden><span class="op-lbl">¿Cuánto tiempo?</span>
+      ${saChips("saCuanto",SA_CUANTO,"saCuanto")}</div>
+    <div class="modal-campo" id="saMinCampo"><label for="saMin">Minutos a descontar</label>
+      <input id="saMin" inputmode="numeric" maxlength="3" placeholder="Ej: 30" disabled oninput="saAvisoRep()"></div>
     <div class="modal-campo" id="saMotivoCampo" hidden>
-      <label id="saMotivoLbl">Detalle</label>
+      <label id="saMotivoLbl" for="saMotivo">Detalle</label>
       <input id="saMotivo" maxlength="140" placeholder="Escribe el detalle">
       <div class="sa-ayuda" id="saMotivoAyuda"></div></div>
+    <div class="op-aviso" id="saAviso" hidden></div>
+    <div class="op-aviso" id="saAvisoRep" hidden></div>
     <div class="modal-msg" id="saMsg"></div>
     <div class="modal-acciones">
-      <button class="btn-principal btn-modal-guardar" onclick="enviarSolicitudAjuste()">ENVIAR</button>
+      <button class="btn-principal btn-modal-guardar" id="saEnviar" onclick="enviarSolicitudAjuste()">ENVIAR</button>
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
     </div>`);
+  saCargarMias();
+}
+/* Lo que ya pidió (para el aviso de repetido). Si la base no tiene el parche
+   114 no hay aviso y todo sigue igual. */
+async function saCargarMias(){
+  const s=sesionActual(); if(!s || SA_V2===false) return;
+  try{
+    const r=await rpc("fn_solicitudes_mias",{p_dni:s.dni,p_token:s.token});
+    if(r && r.ok){ SA_V2=true; SA_MIAS=r.items||[]; saAvisoRep(); }
+  }catch(e){ if(/Could not find the function|PGRST202/i.test(e.message)) SA_V2=false; }
 }
 function saElegir(i){
-  sa.tipo=SA_MOTIVOS[i][0]; sa.motivo=SA_MOTIVOS[i][1];
+  const [tipo,etq]=SA_MOTIVOS[i];
+  const otra=tipo==="OTRA", rep=tipo==="REPROCESOS", otros=tipo==="OTROS";
+  sa.tipo=tipo; sa.motivo=etq; sa.causa=null; sa.donde=null;
   SA_MOTIVOS.forEach((_,k)=>{ const b=$("saMot"+k); if(b) b.classList.toggle("activo",k===i); });
   /* El detalle se pide SIEMPRE, no solo en OTROS: describe qué pasó y NO cambia
      el tipo elegido (parche 53). En OTROS es obligatorio porque ahí es lo único
      que explica el descuento. */
-  const otros = sa.tipo==="OTROS";
+  $("saCausaCampo").hidden=!rep; $("saOfCampo").hidden=!rep;
+  $("saDondeCampo").hidden=!otra; $("saCuantoCampo").hidden=!otra;
+  ["saCausa","saDonde","saCuanto"].forEach(g=>saPulsar(g,-1));
   $("saMotivoCampo").hidden=false;
   $("saMotivoLbl").textContent = otros ? "¿Cuál fue el motivo?" : "Detalle (opcional)";
-  $("saMotivo").placeholder = otros ? "Escribe el motivo" : "Ej: OF 9880, máquina 12";
-  $("saMotivoAyuda").textContent = otros ? "" : "Queda registrado como " + sa.motivo + ": el detalle no cambia el tipo.";
-  $("saMotivo").value="";
+  $("saMotivo").placeholder = otros ? "Escribe el motivo" : otra ? "Ej: despacho Scotiabank" : "Ej: OF 9880, máquina 12";
+  $("saMotivoAyuda").textContent = otros||otra ? "" : "Queda registrado como " + etq + ": el detalle no cambia el tipo.";
+  $("saMotivo").value=""; $("saOf").value="";
   $("saMin").disabled=false;
+  $("saAviso").hidden=true;
   $("saMsg").textContent="";
-  setTimeout(()=>{ const el=otros?$("saMotivo"):$("saMin"); if(el) el.focus(); },80);
+  saAvisoRep();
+  setTimeout(()=>{ const el=otros?$("saMotivo"):otra||rep?null:$("saMin"); if(el) el.focus(); },80);
+}
+function saCausa(i){
+  const mia=AREA_ESTAJERO||((sesionActual()||{}).area)||"";
+  const l=SA_CAUSA.filter(x=>x[0]!==mia); sa.causa=l[i][0]||null; saPulsar("saCausa",i);
+}
+function saDonde(i){
+  const mia=AREA_ESTAJERO||((sesionActual()||{}).area)||"";
+  const l=SA_DONDE.filter(x=>x[0]!==mia); sa.donde=l[i][0]; saPulsar("saDonde",i);
+  const av=$("saAviso"); av.hidden=false;
+  av.innerHTML=`Esto <b>no es tiempo perdido</b>: queda como trabajo en ${esc(l[i][1])} y tu supervisora lo confirma.`;
+}
+function saCuanto(i){
+  const m=SA_CUANTO[i][0]; saPulsar("saCuanto",i);
+  if(m){ $("saMin").value=m; } else { $("saMin").value=""; $("saMin").focus(); }
+  saAvisoRep();
+}
+/* Aviso si hoy ya pidió lo mismo (mismo tipo, o los mismos minutos). */
+function saAvisoRep(){
+  const z=$("saAvisoRep"); if(!z) return;
+  const hoy=hoyLimaApp(), v=parseInt(($("saMin")||{}).value,10);
+  const tipo=sa.tipo==="OTRA" ? (sa.donde==="REPROCESO"?"REPROCESOS":"OTROS") : sa.tipo;
+  const ya=(SA_MIAS||[]).filter(x=>x.fecha===hoy && ["PENDIENTE","APROBADO"].includes(x.estado)
+    && (x.tipo===tipo || (v && Math.abs(x.minutos)===v)));
+  if(!sa.tipo || !ya.length){ z.hidden=true; return; }
+  const x=ya[0];
+  z.hidden=false;
+  z.innerHTML=`<b>Ya pediste hoy ${x.minutos} min</b> por ${esc(x.motivo||x.tipo)} a las ${esc(String(x.pidio||"").slice(11,16))}`
+    +`${ya.length>1?` (y ${ya.length-1} más)`:""}. Si es el mismo trabajo no lo envíes otra vez.`;
 }
 async function enviarSolicitudAjuste(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   if(!sa.tipo){ $("saMsg").textContent="Elige el motivo"; return; }
+  const otra=sa.tipo==="OTRA";
+  if(otra && !sa.donde){ $("saMsg").textContent="Elige dónde trabajaste"; return; }
   const v=parseInt($("saMin").value,10);
   const libre=($("saMotivo").value||"").trim().toUpperCase();
   if(!v||v<=0){ $("saMsg").textContent="Ingresa los minutos"; return; }
+  if(v>575){ $("saMsg").textContent="No puede pasar de 575 min (la jornada)"; return; }
   if(sa.tipo==="OTROS" && !libre){ $("saMsg").textContent="Escribe cuál fue el motivo"; return; }
+  const tipo = otra ? (sa.donde==="REPROCESO"?"REPROCESOS":"OTROS") : sa.tipo;
+  const donde = otra ? SA_DONDE.find(x=>x[0]===sa.donde)[1] : "";
+  const of = sa.tipo==="REPROCESOS" ? ($("saOf").value||"").trim().toUpperCase() : "";
   /* El detalle viaja solo, sin repetir el tipo (que va aparte en p_tipo). Si no
      escribió nada, el servidor pone el nombre del tipo como detalle y el
      desglose de Incidencias lo reconoce como eco y no lo lista. */
-  const motivo = libre || sa.motivo;
+  let motivo = otra ? ("TRABAJÉ EN "+donde+(libre?": "+libre:"")) : (libre || sa.motivo);
+  const b=$("saEnviar");
+  return unaVez("solicitud", [b], async ()=>{
+  if(b) b.textContent="ENVIANDO…";
   try{
-    const r=await rpc("fn_solicitud_ajuste_crear",{p_dni:s.dni,p_token:s.token,p_area:AREA_ESTAJERO||s.area,
-      p_minutos:-Math.abs(v),p_motivo:motivo,p_tipo:sa.tipo});
+    const base={p_dni:s.dni,p_token:s.token,p_area:AREA_ESTAJERO||s.area,p_minutos:-Math.abs(v),p_tipo:tipo};
+    let r;
+    if(SA_V2!==false){
+      try{ r=await rpc("fn_solicitud_ajuste_crear",{...base,p_motivo:motivo,
+             p_area_trabajo:otra?sa.donde:null,p_area_causa:sa.tipo==="REPROCESOS"?sa.causa:null,p_of:of||null}); SA_V2=true; }
+      catch(e){ if(!/Could not find the function|PGRST202/i.test(e.message)) throw e; SA_V2=false; }
+    }
+    if(SA_V2===false){
+      // Sin el parche 114 lo que sabe va escrito en el detalle.
+      if(sa.tipo==="REPROCESOS" && (sa.causa||of))
+        motivo=[sa.causa?"DE "+sa.causa:"", of?"OF "+of:"", libre].filter(Boolean).join(" · ");
+      r=await rpc("fn_solicitud_ajuste_crear",{...base,p_motivo:motivo});
+    }
     if(!r.ok){ $("saMsg").textContent=r.error||"No se pudo enviar"; return; }
     cerrarModal();
-    $("exTitulo").textContent="Solicitud enviada";
-    $("exDetalle").innerHTML=`−${v} min · ${esc(motivo)} · esperando aprobación`;
+    $("exTitulo").textContent = r.repetido ? "Ya lo enviaste" : "Solicitud enviada";
+    $("exDetalle").innerHTML = r.repetido
+      ? `Este mismo pedido llegó hace ${r.hace_s} s: no se envía otra vez`
+      : `−${v} min · ${esc(motivo)} · esperando aprobación`;
     $("exAvance").textContent=""; $("exTimer").textContent="";
     const ex=$("exito"); ex.classList.add("visible");
     setTimeout(()=>ex.classList.remove("visible"),2200);
+    SA_MIAS=null;
   }catch(e){ $("saMsg").textContent=e.message; }
+  finally{ if(b && b.isConnected) b.textContent="ENVIAR"; }
+  });
 }
 /* Artículo de una OF, desde los tickets ya cargados. */
 function artDeOF(of){
@@ -724,7 +870,7 @@ function initOperario(){
   window.onCambioPaso = (id)=>{
     // Al retroceder, limpiar la selección más profunda para que el
     // breadcrumb del encabezado no deje pasos viejos colgados.
-    if(id==="pasoOF"){ sel.of=null; sel.modulo=null; sel.op=null; }
+    if(id==="pasoOF"){ sel.of=null; sel.modulo=null; sel.op=null; if(typeof opiPintar==="function") opiPintar(); }
     else if(id==="pasoModulos"){ sel.modulo=null; sel.op=null; }
     else if(id==="pasoOps"){ sel.op=null; }
     pintarCrumb(id);
@@ -760,7 +906,7 @@ function initOperario(){
   }
   window.VOLVER_MAP = VOLVER_OPERARIO;
   // Atrás siempre devuelve a la lista de OF (o a la de Acabado, según el área).
-  window.VOLVER_INICIO = ES_ACABADO ? "pasoAcabOF" : "pasoOF";
+  if(window.VOLVER_INICIO!=="pasoLotes") window.VOLVER_INICIO = ES_ACABADO ? "pasoAcabOF" : "pasoOF";   // CORTE/REPROCESO: lotes (parche 116)
   window.onSalirApp = confirmarSalir;
   initBackTrap();
 }
@@ -885,6 +1031,9 @@ async function cargarTodo(s){
   pintarCargando($("zonaCarga"),"Cargando "+(ES_ACABADO?"OFs":"almacén")+" de "+area+"…");
   try{
     // ACABADO ya no lee el almacén: registra por cantidad contra el corte real.
+    // Parche 116: CORTE y REPROCESO no tienen OF: trabajan por lotes.
+    if(typeof ltEntrar==="function" && ["CORTE","REPROCESO"].includes(area)){ await ltEntrar(s, true); return; }
+    if(typeof ltAvisoHoy==="function") ltAvisoHoy(s);   // EN DESPACHO/REPROCESO/CORTE hoy: aviso arriba, sin esperar
     if(ES_ACABADO){ await cargarAcabado(s, area); return; }
     // Las OF generadas en el sistema (parche 29) se derivan de of_detalle × bases:
     // no están en el Sheet. Las anteriores siguen saliendo del almacén, así que
@@ -919,6 +1068,8 @@ async function cargarTodo(s){
     setAvance(dia);
     if(alm.duplicados.length) console.warn("Códigos duplicados en almacén:", alm.duplicados);
     irA("pasoOF");
+    if(typeof opInicio==="function") opInicio();   // inicio con el día y "Sigue donde te quedaste"
+    if(typeof ssEnviar==="function"){ ssPintar(); ssEnviar(); }   // parche 110: lo que quedó sin señal
   }catch(e){
     $("zonaCarga").innerHTML = `<div class="vacio-msg">${esc(e.message)}</div>`;
     mostrarError("No se pudo cargar. Revisa la conexión y vuelve a intentar.");
@@ -1177,11 +1328,21 @@ function acabPedirCant(solo){
   irA("pasoAcabCant");
   if(!ACAB.ver) setTimeout(()=>$("acabCant").focus(),150);
 }
+let ACAB_GUARDANDO=false, ACAB_ULT=null;
 async function acabRegistrar(){
   const cant=parseFloat(String($("acabCant").value).replace(/[^\d.]/g,""));
   if(!cant || cant<=0){ mostrarError("Escribe la cantidad que hiciste"); return; }
   const s=sesionActual(), area=AREA_ESTAJERO||s.area;
   const btn=document.querySelector("#pasoAcabCant .btn-principal");
+  if(ACAB_GUARDANDO) return;   // un toque a la vez
+  /* Robustez: la misma cantidad en la misma operación en menos de 1 min suele
+     ser un reintento (ARMAR CAMISA 700 und dos veces en 18 s). Se pregunta. */
+  const clave=(ACAB.tipo?"t"+ACAB.tipo.id:(ACAB.of&&ACAB.of.of)+"|"+(ACAB.op&&ACAB.op.n_op))+"|"+cant;
+  if(ACAB_ULT && ACAB_ULT.clave===clave && Date.now()-ACAB_ULT.t<60000){
+    const seg=Math.round((Date.now()-ACAB_ULT.t)/1000);
+    if(!confirm(`¿Otra vez ${qty(cant)}?\nHace ${seg} s ya registraste ${qty(cant)} und en esta operación.\n\nAcepta solo si hiciste otras ${qty(cant)} und.`)) return;
+  }
+  ACAB_GUARDANDO=true;
   if(btn){ btn.disabled=true; btn.textContent="REGISTRANDO…"; }
   try{
     const r = ACAB.tipo
@@ -1190,8 +1351,9 @@ async function acabRegistrar(){
           p_of:ACAB.of.of,p_nop:ACAB.op.n_op,p_cant:cant,
           p_causa:(($("acabCausa")||{}).value||"")});
     if(!r.ok){ mostrarError(r.error||"No se pudo registrar"); return; }
-    $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
-    $("exDetalle").innerHTML = `${qty(cant)} und · `
+    ACAB_ULT={clave, t:Date.now()};
+    $("exTitulo").textContent = r.repetido ? "Ya estaba registrado" : "¡Listo, "+s.nombre.split(" ")[0]+"!";
+    $("exDetalle").innerHTML = (r.repetido ? "No se registró dos veces · " : "") + `${qty(cant)} und · `
       + (ACAB.tipo ? esc(ACAB.tipo.operacion) : `${esc(ACAB.op.operacion)} · OF ${esc(ACAB.of.of)}`)
       + (r.causa ? `<br>${esc(r.causa)}` : "")
       + (r.hecho!=null ? `<br>Van ${qty(r.hecho)} de ${qty(r.cant_prog)} und` : "");
@@ -1203,7 +1365,7 @@ async function acabRegistrar(){
        que es donde estaba. */
     await refrescarAcabado(s, area, ACAB.tipo ? "extra" : "ops");
   }catch(e){ mostrarError(e.message); }
-  finally{ if(btn){ btn.disabled=false; btn.textContent="REGISTRAR"; } }
+  finally{ ACAB_GUARDANDO=false; if(btn){ btn.disabled=false; btn.textContent="REGISTRAR"; } }
 }
 
 /* ================= MI BOLETA (parche 93) =================
@@ -1381,6 +1543,7 @@ async function declararParcial(i){
   const resto=p.asignada-v;
   if(!confirm(`¿Hiciste ${qty(v)} de ${qty(p.asignada)} und?\nLas ${qty(resto)} restantes quedarán libres para quien las termine.`)) return;
   const s=sesionActual(), area=AREA_ESTAJERO||s.area;
+  return unaVez("parcial"+p.codigo, botonesDe(`[onclick^="declararParcial(${i})"]`), async ()=>{
   try{
     const r=await rpc("fn_declarar_parcial",{p_dni:s.dni,p_token:s.token,p_area:area,p_codigo:p.codigo,p_cant_hecha:v});
     if(!r.ok){ mostrarError(r.error||"No se pudo ajustar"); return; }
@@ -1388,6 +1551,7 @@ async function declararParcial(i){
     await abrirMisPaquetes();
     try{ setAvance(await rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token})); }catch(e){}
   }catch(e){ mostrarError(e.message); }
+  });
 }
 
 let ULTIMO_DIA = {eficiencia:0,minutos_prod:0,minutos_disp:0};
@@ -1397,6 +1561,7 @@ function setAvance(d){
   const ef = EF_CENSURADA ? "****" : (ULTIMO_DIA.eficiencia + "%");
   b.textContent = `Hoy: ${ef} · ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
   b.classList.add("visible");
+  if(typeof opPintarHoy==="function") opPintarHoy();
 }
 /* ACABADO: badge con su eficiencia (igual que costura) MÁS las unidades del día,
    que es el dato con el que se guían.
@@ -1526,7 +1691,7 @@ async function recargarMiEficiencia(){
       else if(act==="pasoOps"){ if(sel.modulo) pintarOperaciones(); else volverAOF(); }
       else if(act==="pasoModulos"){ if(sel.of) pintarModulos(); else volverAOF(); }
       else if(act==="pasoMisPaq") pintarMisPaq();
-      else if(act==="pasoOF") pintarSugerencias();
+      else if(act==="pasoOF"){ pintarSugerencias(); if(typeof opInicio==="function") opInicio(); }
     }
   }catch(e){ mostrarError(e.message); }
   finally{ if(b) setTimeout(()=>b.classList.remove("girando"),500); }
@@ -1698,13 +1863,45 @@ function pintarOperaciones(){
   /* Orden de RUTA (N°OP), no alfabético: la costurera ve las operaciones en el
      orden en que se cosen. Las que no traen N°OP van al final, entre ellas
      alfabéticas (el ALMACÉN de las OF viejas no siempre lo tiene). */
-  Object.keys(ops).sort((a,b)=>{
+  const orden=Object.keys(ops).sort((a,b)=>{
     const na=ops[a].nop, nb=ops[b].nop;
     if(na==null && nb==null) return a.localeCompare(b,"es",{numeric:true});
     if(na==null) return 1;
     if(nb==null) return -1;
     return na-nb || a.localeCompare(b,"es",{numeric:true});
-  }).forEach(op=>{
+  });
+  /* Costura: primero "Tus operaciones" (las que hizo hoy o ayer), después el
+     resto con libres y al final, plegadas, las que no tienen libres. */
+  let grupos=[[null,orden]];
+  if(!ES_ACABADO){
+    const mias=new Set((MISPAQ||[]).map(p=>normKey(p.op)));
+    const tus=orden.filter(op=>mias.has(normKey(op)) && ops[op].libres>0);
+    const otras=orden.filter(op=>!tus.includes(op) && ops[op].libres>0);
+    const sin=orden.filter(op=>ops[op].libres===0);
+    grupos=[];
+    if(tus.length) grupos.push(["Tus operaciones",tus,"las que sueles hacer"]);
+    if(otras.length) grupos.push([tus.length?"Otras operaciones del módulo":null,otras,tus.length?"en orden de ruta":""]);
+    if(sin.length) grupos.push(["sin",sin]);
+  }
+  grupos.forEach(([titulo,lista,nota])=>{
+  if(titulo==="sin"){
+    const d=document.createElement("button");
+    d.type="button"; d.className="opi-plegado";
+    d.innerHTML=`<span>${lista.length} operaci${lista.length===1?"ón":"ones"} sin paquetes libres</span><b>ver ▾</b>`;
+    const caja=document.createElement("div"); caja.hidden=true; caja.className="lista-cards";
+    d.onclick=()=>{ caja.hidden=!caja.hidden; d.querySelector("b").textContent=caja.hidden?"ver ▾":"ocultar ▴"; };
+    l.appendChild(d); l.appendChild(caja);
+    lista.forEach(op=>caja.appendChild(tarjetaOp(op)));
+    return;
+  }
+  if(titulo){
+    const h=document.createElement("div"); h.className="opi-h";
+    h.innerHTML=`<span>${esc(titulo)}</span>${nota?`<small>${esc(nota)}</small>`:""}`;
+    l.appendChild(h);
+  }
+  lista.forEach(op=>l.appendChild(tarjetaOp(op)));
+  });
+  function tarjetaOp(op){
     const o=ops[op];
     const c=document.createElement("div");
     c.className="card-fila";
@@ -1718,9 +1915,10 @@ function pintarOperaciones(){
         </div>
         <div class="badge-disp ${o.libres===0?'vacio':''}">${o.libres} de ${o.total} libres</div>`;
     }
-    c.onclick=()=>{ sel.op=op; modoSel=false; marcados={}; pintarTickets(); irA("pasoTickets"); };
-    l.appendChild(c);
-  });
+    // Costura: los paquetes abren en modo marcar (marcar es lo normal).
+    c.onclick=()=>{ sel.op=op; modoSel=!ES_ACABADO; marcados={}; if(typeof OPI!=="undefined") OPI.tomados=false; pintarTickets(); irA("pasoTickets"); };
+    return c;
+  }
 }
 
 /* --- paso tickets (numeración protagonista + selección múltiple) --- */
@@ -1749,11 +1947,25 @@ function pintarTickets(){
   $("tituloTickets").textContent = sel.op;
   pintarBarraSel();
   const l=$("listaTickets"); l.innerHTML="";
-  ticketsActuales().forEach(t=>{
+  let lista=ticketsActuales(), sigue=null, tomados=[];
+  if(!ES_ACABADO && typeof opiSigue==="function"){
+    const sg=opiSigue(sel.of, sel.modulo, sel.op); sigue=sg&&sg.t?{t:sg.t,ult:sg.ult}:null;
+    const lib=lista.filter(t=>!RECL[t.codigo]);
+    tomados=lista.filter(t=>RECL[t.codigo]);
+    if(sigue){ const k=lib.indexOf(sigue.t); if(k>0) lib.unshift(...lib.splice(k)); }
+    lista=lib;
+    $("subTickets").textContent = lib.length
+      ? `${lib.length} libre${lib.length===1?"":"s"}${sigue?". Arriba el que sigue al último que registraste":""}. Toca todos los que hiciste.`
+      : "No quedan paquetes libres en esta operación.";
+  }
+  const pintar=t=>{
     const r = RECL[t.codigo];
     const marcado = modoSel && marcados[t.codigo];
     const c=document.createElement("div");
-    c.className="card-ticket"+(r?" tomado":"")+(marcado?" marcada":"");
+    c.className="card-ticket"+(r?" tomado":"")+(marcado?" marcada":"")+(sigue&&sigue.t===t?" sigue":"");
+    if(!r){ c.setAttribute("role", modoSel?"checkbox":"button"); c.tabIndex=0;
+      if(modoSel) c.setAttribute("aria-checked", !!marcado);
+      c.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); c.click(); } }; }
     const pph = t.std>0 ? Math.round(60/t.std) : "—";
     // En el módulo final la numeración ya está tapada por la costura: manda la
     // cantidad, con el color debajo. El nº de paquete no se muestra nunca.
@@ -1780,6 +1992,7 @@ function pintarTickets(){
          ${tkVer("std")?`<div>STD <b>${t.std.toFixed(2)}</b> min</div>`:""}
          ${tkVer("nop")?`<div>N°OP <b>${t.nop ?? "—"}</b></div>`:""}`;
     c.innerHTML=`
+      ${sigue&&sigue.t===t?`<div class="tk-sigue">Sigue a tu ${esc(sigue.ult)}</div>`:""}
       ${cab}
       <div class="tk-fila">
         ${col && normKey(col)!=="C" && tkVer("color")
@@ -1795,6 +2008,8 @@ function pintarTickets(){
           pintarTickets();
         } else {
           sel.ticket=t;
+          $("confLabel").textContent = ES_ACABADO ? "Cantidad" : "Numeración";
+          { const h=document.querySelector("#pasoConf h1"); if(h) h.textContent="¿Este es tu paquete?"; }
           if(ES_ACABADO){
             $("confNum").textContent=qty(t.cant)+" und";
             $("confDet").innerHTML=
@@ -1820,14 +2035,35 @@ function pintarTickets(){
         }
       };
     }
-    l.appendChild(c);
-  });
+    return c;
+  };
+  lista.forEach(t=>l.appendChild(pintar(t)));
+  if(tomados.length){
+    const d=document.createElement("button"); d.type="button"; d.className="opi-plegado";
+    const ab=typeof OPI!=="undefined" && OPI.tomados;
+    d.innerHTML=`<span>${tomados.length} ya tomado${tomados.length===1?"":"s"} por otras personas</span><b>${ab?"ocultar ▴":"ver ▾"}</b>`;
+    d.onclick=()=>{ OPI.tomados=!OPI.tomados; pintarTickets(); };
+    l.appendChild(d);
+    if(ab) tomados.forEach(t=>l.appendChild(pintar(t)));
+  }
 }
 function pintarBarraSel(){
   const libres = ticketsActuales().filter(t=>!RECL[t.codigo]);
   const nSel = Object.keys(marcados).length;
   const minSel = Object.values(marcados).reduce((a,t)=>a+t.minutos,0);
   const b=$("barraSel");
+  /* Costura: botón fijo abajo con lo marcado; "marcar todos" queda arriba. */
+  if(!ES_ACABADO && modoSel){
+    const cant=Object.values(marcados).reduce((a,t)=>a+(+t.cant||0),0);
+    b.innerHTML = libres.length>1 ? `<button class="btn-sel" onclick="marcarTodos()">MARCAR TODOS (${libres.length})</button>` : "";
+    const f=$("opiRegistrar");
+    if(f){ f.hidden=false; f.disabled=!nSel;
+      f.innerHTML = nSel
+        ? `REGISTRAR ${nSel} PAQUETE${nSel===1?"":"S"}<small>${qty(cant)} und${tkVer("minutos")?` · ${Math.round(minSel*10)/10} min`:""}</small>`
+        : `MARCA TUS PAQUETES<small>toca todos los que hiciste</small>`; }
+    return;
+  }
+  { const f=$("opiRegistrar"); if(f) f.hidden=true; }
   if(!modoSel){
     b.innerHTML = libres.length>1
       ? `<button class="btn-sel" onclick="activarSel()">MARCAR VARIOS</button>`
@@ -1857,6 +2093,8 @@ function aNombreDe(){
 function confirmarLote(){
   const lista=Object.values(marcados);
   if(!lista.length) return;
+  { const h=document.querySelector("#pasoConf h1"); if(h) h.textContent="¿Este es tu paquete?"; }
+  $("confLabel").textContent = ES_ACABADO ? "Cantidad" : "Numeración";
   if(ES_ACABADO){
     const cant = lista.reduce((a,t)=>a+(+t.cant||0),0);
     $("confNum").textContent = qty(cant) + " und";
@@ -1866,17 +2104,28 @@ function confirmarLote(){
       `Total: <b>${qty(cant)} und</b> ` + aNombreDe();
   } else {
     const min = Math.round(lista.reduce((a,t)=>a+t.minutos,0)*10)/10;
-    const nums = lista.slice(0,6).map(t=>t.num).join(", ") + (lista.length>6?"…":"");
-    $("confNum").textContent = lista.length + " paquetes";
+    const cant = lista.reduce((a,t)=>a+(+t.cant||0),0);
+    /* La operación va de titular: el error número uno al liberar es haber
+       elegido la operación equivocada (82% de los liberados por error). */
+    const col = typeof opiColor==="function" ? opiColor(sel.op) : "var(--azul)";
+    const art = (lista[0]&&lista[0].articulo)||"";
+    $("confLabel").textContent = "Operación";
+    { const h=document.querySelector("#pasoConf h1"); if(h) h.textContent="¿Es tu trabajo?"; }
+    $("confNum").innerHTML = `<span class="conf-op" style="--opc:${col}">${esc(sel.op)}</span>`;
     $("confDet").innerHTML =
-      `${esc(sel.op)} · OF ${esc(sel.of)}<br>`+
-      `<span style="color:#5a6270">${esc(nums)}</span><br>`+
-      `Total: <b>${min} min</b> ` + aNombreDe();
+      `<div class="conf-sub">${esc(sel.modulo)} · OF ${esc(sel.of)}${art?` · ${esc(art)}`:""}</div>`+
+      `<div class="conf-nums">${lista.map(t=>`<span>${esc(t.num)}</span>`).join("")}</div>`+
+      `<div class="conf-tot"><b>${lista.length} paquete${lista.length===1?"":"s"} · ${qty(cant)} und${tkVer("minutos")?` · ${min} min`:""}</b><br>` + aNombreDe() + `</div>`;
   }
   $("btnRegistrar").disabled=false;
   irA("pasoConf");
 }
 
+/* El reclamo es de quien está registrando (compara nombres sin tildes ni espacios). */
+const esMio = (nombre, s) => !!nombre && !!s && normKey(nombre).replace(/\s+/g," ")===normKey(s.nombre).replace(/\s+/g," ");
+
+/* Modo sin señal (parche 110, sinsenal.js): no en ACABADO, que registra por cantidad. */
+const ssListo = () => typeof ssEncolar==="function" && !ES_ACABADO;
 /* --- reclamar (individual o lote) --- */
 async function registrar(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
@@ -1884,6 +2133,7 @@ async function registrar(){
   const btn=$("btnRegistrar");
   btn.disabled=true; btn.textContent="REGISTRANDO…";
   const esLote = modoSel && Object.keys(marcados).length>0;
+  const SS_OK = ssListo();
   try{
     let r;
     if(esLote){
@@ -1895,8 +2145,11 @@ async function registrar(){
       let reclamados=0, conflictos=[], ult=null;
       for(let i=0;i<lote.length;i+=LOTE_MAX){
         let x;
-        try{ x = await rpc("fn_reclamar_lote",{p_dni:s.dni,p_token:s.token,p_area:area,p_tickets:lote.slice(i,i+LOTE_MAX)}); }
-        catch(e){ x = {ok:false, error:e.message}; }
+        try{ if(SS_OK && !navigator.onLine) throw new Error(MSG_SIN_SENAL);
+          x = await rpc("fn_reclamar_lote",{p_dni:s.dni,p_token:s.token,p_area:area,p_tickets:lote.slice(i,i+LOTE_MAX)}); }
+        catch(e){ x = {ok:false, error:e.message, sinSenal: SS_OK && ssEsSinSenal(e)}; }
+        // Parche 110: sin señal, lo que falta se guarda en el celular y se manda solo después.
+        if(x.sinSenal){ r = {ok:true, cola:ssEncolar(s, area, lote.slice(i), sel.op), reclamados}; break; }
         if(!x.ok){
           if(!reclamados){ r=x; break; }
           x.error = `Solo se registraron ${reclamados} de ${lote.length} paquetes. `
@@ -1908,19 +2161,48 @@ async function registrar(){
       if(!r) r = Object.assign({}, ult, {reclamados, conflictos});
     } else {
       const t=sel.ticket;
-      r = await rpc("fn_reclamar", {p_dni:s.dni,p_token:s.token,p_area:area,
-        p_codigo:t.codigo,p_of:t.of,p_modulo:t.modulo,p_op:t.op,p_std:t.std,p_cant:t.cant,
-        p_numeracion:t.num,p_articulo:t.articulo,p_color:t.color,p_talla:t.talla,p_corte:t.corte,p_nop:t.nop});
+      try{
+        if(SS_OK && !navigator.onLine) throw new Error(MSG_SIN_SENAL);
+        r = await rpc("fn_reclamar", {p_dni:s.dni,p_token:s.token,p_area:area,
+          p_codigo:t.codigo,p_of:t.of,p_modulo:t.modulo,p_op:t.op,p_std:t.std,p_cant:t.cant,
+          p_numeracion:t.num,p_articulo:t.articulo,p_color:t.color,p_talla:t.talla,p_corte:t.corte,p_nop:t.nop});
+      }catch(e){
+        if(!(SS_OK && ssEsSinSenal(e))) throw e;
+        r = {ok:true, cola:ssEncolar(s, area, [{codigo:t.codigo,of:t.of,modulo:t.modulo,op:t.op,std:t.std,cant:t.cant,num:t.num,
+          articulo:t.articulo,color:t.color,talla:t.talla,corte:t.corte,nop:t.nop}], sel.op)};
+      }
+    }
+    if(r && r.cola!=null){
+      const tk = esLote ? Object.values(marcados) : [sel.ticket];
+      tk.forEach(t=>{ if(!RECL[t.codigo]) RECL[t.codigo]={nombre:s.nombre,hora:"sin señal"}; });
+      btn.textContent="SÍ, REGISTRAR"; btn.disabled=false;
+      $("exTitulo").textContent="Guardado en tu celular";
+      $("exDetalle").innerHTML=(r.reclamados?`<b>${r.reclamados}</b> ya se registraron. `:"")
+        +`<b>${r.cola}</b> paquete${r.cola===1?"":"s"} de ${esc(sel.op)} se enviarán solos cuando vuelva la señal.<br>No los registres otra vez.`;
+      $("exAvance").textContent=""; modoSel=false; marcados={};
+      mostrarExito(); return;
     }
     btn.textContent="SÍ, REGISTRAR";
     if(!r.ok){
-      mostrarError(r.error||"No se pudo registrar");
+      if(!r.conflicto) mostrarError(r.error||"No se pudo registrar");
       if(r.parcial){
         await refrescarReclamos(s);
         Object.keys(marcados).forEach(c=>{ if(RECL[c]) delete marcados[c]; });
         pintarTickets(); irA("pasoTickets"); btn.disabled=false; return;
       }
-      if(r.conflicto){ await refrescarReclamos(s); pintarTickets(); irA("pasoTickets"); }
+      if(r.conflicto){
+        await refrescarReclamos(s);
+        /* Robustez: si se perdió la respuesta y reintentó, el paquete ya está a
+           SU nombre. Antes leía "Ya lo tomó (su propio nombre)" y parecía error. */
+        const t=sel.ticket, ya=t&&RECL[t.codigo];
+        if(ya && esMio(ya.nombre, s)){
+          $("exTitulo").textContent="Ya estaba registrado";
+          $("exDetalle").innerHTML=`${esc(sel.op)}<br>Numeración <b>${esc(t.num)}</b> ya está a tu nombre (${esc(ya.hora)}). No se registró dos veces.`;
+          $("exAvance").textContent=""; btn.disabled=false; mostrarExito(); return;
+        }
+        mostrarError(r.error||"No se pudo registrar");
+        pintarTickets(); irA("pasoTickets");
+      }
       btn.disabled=false; return;
     }
     const cantLote = esLote ? Object.values(marcados).reduce((a,t)=>a+(+t.cant||0),0) : 0;
@@ -1928,13 +2210,22 @@ async function registrar(){
     if(esLote){
       const nLote = Object.keys(marcados).length;
       Object.values(marcados).forEach(t=>{ RECL[t.codigo]={nombre:s.nombre,hora:"ahora"}; });
-      const conf = (r.conflictos||[]);
-      $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
+      let conf = (r.conflictos||[]), mios = 0;
+      if(conf.length){
+        /* Robustez: los que "ya estaban tomados" por la misma persona son un
+           reintento que sí había entrado; se cuentan aparte, no como error. */
+        const lote=Object.values(marcados);
+        await refrescarReclamos(s);
+        const mio = t => RECL[t.codigo] && esMio(RECL[t.codigo].nombre, s);
+        mios = lote.filter(t=>conf.includes(t.num) && mio(t)).length;
+        conf = conf.filter(n=>!lote.some(t=>t.num===n && mio(t)));
+      }
+      $("exTitulo").textContent = r.reclamados || mios ? "¡Listo, "+s.nombre.split(" ")[0]+"!" : "No se registró";
       $("exDetalle").innerHTML =
         `<b>${r.reclamados}</b>${r.reclamados<nLote?` de ${nLote}`:""} paquete(s) registrados${ES_ACABADO?` · <b>${qty(cantLote)} und</b>`:""} · ${esc(sel.op)}`+
+        (mios?`<br>${mios} ya estaba${mios===1?"":"n"} registrado${mios===1?"":"s"} a tu nombre: no se duplicó`:"")+
         (conf.length?`<br><span style="opacity:.85">No se pudieron (ya tomados): ${esc(conf.join(", "))}</span>`:"");
       modoSel=false; marcados={};
-      if(conf.length) await refrescarReclamos(s);
     } else {
       const t=sel.ticket;
       RECL[t.codigo]={nombre:s.nombre,hora:"ahora"};
@@ -1974,6 +2265,10 @@ function mostrarExito(){
        operaciones `refrescarAcabado`. Aquí solo se cierra el aviso. */
     if(ES_ACABADO) return;
     if(OPADX.volver){ const v=OPADX.volver; OPADX.volver=null; irA(v); return; }
+    // Costura: vuelve al inicio con el día al día (antes volvía a los paquetes).
+    if($("opSigue") && typeof opiTrasRegistrar==="function"){
+      sel.of=null; sel.modulo=null; sel.op=null; $("inputOF").value=""; pintarSugerencias();
+      irA("pasoOF"); window.scrollTo(0,0); opPintarHoy(); opiTrasRegistrar(); return; }
     pintarTickets(); irA("pasoTickets");
   }, 2500);
 }
@@ -1990,6 +2285,8 @@ function areaSup(){ return SUP_AREA_OVERRIDE || ((sesionActual()||{}).area) || "
 
 async function cargarIncidencias(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
+  // Parche 114: por revisar / en Ingeniería / listas (pedidos.js). Sin el parche, lo de antes.
+  if(typeof pedCargarSup==="function" && PED.v2!==false && await pedCargarSup()) return;
   const z=$("listaIncidencias"); pintarCargando(z,"Cargando incidencias…");
   try{
     const r=await rpc("fn_solicitudes_listar",{p_dni:s.dni,p_token:s.token,p_area:areaSup()});
@@ -2032,12 +2329,14 @@ async function confirmarRetorno(i, regreso){
   if(!confirm(regreso
       ? `¿${soloApellidos(x.nombre)} regresó a las ${hora}?`
       : `¿${soloApellidos(x.nombre)} NO regresó a planta?\nSe le descuenta desde su salida hasta el fin de la jornada.`)) return;
+  return unaVez("ret"+x.id, botonesDe(`[onclick^="confirmarRetorno(${i},"]`), async ()=>{
   try{
     const r=await rpc("fn_retorno_confirmar",{p_dni:s.dni,p_token:s.token,p_id:x.id,p_retorno:hora});
     if(!r.ok){ mostrarError(r.error||"No se pudo confirmar"); return; }
     mostrarOk(`Confirmado · ${Math.abs(r.minutos)} min de descuento`);
     await recargarSupervisora(); cargarRetornos();
   }catch(e){ mostrarError(e.message); }
+  });
 }
 function pintarIncidencias(items, z, pref, fn){
   if(!items.length){ z.innerHTML=`<div class="vacio-msg">Sin incidencias pendientes</div>`; return; }
@@ -2066,11 +2365,13 @@ async function resolverIncidencia(id, aprobar){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   let mf=null;
   if(aprobar){ mf=parseInt($("inc_"+id).value,10); if(!mf){ mostrarError("Minutos inválidos"); return; } }
+  return unaVez("sol"+id, botonesDe(`[onclick^="resolverIncidencia(${id},"]`), async ()=>{
   try{
     const r=await rpc("fn_solicitud_resolver",{p_dni:s.dni,p_token:s.token,p_id:id,p_aprobar:aprobar,p_minutos_final:mf});
     if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
     await cargarIncidencias();
   }catch(e){ mostrarError(e.message); }
+  });
 }
 
 let timerAvance=null;
@@ -2078,7 +2379,7 @@ let timerAvance=null;
    y por ingeniería operando "como supervisora"). */
 function bindSupervisoraUI(){
   $("filtroNombre").addEventListener("input", pintarPersonal);
-  { const ta=$("tabAsistencia"); if(ta) ta.onclick = ()=>{ pararAvance(); marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisInit(); }; }
+  { const ta=$("tabAsistencia"); if(ta) ta.onclick = ()=>{ pararAvance(); marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisEntrar(); }; }
   { const af=$("asisFecha"); if(af) af.onchange = asisInit; }
   $("tabPersonal").onclick = ()=>{ pararAvance(); marcarTab("tabPersonal"); irA("pasoPersonal"); };
   $("tabAvance").onclick  = ()=>{ pararAvance(); marcarTab("tabAvance"); irA("pasoAvance"); cargarAvance(); timerAvance=setInterval(cargarAvance, 60000); };
@@ -2248,8 +2549,9 @@ function initSupervisora(){
   { const rc=$("btnRecargar"); if(rc) rc.onclick=()=>{ recargarSupervisora(); }; }
   bindSupervisoraUI();
   cargarPersonal(s);
-  marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisInit();   // vista principal
-  if($("tabBoletas")) cargarBoletasSup(true);   // solo el contador de la pestaña
+  if($("pasoHoy") && typeof shInit==="function") shInit();   // celular: "Hoy" con 4 botones abajo
+  else { marcarTab("tabAsistencia"); irA("pasoAsistencia"); asisEntrar();   // vista principal
+    if($("tabBoletas")) cargarBoletasSup(true); }   // solo el contador de la pestaña
   window.VOLVER_MAP = {
     pasoAlcance:"pasoPersonal", pasoSeleccion:"pasoAlcance",
     pasoTipo:"pasoPersonal", pasoMinutos:"pasoTipo",
@@ -2262,7 +2564,9 @@ function initSupervisora(){
 function recargarSupervisora(){
   const s=sesionActual(); if(!s) return;
   const rc=$("btnRecargar"); if(rc){ rc.classList.add("girando"); setTimeout(()=>rc.classList.remove("girando"),500); }
-  if($("pasoAsistencia") && $("pasoAsistencia").classList.contains("activa")) asisInit();
+  if($("pasoHoy") && $("pasoHoy").classList.contains("activa")) shCargar(true);
+  else if($("pasoHE") && $("pasoHE").classList.contains("activa")) sheCargar();
+  else if($("pasoAsistencia") && $("pasoAsistencia").classList.contains("activa")) asisEntrar(true);
   else if($("pasoAvance").classList.contains("activa")) cargarAvance();
   else if($("pasoSupBases") && $("pasoSupBases").classList.contains("activa")) cargarBasesSup(true);
   else if($("pasoIncidencias").classList.contains("activa")) cargarIncidencias();
@@ -2584,6 +2888,173 @@ async function asisGuardar(){
     mostrarOk(`Asistencia guardada (${(r&&r.afectados)||marcas.length}) para ${ASIS.fecha}.`);
     asisInit();
   }catch(e){ mostrarError(e.message); }
+}
+/* --- Supervisora · Asistencia de AYER (QA) ---------------------------------
+   El 91% de los reclamos llega después de las 6 pm, así que recién a la mañana
+   siguiente se sabe quién no registró nada. La pestaña abre en "Ayer" y solo
+   pregunta por quien no tiene tickets ni estado: quien registró ya vino.
+   Áreas sin tickets (CORTE, REPROCESO, UDP): un toque "Vinieron todos".
+   Usa las mismas RPC de siempre (fn_asistencia_marcar_lista / _guardar). */
+const ASY_SIN_TICKETS=["CORTE","REPROCESO","REPROCESOS","UDP"];
+const ASY_DIAS=["dom","lun","mar","mié","jue","vie","sáb"];
+let ASY={modo:null, fecha:null, list:[], dec:{}, hasta:{}, sinTk:false};
+let ASY_PREF=null;   // día que pidió quien abrió la pantalla (tarjetas de Hoy)
+function asyIso(f){ return f.toLocaleDateString("sv-SE"); }
+function asyFecha(iso){ const [y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d); }
+function asyTxt(iso){ const f=asyFecha(iso); return `${ASY_DIAS[f.getDay()]} ${iso.slice(8,10)}/${iso.slice(5,7)}`; }
+/* Día hábil anterior: el lunes mira el viernes. */
+function asyAyerIso(){ const f=asyFecha(aswHoy()); do{ f.setDate(f.getDate()-1); }while(f.getDay()===0||f.getDay()===6); return asyIso(f); }
+/* Días hábiles de un rango (lunes a viernes), ambos incluidos. */
+function asyHabiles(desde, hasta){ const L=[], f=asyFecha(desde), h=asyFecha(hasta);
+  while(f<=h){ if(f.getDay()!==0&&f.getDay()!==6) L.push(asyIso(f)); f.setDate(f.getDate()+1); } return L; }
+const asyPorConf = p => !(Number(p.tickets)>0) && !p.estado_guardado && !p.feriado;   // feriado: parche 120
+
+/* Al entrar: carga ayer; si hay a quién confirmar abre ahí, si no en Hoy. */
+function asyArranque(){
+  const s=sesionActual(); if(!s) return;
+  const ayer=asyAyerIso();
+  ASY={modo:null, fecha:ayer, list:[], dec:{}, hasta:{}, sinTk:ASY_SIN_TICKETS.includes(norm(areaSup()).toUpperCase())};
+  $("asySegAyer").innerHTML=`Ayer · ${esc(asyTxt(ayer))}`;
+  $("asySegHoy").innerHTML=`Hoy · ${esc(asyTxt(aswHoy()))}`;
+  const box=$("asyAyer"); pintarCargando(box,"Cargando asistencia de ayer…");
+  rpc("fn_asistencia_marcar_lista",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),p_fecha:ayer})
+    .then(r=>{
+      if(r&&r.ok===false){ mostrarError(r.error||"Error"); asyModo("hoy"); return; }
+      ASY.list=(r&&r.personal)||[];
+      if(!ASY.sinTk && ASY.list.length && !ASY.list.some(p=>Number(p.tickets)>0)) ASY.sinTk=true;  // área que no usa tickets
+      const n=asyPendientes();
+      $("asySegAyer").innerHTML=`Ayer · ${esc(asyTxt(ayer))}${n?` <b class="asy-badge">${n}</b>`:""}`;
+      if(ASY.modo===null){ asyModo(ASY_PREF||(n?"ayer":"hoy")); ASY_PREF=null; } else if(ASY.modo==="ayer") asyPintar();
+    })
+    .catch(e=>{ mostrarError(e.message); asyModo("hoy"); });
+}
+function asyPendientes(){ return ASY.list.filter(asyPorConf).length; }
+function asyModo(m){
+  ASY.modo=m;
+  $("asySegAyer").classList.toggle("sel",m==="ayer"); $("asySegAyer").setAttribute("aria-selected",m==="ayer");
+  $("asySegHoy").classList.toggle("sel",m==="hoy"); $("asySegHoy").setAttribute("aria-selected",m==="hoy");
+  $("asyAyer").hidden = m!=="ayer"; $("asyHoy").hidden = m!=="hoy";
+  if(m==="ayer") asyPintar();
+  else { const f=$("asisFecha"); if(f) f.value=aswHoy(); asisInit(); }
+}
+
+function asyPintar(){
+  const box=$("asyAyer"); if(!box) return;
+  if(ASY.sinTk) return asyPintarSinTickets(box);
+  const vin=ASY.list.filter(p=>Number(p.tickets)>0).length;
+  const pend=ASY.list.filter(asyPorConf);
+  const dec=Object.keys(ASY.dec).length;
+  const btn=(p,e,t,cls)=>`<button type="button" class="asy-b${cls||""}${ASY.dec[p.dni]===e?" sel":""}" onclick="asyMarcar('${esc(p.dni)}','${esc(e)}')">${t}</button>`;
+  const tarjeta=p=>{
+    const d=ASY.dec[p.dni], otro=d && !["ACTIVO","FALTA","DM","VACACIONES"].includes(d);
+    const nota = d==="ACTIVO" ? `<div class="asy-nota">Vino sin llenar: queda en Boletas para que le avises.</div>`
+      : d==="VACACIONES" && ASY.hasta[p.dni] ? `<div class="asy-nota">Vacaciones hasta el ${esc(asyTxt(ASY.hasta[p.dni]))}.</div>`
+      : otro ? `<div class="asy-nota">Marcado: ${esc(d)}.</div>` : "";
+    return `<div class="asy-card${d?" lista":""}">
+      <div class="asy-nom">${esc(p.nombre)}</div>
+      <div class="asy-sub">Ayer sin tickets ni estado · DNI ${esc(p.dni)}</div>
+      <div class="asy-bots">
+        ${btn(p,"ACTIVO","✓ Vino"," vino")}${btn(p,"FALTA","Faltó")}${btn(p,"DM","DM")}
+        <button type="button" class="asy-b${d==="VACACIONES"?" sel":""}" onclick="asyVacaciones('${esc(p.dni)}')">Vacaciones</button>
+        <button type="button" class="asy-b${otro?" sel":""}" onclick="asyOtro('${esc(p.dni)}')">${otro?esc(d):"Otro ▾"}</button>
+      </div>${nota}</div>`;
+  };
+  box.innerHTML=`
+    <div class="asy-vin"><b>${vin}</b><div><div class="t">vinieron: registraron tickets</div>
+      <div class="s">Ya están como presentes. No hace falta marcarlos.</div></div></div>
+    ${pend.length?`<div class="asy-h">Por confirmar · no registraron nada ni tienen estado</div>
+      <div class="asy-lista">${pend.map(tarjeta).join("")}</div>
+      <button type="button" class="asy-guardar" onclick="asyGuardar()" ${dec?"":"disabled"}>Guardar (${dec} de ${pend.length})</button>`
+    :`<div class="asy-ok">✓ Ayer está todo confirmado.</div>`}`;
+}
+function asyPintarSinTickets(box){
+  const L=ASY.list, falt=L.filter(p=>(ASY.dec[p.dni]||p.estado_guardado||"ACTIVO")!=="ACTIVO").length;
+  const guardados=L.filter(p=>p.estado_guardado).length;
+  const fila=p=>{ const e=ASY.dec[p.dni]||p.estado_guardado||"ACTIVO", m=e!=="ACTIVO";
+    return `<button type="button" class="asy-fila${m?" marcada":""}" onclick="asyOtro('${esc(p.dni)}',true)">
+      <span>${esc(p.nombre)}</span><span class="pill ${esc(e)}">${esc(e)}</span></button>`; };
+  box.innerHTML=`
+    <p class="asy-intro">${esc(areaSup())} trabaja sin tickets, así que la app no puede saber quién vino. Un toque si vinieron todos; si alguien faltó, tócalo primero.</p>
+    ${guardados===L.length&&L.length?`<div class="asy-ok">✓ Ayer ya está guardado.</div>`:""}
+    <button type="button" class="asy-todos" onclick="asyGuardar(true)">✓ Vinieron ${falt?`los otros ${L.length-falt}`:`los ${L.length}`}</button>
+    <div class="asy-h">O toca a quien no vino</div>
+    <div class="asy-lista">${L.map(fila).join("")}</div>`;
+}
+function asyMarcar(dni,e){
+  if(ASY.dec[dni]===e){ delete ASY.dec[dni]; delete ASY.hasta[dni]; } else { ASY.dec[dni]=e; if(e!=="VACACIONES") delete ASY.hasta[dni]; }
+  asyPintar();
+}
+function asyOtro(dni, todos){
+  const p=ASY.list.find(x=>x.dni===dni); if(!p) return;
+  const cur=ASY.dec[dni]||p.estado_guardado||"ACTIVO", g=estadosGrupos(ESTADOS_SUP,areaSup());
+  const chip=e=>`<button class="asis-chip${esOtraArea(e)?" otra":""} ${e===cur?"sel":""}" onclick="asySet('${esc(dni)}','${esc(e)}')">${esc(e)}</button>`;
+  abrirModal(`<h2>${esc(p.nombre)}</h2>
+    <div class="sub" style="margin-bottom:10px;">Estado del ${esc(asyTxt(ASY.fecha))}</div>
+    <div class="asis-chips">${todos?chip("ACTIVO"):""}${g.aus.map(chip).join("")}</div>
+    ${g.otra.length?`<div class="asis-grupo">Apoya en otra área con tickets · cuenta su eficiencia</div><div class="asis-chips">${g.otra.map(chip).join("")}</div>`:""}
+    ${g.otraSin.length?`<div class="asis-grupo">Apoya en un área sin tickets · no se le exige</div><div class="asis-chips">${g.otraSin.map(chip).join("")}</div>`:""}
+    <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`);
+}
+function asySet(dni,e){
+  if(e==="VACACIONES"){ cerrarModal(); return asyVacaciones(dni); }
+  ASY.dec[dni]=e; delete ASY.hasta[dni]; cerrarModal(); asyPintar();
+}
+/* Vacaciones con "hasta": se marcan de una vez todos los días hábiles. */
+function asyVacaciones(dni){
+  const p=ASY.list.find(x=>x.dni===dni); if(!p) return;
+  const hoy=aswHoy(), f=asyFecha(hoy);
+  const vie=new Date(f); do{ vie.setDate(vie.getDate()+1); }while(vie.getDay()!==5);
+  const finQ=f.getDate()<=15 ? new Date(f.getFullYear(),f.getMonth(),15) : new Date(f.getFullYear(),f.getMonth()+1,0);
+  const ops=[[ASY.fecha,"ya volvió"],[asyIso(vie),asyHabiles(ASY.fecha,asyIso(vie)).length+" días"],[asyIso(finQ),"fin de quincena"]]
+    .filter((o,i,a)=>a.findIndex(x=>x[0]===o[0])===i);
+  const sel=ASY.hasta[dni]||ops[Math.min(1,ops.length-1)][0];
+  abrirModal(`<h2>Vacaciones · ${esc(p.nombre.split(",")[0])}</h2>
+    <div class="sub" style="margin-bottom:12px;">Se marcan todos los días hábiles desde el ${esc(asyTxt(ASY.fecha))}.</div>
+    <div class="asy-opc" id="asyOpc">${ops.map(([d,t])=>`<button type="button" class="${d===sel?"sel":""}" data-d="${d}" onclick="asyVacSel(this.dataset.d)">
+      <span>Hasta ${d===ASY.fecha?"ayer, ":"el "}${esc(asyTxt(d))}</span><small>${esc(t)}</small></button>`).join("")}
+      <label class="asy-otra">Elegir otra fecha <input type="date" id="asyVacFecha" min="${ASY.fecha}" onchange="asyVacSel(this.value)"></label></div>
+    <button type="button" class="asy-guardar" id="asyVacOk" data-d="${sel}" onclick="asyVacOk('${esc(dni)}')"></button>
+    <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
+  asyVacSel(sel);
+}
+function asyVacSel(d){
+  if(!d) return; const b=$("asyVacOk"); if(!b) return;
+  const n=asyHabiles(ASY.fecha,d).length;
+  if(n>23){ mostrarError("Máximo un mes de vacaciones de una vez"); return; }
+  b.dataset.d=d;
+  document.querySelectorAll("#asyOpc button").forEach(x=>x.classList.toggle("sel",x.dataset.d===d));
+  b.textContent = d===ASY.fecha ? `Marcar vacaciones del ${asyTxt(d)}` : `Marcar vacaciones del ${ASY.fecha.slice(8,10)}/${ASY.fecha.slice(5,7)} al ${d.slice(8,10)}/${d.slice(5,7)} (${n} días)`;
+}
+function asyVacOk(dni){ const d=$("asyVacOk").dataset.d; ASY.dec[dni]="VACACIONES"; ASY.hasta[dni]=d; cerrarModal(); asyPintar(); }
+
+async function asyGuardar(todos){
+  const s=sesionActual(); if(!s) return;
+  let marcas;
+  if(todos) marcas=ASY.list.map(p=>({dni:p.dni, estado:ASY.dec[p.dni]||p.estado_guardado||"ACTIVO"}));
+  else marcas=Object.keys(ASY.dec).map(d=>({dni:d, estado:ASY.dec[d]}));
+  if(!marcas.length){ mostrarError("Marca al menos a una persona"); return; }
+  try{
+    const r=await rpc("fn_asistencia_marcar_guardar",{p_dni:s.dni,p_token:s.token,p_fecha:ASY.fecha,p_marcas:marcas});
+    if(r&&r.ok===false){ mostrarError(r.error||"No se pudo guardar"); return; }
+    /* Vacaciones con "hasta": los días siguientes, agrupados por fecha. */
+    const porDia={};
+    Object.keys(ASY.hasta).forEach(dni=>asyHabiles(ASY.fecha,ASY.hasta[dni]).slice(1)
+      .forEach(f=>(porDia[f]=porDia[f]||[]).push({dni,estado:"VACACIONES"})));
+    for(const f of Object.keys(porDia)){
+      const r2=await rpc("fn_asistencia_marcar_guardar",{p_dni:s.dni,p_token:s.token,p_fecha:f,p_marcas:porDia[f]});
+      if(r2&&r2.ok===false){ mostrarError(`Vacaciones del ${asyTxt(f)}: ${r2.error||"no se guardó"}`); return; }
+    }
+    mostrarOk(`Asistencia del ${asyTxt(ASY.fecha)} guardada (${(r&&r.afectados)||marcas.length}).`);
+    ASY.modo="ayer"; asyArranque();
+  }catch(e){ mostrarError(e.message); }
+}
+/* La pestaña Asistencia: con Ayer/Hoy (supervisora.html) o la lista sola (otras pantallas). */
+function asisEntrar(recargar, modo){
+  if(!$("asySegAyer")) return asisInit();
+  if(modo==="hoy"){ asyArranque(); asyModo("hoy"); return; }
+  if(modo==="ayer") ASY_PREF="ayer";
+  if(recargar && ASY.modo==="hoy") return asisInit();
+  const m=ASY.modo; asyArranque(); if(recargar && m) ASY.modo=m;
 }
 function marcarTab(id){
   ["tabAsistencia","tabBoletas","tabPersonal","tabAvance","tabSupBases","tabIncidencias","tabEfPersonal","tabReclamos"].forEach(t=>{ const el=$(t); if(el) el.classList.toggle("activo", t===id); });
@@ -3175,6 +3646,28 @@ async function moverAreaConfirmar(area){
     },2200);
   }catch(e){ mostrarError(e.message); }
 }
+
+/* ---------------- AVISO DE VERSIÓN NUEVA ----------------
+   Una pestaña abierta desde la mañana seguía con el JS viejo todo el día. Al
+   volver a la app (como mucho cada 5 min) se compara la ETag de app.js con la
+   del arranque: es un HEAD sin cuerpo, sin consultas a la base. */
+let VER_ETAG=null, VER_ULT=0;
+async function revisarVersion(){
+  if(Date.now()-VER_ULT<5*60000) return;
+  VER_ULT=Date.now();
+  let e=null;
+  try{ const r=await fetch("app.js",{method:"HEAD",cache:"no-store"}); e=r.ok?(r.headers.get("etag")||r.headers.get("last-modified")):null; }catch(x){}
+  if(!e) return;
+  if(!VER_ETAG){ VER_ETAG=e; return; }
+  if(e!==VER_ETAG && !$("avisoVersion")){
+    const d=document.createElement("div");
+    d.id="avisoVersion"; d.className="aviso-version"; d.setAttribute("role","status");
+    d.innerHTML=`<span>Hay una versión nueva de la app.</span><button type="button" onclick="location.reload()">Actualizar</button>`;
+    document.body.appendChild(d);
+  }
+}
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") revisarVersion(); });
+window.addEventListener("load",()=>{ setTimeout(revisarVersion, 3000); });
 
 /* ---------------- PWA ---------------- */
 if("serviceWorker" in navigator){

@@ -31,15 +31,25 @@
   <!-- ===== SIDEBAR (solo PC) ===== -->
   <aside class="ing-sidebar">
     <nav class="ing-nav" aria-label="Secciones de ingeniería">
+      <a class="nav-item nav-inicio" data-tab="pasoInicio" href="#pasoInicio">Inicio</a>
       <details class="nav-group" open>
         <summary class="nav-sep">Tickets</summary>
+        <a class="nav-item" data-tab="pasoBuscar" href="#pasoBuscar">Buscar y seguir</a>
+        <a class="nav-item" data-tab="pasoAsisConf" href="#pasoAsisConf">Asistencia por confirmar</a>
+        <a class="nav-item" data-tab="pasoFeriados" href="#pasoFeriados">Feriados y fin de semana</a>
         <a class="nav-item" data-tab="pasoBolSin" href="#pasoBolSin">Boletas sin llenar<b class="dyn-cnt" id="bslNavCnt" hidden></b></a>
+        <a class="nav-item" data-tab="pasoSueltos" href="#pasoSueltos">Paquetes sueltos</a>
+        <a class="nav-item" data-tab="pasoLotes" href="#pasoLotes">Trabajo por tiempo</a>
         <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
         <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Avance por módulo</a>
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
         <a class="nav-item" data-tab="pasoOfs" href="#pasoOfs">OFs registradas</a>
         <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Resumen de OF</a>
         <a class="nav-item" data-tab="pasoVista" href="#pasoVista">Vista del personal</a>
+      </details>
+      <details class="nav-group" open>
+        <summary class="nav-sep">Planificación</summary>
+        <a class="nav-item" data-tab="pasoCarga" href="#pasoCarga">Carga vs capacidad</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Eficiencia</summary>
@@ -61,11 +71,13 @@
         <summary class="nav-sep">Gestión</summary>
         <a class="nav-item" data-tab="pasoAsis" href="#pasoAsis">Personal</a>
         <a class="nav-item" data-tab="pasoBases" href="#pasoBases">Bases</a>
+        <a class="nav-item" data-tab="pasoCalBase" href="#pasoCalBase">Calidad de BASES</a>
         <a class="nav-item" data-tab="pasoBaseLog" href="#pasoBaseLog">Historial de tiempos</a>
         <a class="nav-item" data-tab="pasoIncid" href="#pasoIncid">Incidencias</a>
         <a class="nav-item" data-tab="pasoFechas" href="#pasoFechas">Corregir fechas</a>
         <a class="nav-item" data-tab="pasoPermisos" href="#pasoPermisos">Permisos</a>
         <a class="nav-item" data-tab="pasoCorr" href="#pasoCorr">Correcciones</a>
+        <a class="nav-item" data-tab="pasoPrestadas" href="#pasoPrestadas">Sesiones prestadas</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Costos</summary>
@@ -330,7 +342,7 @@
     </section>
 
     <!-- ===================== TICKETS · ACTUAL ===================== -->
-    <section class="pantalla activa" id="pasoTk">
+    <section class="pantalla" id="pasoTk">
       <div class="seccion-cab">
         <h1>Tickets</h1>
         <p class="seccion-sub">Registro del día por persona; y tickets reclamados por OF/operación.</p>
@@ -874,6 +886,25 @@
       </div>
     </section>
 
+    <!-- ===================== CALIDAD DE BASES (preview): solo lectura, todo son avisos ===================== -->
+    <section class="pantalla" id="pasoCalBase">
+      <div class="seccion-cab">
+        <h1>Calidad de BASES</h1>
+        <p class="seccion-sub">Dónde la BASE está mal antes de que arruine eficiencias, balances y planificación. Todo son avisos:
+        nada se bloquea y aquí no se edita; cada aviso te lleva a la BASE para corregirlo.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="cqArea" onchange="cqPintar()"></select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="cqBuscar" placeholder="Artículo u operación…" oninput="cqPintar()"></label>
+        <span style="flex:1"></span>
+        <button class="btn-mini" onclick="cargarCalidadBases()">↻ Revisar de nuevo</button>
+      </div>
+      <div class="cq-areas" id="cqAreas"></div>
+      <div class="cq-tipos" id="cqTipos" role="group" aria-label="Tipo de aviso"></div>
+      <section class="cq-grupo cq-acab-box" id="cqAcab" hidden></section>
+      <div id="cqLista"></div>
+    </section>
+
     <!-- ===================== TIEMPOS MEDIDOS vs BASE (parche 104) ===================== -->
     <section class="pantalla" id="pasoTmpMed">
       <div class="seccion-cab">
@@ -921,7 +952,112 @@
       <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="tfTabla"></table></div>
     </section>
 
+    <!-- ===================== CARGA vs CAPACIDAD (preview, parche 107) ===================== -->
+    <section class="pantalla" id="pasoCarga">
+      <div class="seccion-cab">
+        <h1>Carga vs capacidad</h1>
+        <p class="seccion-sub">Cuántos días de trabajo le quedan a cada área con las OFs que ya tiene generadas y el ritmo
+        real de su gente. Sirve para ver con anticipación a quién le va a faltar o sobrar trabajo.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="ccArea" onchange="ccPintar()"></select></label>
+        <label class="cc-chk"><input type="checkbox" id="ccEmp" checked onchange="ccPintar()"> Contar las OFs generadas que aún no empiezan</label>
+        <button class="btn-mini" onclick="cargarCarga()">Actualizar</button>
+        <span class="cc-corte" id="ccCorte"></span>
+      </div>
+      <div id="ccZona"></div>
+    </section>
+
+    <!-- ===================== SESIONES PRESTADAS (parche 109) ===================== -->
+    <section class="pantalla" id="pasoPrestadas" data-area-sel="prArea">
+      <div class="seccion-cab">
+        <h1>Sesiones prestadas</h1>
+        <p class="seccion-sub">Quién entró como un operario o como supervisora, cuándo, por qué y qué registró. Se cierran solas a los 60 min sin uso.
+        Para entrar como otra persona hace falta la pestaña "Operario" o "Supervisora" de Operar como y Edición en esa área.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Día</span><input type="date" id="prFecha" onchange="prCargar()"></label>
+        <label class="campo"><span>Área</span><select id="prArea" onchange="prCargar()"></select></label>
+      </div>
+      <div id="prZona" aria-live="polite"></div>
+    </section>
+
+    <!-- ===================== TRABAJO POR TIEMPO (parche 116) ===================== -->
+    <section class="pantalla" id="pasoLotes">
+      <div class="seccion-cab">
+        <h1>Trabajo por tiempo</h1>
+        <p class="seccion-sub">Lotes de DESPACHO, REPROCESO y CORTE, que no tienen OF ni BASE. La gente marca EMPEZAR y TERMINAR en su celular;
+        aquí ves las horas, las prendas y los minutos por prenda reales. Con el tiempo de cada tarea que sube Ingeniería, lo que hacen genera
+        minutaje como un ticket, y la cantidad del lote es el tope. Solo ves las áreas que tienes en Permisos (DESPACHO y REPROCESO van con ACABADO).</p>
+      </div>
+      <div class="barra-control" id="ltBarra">
+        <label class="campo"><span>Día</span><input type="date" id="ltFecha" onchange="ltCargarIng()"></label>
+        <label class="campo"><span>Área</span><select id="ltArea" onchange="ltCargarIng()"><option value="">Todas mis áreas</option><option>DESPACHO</option><option>REPROCESO</option><option>CORTE</option></select></label>
+        <span style="flex:1"></span>
+        <button class="btn-mini verde" id="ltNuevoBtn" hidden onclick="ltNuevoIng()">+ Nuevo lote</button>
+        <button class="btn-mini" id="ltTiemposBtn" hidden onclick="ltTiempos()">⏱ Tiempos por tarea</button>
+        <button class="btn-mini gris" onclick="ltDescargar()">⬇ Descargar XLSX</button>
+      </div>
+      <div id="ltIngZona" aria-live="polite"></div>
+    </section>
+
+    <!-- ===================== PAQUETES SUELTOS (parche 115) ===================== -->
+    <section class="pantalla" id="pasoSueltos" data-area-sel="psArea">
+      <div class="seccion-cab">
+        <h1>Paquetes sueltos</h1>
+        <p class="seccion-sub">Paquetes que nadie reclamó en OFs que ya avanzaron. Sale una OF cuando lleva <b>7 días hábiles sin ningún reclamo</b> en el área,
+        o cuando una operación siguió con paquetes posteriores hace <b>3 días hábiles</b> y dejó atrás algunos. Es solo lectura: no reasigna ni cierra nada.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="psArea" onchange="psCargar()"></select></label>
+        <label class="campo"><span>Antigüedad</span><select id="psEdad" onchange="psPintar()">
+          <option value="">Todas</option><option value="5">De 5 a 10 días hábiles</option><option value="11">De 11 a 20</option><option value="21">Más de 20</option></select></label>
+        <label class="campo"><span>Por qué</span><select id="psMot" onchange="psPintar()">
+          <option value="">Todos los motivos</option><option value="saltados">Saltados</option><option value="sin_registrar">Operación sin registrar en la OF</option><option value="nadie">Operación que nadie registra</option></select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="psQ" placeholder="OF o artículo…" oninput="psPintar()"></label>
+        <span style="flex:1"></span>
+        <button class="btn-mini verde" onclick="psDescargar()">⬇ Descargar XLSX</button>
+      </div>
+      <div id="psZona" aria-live="polite"></div>
+    </section>
+
     <!-- ===================== BOLETAS SIN LLENAR (parche 103) ===================== -->
+    <section class="pantalla" id="pasoBuscar">
+      <div class="seccion-cab">
+        <h1>Buscar y seguir</h1>
+        <p class="seccion-sub">Un solo buscador para OF, hoja de numeración, prenda, paquete y persona (arriba, o tecla /).
+        Muestra únicamente las áreas que tu usuario puede ver en Permisos. Es solo lectura.</p>
+      </div>
+      <div class="bus-caja" role="search">
+        <input id="busQ" type="search" placeholder="OF, artículo, N° de prenda, OF/prenda, nombre o DNI" autocomplete="off"
+          aria-label="Buscar OF, prenda, artículo o persona" aria-controls="busDrop" aria-autocomplete="list">
+        <div class="bus-drop" id="busDrop" role="listbox" hidden></div>
+      </div>
+      <div class="bus-rec" id="busRec" hidden></div>
+      <div id="busCuerpo"></div>
+    </section>
+
+    <section class="pantalla" id="pasoAsisConf">
+      <div class="seccion-cab">
+        <h1>Asistencia por confirmar</h1>
+        <p class="seccion-sub">Quien registró tickets ya cuenta como presente. Aquí sale solo quien no registró nada y nadie le marcó
+        estado. Mientras nadie lo confirme, el sistema le exige sus 575 minutos y en Incentivos su día sale NO ENTREGÓ.</p>
+      </div>
+      <div class="acf-kpis" id="acfKpis"></div>
+      <div id="acfCuerpo"></div>
+    </section>
+
+    <section class="pantalla" id="pasoFeriados">
+      <div class="seccion-cab">
+        <h1>Feriados y fin de semana</h1>
+        <p class="seccion-sub">Un feriado no exige minutos a nadie: nadie sale NO ENTREGÓ ni por confirmar, y la quincena no se anula.
+        Si alguien trabaja un feriado, o un sábado o domingo con la regla de fin de semana prendida, aquí se ponen sus horas.
+        Cuentan como hora extra y son su disponible de ese día; mientras no se pongan, su disponible es 0.</p>
+      </div>
+      <div class="acf-kpis" id="ferKpis"></div>
+      <div id="ferCuerpo"></div>
+    </section>
+
     <section class="pantalla" id="pasoBolSin">
       <div class="seccion-cab">
         <h1>Boletas sin llenar</h1>
@@ -943,6 +1079,18 @@
       <div class="contenedor-ancho tabla-scroll">
         <table class="tabla" id="bslTabla"></table>
       </div>
+    </section>
+
+    <!-- ===================== INICIO: el día de mis áreas (solo lectura) ===================== -->
+    <section class="pantalla" id="pasoInicio">
+      <div class="ini-cab">
+        <div><h1 id="iniFecha"></h1><p class="ini-alcance" id="iniAlcance"></p></div>
+      </div>
+      <h2 class="ini-h2">Necesita tu atención</h2>
+      <div class="ini-avisos" id="iniAvisos" aria-live="polite"></div>
+      <h2 class="ini-h2">Cómo va cada área</h2>
+      <div class="contenedor-ancho tabla-scroll"><table class="tabla ini-tabla" id="iniAreasTab"></table></div>
+      <p class="ini-pie" id="iniPie"></p>
     </section>
 
     <!-- ===================== COSTOS (parche 96): todo de solo lectura ===================== -->
@@ -1156,15 +1304,16 @@
     <section class="pantalla" id="pasoIncid" data-area-sel="areaInci">
       <div class="seccion-cab">
         <h1>Incidencias</h1>
-        <p class="seccion-sub">Ajustes de tiempo del personal: aplicadas (editar/borrar) y pendientes por resolver.</p>
+        <p class="seccion-sub">El operario pide, su supervisora da el visto bueno desde el celular y aquí lo aprueba quien tiene <b>Aprueba</b> en esa área (Gestión › Permisos). Las alertas no bloquean: avisan antes de aprobar.</p>
       </div>
       <div class="tabs sup-subtabs">
-        <button id="inciTabApl" class="tab activo" onclick="inciVista('apl')">APLICADAS</button>
-        <button id="inciTabPend" class="tab" onclick="inciVista('pend')">PENDIENTES</button>
+        <button id="inciTabPend" class="tab activo" onclick="inciVista('pend')">POR APROBAR <span class="ir-cnt" id="inciPendN" hidden></span></button>
+        <button id="inciTabApl" class="tab" onclick="inciVista('apl')">APLICADAS</button>
+        <button id="inciTabRep" class="tab" onclick="inciVista('rep')">REPROCESOS Y APOYO</button>
         <button id="inciTabHE" class="tab" onclick="inciVista('he')">HORAS EXTRAS EN LOTE</button>
       </div>
 
-      <div id="inciAplicadas">
+      <div id="inciAplicadas" hidden>
         <div class="barra-control">
           <label class="campo"><span>Desde</span><input type="date" id="fechaInciD" onchange="cargarOcurrencias()"></label>
           <label class="campo"><span>Hasta</span><input type="date" id="fechaInciH" onchange="cargarOcurrencias()"></label>
@@ -1181,15 +1330,29 @@
         </div>
       </div>
 
-      <div id="inciPendientes" hidden>
-        <h2 class="tk-ops-title">Pendientes por resolver (aprobar / rechazar)</h2>
+      <div id="inciPendientes">
         <div class="barra-control">
           <label class="campo"><span>Área</span><select id="areaInciPend" onchange="pintarPendientesInci()"></select></label>
-          <label class="campo"><span>Buscar</span><input type="text" id="filtroInciPend" placeholder="Nombre / tipo / motivo…" oninput="pintarPendientesInci()"></label>
+          <label class="campo"><span>Mostrar</span><select id="verInciPend" onchange="pintarPendientesInci()">
+            <option value="">Todas las pendientes</option><option value="vb">Con visto bueno</option>
+            <option value="sin">Sin visto bueno</option><option value="alerta">Con alerta</option></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="filtroInciPend" placeholder="Nombre, motivo u OF…" oninput="pintarPendientesInci()"></label>
           <button class="btn-mini" onclick="cargarPendientesInci()">↻ CARGAR</button>
           <span class="sub" id="resumenInciPend" style="align-self:flex-end;"></span>
         </div>
-        <div class="lista-cards" id="listaIncidI" style="margin-bottom:22px;"></div>
+        <div id="listaIncidI"></div>
+      </div>
+
+      <!-- Reprocesos y apoyo (parche 114): en qué se fueron los minutos -->
+      <div id="inciRep" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Desde</span><input type="date" id="irRepDesde" onchange="repCargar()"></label>
+          <label class="campo"><span>Hasta</span><input type="date" id="irRepHasta" onchange="repCargar()"></label>
+          <label class="campo"><span>Área</span><select id="irRepArea" onchange="repCargar()"></select></label>
+          <span style="flex:1"></span>
+          <button class="btn-mini verde" onclick="repDescargar()">⬇ Descargar XLSX</button>
+        </div>
+        <div id="repZona"></div>
       </div>
 
       <!-- Horas extras en lote (parche 87): un día, un área, varias personas -->
@@ -1465,6 +1628,15 @@
 <script src="app.js"></script>
 <script src="ingenieria.js"></script>
 <script src="costos.js"></script>
+<script src="inicio.js"></script>
+<script src="calidad.js"></script>
+<script src="asistencia.js"></script>
+<script src="feriados.js"></script>
+<script src="buscar.js"></script>
+<script src="incidencias.js"></script>
+<script src="sueltos.js"></script>
+<script src="lotes.js"></script>
+<script src="prestadas.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>

@@ -186,9 +186,18 @@ const VISTAS=PAG==="ingenieria"?[
   {id:"inciApl",tab:"pasoIncid",m:"inciAplicadas",modo:"rango",def:"semana",area:1,live:1,t:"Incidencias · aplicadas",
    aplicar(){const [d,h]=rangoDe(this);let c=put("fechaInciD",d);c=put("fechaInciH",h)||c;c=areaSel("areaInci")||c;return c;},
    cargar:()=>llamar("cargarOcurrencias"),ocultar:["fechaInciD","fechaInciH","areaInci"]},
-  {id:"inciPend",tab:"pasoIncid",m:"inciPendientes",modo:null,area:1,live:1,t:"Incidencias · pendientes",
+  {id:"inciPend",tab:"pasoIncid",m:"inciPendientes",modo:null,area:1,live:1,t:"Incidencias · por aprobar",
    despues(){const a=$("areaInciPend");if(a&&a.options.length){conOpcion(a);if(a.value!==G.area){a.value=G.area;llamar("pintarPendientesInci");}}},
    cargar:()=>llamar("cargarPendientesInci"),ocultar:["areaInciPend"]},
+  {id:"sueltos",tab:"pasoSueltos",m:"pasoSueltos",modo:null,area:1,t:"Paquetes sueltos",
+   aplicar(){return areaSel("psArea");},cargar:()=>llamar("psCargar"),ocultar:["psArea"]},
+  {id:"prestadas",tab:"pasoPrestadas",m:"pasoPrestadas",modo:"dia",area:1,t:"Sesiones prestadas",
+   aplicar(){let c=put("prFecha",G.fecha);c=areaSel("prArea")||c;return c;},cargar:()=>llamar("prCargar"),ocultar:["prFecha","prArea"]},
+  {id:"lotes",tab:"pasoLotes",m:"pasoLotes",modo:"dia",area:0,t:"Trabajo por tiempo",
+   aplicar(){return put("ltFecha",G.fecha);},cargar:()=>llamar("ltCargarIng"),ocultar:["ltFecha"]},
+  {id:"inciRep",tab:"pasoIncid",m:"inciRep",modo:"rango",def:"d30",area:1,t:"Incidencias · reprocesos y apoyo",
+   aplicar(){const [d,h]=rangoDe(this);let c=put("irRepDesde",d);c=put("irRepHasta",h)||c;c=areaSel("irRepArea")||c;return c;},
+   cargar:()=>llamar("repCargar"),ocultar:["irRepDesde","irRepHasta","irRepArea"]},
   {id:"inciHE",tab:"pasoIncid",m:"inciHE",modo:"dia",area:1,areaReq:1,t:"Incidencias · horas extras en lote",
    aplicar(){let c=put("heFecha",G.fecha);c=put("heArea",G.area)||c;return c;},cargar:()=>llamar("heCargar"),
    ocupada:()=>{try{return HE.marcados.size>0;}catch(e){return false;}},ocultar:["heFecha","heArea"]},
@@ -255,7 +264,7 @@ const selArea=v=>{const id=v.sel||(v.ocultar||[]).find(x=>/area/i.test(x));retur
    luego el área, y la respuesta que llegaba última, a veces "Todas", era la
    que quedaba en pantalla con el chip marcando otra cosa). Mismo formato que
    el que usa cada una. */
-const LLENAR={repArea:"Todas las áreas",opeArea:"Todas las áreas",audArea:"Todas las áreas",blArea:"Todas las áreas",
+const LLENAR={repArea:"Todas las áreas",irRepArea:"Todas las áreas",psArea:"Todas mis áreas",opeArea:"Todas las áreas",audArea:"Todas las áreas",blArea:"Todas las áreas",
   incArea:"Todas las áreas",modArea:"Todas las áreas",efmArea:"Todas las áreas",consArea:"Todas las áreas",tkOpArea:"— Elige área —",heArea:null,
   cbArea:null,chArea:"Todas las áreas",ciArea:"Todas las áreas",caArea:"Todas las áreas"};
 function llenarArea(v){
@@ -516,7 +525,7 @@ function abrirCmdk(){
     $("dynCk").addEventListener("input",()=>{sel=0;listaCk();});
     $("dynCk").addEventListener("keydown",e=>{if(e.key==="ArrowDown"){sel=Math.min(items.length-1,sel+1);listaCk();e.preventDefault();}else if(e.key==="ArrowUp"){sel=Math.max(0,sel-1);listaCk();e.preventDefault();}else if(e.key==="Enter"&&items[sel])ir(items[sel]);else if(e.key==="Escape")cerrarCmdk();});}
   cmdk.classList.add("on");$("dynCk").value="";sel=0;listaCk();setTimeout(()=>$("dynCk").focus(),10);
-  try{if(!PERS&&ING)rpc("fn_personal_listar",{p_dni:ING.dni,p_token:ING.token,p_area:""}).then(r=>{PERS=(r.items||r||[]).filter?(r.items||r):[];listaCk();}).catch(()=>{});}catch(e){}
+  try{if(!PERS&&ING)rpc("fn_personal_listar",{p_dni_ing:ING.dni,p_token:ING.token,p_area:""}).then(r=>{PERS=(r.items||r||[]).filter?(r.items||r):[];listaCk();}).catch(()=>{});}catch(e){}
   try{if(!OFSL&&ING)rpc("fn_ofs_listar",{p_dni:ING.dni,p_token:ING.token,p_buscar:""}).then(r=>{OFSL=Array.isArray(r)?r:[];listaCk();}).catch(()=>{});}catch(e){}
 }
 function cerrarCmdk(){if(cmdk)cmdk.classList.remove("on");}
@@ -525,6 +534,9 @@ function listaCk(){
   const q=norm($("dynCk").value);const out=[];
   const tabs=[...document.querySelectorAll(".nav-item[data-tab]")].map(a=>({g:"Pestañas",t:a.textContent.trim(),k:a.closest("details")?a.closest("details").querySelector("summary").textContent.trim():"",go:()=>activarTab(a.dataset.tab)}));
   VISTAS.filter(v=>/·|Reclamados|Reporte|Resumen x/.test(v.t)).forEach(v=>tabs.push({g:"Pestañas",t:v.t,k:"",go:()=>irVista(v)}));
+  { const raw=$("dynCk").value.trim();   // parche 106: seguir OF, prenda o persona
+    if(raw.length>=3 && typeof busDesde==="function" && document.querySelector('.nav-item[data-tab="pasoBuscar"]'))
+      out.push({g:"Buscar y seguir",t:`Seguir «${raw}»`,k:"OF, prenda, OF/prenda, artículo o persona",go:()=>busDesde(raw)}); }
   tabs.filter(x=>!q||norm(x.t+" "+x.k).includes(q)).slice(0,q?8:12).forEach(x=>out.push(x));
   if(q&&PERS)PERS.filter(p=>norm((p.nombres||p.nombre)+" "+p.dni).includes(q)).slice(0,6).forEach(p=>out.push({g:"Personas",t:p.nombres||p.nombre,k:(p.area_actual||p.area||"")+" · "+p.dni,go:()=>{activarTab("pasoAsis");setTimeout(()=>{try{perTab("crud");}catch(e){}const b=$("perBuscar");if(b){b.value=p.dni;b.dispatchEvent(new Event("input",{bubbles:true}));}},250);}}));
   if(q&&OFSL)OFSL.filter(o=>norm(o.of+" "+o.articulo+" "+(o.cliente||"")).includes(q)).slice(0,6).forEach(o=>out.push({g:"OF",t:"OF "+o.of+" · "+o.articulo,k:(o.prenda||"")+" · "+(o.cant_prog||o.cantidad||"")+" und",go:()=>{activarTab("pasoAvOF");setTimeout(()=>{const b=$("avofBuscar");if(b){b.value=String(o.of);b.dispatchEvent(new Event("input",{bubbles:true}));}},400);}}));
@@ -637,9 +649,9 @@ function contadores(){
 /* =====================================================================
    ARRANQUE · INGENIERÍA
    ===================================================================== */
-const GRUPOS={pasoTk:"Tickets",pasoMod:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
-  pasoEf:"Eficiencia",pasoAudit:"Eficiencia",pasoInc:"Eficiencia",pasoDash:"Dashboards",
-  pasoAsis:"Gestión",pasoBases:"Gestión",pasoBaseLog:"Gestión",pasoIncid:"Gestión",pasoFechas:"Gestión",pasoPermisos:"Gestión",
+const GRUPOS={pasoBuscar:"Tickets",pasoSueltos:"Tickets",pasoLotes:"Tickets",pasoPrestadas:"Gestión",pasoAsisConf:"Tickets",pasoFeriados:"Tickets",pasoTk:"Tickets",pasoMod:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
+  pasoEf:"Eficiencia",pasoAudit:"Eficiencia",pasoInc:"Eficiencia",pasoDash:"Dashboards",pasoCarga:"Planificación",
+  pasoAsis:"Gestión",pasoBases:"Gestión",pasoBaseLog:"Gestión",pasoCalBase:"Gestión",pasoIncid:"Gestión",pasoFechas:"Gestión",pasoPermisos:"Gestión",
   pasoCostosBase:"Costos",pasoCostosHoy:"Costos",pasoCostosInc:"Costos",pasoCostosAsis:"Costos",
   pasoSupArea:"Operar como",pasoOpArea:"Operar como"};
 function etiquetarGrupos(){
