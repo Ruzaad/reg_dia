@@ -3,7 +3,10 @@
    Operario: EMPEZAR y TERMINAR (la hora la pone el servidor) y al terminar
    cuántas prendas hizo. Supervisora e Ingeniería: crear y cerrar lotes,
    ver las horas y poner la cantidad de lo que quedó por revisar.
-   No cambia ningún cálculo de boleta, eficiencia ni incentivos. */
+   Parche 119: Ingeniería sube el tiempo (min/prenda) de cada tarea. Con
+   tiempo, cada tramo con prendas genera minutaje (prendas × tiempo) que entra
+   a la boleta, la eficiencia y los incentivos como un ticket. La cantidad del
+   lote es el tope, igual que el corte real en ACABADO. */
 
 const LT_AREAS=["DESPACHO","REPROCESO","CORTE"];
 const LT={mios:null, sel:null, tic:null, fin:null, tareas:null, panel:null, sesion:null};
@@ -18,6 +21,7 @@ const ltSes = () => LT.sesion || ((typeof ING!=="undefined" && ING && ING.dni) ?
 /* min/prenda real: solo con tramos que tienen cantidad. */
 const ltReal = l => (l.hecho>0 && l.min_contado>0) ? l.min_contado/l.hecho : null;
 const ltPct = l => Math.min(100, Math.round((l.hecho||0)/(l.cantidad||1)*100));
+const ltMj = v => Math.round(Number(v)||0).toLocaleString("es-PE");
 
 /* ---------------- OPERARIO ---------------- */
 /* CORTE y REPROCESO entran directo aquí; quien está EN DESPACHO/REPROCESO/CORTE
@@ -58,10 +62,12 @@ function ltMinHoy(){
 }
 function ltDia(){
   const m=ltMinHoy(), run=LT.mios&&LT.mios.actual ? (LT.mios.hoy||[]).filter(t=>!t.fin).reduce((a,t)=>a+Number(t.min||0),0) : 0;
+  const mj=(LT.mios&&LT.mios.hoy||[]).reduce((a,t)=>a+Number(t.minutaje||0),0);
   const w=v=>Math.min(100,v/5.75).toFixed(1)+"%";
   return `<div class="lt-dia"><div class="t">Mi día en lotes <b>${Math.round(m)} de 575 min</b></div>
     <div class="lt-bar"><i style="width:${w(m-run)}"></i>${run?`<i class="run" style="width:${w(run)}"></i>`:""}</div>
-    <div class="s">${LT.mios&&LT.mios.actual?"El lote en curso ya cuenta para tu día.":m?"Toca un lote para seguir.":"Aún no empiezas ningún lote."}</div></div>`;
+    ${mj?`<div class="lt-mj">Minutaje ganado hoy <b>${ltMj(mj)} min</b></div>`:""}
+    <div class="s">${LT.mios&&LT.mios.actual?"El lote en curso cuenta cuando lo terminas con tus prendas.":m?"Toca un lote para seguir.":"Aún no empiezas ningún lote."}</div></div>`;
 }
 function ltPintarOp(){
   const z=$("ltZona"), r=LT.mios; if(!z||!r) return;
@@ -72,7 +78,7 @@ function ltPintarOp(){
   const hoy=(r.hoy||[]).filter(t=>t.fin);
   const tramos = hoy.length ? `<h2 class="lt-h2">Hoy</h2>`+hoy.slice().reverse().map(t=>`<div class="lt-tr${t.prendas==null?" inc":""}"><span class="h">${ltHM(t.inicio)}<br>${ltHM(t.fin)}</span>
       <span class="q">${esc(t.destino)}</span><span class="min">${Math.round(t.min)}<small>min</small></span>
-      <span class="d">${esc(t.tarea)} · ${t.prendas==null?"cantidad por poner":ltN(t.prendas)+" prendas"}</span></div>`).join("") : "";
+      <span class="d">${esc(t.tarea)} · ${t.prendas==null?"cantidad por poner":ltN(t.prendas)+" prendas"}${t.minutaje!=null?` · <b class="lt-mjt">+${ltMj(t.minutaje)} min de minutaje</b>`:""}</span></div>`).join("") : "";
   if(r.actual){
     const a=r.actual, l=a.lote;
     z.innerHTML=`${cab}${ltDia()}
@@ -80,7 +86,8 @@ function ltPintarOp(){
         <div class="desde">desde las ${ltHM(a.inicio)}</div>
         <div class="lote">${esc(l.destino)}<small>${esc(l.tarea)}${l.o_f?` · OF ${esc(l.o_f)}`:""}</small></div>
         <div class="lt-av"><div class="lt-bar"><i style="width:${ltPct(l)}%;background:var(--azul)"></i></div>
-          <div class="m"><span>Lote: <b>${ltN(l.hecho)}</b> de <b>${ltN(l.cantidad)}</b></span><span>${l.ahora>1?`con ${l.ahora-1} más`:"solo tú ahora"}</span></div></div></div>
+          <div class="m"><span>Lote: <b>${ltN(l.hecho)}</b> de <b>${ltN(l.cantidad)}</b></span><span>${l.ahora>1?`con ${l.ahora-1} más`:"solo tú ahora"}</span></div>
+          ${l.std?`<div class="m"><span>Cada prenda te da <b>${Number(l.std).toLocaleString("es-PE",{maximumFractionDigits:3})} min</b> de minutaje</span></div>`:""}</div></div>
       <button type="button" class="lt-go stop" onclick="ltIrFin(false)">■ TERMINAR</button>
       <button type="button" class="lt-sec" onclick="ltIrFin(true)">Pasarme a otro lote</button>
       <div class="lt-nota">Si te olvidas de terminar, se cierra solo a la salida (18:20) y tu supervisora pone la cantidad.</div>
@@ -120,6 +127,7 @@ function ltIrFin(otro){
   const min=(Date.now()-new Date(a.inicio))/60000;
   $("ltFinSub").textContent=`${a.lote.destino} · ${a.lote.tarea}`;
   $("ltFinRes").innerHTML=`<span>${ltHM(a.inicio)} a ${ltHM(new Date())}</span><b>${ltH(min).replace(":"," h ")} min</b>`;
+  const q=$("ltFinQueda"); if(q) q.textContent = a.lote.queda!=null ? `En el lote quedan ${ltN(a.lote.queda)} de ${ltN(a.lote.cantidad)} prendas`+(a.lote.std?` · cada una da ${Number(a.lote.std).toLocaleString("es-PE",{maximumFractionDigits:3})} min`:"") : "";
   const i=$("ltCant"); i.value="";
   irA("pasoLoteFin"); window.scrollTo(0,0); setTimeout(()=>i.focus(),50);
 }
@@ -136,7 +144,7 @@ async function ltTerminar(sinContar){
     try{
       const r=await rpc("fn_lote_terminar",{p_dni:s.dni,p_token:s.token,p_prendas:p});
       if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); return; }
-      mostrarOk(p==null?"Listo: tu supervisora pondrá la cantidad":`Guardado: ${ltN(p)} prendas en ${Math.round(r.min||0)} min`);
+      mostrarOk(p==null?"Listo: tu supervisora pondrá la cantidad":`Guardado: ${ltN(p)} prendas en ${Math.round(r.min||0)} min`+(r.minutaje!=null?` · ${ltMj(r.minutaje)} min de minutaje`:""));
       irA("pasoLotes"); window.scrollTo(0,0); await ltCargarOp();
     }catch(e){ mostrarError(e.message); }
   });
@@ -208,12 +216,12 @@ async function ltRevisar(id, alTerminar){
   await unaVez("ltRev"+id, botonesDe(`#ltRvB${id}`), async()=>{
     try{ const r=await rpc("fn_lote_tramo_revisar",{p_dni:s.dni,p_token:s.token,p_tramo:id,p_prendas:p,p_fin:f&&f.value||""});
       if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
-      mostrarOk("Guardado"); alTerminar&&alTerminar();
+      mostrarOk(r.minutaje!=null?`Guardado · ${ltMj(r.minutaje)} min de minutaje`:"Guardado"); alTerminar&&alTerminar();
     }catch(e){ mostrarError(e.message); }
   });
 }
 const ltPorRevisarFila = (t, cb) => `<div class="lt-rev"><div class="lt-rev-t"><b>${esc(soloApellidos(t.nombre||t.dni))}</b>
-    <span>${esc(t.destino)} · ${esc(t.tarea)}</span><small>${new Date(t.inicio).toLocaleDateString("es-PE",{timeZone:"America/Lima",weekday:"short",day:"2-digit",month:"2-digit"})} · ${ltHM(t.inicio)} a ${ltHM(t.fin)} · ${Math.round(t.min)} min${t.auto?" · se cerró solo":""}</small></div>
+    <span>${esc(t.destino)} · ${esc(t.tarea)}${t.queda!=null?` · quedan ${ltN(t.queda)} en el lote`:""}</span><small>${new Date(t.inicio).toLocaleDateString("es-PE",{timeZone:"America/Lima",weekday:"short",day:"2-digit",month:"2-digit"})} · ${ltHM(t.inicio)} a ${ltHM(t.fin)} · ${Math.round(t.min)} min${t.auto?" · se cerró solo":""}</small></div>
     <div class="lt-rev-f"><label>Prendas<input id="ltRv${t.id}" type="number" inputmode="numeric" min="0"></label>
     ${t.auto?`<label>Terminó a las<input id="ltRvF${t.id}" type="time" value="${ltHM(t.fin)}"></label>`:""}
     <button type="button" class="btn-mini" id="ltRvB${t.id}" onclick="ltRevisar(${t.id},${cb})">Guardar</button></div></div>`;
@@ -222,6 +230,7 @@ const ltPorRevisarFila = (t, cb) => `<div class="lt-rev"><div class="lt-rev-t"><
 async function ltCargarIng(){
   const z=$("ltIngZona"); if(!z) return;
   const s=ltSes(), f=$("ltFecha"), a=$("ltArea");
+  const bc=$("ltBarra"); if(bc) bc.style.display="";
   pintarCargando(z,"Cargando lotes…");
   try{
     const r=await rpc("fn_lotes_panel",{p_dni:s.dni,p_token:s.token,p_area:a?a.value:"",p_fecha:(f&&f.value)||null});
@@ -233,10 +242,11 @@ function ltPintarIng(){
   const z=$("ltIngZona"), r=LT.panel; if(!z||!r) return;
   const edita=(r.areas||[]).filter(a=>a.edita).map(a=>a.area);
   const nb=$("ltNuevoBtn"); if(nb) nb.hidden=!edita.length;
+  const tb=$("ltTiemposBtn"); if(tb) tb.hidden=false;
   const sum=k=>(r.areas||[]).reduce((s,a)=>s+Number(a[k]||0),0);
   const kpi=(t,v,c)=>`<div class="kpi"><div class="kpi-num"${c?` style="color:${c}"`:""}>${v}</div><div class="kpi-lbl">${t}</div></div>`;
   const ls=r.lotes||[], pr=r.por_revisar||[];
-  const std=l=>l.std?`<span class="lt-std">${Number(l.std).toFixed(2)}</span>`:`<span class="lt-sinstd">Sin estándar</span>`;
+  const std=l=>l.std?`<span class="lt-std">${Number(l.std).toFixed(2)}</span>`:`<span class="lt-sinstd">Sin tiempo</span>`;
   const real=l=>{ const v=ltReal(l); if(v==null) return `<span class="sub">—</span>`;
     return `<span class="lt-std${l.std?(v>l.std*1.1?" mal":" bien"):""}">${v.toFixed(2)}</span>`; };
   const efi=l=>{ const v=ltReal(l); return (l.std&&v)?`<b>${Math.round(l.std/v*100)}%</b>`:`<span class="sub">—</span>`; };
@@ -245,20 +255,23 @@ function ltPintarIng(){
     <td><span class="lt-prog${ltPct(l)>=100?" ok":""}"><span class="b"><i style="width:${ltPct(l)}%"></i></span><span>${ltPct(l)}%</span></span></td>
     <td class="nw">${ltHoras(l.min)}</td>
     <td>${l.estado==="CERRADO"?`<span class="tag g">Cerrado</span>`:l.ahora?`<span class="lt-vivo">${l.ahora}</span>`:`<span class="sub">0</span>`}</td>
-    <td>${real(l)}</td><td>${std(l)}</td><td>${efi(l)}</td>
+    <td>${real(l)}</td><td>${std(l)}</td><td>${efi(l)}</td><td class="nw">${l.minutaje?`<b>${ltMj(l.minutaje)}</b>`:`<span class="sub">—</span>`}</td>
     <td>${l.por_revisar?`<span class="tag r">${l.por_revisar}</span>`:""}</td>
     <td class="nw"><button class="btn-mini gris" onclick="ltVer(${l.id})">Ver</button></td></tr>`;
   z.innerHTML=`<div class="kpis" style="margin-bottom:14px">${kpi("Lotes abiertos",sum("abiertos"))}${kpi("Trabajando ahora",sum("ahora"),"var(--exito)")}
-      ${kpi("Horas del día",ltHoras(sum("min")))}${kpi("Por revisar",pr.length,pr.length?"var(--alerta)":"")}</div>
+      ${kpi("Horas del día",ltHoras(sum("min")))}${kpi("Minutaje del día",ltMj(sum("minutaje"))+" min","var(--azul)")}${kpi("Por revisar",pr.length,pr.length?"var(--alerta)":"")}</div>
+    ${sum("sin_tiempo")?`<button type="button" class="lt-sintiempo" onclick="ltTiempos()"><b>${sum("sin_tiempo")} ${sum("sin_tiempo")===1?"tarea no tiene":"tareas no tienen"} tiempo</b>
+      <span>Sin tiempo, lo que hacen en esas tareas no genera minutaje: el día queda solo en horas. Súbelo en Tiempos por tarea ›</span></button>`:""}
     <div class="lt-areas">${(r.areas||[]).map(a=>`<div class="lt-ar"><div class="t">${esc(a.area)} ${a.ahora?`<span class="lt-vivo">${a.ahora} ahora</span>`:""}</div>
-      <div class="n">${ltHoras(a.min)} <small>· ${a.personas} ${a.personas===1?"persona":"personas"}</small></div><div class="s">${a.abiertos} ${a.abiertos===1?"lote abierto":"lotes abiertos"}${a.edita?"":" · solo lectura"}</div></div>`).join("")}</div>
+      <div class="n">${ltHoras(a.min)} <small>· ${a.personas} ${a.personas===1?"persona":"personas"}</small></div><div class="s">${a.abiertos} ${a.abiertos===1?"lote abierto":"lotes abiertos"} · ${ltMj(a.minutaje)} min de minutaje${a.edita?"":" · solo lectura"}</div></div>`).join("")}</div>
     ${pr.length?`<h2 class="lt-h2">Por revisar <span class="sub">(sin cantidad: se cerraron solos o el operario no contó)</span></h2>
       <div class="lt-revs">${pr.map(t=>edita.includes(t.area)?ltPorRevisarFila(t,"ltCargarIng"):"").join("")}</div>`:""}
     ${ls.length?`<div class="contenedor-ancho tabla-scroll"><table class="tabla lt-tabla"><thead><tr><th class="izq">Lote</th><th>Área</th><th>Prendas</th><th>Avance</th><th>Horas</th>
-      <th>Ahora</th><th>Min/prenda real</th><th>Estándar</th><th>Eficiencia</th><th>Por revisar</th><th></th></tr></thead><tbody>${ls.map(fila).join("")}</tbody></table></div>`
+      <th>Ahora</th><th>Min/prenda real</th><th>Tiempo</th><th>Eficiencia</th><th>Minutaje</th><th>Por revisar</th><th></th></tr></thead><tbody>${ls.map(fila).join("")}</tbody></table></div>`
       :`<div class="vacio-msg">Sin lotes ese día.${edita.length?" Crea el primero con + Nuevo lote.":""}</div>`}
-    <div class="lt-explica">Los minutos en lotes <b>todavía no cambian</b> la boleta, la eficiencia ni los incentivos: se ven aquí aparte.
-      Min/prenda real cuenta solo los tramos con cantidad. La eficiencia sale cuando la tarea tiene estándar medido en Tiempos.</div>`;
+    <div class="lt-explica">Cuando la tarea tiene tiempo, cada prenda genera <b>minutaje</b> (prendas × tiempo) que entra a la boleta, la eficiencia y los incentivos
+      igual que un ticket, con la fecha del día que se trabajó. La cantidad del lote es el tope, como el corte real en ACABADO.
+      Sin tiempo, el lote solo suma horas aquí. Min/prenda real cuenta solo los tramos con cantidad.</div>`;
 }
 async function ltNuevoIng(){
   const r=LT.panel; const areas=((r&&r.areas)||[]).filter(a=>a.edita).map(a=>a.area); if(!areas.length) return;
@@ -276,23 +289,35 @@ async function ltVer(id){
     if(!r.ok){ d.innerHTML=`<div class="vacio-msg">${esc(r.error||"No se pudo")}</div>`; return; }
     const l=r.lote, ts=r.tramos||[], rl=ltReal(l);
     d.innerHTML=`<h2>${esc(l.destino)} · L-${l.id}</h2>
-      <div class="sub" style="margin-bottom:10px">${esc(l.area)} · ${esc(l.tarea)}${l.o_f?` · OF ${esc(l.o_f)}`:""} · ${ltN(l.hecho)} de ${ltN(l.cantidad)} prendas · ${ltHoras(l.min)}${rl?` · ${rl.toFixed(2)} min/prenda`:""}</div>
-      <div class="tabla-scroll" style="max-height:52vh"><table class="tabla"><thead><tr><th class="izq">Persona</th><th>Día</th><th>Desde</th><th>Hasta</th><th>Min</th><th>Prendas</th></tr></thead>
+      <div class="sub" style="margin-bottom:10px">${esc(l.area)} · ${esc(l.tarea)}${l.o_f?` · OF ${esc(l.o_f)}`:""} · ${ltN(l.hecho)} de ${ltN(l.cantidad)} prendas · ${ltHoras(l.min)}${rl?` · ${rl.toFixed(2)} min/prenda`:""}${l.std?` · ${ltMj(l.minutaje)} min de minutaje`:" · tarea sin tiempo"}</div>
+      <div class="tabla-scroll" style="max-height:52vh"><table class="tabla"><thead><tr><th class="izq">Persona</th><th>Día</th><th>Desde</th><th>Hasta</th><th>Min</th><th>Prendas</th><th>Minutaje</th></tr></thead>
       <tbody>${ts.map(t=>`<tr><td class="izq">${esc(soloApellidos(t.nombre||t.dni))}</td><td>${new Date(t.inicio).toLocaleDateString("es-PE",{timeZone:"America/Lima",day:"2-digit",month:"2-digit"})}</td>
         <td>${ltHM(t.inicio)}</td><td>${t.fin?ltHM(t.fin):`<span class="lt-vivo">ahora</span>`}${t.auto?` <span class="tag o">solo</span>`:""}</td><td>${Math.round(t.min)}</td>
-        <td>${t.prendas==null?(t.fin?`<span class="tag r">por revisar</span>`:"—"):ltN(t.prendas)}</td></tr>`).join("")||`<tr><td colspan="6" class="sub">Nadie trabajó aún en este lote</td></tr>`}</tbody></table></div>
+        <td>${t.prendas==null?(t.fin?`<span class="tag r">por revisar</span>`:"—"):ltN(t.prendas)}</td><td>${t.minutaje!=null?ltMj(t.minutaje):"—"}</td></tr>`).join("")||`<tr><td colspan="7" class="sub">Nadie trabajó aún en este lote</td></tr>`}</tbody></table></div>
+      ${r.edita?`<div class="lt-cantedit"><label>Cantidad del lote (tope)<input class="inp" id="ltCantLote" type="number" inputmode="numeric" min="${l.hecho||1}" value="${l.cantidad}"></label>
+        <button type="button" class="btn-mini" id="ltCantLoteB" onclick="ltCambiarCant(${l.id})">Cambiar</button><small>Nunca menos de lo ya hecho (${ltN(l.hecho)}).</small></div>`:""}
       <div class="modal-acciones">${r.edita?(l.estado==="ABIERTO"
           ?`<button class="btn-principal btn-modal-guardar" style="background:var(--alerta)" onclick="ltCerrar(${l.id},true,()=>{cerrarModal();ltRecargar();})">CERRAR LOTE</button>`
           :`<button class="btn-principal btn-modal-guardar" onclick="ltCerrar(${l.id},false,()=>{cerrarModal();ltRecargar();})">REABRIR LOTE</button>`):""}
         <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`;
   }catch(e){ const d=$("ltDet"); if(d) d.innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`; }
 }
+async function ltCambiarCant(id){
+  const s=ltSes(), i=$("ltCantLote"), c=parseInt(i&&i.value,10);
+  if(!(c>0)){ mostrarError("Pon la cantidad de prendas"); i&&i.focus(); return; }
+  await unaVez("ltCant"+id, botonesDe("#ltCantLoteB"), async()=>{
+    try{ const r=await rpc("fn_lote_cantidad",{p_dni:s.dni,p_token:s.token,p_lote:id,p_cantidad:c});
+      if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
+      mostrarOk(`Cantidad del lote: ${ltN(c)}`); cerrarModal(); ltRecargar();
+    }catch(e){ mostrarError(ltFalta(e)?"Falta correr el parche 119 en la base":e.message); }
+  });
+}
 function ltRecargar(){ if($("ltIngZona")) ltCargarIng(); else if($("ltSupZona")) ltCargarSup(); }
 function ltDescargar(){
   const r=LT.panel; if(!r||!(r.lotes||[]).length){ mostrarError("No hay datos para descargar"); return; }
-  const CAB=["Lote","Área","Destino","Tarea","OF","Estado","Cantidad","Hechas","Horas","Personas","Min/prenda real","Estándar","Por revisar"];
+  const CAB=["Lote","Área","Destino","Tarea","OF","Estado","Cantidad","Hechas","Horas","Personas","Min/prenda real","Tiempo","Minutaje","Por revisar"];
   const filas=r.lotes.map(l=>[`L-${l.id}`,l.area,l.destino,l.tarea,l.o_f||"",l.estado,l.cantidad,l.hecho,Math.round(l.min/6)/10,l.personas,
-    ltReal(l)?Number(ltReal(l).toFixed(2)):"",l.std||"",l.por_revisar]);
+    ltReal(l)?Number(ltReal(l).toFixed(2)):"",l.std||"",Math.round(Number(l.minutaje||0)*10)/10,l.por_revisar]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "LOTES");
   XLSX.writeFile(wb, `TRABAJO_POR_TIEMPO_${r.fecha||""}.xlsx`);
@@ -320,7 +345,7 @@ function ltPintarSup(){
     ${ls.length?ls.map(l=>`<div class="cel-card ${l.ahora?"v":"g"}"><div class="cel-top"><b>${esc(l.destino)}</b><span class="tag ${l.ahora?"v":"g"}">${l.ahora} ahora</span></div>
         <div class="cel-l">${esc(l.area)} · ${esc(l.tarea)} · L-${l.id}${l.o_f?` · OF ${esc(l.o_f)}`:""}</div>
         <div class="lt-av"><div class="lt-bar"><i style="width:${ltPct(l)}%;background:var(--azul)"></i></div>
-        <div class="m"><span><b>${ltN(l.hecho)}</b> de ${ltN(l.cantidad)} prendas</span><span>${ltHoras(l.min)}</span></div></div>
+        <div class="m"><span><b>${ltN(l.hecho)}</b> de ${ltN(l.cantidad)} prendas</span><span>${ltHoras(l.min)}${l.std?` · ${ltMj(l.minutaje)} min de minutaje`:" · sin tiempo"}</span></div></div>
         <div class="cel-btns"><button type="button" class="az" onclick="ltVer(${l.id})">Ver quién</button>
         <button type="button" class="no" onclick="ltCerrar(${l.id},true,ltCargarSup)">Cerrar lote</button></div></div>`).join("")
       :`<div class="vacio-msg">No hay lotes abiertos. Crea uno para que tu gente pueda registrar.</div>`}`;
@@ -332,4 +357,162 @@ async function ltNuevoSup(){
   z.innerHTML=ltFormHTML(areas)+`<button type="button" class="lt-go azul lt-crear" onclick="ltCrear(()=>{ $('ltFormSup').innerHTML=''; ltCargarSup(); })">CREAR LOTE</button>
     <button type="button" class="lt-sec" onclick="$('ltFormSup').innerHTML=''">Cancelar</button>`;
   await ltFormIniciar(); $("ltFDest").focus();
+}
+
+/* ---------------- TIEMPOS POR TAREA (parche 119, Ingeniería) ----------------
+   Ingeniería sube el tiempo (min por prenda) de cada tarea. Con él, lo que la
+   gente termina con prendas genera minutaje. Se puede pegar desde Excel.
+   "Real 30 días" es la referencia: minutos trabajados ÷ prendas. */
+const LTT={r:null, cambios:{}, nuevas:[]};
+function ltQuincena(){ const h=hoyLimaApp(); return h.slice(0,8)+(Number(h.slice(8,10))>=16?"16":"01"); }
+const ltNum = v => { const n=parseFloat(String(v==null?"":v).replace(",", ".")); return isFinite(n)?n:null; };
+const ltFmtStd = v => v==null||v==="" ? "" : String(Math.round(Number(v)*10000)/10000);
+async function ltTiempos(){
+  const z=$("ltIngZona"); if(!z) return;
+  ["ltNuevoBtn","ltTiemposBtn"].forEach(id=>{ const b=$(id); if(b) b.hidden=true; });
+  const bc=$("ltBarra"); if(bc) bc.style.display="none";
+  pintarCargando(z,"Cargando tiempos…");
+  const s=ltSes();
+  try{
+    const r=await rpc("fn_lote_tiempos",{p_dni:s.dni,p_token:s.token});
+    if(!r.ok){ z.innerHTML=`<div class="vacio-msg">${esc(r.error||"No se pudo")}</div>`; return; }
+    LTT.r=r; LTT.cambios={}; LTT.nuevas=[]; ltPintarTiempos();
+  }catch(e){
+    z.innerHTML = ltFalta(e) ? `<div class="acf-falta"><b>Falta correr el parche 119 en la base.</b> Con él, Ingeniería sube el tiempo de cada tarea y lo que la gente hace en lotes genera minutaje, con la cantidad del lote como tope.</div>`
+      : `<div class="vacio-msg">${esc(e.message)}</div>`;
+  }
+}
+function ltSalirTiempos(){
+  if(Object.keys(LTT.cambios).length+LTT.nuevas.length && !confirm("Hay tiempos sin guardar. ¿Salir igual?")) return;
+  ltCargarIng();
+}
+function ltPintarTiempos(){
+  const z=$("ltIngZona"), r=LTT.r; if(!z||!r) return;
+  const ts=r.tareas||[], areas=r.areas||[];
+  const edita=a=>(areas.find(x=>x.area===a)||{}).edita;
+  const act=ts.filter(t=>t.activo), sin=act.filter(t=>t.std==null);
+  const sinMj=ts.reduce((s,t)=>s+Number(t.sin_minutaje||0),0);
+  const conT=act.length-sin.length;
+  const fila=t=>{
+    const c=LTT.cambios[t.id]||{}, std=("std" in c)?c.std:ltFmtStd(t.std), activo=("activo" in c)?c.activo:t.activo;
+    const real=t.real>0?Number(t.real):null, sv=ltNum(std);
+    const dif = (real&&sv) ? Math.round((sv/real-1)*100) : null;
+    const ed=edita(t.area);
+    return `<tr class="${Object.keys(c).length?"ltt-cambio":""}${activo?"":" ltt-off"}">
+      <th scope="row">${esc(t.nombre)}${t.actualizado?`<small>${esc(soloApellidos(t.por||""))} · ${new Date(t.actualizado).toLocaleDateString("es-PE",{timeZone:"America/Lima",day:"2-digit",month:"2-digit"})}</small>`:`<small>nunca se subió</small>`}</th>
+      <td>${ed?`<input class="inp ltt-in${std===""&&activo?" vacio":""}" inputmode="decimal" aria-label="Tiempo de ${esc(t.nombre)} en minutos por prenda" value="${esc(std)}" placeholder="—"
+          oninput="ltTCambio(${t.id},'std',this.value)">`:(std===""?`<span class="lt-sinstd">Sin tiempo</span>`:`<b class="lt-std">${esc(std)}</b>`)}</td>
+      <td>${real?`<span class="lt-std">${real.toFixed(2)}</span>${dif!=null&&Math.abs(dif)>=20?`<small class="ltt-dif ${dif>0?"alto":"bajo"}">el tiempo está ${Math.abs(dif)}% ${dif>0?"arriba":"abajo"} de lo real</small>`:""}`:`<span class="sub">—</span>`}</td>
+      <td class="nw">${t.prendas?ltN(t.prendas):`<span class="sub">0</span>`}</td>
+      <td class="nw">${t.personas||`<span class="sub">0</span>`}</td>
+      <td>${t.sin_minutaje?`<span class="acf-n alto" title="Tramos con prendas que no generaron minutaje">${t.sin_minutaje}</span>`:`<span class="acf-n ok">✓</span>`}</td>
+      <td>${ed?`<label class="ltt-sw"><input type="checkbox" ${activo?"checked":""} onchange="ltTCambio(${t.id},'activo',this.checked)"> <span>${activo?"Activa":"Oculta"}</span></label>`:(activo?"Activa":"Oculta")}</td>
+      <td><button type="button" class="btn-mini gris" onclick="ltTLog(${t.id},'${esc(t.nombre)}')">Historial</button></td></tr>`;
+  };
+  const nuevas=a=>LTT.nuevas.map((n,i)=>n.area!==a?"":`<tr class="ltt-cambio"><th scope="row"><input class="inp" maxlength="40" aria-label="Nombre de la tarea nueva" placeholder="Nombre de la tarea" value="${esc(n.nombre)}" oninput="LTT.nuevas[${i}].nombre=this.value"></th>
+      <td><input class="inp ltt-in" inputmode="decimal" aria-label="Tiempo de la tarea nueva" placeholder="min/prenda" value="${esc(n.std)}" oninput="LTT.nuevas[${i}].std=this.value"></td>
+      <td colspan="5" class="sub">Tarea nueva</td><td><button type="button" class="btn-mini gris" onclick="LTT.nuevas.splice(${i},1);ltPintarTiempos()">Quitar</button></td></tr>`).join("");
+  const bloque=a=>{ const de=ts.filter(t=>t.area===a.area); const s0=de.filter(t=>t.activo&&t.std==null).length;
+    return `<div class="ltt-area"><div class="ltt-cab"><h2>${esc(a.area)}</h2><span class="${s0?"acf-q mal":"acf-q ok"}">${s0?`${s0} sin tiempo`:"Todas con tiempo"}</span>
+      ${a.edita?"":`<span class="sub">solo lectura</span>`}</div>
+      <div class="contenedor-ancho tabla-scroll"><table class="tabla acf-tabla ltt-tabla">
+      <thead><tr><th>Tarea</th><th>Tiempo<small>min por prenda</small></th><th>Real 30 días<small>min por prenda</small></th><th>Prendas<small>30 días</small></th><th>Personas</th><th>Sin minutaje</th><th>Estado</th><th></th></tr></thead>
+      <tbody>${de.map(fila).join("")}${nuevas(a.area)}</tbody></table></div>
+      ${a.edita?`<button type="button" class="btn-mini" onclick="LTT.nuevas.push({area:'${esc(a.area)}',nombre:'',std:''});ltPintarTiempos()">+ Tarea nueva en ${esc(a.area)}</button>`:""}</div>`; };
+  const puede=areas.some(a=>a.edita), nCamb=Object.keys(LTT.cambios).length+LTT.nuevas.length;
+  z.innerHTML=`<div class="ltt-top"><button type="button" class="btn-mini gris" onclick="ltSalirTiempos()">‹ Volver a los lotes</button><h2 class="lt-h2" style="margin:0">Tiempos por tarea</h2></div>
+    <div class="acf-kpis">
+      <div class="acf-k"><b class="${sin.length?"rojo":"verde"}">${sin.length}</b><span>tarea${sin.length===1?"":"s"} activa${sin.length===1?"":"s"} sin tiempo: lo que se hace en ellas no genera minutaje</span></div>
+      <div class="acf-k"><b class="${sinMj?"rojo":"verde"}">${ltN(sinMj)}</b><span>tramos con prendas en 30 días que se quedaron sin minutaje</span></div>
+      <div class="acf-k"><b class="verde">${conT}</b><span>tarea${conT===1?"":"s"} con tiempo, cada prenda suma minutaje como un ticket</span></div>
+    </div>
+    ${areas.map(bloque).join("")}
+    ${puede?`<details class="ltt-pegar"><summary>Pegar desde Excel</summary>
+      <p class="sub">Copia de Excel tres columnas: <b>ÁREA</b>, <b>TAREA</b> y <b>MIN POR PRENDA</b> (o solo TAREA y MIN si eliges el área). Las tareas que no existen se crean.</p>
+      <div class="ltt-pegar-f"><label class="campo"><span>Área si pegas 2 columnas</span><select id="lttPegArea">${areas.filter(a=>a.edita).map(a=>`<option>${esc(a.area)}</option>`).join("")}</select></label>
+      <textarea class="inp" id="lttPegar" rows="5" placeholder="CORTE&#9;TENDIDO&#9;0.35&#10;CORTE&#9;NUMERADO&#9;0.12"></textarea>
+      <button type="button" class="btn-mini" onclick="ltTPegar()">Leer lo pegado</button></div></details>
+    <div class="ltt-guardar">
+      <label class="ltt-chk"><input type="checkbox" id="lttDesdeOn" checked> Dar minutaje también a lo ya registrado sin tiempo desde el
+        <input type="date" id="lttDesde" value="${ltQuincena()}" min="${(()=>{const d=new Date(hoyLimaApp()+"T12:00:00");d.setDate(d.getDate()-31);return d.toLocaleDateString("sv-SE");})()}" max="${hoyLimaApp()}"></label>
+      <button type="button" class="btn-principal" id="lttGuardar" onclick="ltTGuardar()" ${nCamb?"":"disabled"}>GUARDAR ${nCamb?nCamb+" CAMBIO"+(nCamb===1?"":"S"):"TIEMPOS"}</button>
+    </div>`:""}
+    <div class="lt-explica">El tiempo queda congelado en cada registro, igual que el STD de un ticket: cambiarlo después solo cuenta para lo que se registre desde ahí.
+      "Real 30 días" son los minutos trabajados entre las prendas contadas: sirve de referencia, no es el tiempo que se paga.
+      La supervisora no sube tiempos; lo hace Ingeniería con Edición en el área (DESPACHO y REPROCESO van con ACABADO).</div>`;
+}
+function ltTCambio(id, k, v){
+  const t=(LTT.r.tareas||[]).find(x=>x.id===id); if(!t) return;
+  const c=LTT.cambios[id]||(LTT.cambios[id]={});
+  const orig = k==="std" ? ltFmtStd(t.std) : t.activo;
+  if(k==="std" ? (ltNum(v)===ltNum(orig) && (String(v).trim()==="")===(orig==="")) : v===orig) delete c[k]; else c[k]=v;
+  if(!Object.keys(c).length) delete LTT.cambios[id];
+  const n=Object.keys(LTT.cambios).length+LTT.nuevas.length, b=$("lttGuardar");
+  if(b){ b.disabled=!n; b.textContent=n?`GUARDAR ${n} CAMBIO${n===1?"":"S"}`:"GUARDAR TIEMPOS"; }
+  if(k==="activo") ltPintarTiempos();
+}
+function ltTPegar(){
+  const txt=($("lttPegar").value||"").trim(), defA=$("lttPegArea").value;
+  if(!txt){ mostrarError("Pega las filas de Excel"); return; }
+  const ts=LTT.r.tareas||[], edit=(LTT.r.areas||[]).filter(a=>a.edita).map(a=>a.area);
+  let ok=0; const malas=[];
+  txt.split(/\r?\n/).forEach((ln,i)=>{
+    const c=ln.split(/\t|;/).map(x=>x.trim()).filter((x,j,a)=>x!==""||j<a.length-1);
+    if(!c.length||!c.join("")) return;
+    let area=defA, nom, std;
+    if(c.length>=3){ area=c[0].toUpperCase(); nom=c[1]; std=c[2]; } else { nom=c[0]; std=c[1]; }
+    nom=String(nom||"").toUpperCase().replace(/\s+/g," ").trim();
+    const n=ltNum(std);
+    if(/^(AREA|ÁREA|TAREA)$/i.test(c[0])) return;                         // encabezado
+    if(!edit.includes(area) || !nom || n==null || n<=0 || n>600){ malas.push(i+1); return; }
+    const t=ts.find(x=>x.area===area&&x.nombre===nom);
+    if(t) ltTCambio(t.id,"std",String(n));
+    else { const e=LTT.nuevas.find(x=>x.area===area&&x.nombre.toUpperCase()===nom); if(e) e.std=String(n); else LTT.nuevas.push({area,nombre:nom,std:String(n)}); }
+    ok++;
+  });
+  ltPintarTiempos();
+  if(ok) mostrarOk(`${ok} fila${ok===1?"":"s"} leída${ok===1?"":"s"}: revisa y toca GUARDAR`);
+  if(malas.length) mostrarError(`No se entendió la fila ${malas.slice(0,6).join(", ")}${malas.length>6?"…":""}: área de DESPACHO, REPROCESO o CORTE que puedas editar y un tiempo entre 0 y 600`);
+}
+async function ltTGuardar(){
+  const ts=LTT.r.tareas||[], filas=[];
+  for(const [id,c] of Object.entries(LTT.cambios)){
+    const t=ts.find(x=>x.id===Number(id)); if(!t) continue;
+    const std=("std" in c)?c.std:ltFmtStd(t.std);
+    if(String(std).trim()!=="" && !(ltNum(std)>0)){ mostrarError(`El tiempo de ${t.nombre} no es un número`); return; }
+    filas.push({area:t.area,nombre:t.nombre,std:String(std).trim(),activo:("activo" in c)?c.activo:t.activo});
+  }
+  for(const n of LTT.nuevas){
+    if(!n.nombre.trim()){ mostrarError("Falta el nombre de una tarea nueva"); return; }
+    if(String(n.std).trim()!=="" && !(ltNum(n.std)>0)){ mostrarError(`El tiempo de ${n.nombre} no es un número`); return; }
+    filas.push({area:n.area,nombre:n.nombre,std:String(n.std).trim(),activo:true});
+  }
+  if(!filas.length) return;
+  const on=$("lttDesdeOn"), d=$("lttDesde"), desde=(on&&on.checked&&d&&d.value)||null;
+  const s=ltSes();
+  await unaVez("lttGuardar", botonesDe("#lttGuardar"), async()=>{
+    try{
+      const r=await rpc("fn_lote_tiempos_guardar",{p_dni:s.dni,p_token:s.token,p_filas:filas,p_desde:desde});
+      if(!r.ok){ mostrarError(r.error||"No se pudo guardar"); return; }
+      mostrarOk(`${r.guardadas} tiempo${r.guardadas===1?"":"s"} guardado${r.guardadas===1?"":"s"}`+(r.aplicados?` · ${ltN(r.aplicados)} tramos ya registrados ganaron ${ltMj(r.minutaje)} min de minutaje`:""));
+      LTT.cambios={}; LTT.nuevas=[]; LT.tareas=null;
+      await ltTiempos();
+    }catch(e){ mostrarError(e.message); }
+  });
+}
+async function ltTLog(id, nombre){
+  const s=ltSes();
+  abrirModal(`<div id="lttLog">${cargandoHTML("Cargando historial…")}</div>`);
+  try{
+    const r=await rpc("fn_lote_tiempos_log",{p_dni:s.dni,p_token:s.token,p_tarea:id});
+    const d=$("lttLog"); if(!d) return;
+    if(!r.ok){ d.innerHTML=`<div class="vacio-msg">${esc(r.error||"No se pudo")}</div>`; return; }
+    const f=r.filas||[], v=x=>x==null?"sin tiempo":ltFmtStd(x)+" min";
+    d.innerHTML=`<h2>${esc(nombre)}</h2><div class="sub" style="margin-bottom:10px">Cambios del tiempo por prenda</div>
+      ${f.length?`<div class="tabla-scroll" style="max-height:52vh"><table class="tabla"><thead><tr><th class="izq">Cuándo</th><th>Quién</th><th>Antes</th><th>Nuevo</th><th>Estado</th></tr></thead>
+      <tbody>${f.map(x=>`<tr><td class="izq">${new Date(x.cuando).toLocaleString("es-PE",{timeZone:"America/Lima",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false})}</td>
+        <td>${esc(soloApellidos(x.por||""))}</td><td>${v(x.antes)}</td><td><b>${v(x.nuevo)}</b></td><td>${x.activo?"Activa":"Oculta"}</td></tr>`).join("")}</tbody></table></div>`
+      :`<div class="vacio-msg">Nadie ha cambiado este tiempo todavía.</div>`}
+      <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`;
+  }catch(e){ const d=$("lttLog"); if(d) d.innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`; }
 }
