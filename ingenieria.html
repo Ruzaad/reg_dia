@@ -36,6 +36,7 @@
         <summary class="nav-sep">Tickets</summary>
         <a class="nav-item" data-tab="pasoBuscar" href="#pasoBuscar">Buscar y seguir</a>
         <a class="nav-item" data-tab="pasoAsisConf" href="#pasoAsisConf">Asistencia por confirmar</a>
+        <a class="nav-item" data-tab="pasoFeriados" href="#pasoFeriados">Feriados y fin de semana</a>
         <a class="nav-item" data-tab="pasoBolSin" href="#pasoBolSin">Boletas sin llenar<b class="dyn-cnt" id="bslNavCnt" hidden></b></a>
         <a class="nav-item" data-tab="pasoSueltos" href="#pasoSueltos">Paquetes sueltos</a>
         <a class="nav-item" data-tab="pasoLotes" href="#pasoLotes">Trabajo por tiempo</a>
@@ -1046,6 +1047,17 @@
       <div id="acfCuerpo"></div>
     </section>
 
+    <section class="pantalla" id="pasoFeriados">
+      <div class="seccion-cab">
+        <h1>Feriados y fin de semana</h1>
+        <p class="seccion-sub">Un feriado no exige minutos a nadie: nadie sale NO ENTREGÓ ni por confirmar, y la quincena no se anula.
+        Si alguien trabaja un feriado, o un sábado o domingo con la regla de fin de semana prendida, aquí se ponen sus horas.
+        Cuentan como hora extra y son su disponible de ese día; mientras no se pongan, su disponible es 0.</p>
+      </div>
+      <div class="acf-kpis" id="ferKpis"></div>
+      <div id="ferCuerpo"></div>
+    </section>
+
     <section class="pantalla" id="pasoBolSin">
       <div class="seccion-cab">
         <h1>Boletas sin llenar</h1>
@@ -1619,6 +1631,7 @@
 <script src="inicio.js"></script>
 <script src="calidad.js"></script>
 <script src="asistencia.js"></script>
+<script src="feriados.js"></script>
 <script src="buscar.js"></script>
 <script src="incidencias.js"></script>
 <script src="sueltos.js"></script>

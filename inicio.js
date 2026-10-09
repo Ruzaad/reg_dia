@@ -45,6 +45,8 @@ function iniCargar(){
   if(iniPuede("pasoEf")) iniRpc("ef","fn_eficiencia_areas",{p_desde:ayer,p_hasta:ayer});
   if(iniPuede("pasoAudit")) iniRpc("aud","fn_ef_auditoria_v2",{p_desde:ayer,p_hasta:ayer,p_area:"",p_umbral:AUD_ANORMAL,p_pico:20});
   if(iniPuede("pasoIncid")) iniRpc("sol","fn_solicitudes_listar",{p_area:""});
+  if(iniPuede("pasoBolSin")) iniRpc("fer","fn_dias_no_laborables",{p_desde:ferSuma(hoy,-45),p_hasta:hoy})   // parche 120
+    .then(r=>{ if(r && r.ok) ferNav(r); });
 }
 
 /* ---------- cálculo por área (solo con lo que devuelven las RPC) ---------- */
@@ -77,6 +79,12 @@ function iniAvisos(F){
     if(n) L.push({n, tab:iniPuede("pasoAsis")?"pasoAsis":"pasoDash", ir:iniPuede("pasoAsis")?"Personal":"Tableros", tipo:"aviso",
       txt:`${n===1?"persona sigue":"personas siguen"} sin asistencia marcada hoy`, chips:chips("as",f),
       nota:"Sin marca cuentan como ACTIVO en la eficiencia; una falta no marcada no se ve."}); }
+  if(INI.d.fer && INI.d.fer.ok){   // parche 120: trabajaron en sábado, domingo o feriado y nadie puso sus horas
+    const M={}; (INI.d.fer.dias||[]).forEach(d=>ferPend(d).forEach(p=>{ if(F.some(x=>x.area===p.area)) M[p.area]=(M[p.area]||0)+1; }));
+    const n=Object.values(M).reduce((a,b)=>a+b,0);
+    if(n) L.push({n, tab:"pasoFeriados", ir:"Feriados y fin de semana", tipo:"alerta",
+      txt:`${n===1?"persona trabajó":"personas trabajaron"} en sábado, domingo o feriado y no tiene${n===1?"":"n"} sus horas`, chips:chips("fer",x=>M[x.area]||0),
+      nota:"Hasta ponerlas, su disponible de ese día es 0."}); }
   if(INI.d.aud && INI.d.aud.ok){ const f=x=>x.aud||0, n=suma(f);
     if(n) L.push({n, tab:"pasoAudit", ir:"Auditoría", tipo:"aviso",
       txt:`${n===1?"persona pasó":"personas pasaron"} el ${AUD_ANORMAL}% de eficiencia el ${iniFechaTxt(INI.ayer)}`, chips:chips("aud",f)}); }

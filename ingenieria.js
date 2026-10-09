@@ -104,7 +104,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoInicio","pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
+  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoFeriados","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -151,6 +151,7 @@ function activarTab(tab){
   else if(tab==='pasoLotes') ltCargarIng();
   else if(tab==='pasoPrestadas') prCargar();
   else if(tab==='pasoAsisConf') acfInit();
+  else if(tab==='pasoFeriados') ferInit();
   else if(tab==='pasoCalBase') calidadInit();
   else if(tab==='pasoTmpMed') tmInit();
   else if(tab==='pasoTmpFalta') tfInit();
@@ -215,7 +216,7 @@ function puedeEditar(a){
   return PERM.areas[a]==="EDITAR";
 }
 /* Subpestañas que no están en el menú: siguen el permiso de su pestaña madre. */
-const TAB_MADRE={pasoAsisConf:"pasoBolSin",pasoDia:"pasoEf",pasoOpsOF:"pasoGen",pasoExtra:"pasoGen",pasoOpAd:"pasoGen",pasoCausas:"pasoGen"};
+const TAB_MADRE={pasoAsisConf:"pasoBolSin",pasoFeriados:"pasoBolSin",pasoDia:"pasoEf",pasoOpsOF:"pasoGen",pasoExtra:"pasoGen",pasoOpAd:"pasoGen",pasoCausas:"pasoGen"};
 function tabPermitida(tab){
   if(tab==='pasoInicio') return typeof iniHayAlgo==="function" && iniHayAlgo();
   if(tab==='pasoBuscar') return true;   // solo lectura; el servidor limita a las áreas de Permisos
@@ -4929,7 +4930,7 @@ function incPintar(){
     const celdas = dias.map(d=>{
       const c=(p.dias||{})[d.fecha]||{};
       if(c.etiqueta){
-        const finde = c.etiqueta==="SABADO"||c.etiqueta==="DOMINGO";
+        const finde = ["SABADO","DOMINGO","FERIADO"].includes(c.etiqueta);
         return `<td class="inc-etq${finde?" inc-finde":""}" title="${esc(c.etiqueta)}">${esc(c.etiqueta.slice(0,3))}</td>`;
       }
       /* Sin eficiencia y sin etiqueta: día activo cuyo disponible quedó en cero
