@@ -1616,3 +1616,39 @@ body.prestada::after{content:"";position:fixed;inset:0;border:4px solid var(--vi
 .ss-aviso.ok{background:var(--exito-t);border-color:color-mix(in srgb,var(--exito) 40%,transparent)} .ss-aviso.ok b{color:var(--exito)}
 .ss-aviso.mal{background:var(--alerta-t);border-color:color-mix(in srgb,var(--alerta) 40%,transparent)} .ss-aviso.mal b{color:var(--alerta)}
 .ss-aviso button{align-self:flex-start;margin-top:6px;border:0;border-radius:999px;padding:8px 14px;font:800 13px var(--sans);background:var(--sup);color:var(--texto);cursor:pointer;box-shadow:var(--sombra-1)}
+
+/* ---------- Tiempos por tarea y minutaje de lotes (parche 119) ---------- */
+.lt-mj{display:flex;justify-content:space-between;align-items:baseline;margin-top:8px;font-size:12.5px;font-weight:700;color:var(--suave);text-transform:uppercase;letter-spacing:.4px}
+.lt-mj b{font:700 15px var(--mono);color:var(--azul);text-transform:none;letter-spacing:0}
+.lt-mjt{color:var(--azul);font-weight:700}
+.lt-queda{text-align:center;font-size:14px;font-weight:700;color:var(--azul);margin:0 0 10px}
+.lt-sintiempo{display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;cursor:pointer;border:1.5px solid var(--linea);border-left:5px solid var(--aviso);background:var(--sup);border-radius:12px;padding:10px 14px;margin:0 0 14px;color:var(--texto);font:inherit}
+.lt-sintiempo b{font-size:14.5px} .lt-sintiempo span{font-size:13px;color:var(--suave);font-weight:600}
+.lt-sintiempo:focus-visible{outline:3px solid var(--azul);outline-offset:2px}
+.lt-cantedit{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end;margin-top:12px}
+.lt-cantedit label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--suave)}
+.lt-cantedit input{width:130px;border:1.5px solid var(--linea);border-radius:10px;padding:8px 10px;font:600 15px var(--mono);background:var(--sup);color:var(--texto)}
+.lt-cantedit small{font-size:12px;color:var(--suave);font-weight:600}
+.ltt-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.ltt-area{margin-bottom:22px}
+.ltt-cab{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.ltt-cab h2{font-size:17px;margin:0}
+.ltt-tabla th small{display:block;font-weight:500;font-size:11px;text-transform:none;letter-spacing:0;color:var(--suave)}
+.ltt-tabla td{vertical-align:middle}
+.ltt-tabla .inp{border:1.5px solid var(--linea);border-radius:10px;padding:8px 10px;font:600 14px var(--sans);background:var(--sup);color:var(--texto);min-width:150px}
+.ltt-in{width:96px;min-width:0 !important;font-family:var(--mono) !important;text-align:right}
+.ltt-in.vacio{border-color:var(--aviso);background:var(--ocre-t)}
+.ltt-tabla tr.ltt-cambio{background:var(--azul-t)}
+.ltt-tabla tr.ltt-off th,.ltt-tabla tr.ltt-off td{opacity:.55}
+.ltt-dif{display:block;font-size:11.5px;font-weight:700;margin-top:2px} .ltt-dif.alto{color:var(--aviso)} .ltt-dif.bajo{color:var(--alerta)}
+.ltt-sw{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer}
+.ltt-sw input{width:18px;height:18px}
+.ltt-pegar{background:var(--sup);border:1.5px solid var(--linea);border-radius:var(--r);padding:10px 14px;margin:0 0 14px}
+.ltt-pegar summary{cursor:pointer;font-weight:700;color:var(--azul)}
+.ltt-pegar-f{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:8px}
+.ltt-pegar-f textarea{flex:1;min-width:240px;font:500 13px var(--mono);border:1.5px solid var(--linea);border-radius:10px;padding:8px 10px;background:var(--sup);color:var(--texto)}
+.ltt-guardar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;position:sticky;bottom:0;background:var(--sup);border:1.5px solid var(--linea);border-radius:var(--r);padding:10px 14px;box-shadow:var(--sombra-1);z-index:2}
+.ltt-chk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13.5px;font-weight:600}
+.ltt-chk input[type=date]{border:1.5px solid var(--linea);border-radius:10px;padding:6px 8px;background:var(--sup);color:var(--texto);font:600 13px var(--sans)}
+.ltt-guardar .btn-principal{width:auto;margin:0;padding:12px 20px}
+.ltt-guardar .btn-principal:disabled{opacity:.5}
