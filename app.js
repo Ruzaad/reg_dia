@@ -2907,7 +2907,7 @@ function asyAyerIso(){ const f=asyFecha(aswHoy()); do{ f.setDate(f.getDate()-1);
 /* Días hábiles de un rango (lunes a viernes), ambos incluidos. */
 function asyHabiles(desde, hasta){ const L=[], f=asyFecha(desde), h=asyFecha(hasta);
   while(f<=h){ if(f.getDay()!==0&&f.getDay()!==6) L.push(asyIso(f)); f.setDate(f.getDate()+1); } return L; }
-const asyPorConf = p => !(Number(p.tickets)>0) && !p.estado_guardado;
+const asyPorConf = p => !(Number(p.tickets)>0) && !p.estado_guardado && !p.feriado;   // feriado: parche 120
 
 /* Al entrar: carga ayer; si hay a quién confirmar abre ahí, si no en Hoy. */
 function asyArranque(){
