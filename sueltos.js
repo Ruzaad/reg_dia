@@ -33,9 +33,15 @@ async function psCargar(){
   const s=psSesion(); PS.cargando=true;
   pintarCargando(z,"Revisando los paquetes de cada OF…");
   try{
-    const r=await rpc("fn_paquetes_sueltos",{p_dni:s.dni,p_token:s.token,p_area:sa?sa.value:""});
+    /* "Todas mis áreas" va de a una área en paralelo: todas juntas pasan los
+       3 s que la base le da a cada consulta y salía error 500. */
+    const areas = sa && !sa.value ? [...sa.options].map(o=>o.value).filter(Boolean) : [sa?sa.value:""];
+    const rs=(await Promise.allSettled(areas.map(a=>rpc("fn_paquetes_sueltos",{p_dni:s.dni,p_token:s.token,p_area:a}))))
+      .filter(x=>x.status==="fulfilled" || !/NO_AUTORIZADA/.test(String(x.reason&&x.reason.message||""))).map(x=>{ if(x.status==="rejected") throw x.reason; return x.value; });
+    const r=rs.find(x=>!x.ok) || {ok:true, hoy:(rs[0]||{}).hoy, sin_generar:(rs[0]||{}).sin_generar, items:rs.flatMap(x=>x.items||[])};
     if(!r.ok){ z.innerHTML=`<div class="vacio-msg">${esc(r.error||"No se pudo")}</div>`; return; }
-    PS.items=r.items||[]; PS.hoy=r.hoy; PS.sin_generar=r.sin_generar||0;
+    r.items.sort((a,b)=>Number(b.min||0)-Number(a.min||0));
+    PS.items=r.items; PS.hoy=r.hoy; PS.sin_generar=r.sin_generar||0;
     psPintar();
   }catch(e){ z.innerHTML = psFalta(e) ? PS_FALTA_HTML : `<div class="vacio-msg">${esc(e.message)}</div>`; }
   finally{ PS.cargando=false; }
