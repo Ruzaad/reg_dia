@@ -1032,6 +1032,7 @@ body[data-pagina="supervisora"] .grid-personal{max-width:1100px;width:100%;margi
 .cc-chk{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--suave);align-self:flex-end;padding-bottom:9px}
 .cc-chk input{width:17px;height:17px;accent-color:var(--azul)}
 .cc-corte{margin-left:auto;align-self:flex-end;padding-bottom:9px;font-size:12px;color:var(--tenue);font-weight:600}
+.cc-colas{font-size:12px;line-height:1.4;color:var(--suave);margin-top:8px}
 .cc-aviso{display:flex;gap:10px;align-items:flex-start;background:var(--ocre-t);border-radius:var(--r);padding:11px 14px;font-size:13px;line-height:1.45;color:var(--texto);margin:0 0 14px}
 .cc-aviso b{color:var(--aviso)}
 .cc-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-bottom:16px}
