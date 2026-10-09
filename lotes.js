@@ -161,9 +161,11 @@ function ltFormHTML(areas){
   return `<div class="lt-form" id="ltForm">
     <div class="lt-f"><span id="ltAreaL">Área</span><div class="lt-seg" role="radiogroup" aria-labelledby="ltAreaL" id="ltFArea">
       ${areas.map((a,i)=>`<button type="button" role="radio" aria-checked="${i===0}" data-v="${esc(a)}">${esc(a)}</button>`).join("")}</div></div>
-    <label class="lt-f"><span>Cliente o destino</span><input class="inp" id="ltFDest" maxlength="60" autocomplete="off" placeholder="Ej: SCOTIABANK"></label>
-    <div class="lt-f"><span id="ltTarL">Tarea</span><div class="lt-seg" role="radiogroup" aria-labelledby="ltTarL" id="ltFTar"></div>
-      <input class="inp" id="ltFOtra" maxlength="40" placeholder="Nombre de la tarea nueva" hidden style="margin-top:8px"></div>
+    <label class="lt-f"><span>Lote, artículo o cliente</span><input class="inp" id="ltFDest" maxlength="60" autocomplete="off" placeholder="Ej: 9CY740"></label>
+    <div class="lt-f"><span id="ltTarL">Operaciones <small class="lt-fn">toca todas las que lleva, en orden</small></span>
+      <div class="lt-seg lt-multi" role="group" aria-labelledby="ltTarL" id="ltFTar"></div>
+      <textarea class="inp" id="ltFOtra" rows="3" maxlength="400" placeholder="Operaciones nuevas, una por línea" hidden style="margin-top:8px"></textarea>
+      <div class="lt-fsel" id="ltFSel" aria-live="polite"></div></div>
     <label class="lt-f"><span>Cantidad de prendas</span><input class="inp" id="ltFCant" type="number" inputmode="numeric" min="1"></label>
     <label class="lt-f"><span>OF (opcional)</span><input class="inp" id="ltFOf" maxlength="12" autocomplete="off" placeholder="Si el lote viene de una OF"></label>
     <div class="modal-msg" id="ltFMsg" role="alert"></div>
@@ -174,30 +176,56 @@ async function ltFormIniciar(){
   const seg=(id,cb)=>{ const g=$(id); if(!g) return; g.onclick=e=>{ const b=e.target.closest("button"); if(!b) return;
     g.querySelectorAll("button").forEach(x=>x.setAttribute("aria-checked", x===b)); cb&&cb(b.dataset.v); }; };
   const pintarTar=a=>{ const g=$("ltFTar"); if(!g) return;
-    g.innerHTML=ts.filter(t=>t.area===a).map(t=>`<button type="button" role="radio" aria-checked="false" data-v="${esc(t.nombre)}">${esc(t.nombre)}</button>`).join("")
-      +`<button type="button" role="radio" aria-checked="false" data-v="">+ otra</button>`;
-    $("ltFOtra").hidden=true; };
+    LT.ops=[];
+    g.innerHTML=ts.filter(t=>t.area===a).map(t=>`<button type="button" aria-pressed="false" data-v="${esc(t.nombre)}">${esc(t.nombre)}</button>`).join("")
+      +`<button type="button" aria-pressed="false" data-v="">+ otras</button>`;
+    $("ltFOtra").hidden=true; ltFSel(); };
   seg("ltFArea", pintarTar);
-  seg("ltFTar", v=>{ const o=$("ltFOtra"); o.hidden = v!==""; if(v==="") o.focus(); });
+  /* Operaciones: varias a la vez (parche 122). El orden en que se tocan es el
+     orden de los lotes (L-1, L-2…), como el desglose de la hoja. */
+  const gt=$("ltFTar");
+  if(gt) gt.onclick=e=>{ const b=e.target.closest("button"); if(!b) return;
+    const on=b.getAttribute("aria-pressed")!=="true"; b.setAttribute("aria-pressed", on);
+    if(b.dataset.v===""){ const o=$("ltFOtra"); o.hidden=!on; if(on) o.focus(); }
+    else { LT.ops=(LT.ops||[]).filter(x=>x!==b.dataset.v); if(on) LT.ops.push(b.dataset.v); }
+    ltFSel(); };
+  const ot=$("ltFOtra"); if(ot) ot.oninput=ltFSel;
   const a=$("ltFArea").querySelector("[aria-checked=true]"); pintarTar(a?a.dataset.v:"");
+}
+/* Operaciones elegidas, en orden: las tocadas y luego las nuevas escritas. */
+function ltFOps(){
+  const o=$("ltFOtra"), nuevas = (o && !o.hidden) ? o.value.split(/\r?\n|;/).map(x=>x.trim().toUpperCase().replace(/\s+/g," ")).filter(Boolean) : [];
+  return [...new Set([...(LT.ops||[]), ...nuevas])];
+}
+function ltFSel(){
+  const z=$("ltFSel"); if(!z) return; const ops=ltFOps();
+  z.innerHTML = ops.length ? `<b>${ops.length} ${ops.length===1?"operación":"operaciones"}:</b> ${ops.map((x,i)=>`${i+1}. ${esc(x)}`).join(" · ")}` : "";
+  const b=document.querySelector(".lt-crear"); if(b) b.textContent = ops.length>1 ? `CREAR ${ops.length} LOTES` : "CREAR LOTE";
 }
 async function ltCrear(alTerminar){
   const s=ltSes(), msg=$("ltFMsg");
   const sel=id=>{ const b=$(id)&&$(id).querySelector("[aria-checked=true]"); return b?b.dataset.v:null; };
-  const area=sel("ltFArea"); let tarea=sel("ltFTar");
-  if(tarea==="") tarea=$("ltFOtra").value.trim();
+  const area=sel("ltFArea"), ops=ltFOps();
   const dest=$("ltFDest").value.trim(), cant=parseInt($("ltFCant").value,10), of=$("ltFOf").value.trim();
-  if(!dest){ msg.textContent="Escribe el cliente o destino"; $("ltFDest").focus(); return; }
-  if(!tarea){ msg.textContent="Elige la tarea"; return; }
+  if(!dest){ msg.textContent="Escribe el lote, artículo o cliente"; $("ltFDest").focus(); return; }
+  if(!ops.length){ msg.textContent="Elige al menos una operación"; return; }
+  if(ops.some(x=>x.length>40)){ msg.textContent="Cada operación puede tener hasta 40 letras"; return; }
   if(!(cant>0)){ msg.textContent="Pon la cantidad de prendas"; $("ltFCant").focus(); return; }
   msg.textContent="";
   await unaVez("ltCrear", botonesDe(".lt-crear"), async()=>{
+    const hechos=[];
     try{
-      const r=await rpc("fn_lote_crear",{p_dni:s.dni,p_token:s.token,p_area:area,p_destino:dest,p_tarea:tarea,p_cantidad:cant,p_of:of});
-      if(!r.ok){ msg.textContent=r.error||"No se pudo crear"; return; }
-      LT.tareas=null; mostrarOk(r.repetido?"Ese lote ya estaba creado":`Lote L-${r.id} creado`);
-      alTerminar&&alTerminar();
-    }catch(e){ msg.textContent=e.message; }
+      // Una por una y en orden, para que los números de lote sigan el orden de la hoja.
+      for(const tarea of ops){
+        const r=await rpc("fn_lote_crear",{p_dni:s.dni,p_token:s.token,p_area:area,p_destino:dest,p_tarea:tarea,p_cantidad:cant,p_of:of});
+        if(!r.ok){ msg.textContent=`${hechos.length?`Se crearon ${hechos.length}; `:""}no se pudo crear ${tarea}: ${r.error||"error"}`; break; }
+        hechos.push(r.id);
+      }
+    }catch(e){ msg.textContent=`${hechos.length?`Se crearon ${hechos.length}; `:""}${e.message}`; }
+    if(!hechos.length) return;
+    LT.tareas=null;
+    mostrarOk(hechos.length===1?`Lote L-${hechos[0]} creado`:`${hechos.length} lotes creados: L-${hechos[0]} a L-${hechos[hechos.length-1]}`);
+    if(hechos.length===ops.length) alTerminar&&alTerminar();
   });
 }
 async function ltCerrar(id, cerrar, alTerminar){

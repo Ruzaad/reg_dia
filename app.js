@@ -682,7 +682,7 @@ function abrirSolicitudAjuste(){
   const mia=AREA_ESTAJERO||((sesionActual()||{}).area)||"";
   abrirModal(`
     <h2>Solicitar descuento de tiempo</h2>
-    <div class="sub" style="margin-bottom:12px;">Pides a supervisión restar minutos de tu día${SA_V2===false?"":` · <a href="#" onclick="cerrarModal();abrirMisPedidos();return false;">Ver mis pedidos</a>`}</div>
+    <div class="sub" style="margin-bottom:12px;">Pides a supervisión restar minutos de tu día</div>
     <div class="sa-motivos" id="saMotivos">
       ${SA_MOTIVOS.map((m,i)=>`<button type="button" class="sa-mot" id="saMot${i}" onclick="saElegir(${i})"${m[0]==="OTROS"?' style="grid-column:1/-1"':""}>${esc(m[1])}</button>`).join("")}
     </div>
