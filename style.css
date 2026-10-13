@@ -2,7 +2,7 @@
 :root{
   --azul:#0D3B85; --ocre:#D49D53; --enlace:#1A56B4;
   --blanco:#FAFAFA; --gris-fondo:#F0F2F5; --texto:#212529;
-  --exito:#1E7B3C; --alerta:#B3261E; --tomado:#9aa4b1;
+  --exito:#1E7B3C; --alerta:#B3261E; --tomado:#9AA4B1;
   --dorado:#C9A227;
   --sw-on:var(--enlace); --sw-off:#E1E5EB;
 }
@@ -35,7 +35,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative
 .pantalla{display:none;flex:1;flex-direction:column;padding:18px;overflow-y:auto;}
 .pantalla.activa{display:flex;}
 h1{font-size:26px;font-weight:800;color:var(--azul);text-align:center;margin-bottom:4px;}
-.sub{font-size:16px;text-align:center;color:#5a6270;margin-bottom:16px;}
+.sub{font-size:16px;text-align:center;color:var(--suave);margin-bottom:16px;}
 
 .cargando{margin:24px auto;text-align:center;font-size:21px;font-weight:700;color:var(--enlace);}
 .spinner{width:44px;height:44px;border:5px solid var(--gris-fondo);border-top-color:var(--enlace);
@@ -44,7 +44,7 @@ h1{font-size:26px;font-weight:800;color:var(--azul);text-align:center;margin-bot
 .banner-error{background:var(--alerta);color:#fff;font-size:17px;font-weight:700;
   padding:12px 16px;border-radius:12px;margin:0 18px 12px;display:none;text-align:center;}
 .banner-error.visible{display:block;}
-.vacio-msg{margin:24px auto;font-size:19px;color:#5a6270;text-align:center;}
+.vacio-msg{margin:24px auto;font-size:19px;color:var(--suave);text-align:center;}
 
 /* ---- pie de página: SALIR discreto + disclaimer ---- */
 footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:8px;
@@ -108,7 +108,7 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .card-area:active{transform:scale(.96);}
 .card-area.off{opacity:.45;cursor:not-allowed;border-top-color:var(--tomado);}
 .card-area .ca-nombre{font-size:23px;font-weight:800;color:var(--azul);}
-.card-area .ca-sub{font-size:15px;color:#5a6270;margin-top:6px;}
+.card-area .ca-sub{font-size:15px;color:var(--suave);margin-top:6px;}
 
 .lista-cards{display:flex;flex-direction:column;gap:12px;max-width:740px;width:100%;margin:0 auto;}
 .card-fila{background:var(--blanco);border-left:11px solid var(--ocre);border-radius:14px;
@@ -116,7 +116,7 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
   display:flex;justify-content:space-between;align-items:center;gap:12px;}
 .card-fila:active{transform:scale(.98);}
 .card-fila .cf-titulo{font-size:22px;font-weight:800;}
-.card-fila .cf-detalle{font-size:16px;color:#5a6270;margin-top:4px;}
+.card-fila .cf-detalle{font-size:16px;color:var(--suave);margin-top:4px;}
 .badge-disp{font-size:16px;font-weight:800;color:var(--blanco);background:var(--enlace);
   padding:7px 14px;border-radius:999px;white-space:nowrap;}
 .badge-disp.vacio{background:var(--tomado);}
@@ -130,7 +130,7 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .mp-editor input:focus{border-color:var(--enlace);}
 /* Motivos del descuento de tiempo del operario: botones grandes, no un desplegable. */
 .sa-motivos{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
-.sa-mot{background:var(--blanco);border:2px solid #cfd8e6;border-radius:12px;
+.sa-mot{background:var(--blanco);border:2px solid var(--linea);border-radius:12px;
   font-size:15px;font-weight:800;color:var(--azul);padding:14px 8px;cursor:pointer;
   text-align:center;line-height:1.2;}
 .sa-mot:active{background:var(--gris-fondo);}
@@ -149,7 +149,7 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
   color:var(--azul);box-shadow:0 2px 5px rgba(13,59,133,.10);cursor:pointer;
   display:flex;justify-content:space-between;align-items:center;}
 .sug:active{background:var(--gris-fondo);}
-.sug small{font-size:15px;color:#5a6270;font-weight:700;}
+.sug small{font-size:15px;color:var(--suave);font-weight:700;}
 
 /* ---- tickets ---- */
 .lista-tickets{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-content:start;}
@@ -164,7 +164,7 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .tk-fila{display:flex;gap:11px;margin-top:7px;flex-wrap:wrap;font-size:16px;}
 .tk-fila b{font-weight:800;}
 .tk-tomado-por{margin-top:7px;font-size:14px;font-weight:700;color:var(--alerta);
-  background:#fdecea;padding:4px 9px;border-radius:8px;display:inline-block;}
+  background:var(--alerta-t);padding:4px 9px;border-radius:8px;display:inline-block;}
 .tk-min{position:absolute;top:11px;right:11px;font-size:14px;font-weight:800;color:var(--ocre);}
 /* cabecera de ticket en 2 columnas: Numeración + PPH (dorado) */
 .tk-head{display:flex;gap:22px;align-items:flex-start;padding-right:56px;}
@@ -205,10 +205,10 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .acab-hist-fila:last-child{border-bottom:none;}
 .acab-hist-fila.mio{background:rgba(26,86,180,.06);border-radius:8px;padding-left:8px;padding-right:8px;}
 .acab-hist-quien{font-weight:800;font-size:16px;color:var(--azul);}
-.acab-hist-cuando{font-size:13px;font-weight:600;color:#5a6270;}
+.acab-hist-cuando{font-size:13px;font-weight:600;color:var(--suave);}
 .acab-hist-cant{font-weight:800;font-size:18px;white-space:nowrap;}
 .acab-hist-causa{font-size:13px;font-weight:700;color:var(--ocre);}
-.acab-hist-total{margin-top:10px;font-size:14px;font-weight:700;text-align:center;color:#5a6270;}
+.acab-hist-total{margin-top:10px;font-size:14px;font-weight:700;text-align:center;color:var(--suave);}
 /* Operación de ACABADO ya completa: se ve apagada, pero SÍ se abre — en solo
    lectura, que es la única forma de ver quién registró esas cantidades. */
 .card-fila.off{opacity:.72;}
@@ -216,21 +216,21 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 /* OFs registradas · estado por área (parche 44) */
 .of-area{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;
   padding:3px 9px;margin:2px 3px 2px 0;white-space:nowrap;border:1px solid transparent;}
-.of-area.lista{background:#e6f3ea;color:var(--exito);border-color:#bfe0c9;}
+.of-area.lista{background:var(--exito-t);color:var(--exito);border-color:var(--exito);}
 .of-area.pendiente{background:#fdf3e3;color:#8a6116;border-color:#ecd9b0;}
-.of-area.sin-base{background:#fdecea;color:var(--alerta);border-color:#f3c7c2;cursor:help;}
+.of-area.sin-base{background:var(--alerta-t);color:var(--alerta);border-color:var(--alerta);cursor:help;}
 
 /* Incidencias · desglose de motivos del rango (parche 51; agrupado por tipo en
    el 52). Un chip por TIPO; el texto libre de OTROS se abre en .mot-sub debajo,
    en vez de generar un chip por frase. */
-.mot-caja{background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;
+.mot-caja{background:var(--blanco);border:1px solid var(--linea-2);border-radius:14px;
   padding:14px 16px;box-shadow:0 1px 3px rgba(13,59,133,.06);}
 .mot-chips{display:flex;flex-wrap:wrap;gap:8px;}
 .mot-chip{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-family:inherit;
   color:var(--texto);text-align:left;background:var(--gris-fondo);border:1px solid var(--sw-off);
   border-radius:999px;padding:6px 12px;}
-.mot-chip.neg{border-color:#f3c7c2;}
-.mot-chip.pos{border-color:#bfe0c9;}
+.mot-chip.neg{border-color:var(--alerta);}
+.mot-chip.pos{border-color:var(--exito);}
 .mot-chip .mot-n{font-weight:800;background:var(--blanco);border:1px solid var(--sw-off);
   border-radius:999px;padding:1px 8px;font-variant-numeric:tabular-nums;}
 .mot-chip .mot-min{font-variant-numeric:tabular-nums;white-space:nowrap;}
@@ -244,9 +244,9 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .mot-chip:focus-visible{outline:2px solid var(--enlace);outline-offset:2px;border-radius:999px;}
 .mot-car{font-size:11px;opacity:.75;}
 /* Motivos declarados dentro de un tipo (solo OTROS los tiene) */
-.mot-sub{margin-top:12px;border-top:1px dashed #d6e0ef;padding-top:10px;}
+.mot-sub{margin-top:12px;border-top:1px dashed var(--linea);padding-top:10px;}
 .mot-sub-cab{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;
-  color:#5a6270;margin-bottom:6px;}
+  color:var(--suave);margin-bottom:6px;}
 .mot-sub-fila{display:flex;align-items:center;gap:10px;font-size:13px;padding:5px 0;
   border-bottom:1px solid #f0f2f5;}
 .mot-sub-fila:last-child{border-bottom:none;}
@@ -276,7 +276,7 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .ma-tabla th.izq{text-align:left;}
 .ma-tabla td{padding:5px 6px;border-bottom:1px solid var(--gris-fondo);}
 .ma-tabla tbody tr:last-child td{border-bottom:none;}
-.ma-tabla tbody tr:nth-child(even) td{background:#f7f9fc;}
+.ma-tabla tbody tr:nth-child(even) td{background:var(--sup-2);}
 .ma-tabla .col-n{width:82px;}
 .ma-tabla .col-mod{width:22%;}
 .ma-tabla .col-std{width:100px;}
@@ -338,9 +338,9 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
   box-shadow:0 2px 6px rgba(13,59,133,.10);cursor:pointer;border:3px solid transparent;
   display:flex;justify-content:space-between;align-items:center;gap:10px;transition:transform .06s;}
 .card-persona:active{transform:scale(.97);}
-.card-persona.marcada{border-color:var(--exito);background:#eef7f0;}
+.card-persona.marcada{border-color:var(--exito);background:var(--exito-t);}
 .card-persona .cp-nombre{font-size:19px;font-weight:800;line-height:1.2;}
-.card-persona .cp-dni{font-size:14px;color:#5a6270;margin-top:3px;}
+.card-persona .cp-dni{font-size:14px;color:var(--suave);margin-top:3px;}
 .card-persona .cp-disp{font-size:15px;font-weight:800;color:var(--enlace);white-space:nowrap;}
 .seg{display:flex;gap:10px;max-width:560px;margin:0 auto 14px;width:100%;}
 .seg button{flex:1;background:var(--blanco);border:3px solid var(--enlace);color:var(--enlace);
@@ -365,7 +365,7 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .btn-sel.primario{background:var(--exito);color:#fff;border-color:var(--exito);}
 .btn-sel.primario:disabled{background:var(--tomado);border-color:var(--tomado);}
 .btn-sel.cancelar{color:var(--alerta);border-color:var(--alerta);}
-.card-ticket.marcada{border-color:var(--exito);background:#eef7f0;}
+.card-ticket.marcada{border-color:var(--exito);background:var(--exito-t);}
 .card-ticket.marcada::after{content:"✓";position:absolute;bottom:10px;right:12px;
   width:30px;height:30px;border-radius:50%;background:var(--exito);color:#fff;
   font-size:19px;font-weight:800;display:flex;align-items:center;justify-content:center;}
@@ -392,7 +392,7 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .kpi{background:var(--blanco);border-radius:14px;padding:14px;text-align:center;
   box-shadow:0 2px 6px rgba(13,59,133,.10);border-top:6px solid var(--ocre);}
 .kpi-num{font-size:30px;font-weight:800;color:var(--azul);}
-.kpi-lbl{font-size:13px;font-weight:700;color:#5a6270;margin-top:3px;}
+.kpi-lbl{font-size:13px;font-weight:700;color:var(--suave);margin-top:3px;}
 .link-ing{background:none;border:none;color:var(--enlace);font-size:16px;font-weight:700;
   text-decoration:underline;cursor:pointer;margin-top:14px;padding:8px;}
 .tabla{width:100%;border-collapse:collapse;background:var(--blanco);border-radius:12px;
@@ -400,7 +400,7 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
 .tabla th{background:var(--azul);color:#fff;padding:9px 8px;text-align:center;font-size:12px;
   text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;z-index:2;}
 .tabla td{padding:7px 8px;border-bottom:1px solid var(--gris-fondo);text-align:center;}
-.tabla tr:nth-child(even) td{background:#f7f9fc;}
+.tabla tr:nth-child(even) td{background:var(--sup-2);}
 .tabla .ef-alta{color:var(--exito);font-weight:800;}
 .tabla .ef-baja{color:var(--alerta);font-weight:800;}
 /* Columna Operación (y cualquier th/td marcada .izq): alineación a la izquierda,
@@ -423,12 +423,12 @@ footer.pie-app{flex-shrink:0;display:flex;flex-direction:column;align-items:cent
   font-size:13px;font-weight:800;padding:6px 12px;}
 .pill{display:inline-block;font-size:12px;font-weight:800;padding:3px 9px;border-radius:999px;
   background:var(--gris-fondo);color:var(--texto);}
-.pill.FALTA,.pill.DM,.pill.VACACIONES{background:#fdecea;color:var(--alerta);}
-.pill.ACTIVO{background:#eef7f0;color:var(--exito);}
-.pill.LIBERADO{background:#fdecea;color:var(--alerta);}
+.pill.FALTA,.pill.DM,.pill.VACACIONES{background:var(--alerta-t);color:var(--alerta);}
+.pill.ACTIVO{background:var(--exito-t);color:var(--exito);}
+.pill.LIBERADO{background:var(--alerta-t);color:var(--alerta);}
 /* Avance de OF/módulo: en curso (ocre) y cerrado por ingeniería (azul), no error. */
-.pill.PROCESO{background:#fdf3e4;color:#8a5f18;}
-.pill.CERRADO{background:#e9eefa;color:var(--azul);}
+.pill.PROCESO{background:var(--ocre-t);color:#8a5f18;}
+.pill.CERRADO{background:var(--azul-t);color:var(--azul);}
 .contenedor-ancho{max-width:1100px;margin:0 auto;width:100%;}
 /* Ingeniería es vista de escritorio: el tope de 1100px dejaba ~590px muertos a
    los lados en una pantalla de 1920, y además la barra de filtros (sin tope)
@@ -485,7 +485,7 @@ body[data-pagina="ingenieria"] .barra-control{max-width:var(--ancho-ing);
 .chip-estado{background:var(--blanco);border-radius:12px;padding:10px 18px;text-align:center;
   box-shadow:0 2px 6px rgba(13,59,133,.10);border-top:5px solid var(--ocre);min-width:110px;}
 .chip-estado .ce-num{font-size:24px;font-weight:800;color:var(--azul);}
-.chip-estado .ce-lbl{font-size:12px;font-weight:700;color:#5a6270;margin-top:2px;}
+.chip-estado .ce-lbl{font-size:12px;font-weight:700;color:var(--suave);margin-top:2px;}
 
 /* ---- tabla de asistencia mensual (persona x día) ----
    La tabla se centra sola con margin:auto. NO usar flex+justify-content:center
@@ -548,20 +548,20 @@ body[data-pagina="ingenieria"] .barra-control{max-width:var(--ancho-ing);
   border-radius:12px;font-size:14px;font-weight:800;padding:9px 14px;cursor:pointer;
   box-shadow:0 3px 10px rgba(13,59,133,.20);white-space:nowrap;}
 .fab-area-btn.activo{background:var(--azul);color:#fff;}
-.fab-area-titulo{font-size:11px;font-weight:800;color:#5a6270;text-transform:uppercase;
+.fab-area-titulo{font-size:11px;font-weight:800;color:var(--suave);text-transform:uppercase;
   letter-spacing:.5px;background:var(--blanco);padding:4px 8px;border-radius:8px;
   box-shadow:0 2px 6px rgba(13,59,133,.15);}
 
 /* Estrellas de operación en BASE (final = dorada, penúltima = plateada) */
 .estrella{font-size:15px;line-height:1;}
 .estrella-final{color:#e4b100;filter:drop-shadow(0 1px 1px rgba(0,0,0,.15));}
-.estrella-pen{color:#9aa4b1;}
+.estrella-pen{color:var(--tenue);}
 
 /* Fila de acciones CRUD en BASE */
 .btn-mini.azul{background:var(--azul);color:#fff;}
 /* --- Bases · edición en lote --- */
 .base-edit-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 auto 12px;
-  background:#fff8ef;border:2px solid var(--ocre);border-radius:12px;padding:10px 14px;
+  background:var(--ocre-t);border:2px solid var(--ocre);border-radius:12px;padding:10px 14px;
   position:sticky;top:0;z-index:20;}
 .base-edit-bar #basesEditInfo{margin-right:auto;font-size:13px;font-weight:800;color:#8a5f18;}
 .base-edit-bar .btn-mini[disabled]{opacity:.45;cursor:not-allowed;}
@@ -569,7 +569,7 @@ body[data-pagina="ingenieria"] .barra-control{max-width:var(--ancho-ing);
 /* El input ocupa la celda entera: la tabla no cambia de ancho al entrar y salir
    del modo edición. */
 .base-in{width:100%;min-width:60px;box-sizing:border-box;background:var(--blanco);
-  border:1px solid #cfd8e6;border-radius:7px;padding:5px 7px;font:inherit;font-size:13px;
+  border:1px solid var(--linea);border-radius:7px;padding:5px 7px;font:inherit;font-size:13px;
   color:var(--texto);text-align:center;}
 .base-in.num{max-width:88px;}
 /* La estrella de operación final va al lado del input, no encima: si no, la
@@ -578,7 +578,7 @@ body[data-pagina="ingenieria"] .barra-control{max-width:var(--ancho-ing);
 .base-op-cell .estrella{flex:0 0 auto;}
 .base-in:focus{outline:none;border-color:var(--enlace);box-shadow:0 0 0 2px rgba(26,86,180,.18);}
 /* Sin guardar: ámbar en la celda tocada y en toda su fila. */
-.base-in.cambiada{border-color:var(--ocre);background:#fff8ef;font-weight:800;}
+.base-in.cambiada{border-color:var(--ocre);background:var(--ocre-t);font-weight:800;}
 .tabla tr.fila-cambiada>td{background:#fffaf2;}
 .tabla .acc-base{display:flex;gap:6px;justify-content:center;}
 /* Estilo autónomo (también fuera de .acc-base, p.ej. columna Editar del CRUD). */
@@ -658,11 +658,11 @@ body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",mono
    separado del contenido con más aire + hairline divisor. */
 .ing-main h1{text-align:left;font-size:24px;line-height:1.15;margin:0;letter-spacing:-.2px;}
 .seccion-cab{margin-bottom:26px;padding-bottom:14px;border-bottom:1px solid rgba(13,59,133,.12);}
-.seccion-sub{font-size:13px;color:#5a6270;margin-top:4px;max-width:70ch;}
+.seccion-sub{font-size:13px;color:var(--suave);margin-top:4px;max-width:70ch;}
 
 /* Barra de control: contenedor claro de filtros/acciones por sección */
 .barra-control{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;
-  background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;padding:14px 16px;
+  background:var(--blanco);border:1px solid var(--linea-2);border-radius:14px;padding:14px 16px;
   box-shadow:0 1px 3px rgba(13,59,133,.06);}
 /* Ingeniería: más aire entre la barra de filtros y el contenido (ritmo de zonas).
    Sin selector de tipo `body` para no ganarle al override compacto de .gen-job. */
@@ -672,18 +672,18 @@ body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",mono
    encima de su tarjeta: el ancho lo manda el contenedor, no la opción. */
 .barra-control select{max-width:100%;}
 .barra-control .campo>span{font-size:11px;font-weight:800;text-transform:uppercase;
-  letter-spacing:.5px;color:#5a6270;}
+  letter-spacing:.5px;color:var(--suave);}
 .barra-control select,.barra-control input[type=text],.barra-control input[type=date]{
-  background:var(--gris-fondo);border:2px solid #cfd8e6;border-radius:10px;
+  background:var(--gris-fondo);border:2px solid var(--linea);border-radius:10px;
   font-size:15px;font-weight:600;padding:9px 12px;color:var(--texto);outline:none;min-height:42px;}
 .barra-control select:hover,.barra-control input:not(.sw):not(.chk-lib):hover{border-color:var(--enlace);}
-.barra-control input[type=number]{background:var(--gris-fondo);border:2px solid #cfd8e6;
+.barra-control input[type=number]{background:var(--gris-fondo);border:2px solid var(--linea);
   border-radius:10px;font-size:15px;font-weight:600;padding:9px 12px;color:var(--texto);
   outline:none;min-height:42px;max-width:150px;}
 .barra-control .btn-mini{align-self:flex-end;min-height:42px;}
 /* Checkbox integrado en la barra: mismo contenedor que un .campo pero en fila. */
 .barra-control .campo-check{flex-direction:row;align-items:center;gap:10px;cursor:pointer;
-  background:var(--gris-fondo);border:2px solid #cfd8e6;border-radius:10px;
+  background:var(--gris-fondo);border:2px solid var(--linea);border-radius:10px;
   padding:9px 12px;min-height:42px;}
 .barra-control .campo-check:hover{border-color:var(--enlace);}
 .barra-control .campo-check input[type=checkbox]:not(.sw):not(.chk-lib){width:18px;height:18px;
@@ -691,17 +691,17 @@ body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",mono
 .barra-control .campo-check span{font-size:14px;font-weight:700;text-transform:none;
   letter-spacing:0;color:var(--texto);}
 /* Config de empaquetado por tarjeta (Generar tickets) */
-.gen-cfg-job{background:#eef2f8;border-color:#d6e0ef;margin:10px 0 0;}
+.gen-cfg-job{background:var(--sup-2);border-color:var(--linea);margin:10px 0 0;}
 /* Tarjeta de trabajo por archivo/OF en Generar tickets */
-.gen-job{background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;
+.gen-job{background:var(--blanco);border:1px solid var(--linea-2);border-radius:14px;
   padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(13,59,133,.06);}
 .gen-job-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
 .gen-job-name{font-weight:800;color:var(--azul);font-size:15px;word-break:break-word;}
 .gen-job .barra-control{margin-bottom:12px;}
 
 /* Estado vacío / gating (elige área) */
-.estado-vacio{background:var(--blanco);border:1.5px dashed #c3ccdb;border-radius:16px;
-  padding:44px 22px;text-align:center;color:#5a6270;font-size:15px;font-weight:600;max-width:640px;}
+.estado-vacio{background:var(--blanco);border:1.5px dashed var(--linea);border-radius:16px;
+  padding:44px 22px;text-align:center;color:var(--suave);font-size:15px;font-weight:600;max-width:640px;}
 
 /* Contenedor de tabla con scroll (reemplaza overflow inline) */
 .tabla-scroll{overflow:auto;}
@@ -734,7 +734,7 @@ body[data-pagina="ingenieria"] .tabla-scroll{max-width:100%;}
 #resumenInciTxt{text-align:left;font-size:13px;margin:16px 0 8px;}
 
 /* Descuento de tiempo del operario: ayuda bajo el campo de detalle (parche 53) */
-.sa-ayuda{font-size:12px;color:#5a6270;margin-top:6px;line-height:1.35;}
+.sa-ayuda{font-size:12px;color:var(--suave);margin-top:6px;line-height:1.35;}
 /* Personal que no estuvo activo hoy: se ve pero no se puede marcar (parche 53) */
 .card-persona.inactiva{opacity:.55;cursor:not-allowed;background:var(--gris-fondo);}
 .card-persona.inactiva:active{transform:none;}
@@ -742,9 +742,9 @@ body[data-pagina="ingenieria"] .tabla-scroll{max-width:100%;}
 /* Tickets libres (parche 58). El checkbox va excluido de las reglas de `.sw`
    como el resto: cualquier `input` suelto rompe el toggle. */
 .tabla .lib-chk:not(.sw):not(.chk-lib){width:18px;height:18px;accent-color:var(--azul);cursor:pointer;margin:0;}
-.tabla tr.lib-cerrado{background:var(--gris-fondo);color:#9aa4b1;}
+.tabla tr.lib-cerrado{background:var(--gris-fondo);color:var(--tenue);}
 .lib-lock{font-size:13px;cursor:help;}
-.tabla td.lib-cod{font-size:11px;color:#5a6270;font-variant-numeric:tabular-nums;}
+.tabla td.lib-cod{font-size:11px;color:var(--suave);font-variant-numeric:tabular-nums;}
 
 /* El área propia se distingue de las temporales en el selector */
 .card-area.propia{border-color:var(--exito);}
@@ -765,12 +765,12 @@ body[data-pagina="ingenieria"] .tabla-scroll{max-width:100%;}
 /* Novedades: popup de avisos al iniciar sesión (parche 58) */
 .nov-lista{max-height:46vh;overflow:auto;text-align:left;margin-bottom:10px;}
 .nov-dia{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;
-  color:#5a6270;margin:10px 0 6px;}
+  color:var(--suave);margin:10px 0 6px;}
 .nov-item{background:var(--gris-fondo);border-left:3px solid var(--ocre);
   border-radius:8px;padding:9px 11px;margin-bottom:7px;}
 .nov-tit{font-size:14px;font-weight:800;color:var(--azul);}
 .nov-det{font-size:13px;color:var(--texto);margin-top:2px;line-height:1.35;}
-.nov-pie{font-size:11px;color:#5a6270;margin-top:4px;}
+.nov-pie{font-size:11px;color:var(--suave);margin-top:4px;}
 
 /* Incentivos · matriz persona × día de la quincena (parche 54).
    Tabla ancha: celdas compactas y cabecera pegada. Sin reglas sobre `input`. */
@@ -779,23 +779,23 @@ body[data-pagina="ingenieria"] .tabla-scroll{max-width:100%;}
 .tabla-inc td{padding:6px 5px;}
 .tabla-inc td.izq{white-space:nowrap;max-width:230px;overflow:hidden;text-overflow:ellipsis;}
 /* Día que alcanza el 80%: es el que paga */
-.tabla-inc td.inc-gana{background:#e6f3ea;color:var(--exito);font-weight:800;}
+.tabla-inc td.inc-gana{background:var(--exito-t);color:var(--exito);font-weight:800;}
 /* Día repartido entre dos áreas: el tooltip lleva el desglose. Se usa también
    en Eficiencia día × día (parche 56), así que no va scoped a .tabla-inc. */
 td.inc-multi-dia{box-shadow:inset 0 -3px 0 var(--ocre);cursor:help;}
 /* Fin de semana y días sin dato: se ven, pero no compiten con los números */
-.tabla-inc th.inc-finde,.tabla-inc td.inc-finde{background:var(--gris-fondo);color:#9aa4b1;}
-.tabla-inc td.inc-etq{font-size:10px;font-weight:700;color:#5a6270;cursor:help;}
-.tabla-inc td.inc-nodato{color:#c3ccdb;cursor:help;}
+.tabla-inc th.inc-finde,.tabla-inc td.inc-finde{background:var(--gris-fondo);color:var(--tenue);}
+.tabla-inc td.inc-etq{font-size:10px;font-weight:700;color:var(--suave);cursor:help;}
+.tabla-inc td.inc-nodato{color:var(--linea);cursor:help;}
 /* Ya no está en el maestro pero trabajó en la quincena: se paga y se ve por qué */
 .inc-cesado{font-size:9px;font-weight:800;background:var(--ocre);color:var(--texto);
   border-radius:999px;padding:1px 6px;margin-left:4px;vertical-align:middle;cursor:help;}
 .tabla-inc td.inc-pen{color:var(--alerta);font-weight:800;}
 /* Penalizado: la quincena queda en cero y hay que verlo de un golpe */
-.tabla-inc tr.inc-anulado{background:#fdecea;}
+.tabla-inc tr.inc-anulado{background:var(--alerta-t);}
 .tabla-inc tr.inc-anulado td.inc-gana{background:#f6dcd8;color:#8a3129;}
 .tabla-inc .inc-btn{padding:3px 9px;font-size:11px;min-width:34px;}
-.inc-ayuda{font-size:13px;color:#5a6270;text-align:left;line-height:1.4;margin:2px 0 8px;}
+.inc-ayuda{font-size:13px;color:var(--suave);text-align:left;line-height:1.4;margin:2px 0 8px;}
 
 /* Tickets · Reporte de Hoy: dos tablas en paralelo (tickets activos de la
    última/penúltima operación · incidencias del día). Sin reglas sobre `input`. */
@@ -890,16 +890,16 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .swipe-card.top{cursor:grab;touch-action:none;z-index:3;}
 .swipe-card:not(.top){transform:scale(.95) translateY(10px);z-index:2;opacity:.85;}
 .swipe-card .sc-nombre{font-size:24px;font-weight:800;color:var(--azul);}
-.swipe-card .sc-dni{font-size:14px;color:#5a6270;font-weight:700;margin-top:6px;}
+.swipe-card .sc-dni{font-size:14px;color:var(--suave);font-weight:700;margin-top:6px;}
 .swipe-card .sc-hint{position:absolute;bottom:14px;left:14px;right:14px;display:flex;
-  justify-content:space-between;font-size:11px;font-weight:800;color:#9aa4b1;}
+  justify-content:space-between;font-size:11px;font-weight:800;color:var(--tenue);}
 .swipe-card.hint-r{border-color:var(--exito);}
 .swipe-card.hint-l{border-color:var(--alerta);}
 .swipe-card.hint-d{border-color:var(--ocre);}
 .swipe-card.hint-u{border-color:var(--enlace);}
 .swipe-card .sc-r{color:var(--exito);} .swipe-card .sc-l{color:var(--alerta);} .swipe-card .sc-d{color:var(--ocre);}
-.swipe-ayuda{text-align:center;font-size:13px;color:#5a6270;font-weight:700;}
-.swipe-card .sc-actual{font-size:13px;color:#5a6270;font-weight:700;margin-top:10px;}
+.swipe-ayuda{text-align:center;font-size:13px;color:var(--suave);font-weight:700;}
+.swipe-card .sc-actual{font-size:13px;color:var(--suave);font-weight:700;margin-top:10px;}
 .swipe-card .sc-u{color:var(--enlace);}
 /* Resumen de asistencia (antes de guardar) */
 .asis-res{max-width:520px;margin:8px auto 0;background:var(--blanco);border-radius:16px;
@@ -917,11 +917,11 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
   background:var(--blanco);border-radius:13px;padding:14px 16px;border:2px solid transparent;
   box-shadow:0 2px 8px rgba(13,59,133,.08);cursor:pointer;}
 .asis-fila:active{background:var(--gris-fondo);}
-.asis-fila.marcada{border-color:var(--ocre);background:#fff8ef;}
+.asis-fila.marcada{border-color:var(--ocre);background:var(--ocre-t);}
 .asis-nom{font-size:18px;font-weight:800;color:var(--azul);line-height:1.2;}
-.asis-dni{font-size:13px;color:#5a6270;font-weight:700;margin-top:2px;}
+.asis-dni{font-size:13px;color:var(--suave);font-weight:700;margin-top:2px;}
 .asis-chips{display:flex;flex-wrap:wrap;gap:8px;}
-.asis-chip{border:2px solid #cfd8e6;background:var(--gris-fondo);color:var(--texto);
+.asis-chip{border:2px solid var(--linea);background:var(--gris-fondo);color:var(--texto);
   border-radius:999px;padding:9px 16px;font-size:15px;font-weight:800;cursor:pointer;}
 .asis-chip.sel{background:var(--azul);color:#fff;border-color:var(--azul);}
 /* ---- Incentivos · rejillas de bono modular y eficiencia manual ----
@@ -930,7 +930,7 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .mod-mes{font-size:9px;font-weight:700;opacity:.65;}
 .mod-celda,.efm-celda{padding:4px 5px;min-width:74px;}
 .mod-in,.efm-in{width:100%;box-sizing:border-box;background:var(--blanco);
-  border:1px solid #cfd8e6;border-radius:7px;padding:5px 4px;font:inherit;font-size:13px;
+  border:1px solid var(--linea);border-radius:7px;padding:5px 4px;font:inherit;font-size:13px;
   font-weight:700;color:var(--texto);text-align:center;
   font-variant-numeric:tabular-nums;-moz-appearance:textfield;}
 .mod-in::-webkit-outer-spin-button,.mod-in::-webkit-inner-spin-button,
@@ -938,30 +938,30 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
   -webkit-appearance:none;margin:0;}
 .mod-in:focus,.efm-in:focus{outline:none;border-color:var(--enlace);
   box-shadow:0 0 0 2px rgba(26,86,180,.18);}
-.mod-in.cambiada,.efm-in.cambiada{border-color:var(--ocre);background:#fff8ef;}
-.mod-soles,.efm-res{font-size:10px;font-weight:800;color:#5a6270;margin-top:2px;
+.mod-in.cambiada,.efm-in.cambiada{border-color:var(--ocre);background:var(--ocre-t);}
+.mod-soles,.efm-res{font-size:10px;font-weight:800;color:var(--suave);margin-top:2px;
   white-space:nowrap;font-variant-numeric:tabular-nums;}
 .mod-soles{color:var(--exito);}
 .efm-nom{min-width:190px;}
 .efm-nom .sub{font-size:11px;margin:0;text-align:left;}
 /* La celda enfocada se ve desde lejos: se llena columna a columna. */
-.tabla-efm tbody tr:focus-within>td:first-child{background:#eef2f8;}
+.tabla-efm tbody tr:focus-within>td:first-child{background:var(--sup-2);}
 /* Botón de override del modular, pegado al nombre en la quincena. Tres estados:
    automático (gris), forzado (verde) y anulado a mano (rojo). */
-.inc-ovr{border:1px solid #cfd8e6;background:var(--blanco);color:#9aa3b0;
+.inc-ovr{border:1px solid var(--linea);background:var(--blanco);color:var(--tenue);
   border-radius:6px;width:20px;height:20px;line-height:1;padding:0;font-size:12px;
   font-weight:800;cursor:pointer;vertical-align:middle;margin-right:2px;flex:0 0 auto;}
 .inc-ovr:hover{border-color:var(--enlace);}
-.inc-ovr.si{background:#eef7f0;color:var(--exito);border-color:var(--exito);}
-.inc-ovr.no{background:#fdecea;color:var(--alerta);border-color:var(--alerta);}
+.inc-ovr.si{background:var(--exito-t);color:var(--exito);border-color:var(--exito);}
+.inc-ovr.no{background:var(--alerta-t);color:var(--alerta);border-color:var(--alerta);}
 /* El bono que lleva modular dentro, y el modular que no se llegó a pagar. */
 .inc-con-mod{box-shadow:inset 0 -2px 0 var(--ocre);}
-.inc-mod-no{color:#9aa3b0;text-decoration:line-through;}
+.inc-mod-no{color:var(--tenue);text-decoration:line-through;}
 /* Asistencia confirmada por ticket: estuvo en planta, lo dice su propio trabajo. */
 .asis-der{display:flex;align-items:center;gap:8px;flex-shrink:0;}
-.asis-tk{background:#eef7f0;color:var(--exito);border-radius:999px;padding:3px 9px;
+.asis-tk{background:var(--exito-t);color:var(--exito);border-radius:999px;padding:3px 9px;
   font-size:12px;font-weight:800;white-space:nowrap;}
-.asis-aviso-tk{background:#eef7f0;color:var(--exito);border-radius:10px;padding:9px 12px;
+.asis-aviso-tk{background:var(--exito-t);color:var(--exito);border-radius:10px;padding:9px 12px;
   font-size:14px;font-weight:700;margin-bottom:10px;}
 /* Resumen de OF · fila de detalle expandible */
 .avof-det-wrap{background:var(--gris-fondo);border-radius:12px;padding:12px 14px;margin:4px 0;}
@@ -973,7 +973,7 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .avof-ops td{vertical-align:middle;}
 /* `.sub` global trae margin-bottom y centrado: dentro de la tabla estorban. */
 .avof-ops .sub{font-size:11px;font-weight:700;margin:0;text-align:inherit;}
-.avof-nop{display:inline-block;min-width:24px;background:var(--gris-fondo);color:#5a6270;
+.avof-nop{display:inline-block;min-width:24px;background:var(--gris-fondo);color:var(--suave);
   border-radius:6px;padding:1px 5px;font-size:11px;font-weight:800;text-align:center;
   font-family:"Fira Code",monospace;}
 /* La operación final es la que decide salida y estado del módulo. */
@@ -1034,13 +1034,13 @@ body.sidebar-cerrada .ing-sidebar{display:none;}
 .mod-op-head{display:flex;justify-content:space-between;align-items:center;gap:8px;
   background:var(--gris-fondo);padding:8px 12px;}
 .mod-op-nom{font-size:15px;font-weight:800;color:var(--azul);}
-.mod-op-sub{font-size:11px;color:#5a6270;font-weight:700;white-space:nowrap;}
+.mod-op-sub{font-size:11px;color:var(--suave);font-weight:700;white-space:nowrap;}
 .mod-persona{padding:8px 12px;border-top:1px solid var(--gris-fondo);}
 .mod-persona:first-child{border-top:none;}
 .mp-cab{display:flex;justify-content:space-between;align-items:center;font-size:14px;gap:8px;}
-.mp-cab span{font-size:12px;color:#5a6270;font-weight:700;white-space:nowrap;}
+.mp-cab span{font-size:12px;color:var(--suave);font-weight:700;white-space:nowrap;}
 .mp-tks{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
-.mp-tk{background:#eef2f8;border-radius:7px;padding:3px 8px;font-size:12px;font-weight:700;color:var(--azul);}
+.mp-tk{background:var(--sup-2);border-radius:7px;padding:3px 8px;font-size:12px;font-weight:700;color:var(--azul);}
 /* Gráfico de avance por módulo (% de la última operación vs meta OF) */
 .mod-avance{padding:10px 12px 4px;}
 .avance-bar{position:relative;height:26px;background:var(--gris-fondo);border-radius:8px;overflow:hidden;}
@@ -1049,7 +1049,7 @@ body.sidebar-cerrada .ing-sidebar{display:none;}
 .avance-fill.bajo{background:var(--alerta);}
 .avance-lbl{position:absolute;top:0;right:10px;line-height:26px;font-size:13px;font-weight:800;
   color:var(--texto);font-family:"Fira Code",monospace;}
-.avance-sub{font-size:12px;color:#5a6270;font-weight:700;margin-top:5px;}
+.avance-sub{font-size:12px;color:var(--suave);font-weight:700;margin-top:5px;}
 .avance-nometa{font-size:13px;color:var(--alerta);font-weight:700;padding:6px 0;}
 /* Checkbox inline dentro de la barra de control */
 .chk-inline{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;
@@ -1058,13 +1058,13 @@ body.sidebar-cerrada .ing-sidebar{display:none;}
 /* Operaciones colapsables dentro del módulo */
 details.mod-op>summary.mod-op-head{cursor:pointer;list-style:none;}
 details.mod-op>summary.mod-op-head::-webkit-details-marker{display:none;}
-details.mod-op>summary.mod-op-head::before{content:"▸ ";font-size:11px;color:#5a6270;}
+details.mod-op>summary.mod-op-head::before{content:"▸ ";font-size:11px;color:var(--suave);}
 
 /* Tarjeta de módulo (Parche 12): encabezado FIJO + operaciones colapsables */
 .mod-head-fija{padding:12px 14px 8px;}
 .mod-head-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
 .mod-head-fija .mod-nombre{color:var(--azul);font-size:18px;font-weight:800;}
-.mod-head-fija .mod-sub{color:#5a6270;font-weight:700;font-size:12px;margin-top:2px;}
+.mod-head-fija .mod-sub{color:var(--suave);font-weight:700;font-size:12px;margin-top:2px;}
 .mod-head-fija .mod-avance{padding:8px 0 0;}
 .mod-badge-cerrado{display:inline-block;background:var(--alerta);color:#fff;font-size:11px;font-weight:800;
   padding:2px 8px;border-radius:8px;margin-left:6px;vertical-align:middle;}
@@ -1089,7 +1089,7 @@ details.mod-op>summary.mod-op-head::before{content:"▸ ";font-size:11px;color:#
 .tk-layout{display:flex;gap:16px;align-items:flex-start;}
 .tk-tabla-wrap{flex:1;min-width:0;}
 .tk-ops-panel{flex:0 0 300px;max-width:300px;max-height:66vh;overflow-y:auto;
-  background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;padding:12px;
+  background:var(--blanco);border:1px solid var(--linea-2);border-radius:14px;padding:12px;
   box-shadow:0 1px 3px rgba(13,59,133,.06);}
 .tk-ops-title{font-size:13px;font-weight:800;color:var(--azul);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px;}
 .tk-ops-of{border:1px solid var(--gris-fondo);border-radius:10px;margin-bottom:8px;overflow:hidden;}
@@ -1103,7 +1103,7 @@ details.mod-op>summary.mod-op-head::before{content:"▸ ";font-size:11px;color:#
 .tk-ops-row span:first-child{color:var(--texto);}
 .tk-ops-row span:last-child{font-weight:800;color:var(--azul);font-family:"Fira Code",monospace;white-space:nowrap;}
 .pager{display:flex;gap:12px;align-items:center;justify-content:center;padding:12px 0;flex-wrap:wrap;}
-.pager .pg-info{font-size:13px;font-weight:700;color:#5a6270;}
+.pager .pg-info{font-size:13px;font-weight:700;color:var(--suave);}
 .pager .btn-mini[disabled]{opacity:.45;cursor:not-allowed;}
 @media (max-width:1100px){
   .tk-layout{flex-direction:column;}
@@ -1124,7 +1124,7 @@ details.mod-op[open]>summary.mod-op-head::before{content:"▾ ";}
 .det-list{max-height:320px;overflow-y:auto;}
 .det-persona{display:flex;justify-content:space-between;gap:10px;padding:8px 14px;
   border-top:1px solid var(--gris-fondo);font-size:14px;font-weight:700;}
-.det-persona span{color:#5a6270;font-size:12px;font-weight:600;}
+.det-persona span{color:var(--suave);font-size:12px;font-weight:600;}
 /* ===== AUDITORÍA DE EFICIENCIA (parche 80) ===== */
 .aud-backdrop{position:fixed;inset:0;background:rgba(33,37,41,.35);z-index:70;
   opacity:0;pointer-events:none;transition:opacity .18s;}
@@ -1137,56 +1137,56 @@ details.mod-op[open]>summary.mod-op-head::before{content:"▾ ";}
 .aud-ini{flex:0 0 42px;height:42px;border-radius:50%;background:var(--azul);color:var(--blanco);
   display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;}
 .aud-nom{font-size:17px;font-weight:800;line-height:1.25;}
-.aud-sub{font-size:12px;color:#5a6270;margin-top:2px;}
-.aud-x{margin-left:auto;background:transparent;border:1px solid #d8dde4;border-radius:50%;
-  width:28px;height:28px;cursor:pointer;font-size:15px;line-height:1;color:#5a6270;flex-shrink:0;}
+.aud-sub{font-size:12px;color:var(--suave);margin-top:2px;}
+.aud-x{margin-left:auto;background:transparent;border:1px solid var(--linea);border-radius:50%;
+  width:28px;height:28px;cursor:pointer;font-size:15px;line-height:1;color:var(--suave);flex-shrink:0;}
 .aud-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
 .aud-kpi{background:var(--gris-fondo);border-radius:12px;padding:10px;text-align:center;}
-.aud-kpi-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;color:#5a6270;text-transform:uppercase;}
+.aud-kpi-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;color:var(--suave);text-transform:uppercase;}
 .aud-kpi-num{font-size:19px;font-weight:800;margin-top:3px;}
-.aud-tit{font-size:11px;font-weight:800;letter-spacing:.6px;color:#5a6270;
+.aud-tit{font-size:11px;font-weight:800;letter-spacing:.6px;color:var(--suave);
   text-transform:uppercase;margin:18px 0 8px;}
 .aud-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;}
-.aud-campo .k{font-size:11px;color:#5a6270;}
+.aud-campo .k{font-size:11px;color:var(--suave);}
 .aud-campo .v{font-size:14px;font-weight:700;}
-.aud-item{border-top:1px solid #e6e9ee;padding:10px 0;}
-.aud-item:last-child{border-bottom:1px solid #e6e9ee;}
+.aud-item{border-top:1px solid var(--linea-2);padding:10px 0;}
+.aud-item:last-child{border-bottom:1px solid var(--linea-2);}
 .aud-item-fila{display:flex;justify-content:space-between;gap:10px;align-items:baseline;}
 .aud-item-tit{font-size:14px;font-weight:700;}
-.aud-item-sub{font-size:11px;color:#5a6270;margin-top:2px;}
+.aud-item-sub{font-size:11px;color:var(--suave);margin-top:2px;}
 .aud-min{font-weight:800;font-size:14px;white-space:nowrap;}
 .aud-min.resta{color:var(--alerta);}
 .aud-min.suma{color:var(--exito);}
 .aud-sim{background:var(--gris-fondo);border-radius:10px;padding:10px;margin-top:8px;}
 .aud-sim-fila{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-.aud-sim-fila input[type=number]{width:96px;padding:6px 8px;border:1px solid #d8dde4;
+.aud-sim-fila input[type=number]{width:96px;padding:6px 8px;border:1px solid var(--linea);
   border-radius:8px;font-size:14px;font-weight:700;font-family:inherit;}
-.aud-sim-res{margin-top:8px;font-size:12px;color:#5a6270;}
+.aud-sim-res{margin-top:8px;font-size:12px;color:var(--suave);}
 .aud-sim-res b{font-size:15px;color:var(--texto);}
 .aud-chip{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;
-  background:var(--gris-fondo);color:#5a6270;letter-spacing:.4px;}
+  background:var(--gris-fondo);color:var(--suave);letter-spacing:.4px;}
 .aud-ef{font-weight:800;}
 .aud-ef.alarma{color:var(--alerta);}
 .aud-ef.aviso{color:var(--ocre);}
 /* Parche 88: porqués, resumen por operación y análisis de Gemini. */
 .aud-chip.alarma{background:#fde8e8;color:var(--alerta);}
 .aud-chip.aviso{background:#fbf1dc;color:var(--ocre);}
-.aud-sim-fija{position:sticky;top:-18px;z-index:1;background:#eef3fb;box-shadow:0 4px 10px rgba(13,59,133,.08);}
-.aud-sim input[type=text]{width:100%;padding:6px 8px;border:1px solid #d8dde4;border-radius:8px;font-size:13px;font-family:inherit;}
+.aud-sim-fija{position:sticky;top:-18px;z-index:1;background:var(--azul-t);box-shadow:0 4px 10px rgba(13,59,133,.08);}
+.aud-sim input[type=text]{width:100%;padding:6px 8px;border:1px solid var(--linea);border-radius:8px;font-size:13px;font-family:inherit;}
 .aud-det{margin-top:18px;}
-.aud-det summary{cursor:pointer;font-size:11px;font-weight:800;letter-spacing:.6px;color:#5a6270;text-transform:uppercase;}
+.aud-det summary{cursor:pointer;font-size:11px;font-weight:800;letter-spacing:.6px;color:var(--suave);text-transform:uppercase;}
 .aud-ia-res{margin-top:10px;}
 .aud-ia-lista{margin:6px 0 8px 18px;padding:0;font-size:13px;}
-.aud-ia-op{border-top:1px solid #e6e9ee;padding-top:8px;margin-top:8px;font-size:13px;}
+.aud-ia-op{border-top:1px solid var(--linea-2);padding-top:8px;margin-top:8px;font-size:13px;}
 tr.aud-fila{cursor:pointer;}
-tr.aud-fila:hover{background:#eef3fb;}
+tr.aud-fila:hover{background:var(--azul-t);}
 @media(max-width:560px){ .aud-drawer{width:100%;padding:14px;} .aud-grid{grid-template-columns:1fr;} .aud-sim-fija{position:static;} }
 
 /* Tickets · Resumen x Operario (parche 84) */
 .ope-seg{display:inline-flex;border:2px solid var(--azul);border-radius:10px;overflow:hidden;align-self:flex-end;}
 .ope-seg button{background:var(--blanco);color:var(--azul);border:0;padding:8px 14px;font-weight:800;font-size:13px;cursor:pointer;}
 .ope-seg button.activo{background:var(--azul);color:#fff;}
-.ope-card{background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;margin-bottom:10px;
+.ope-card{background:var(--blanco);border:1px solid var(--linea-2);border-radius:14px;margin-bottom:10px;
   box-shadow:0 1px 3px rgba(13,59,133,.06);overflow:hidden;}
 .ope-card>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;
   gap:12px;flex-wrap:wrap;padding:12px 16px;user-select:none;}
@@ -1195,27 +1195,27 @@ tr.aud-fila:hover{background:#eef3fb;}
 .ope-card[open]>summary::before{content:"▾";}
 .ope-card[open]>summary{border-bottom:1px solid var(--gris-fondo);}
 .ope-nom{flex:1;min-width:200px;font-weight:800;color:var(--azul);}
-.ope-nom small{display:block;font-size:12px;font-weight:600;color:#5a6270;}
+.ope-nom small{display:block;font-size:12px;font-weight:600;color:var(--suave);}
 .ope-res{font-family:"Fira Code",monospace;font-size:13px;font-weight:700;white-space:nowrap;}
 .ope-card .tabla-scroll{padding:0 8px 8px;}
-.ope-tabla td.ope-dia{color:#5a6270;font-variant-numeric:tabular-nums;}
-.ope-area{font-size:11px;color:#5a6270;}
+.ope-tabla td.ope-dia{color:var(--suave);font-variant-numeric:tabular-nums;}
+.ope-area{font-size:11px;color:var(--suave);}
 .ope-tag{display:inline-block;font-size:11px;font-weight:800;border-radius:6px;padding:1px 6px;margin-left:6px;white-space:nowrap;}
-.ope-tag.alta{background:#eef7f0;color:var(--exito);}
-.ope-tag.baja{background:#fdecea;color:var(--alerta);}
+.ope-tag.alta{background:var(--exito-t);color:var(--exito);}
+.ope-tag.baja{background:var(--alerta-t);color:var(--alerta);}
 .ope-cmp{white-space:nowrap;min-width:150px;text-align:left;}
 .ope-bar{display:inline-block;vertical-align:middle;width:80px;height:8px;background:var(--gris-fondo);
   border-radius:4px;overflow:hidden;margin-right:8px;}
 .ope-bar i{display:block;height:100%;background:var(--enlace);}
 .ope-bar i.ef-alta{background:var(--exito);}
 .ope-bar i.ef-baja{background:var(--alerta);}
-.ope-sd{color:#9aa4b1;}
+.ope-sd{color:var(--tenue);}
 
 /* Supervisora · Avance OF y Bases (parche 85). Pensado para celular: nada de
    ancho fijo, los textos largos se parten y los números no. */
 .sv-buscar{display:block;width:100%;box-sizing:border-box;max-width:760px;margin:10px auto 8px;font-size:17px;font-weight:700;
   padding:11px 12px;border:3px solid var(--azul);border-radius:13px;background:var(--blanco);color:var(--texto);}
-.sv-res{font-size:13px;color:#5a6270;text-align:center;margin-bottom:10px;min-height:1em;}
+.sv-res{font-size:13px;color:var(--suave);text-align:center;margin-bottom:10px;min-height:1em;}
 #aoLista,#bsLista{max-width:760px;margin:0 auto;width:100%;}
 .sv-card{background:var(--blanco);border-left:8px solid var(--ocre);border-radius:14px;margin-bottom:10px;
   box-shadow:0 1px 3px rgba(13,59,133,.08);overflow:hidden;}
@@ -1228,7 +1228,7 @@ tr.aud-fila:hover{background:#eef3fb;}
 .sv-t::before,.sv-mt::before{content:"▸ ";color:var(--azul);}
 details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content:"▾ ";}
 .sv-pct{font-size:18px;font-weight:800;font-family:"Fira Code",monospace;flex:none;white-space:nowrap;}
-.sv-sub{font-size:13px;color:#5a6270;margin:3px 0 7px;overflow-wrap:anywhere;}
+.sv-sub{font-size:13px;color:var(--suave);margin:3px 0 7px;overflow-wrap:anywhere;}
 .sv-bar{height:8px;background:var(--gris-fondo);border-radius:5px;overflow:hidden;}
 .sv-bar i{display:block;height:100%;background:var(--ocre);}
 .sv-bar i.ok{background:var(--exito);}
@@ -1237,15 +1237,15 @@ details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content
 .sv-mt{font-weight:800;font-size:15px;min-width:0;overflow-wrap:anywhere;}
 .sv-mr{display:flex;gap:6px;align-items:center;flex:none;}
 .sv-mr .pill{font-size:11px;padding:3px 7px;white-space:nowrap;}
-.pill.COMPLETADO{background:#eef7f0;color:var(--exito);}
+.pill.COMPLETADO{background:var(--exito-t);color:var(--exito);}
 .sv-mpct{font-weight:800;font-family:"Fira Code",monospace;font-size:14px;white-space:nowrap;}
 .sv-mod>summary .sv-bar{grid-column:1/3;height:6px;}
 .sv-mod>summary .sv-f{grid-column:1/3;}
-.sv-f{font-size:12px;color:#5a6270;overflow-wrap:anywhere;}
+.sv-f{font-size:12px;color:var(--suave);overflow-wrap:anywhere;}
 .sv-cargando{padding:6px 0 10px;}
 .sv-ops{padding:0 14px 6px;}
 .sv-op{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:2px 8px;align-items:center;padding:6px 0;border-top:1px dashed #e6eaf0;}
-.sv-n{font-size:11px;font-weight:800;color:#5a6270;background:var(--gris-fondo);border-radius:6px;text-align:center;padding:2px 0;}
+.sv-n{font-size:11px;font-weight:800;color:var(--suave);background:var(--gris-fondo);border-radius:6px;text-align:center;padding:2px 0;}
 .sv-op-t{font-size:13.5px;overflow-wrap:anywhere;min-width:0;}
 .sv-op-c{font-size:13px;font-weight:800;font-family:"Fira Code",monospace;white-space:nowrap;}
 /* Avance: el nombre ocupa todo el ancho y debajo van la barra y la cantidad,
@@ -1267,12 +1267,12 @@ details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content
 .he-step.off{opacity:.4;}
 .he-tabla td,.he-tabla th{white-space:nowrap;}
 .he-tabla td.izq{white-space:normal;}
-.he-tabla tr.he-off td{color:#9aa4b1;}
+.he-tabla tr.he-off td{color:var(--tenue);}
 .he-min{font-family:"Fira Code",monospace;font-weight:800;}
-.he-ya{font-size:12px;color:#8a5f18;background:#fdf3e4;border-radius:8px;padding:2px 7px;font-weight:700;}
-.he-aus{font-size:12px;color:var(--alerta);background:#fdecea;border-radius:8px;padding:2px 7px;font-weight:700;}
+.he-ya{font-size:12px;color:#8a5f18;background:var(--ocre-t);border-radius:8px;padding:2px 7px;font-weight:700;}
+.he-aus{font-size:12px;color:var(--alerta);background:var(--alerta-t);border-radius:8px;padding:2px 7px;font-weight:700;}
 .he-pie{position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
-  background:var(--blanco);border:1px solid #e3e9f2;border-radius:14px;padding:12px 16px;margin-top:12px;
+  background:var(--blanco);border:1px solid var(--linea-2);border-radius:14px;padding:12px 16px;margin-top:12px;
   box-shadow:0 -2px 10px rgba(13,59,133,.08);}
 .he-pie .kn{font-family:"Fira Code",monospace;font-weight:800;color:var(--azul);font-size:18px;}
 .he-pie-acc{display:flex;gap:8px;flex-wrap:wrap;}
@@ -1284,17 +1284,17 @@ details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content
 .lg-d{font-family:"Fira Code",monospace;font-weight:800;}
 .lg-up{color:var(--alerta);} .lg-dn{color:var(--exito);}
 .lg-tag{font-size:11px;font-weight:800;border-radius:6px;padding:2px 6px;white-space:nowrap;}
-.lg-tag.ed{background:#e9eefa;color:var(--azul);} .lg-tag.nu{background:#eef7f0;color:var(--exito);}
-.lg-tag.bo{background:#fdecea;color:var(--alerta);}
+.lg-tag.ed{background:var(--azul-t);color:var(--azul);} .lg-tag.nu{background:var(--exito-t);color:var(--exito);}
+.lg-tag.bo{background:var(--alerta-t);color:var(--alerta);}
 .nw{white-space:nowrap;}
 
 /* Subida de HN (parche 89) */
 .hn-drop{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;cursor:pointer;
   border:2px dashed #b9c6d8;border-radius:14px;padding:18px 14px;margin:8px 0 12px;background:var(--blanco);
   color:var(--azul);transition:background .15s,border-color .15s;}
-.hn-drop:hover,.hn-drop.sobre{border-color:var(--azul);background:#eef3fa;}
+.hn-drop:hover,.hn-drop.sobre{border-color:var(--azul);background:var(--azul-t);}
 .hn-aviso{color:var(--alerta);font-weight:700;font-size:14px;margin:6px 0;}
-.hn-dif{border:1px solid #f3c7c2;background:#fdf6f5;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:14px;}
+.hn-dif{border:1px solid var(--alerta);background:#fdf6f5;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:14px;}
 .hn-dif ul{margin:6px 0 8px 18px;}
 .hn-rep{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--azul);cursor:pointer;margin:4px 0;}
 .hn-rep input{width:18px;height:18px;}
@@ -1306,7 +1306,7 @@ details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content
 
 /* Sustento de la quincena: el documento se ve como la hoja que se
    va a mandar, no como una pantalla más. */
-.sus-hoja{background:var(--blanco);border:1px solid #e3e9f2;border-radius:16px;
+.sus-hoja{background:var(--blanco);border:1px solid var(--linea-2);border-radius:16px;
   padding:26px 30px;max-width:1100px;margin:0 auto;box-shadow:0 2px 14px rgba(13,59,133,.07);}
 .sus-cab{border-bottom:2px solid var(--azul);padding-bottom:12px;margin-bottom:18px;}
 .sus-tit{font-size:20px;font-weight:800;color:var(--azul);letter-spacing:.3px;}
@@ -1316,4 +1316,4 @@ details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content
 .sus-p{font-size:14px;line-height:1.6;margin:8px 0 4px;}
 .sus-tabla{font-size:12.5px;}
 .sus-tabla td,.sus-tabla th{white-space:nowrap;}
-.sus-tabla tfoot th{background:#eef3fa;color:var(--azul);font-weight:800;}
+.sus-tabla tfoot th{background:var(--azul-t);color:var(--azul);font-weight:800;}
