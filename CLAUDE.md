@@ -27,7 +27,8 @@ No hay tests ni linter. Para probar, abre las páginas en un navegador (Playwrig
 ## Grafo del código (graphify) — úsalo primero
 Herramienta interna para ubicar código sin releer archivos enteros. **No se publica**: `graphify-out/` está en `.gitignore` y `.vercelignore`.
 
-- Al empezar la sesión: `bash scripts/grafo.sh` (instala `graphifyy[sql]` si falta y arma o actualiza `graphify-out/graph.json`; ~5 s, solo AST local, sin LLM ni claves).
+- Se arma solo al empezar cada sesión: `.claude/settings.json` corre `scripts/grafo.sh` (instala `graphifyy[sql]` si falta y arma o actualiza `graphify-out/graph.json`; ~10 s, solo AST local, sin LLM ni claves). Si no está, córrelo a mano: `bash scripts/grafo.sh`.
+- Un hook te recuerda consultar el grafo antes de buscar o leer archivos, y `/graphify` queda disponible (`.claude/skills/graphify/`). `.graphifyignore` deja fuera los rollback, así cada función sale con la versión de su parche, no repetida.
 - Antes de abrir archivos: `graphify query "<pregunta>"`, `graphify explain "<función>"`, `graphify path "<A>" "<B>"`, `graphify affected "<X>"`. Abre solo el rango de líneas que indique.
 - Las funciones SQL salen como `public.fn_x()` con su `sql/parche_N.sql`; el front las llama por texto (`rpc("fn_x")`), así que para cruzar front y base busca también con `query`.
 - Tras cambiar código: `graphify update .`
