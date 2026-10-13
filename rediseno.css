@@ -1691,3 +1691,6 @@ body.prestada::after{content:"";position:fixed;inset:0;border:4px solid var(--vi
 .lt-fsel{font-size:13px;color:var(--texto);margin-top:8px;line-height:1.45}
 .lt-fsel b{color:var(--azul)}
 .lt-form textarea.inp{font:600 14px var(--sans);resize:vertical}
+/* Celular del operario: jalar hacia abajo al subir por la lista de paquetes
+   recargaba la página entera sin querer. */
+body[data-pagina="operario"]{overscroll-behavior-y:contain;}
