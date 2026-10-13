@@ -3840,7 +3840,7 @@ async function audRecargar(){
 }
 
 /* ================= TICKETS DEL DÍA ================= */
-let TK=[], TK_VISTA=[], BASES_CACHE={};
+let TK=[], TK_VISTA=[], BASES_CACHE={}, ULT_CACHE={};
 let tkSort={col:null,dir:1};
 let tkArea="";                 // filtro de área activo (select); "" = todas
 let modoLibTk=false, libSel={}; // modo liberar en lote + ids de reclamo marcados
@@ -4341,6 +4341,7 @@ async function infoUltimas(areas){
       try{ BASES_CACHE[a] = await rpc("fn_bases_listar",{p_dni:ING.dni,p_token:ING.token,p_area:a}); }
       catch(e){ BASES_CACHE[a]=[]; }
     }
+    if(!ULT_CACHE[a]) await ultimasArea(a);
   }
   const info={};   // "AREA|ARTICULO" -> {n1,n2,op1:Set,op2:Set}
   areas.forEach(a=>{
@@ -4352,7 +4353,8 @@ async function infoUltimas(areas){
     Object.keys(porArt).forEach(k=>{
       const nops=[...new Set(porArt[k].map(b=>Number(b.n_op)).filter(n=>!isNaN(n)&&n>0))].sort((x,y)=>y-x);
       if(!nops.length) return;
-      const n1=nops[0], n2=(nops[1]!==undefined?nops[1]:null);
+      const m=(ULT_CACHE[a]||{})[k];
+      const n1=m?m.n1:nops[0], n2=m?m.n2:(nops[1]!==undefined?nops[1]:null);
       info[a+"|"+k]={
         n1, n2,
         op1:new Set(porArt[k].filter(b=>Number(b.n_op)===n1).map(b=>norm(b.operacion)).filter(Boolean)),
@@ -4361,6 +4363,16 @@ async function infoUltimas(areas){
     });
   });
   return info;
+}
+/* Parche 125: última y penúltima por artículo, con la elección manual del
+   analista. Sin el parche en la base queda {} y manda el N°OP como antes. */
+async function ultimasArea(a){
+  try{
+    const r=await rpc("fn_ultimas_area",{p_dni:ING.dni,p_token:ING.token,p_area:a});
+    const m={}; (Array.isArray(r)?r:[]).forEach(u=>{ m[normKey(u.articulo)]=u; });
+    ULT_CACHE[a]=m;
+  }catch(e){ ULT_CACHE[a]={}; }
+  return ULT_CACHE[a];
 }
 async function cargarResumenUltimas(){
   const z=$("resumenUltimas"); if(!z) return;
@@ -5662,7 +5674,10 @@ async function cargarBases(){
   $("zonaDiff").style.display="none";
   pintarCargando($("tablaBases"),"Cargando base…");
   try{
-    BASE = await rpc("fn_bases_listar",{p_dni:ING.dni,p_token:ING.token,p_area:$("areaBase").value});
+    const [b] = await Promise.all([
+      rpc("fn_bases_listar",{p_dni:ING.dni,p_token:ING.token,p_area:$("areaBase").value}),
+      ultimasArea($("areaBase").value)]);
+    BASE = b;
     BASES_CACHE[$("areaBase").value] = BASE;
     BASE_MAP={}; BASE.forEach(b=>BASE_MAP[b.id]=b);
     pintarBases();
@@ -5714,7 +5729,7 @@ function pintarBases(){
   { const be=$("btnEditArt"); if(be) be.hidden = (arts.size !== 1); }
   const flecha = k => baseSort.col===k ? (baseSort.dir===1?" \u25B2":" \u25BC") : "";
   // Final = mayor N°OP del artículo (⭐ dorada); penúltima = 2º mayor (estrella plateada).
-  const finalPorArt = calcularFinalesBase(BASE);
+  const finalPorArt = calcularFinalesBase(BASE, ULT_CACHE[$("areaBase").value]);
   const thead = "<thead><tr>"+BASE_COLS.map(c=>
     `<th class="ord${c.k==='operacion'?' izq':''}" onclick="ordenarBase('${c.k}')">${c.t}${flecha(c.k)}</th>`).join("")
     +"<th></th></tr></thead>";
@@ -5722,10 +5737,11 @@ function pintarBases(){
     lista.map(b=>{
       const f=finalPorArt[normKey(b.articulo)]||{};
       const n=Number(b.n_op);
+      const fija=f.manual?" (elegida por Ingeniería)":"";
       const estrella = (f.n1!=null && n===f.n1)
-        ? `<span class="estrella estrella-final" title="Operación final">★</span> `
+        ? `<span class="estrella estrella-final" title="Operación final${fija}">★</span> `
         : (f.n2!=null && n===f.n2)
-          ? `<span class="estrella estrella-pen" title="Penúltima operación">★</span> `
+          ? `<span class="estrella estrella-pen" title="Penúltima operación${fija}">★</span> `
           : "";
       if(baseEdit) return `<tr${BASE_DIRTY[b.id]?' class="fila-cambiada"':""}>
       ${["prenda","cliente","modulo","articulo"].map(k=>`<td>${baseInput(b,k)}</td>`).join("")}
@@ -5752,16 +5768,75 @@ function pintarBases(){
        <button class="btn-mini" ${basePag>=totPag?"disabled":""} onclick="basePagina(1)">Siguiente ›</button>` : "";
 }
 
-/* Mapa articulo(normKey) -> {n1: mayor N°OP, n2: 2º mayor} sobre TODA la base. */
-function calcularFinalesBase(filas){
+/* Mapa articulo(normKey) -> {n1: mayor N°OP, n2: 2º mayor} sobre TODA la base.
+   `ult` (fn_ultimas_area) trae la elección manual del analista y manda. */
+function calcularFinalesBase(filas, ult){
   const porArt={};
   (filas||[]).forEach(b=>{ (porArt[normKey(b.articulo)]=porArt[normKey(b.articulo)]||[]).push(b); });
   const res={};
   Object.keys(porArt).forEach(k=>{
     const nops=[...new Set(porArt[k].map(b=>Number(b.n_op)).filter(n=>!isNaN(n)&&n>0))].sort((x,y)=>y-x);
-    res[k]={ n1: nops.length?nops[0]:null, n2: nops.length>1?nops[1]:null };
+    const m=ult&&ult[k];
+    res[k]= m ? { n1:m.n1, n2:m.n2, manual:!!m.manual }
+              : { n1: nops.length?nops[0]:null, n2: nops.length>1?nops[1]:null };
   });
   return res;
+}
+
+/* ---- Última y penúltima por artículo (parche 125) ----
+   Por defecto: mayor N°OP y el siguiente. El analista puede fijar otra
+   operación; cuenta en Tickets, Reporte de hoy, Costos y Avance del área. */
+function abrirModalUltimas(){
+  const area=$("areaBase").value;
+  if(!(BASE||[]).length){ mostrarError("Carga una base primero"); return; }
+  abrirModal(`<h2>Última y penúltima operación · ${esc(area)}</h2>
+    <div class="sub" style="margin-bottom:12px;">Por defecto es el mayor N°OP y el siguiente. Cambia la operación cuando
+      la que cierra el balance de un artículo sea otra; cuenta en Tickets, Reporte de hoy, Costos y Avance del área.</div>
+    <div class="fila-filtros"><input type="text" id="ultBuscar" placeholder="Filtrar artículo…" oninput="pintarUltimas()"
+      value="${esc(($("fArt")||{}).value||"")}"></div>
+    <div class="tabla-scroll pv-tabla" id="ultTabla"></div>
+    <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`,"modal-ancho");
+  pintarUltimas();
+}
+function pintarUltimas(){
+  const z=$("ultTabla"); if(!z) return;
+  const area=$("areaBase").value, ult=ULT_CACHE[area]||{}, fb=normKey(($("ultBuscar")||{}).value||"");
+  const porArt={};
+  (BASE||[]).forEach(b=>{ const k=normKey(b.articulo); if(Number(b.n_op)>0) (porArt[k]=porArt[k]||{art:norm(b.articulo),ops:[]}).ops.push(b); });
+  const arts=Object.keys(porArt).filter(k=>!fb||k.includes(fb)).sort((a,b)=>porArt[a].art.localeCompare(porArt[b].art,"es",{numeric:true}));
+  if(!arts.length){ z.innerHTML=`<div class="vacio-msg">Sin artículos</div>`; return; }
+  const nom=(ops,n)=>{ const o=ops.find(b=>Number(b.n_op)===Number(n)); return o?`N°${n} · ${norm(o.operacion)}`:(n==null?"—":`N°${n}`); };
+  const sel=(k,cual,ops,auto,actual,manual)=>`<select id="ult${cual}_${esc(k)}" onchange="guardarUltima('${esc(k)}')">
+      <option value="">Automática · ${esc(nom(ops,auto))}</option>
+      ${ops.map(b=>`<option value="${Number(b.n_op)}"${manual&&Number(b.n_op)===Number(actual)?" selected":""}>N°${Number(b.n_op)} · ${esc(norm(b.operacion))}</option>`).join("")}
+    </select>`;
+  z.innerHTML=`<table class="tabla"><thead><tr><th class="izq">Artículo</th><th class="izq">Última operación</th>
+      <th class="izq">Penúltima operación</th><th></th></tr></thead><tbody>`
+    + arts.map(k=>{
+        const ops=[...porArt[k].ops].sort((a,b)=>Number(b.n_op)-Number(a.n_op));
+        const nops=[...new Set(ops.map(b=>Number(b.n_op)))];
+        const u=ult[k]||{n1:nops[0],n2:nops[1]??null,auto1:nops[0],auto2:nops[1]??null,manual:false};
+        const mu=!!u.fija1, mp=!!u.fija2;   // el "Automática" de la penúltima es el N°OP bajo la última vigente
+        return `<tr><td class="izq"><b>${esc(porArt[k].art)}</b></td>
+          <td class="izq">${sel(k,"U",ops,u.auto1,u.n1,mu)}</td>
+          <td class="izq">${sel(k,"P",ops,mp?(nops.find(n=>n<u.n1)??null):u.n2,u.n2,mp)}</td>
+          <td>${u.manual?`<span class="sub" title="${esc((u.por||"")+" "+(u.cuando||""))}">Elegida</span>
+            <button class="btn-mini gris" onclick="guardarUltima('${esc(k)}',true)">↺ Automática</button>`:`<span class="sub">Automática</span>`}</td></tr>`;
+      }).join("") + "</tbody></table>";
+}
+async function guardarUltima(k, auto){
+  const area=$("areaBase").value;
+  const art=(BASE||[]).find(b=>normKey(b.articulo)===k);
+  if(!art) return;
+  const v=id=>{ const e=$(id); return auto||!e||e.value===""?null:Number(e.value); };
+  try{
+    const r=await rpc("fn_ultimas_guardar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:art.articulo,
+      p_nop_ultima:v("ultU_"+k), p_nop_penultima:v("ultP_"+k)});
+    if(!r||!r.ok){ mostrarError((r&&r.error)||"No se pudo guardar"); }
+    else mostrarOk(r.manual?`${norm(art.articulo)}: última y penúltima guardadas`:`${norm(art.articulo)}: vuelve a la regla del N°OP`);
+  }catch(e){ mostrarError(e.message); }
+  await ultimasArea(area);
+  pintarUltimas(); pintarBases();
 }
 /* MAX OP. no lleva input a propósito: lo recalcula `_base_resecuenciar` en la
    BD a partir del número de operaciones del artículo. */
@@ -5918,7 +5993,7 @@ Escribe 1 o 2:`);
     </div>
     <div class="modal-campo"><label>Max Op. <span class="cf-detalle" style="font-weight:600;">(automático)</span></label>
       <input id="boMaxOp" inputmode="numeric" value="${v('max_op')}" readonly style="background:var(--gris-fondo);color:#5a6270;"></div>
-    <div class="cf-detalle" style="margin-top:-4px;">El N°OP es la posición; al guardar se reordena automáticamente el resto y Max Op. = total de operaciones del artículo. El mayor N°OP es la operación final (★ dorada); el 2º mayor, la penúltima.</div>
+    <div class="cf-detalle" style="margin-top:-4px;">El N°OP es la posición; al guardar se reordena automáticamente el resto y Max Op. = total de operaciones del artículo. El mayor N°OP es la operación final (★ dorada); el 2º mayor, la penúltima, salvo que se elijan otras en ÚLTIMA / PENÚLTIMA.</div>
     <div class="modal-msg" id="boMsg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" onclick="guardarBaseOp(${esEdicion?id:"null"})">GUARDAR</button>

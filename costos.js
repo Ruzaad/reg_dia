@@ -79,8 +79,8 @@ async function cargarCostosBase(){
   if(!area){ $("cbBalView").innerHTML=`<div class="estado-vacio">Elige un área para ver su base.</div>`; return; }
   pintarCargando($("cbBalView"),"Cargando base…");
   try{
-    const r=await rpc("fn_costos_base",{p_dni:ING.dni,p_token:ING.token,p_area:area});
-    CB.area=area; CB.filas=Array.isArray(r)?r:[]; CB.pag=1;
+    const [r, ult]=await Promise.all([rpc("fn_costos_base",{p_dni:ING.dni,p_token:ING.token,p_area:area}), ultimasArea(area)]);
+    CB.area=area; CB.filas=Array.isArray(r)?r:[]; CB.ult=ult; CB.pag=1;
     $("cbArtLista").innerHTML=[...new Set(CB.filas.map(b=>norm(b.articulo)))].sort()
       .map(a=>`<option value="${esc(a)}">`).join("");
     cbPintar();
@@ -188,7 +188,7 @@ function cbFichaHTML(a){
   </article>`;
 }
 function cbPintarTabla(filas){
-  const fin=calcularFinalesBase(CB.filas);
+  const fin=calcularFinalesBase(CB.filas, CB.ult);
   const lista=ordAplicar("cbTabla", filas);
   const tot=Math.max(1,Math.ceil(lista.length/CB_PAG_TAB));
   CB.pag=Math.min(Math.max(1,CB.pag),tot);
