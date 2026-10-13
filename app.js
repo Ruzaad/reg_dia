@@ -184,17 +184,20 @@ function irA(id){
    supervisora). Al retroceder con el hardware se ejecuta la MISMA lógica que el
    botón Volver; solo en un paso raíz se permite salir de la app. */
 function pasoActivo(){ const el=document.querySelector(".pantalla.activa"); return el?el.id:null; }
-/* El botón Atrás del celular vuelve DIRECTO a la pantalla de OF: encadenar
-   Volver→Volver→Volver era lento en planta. `window.VOLVER_INICIO` lo fija cada
-   página (operario: la lista de OF); si no está, se usa el salto de uno en uno. */
+/* El botón Atrás del celular retrocede paso a paso, igual que "← Volver":
+   paquetes → operación → módulo → OF → área. `window.alVolver` (operario)
+   repinta la pantalla de destino, que pudo no haberse pintado si se llegó por
+   un atajo ("Sigue donde te quedaste"). */
+function irAtras(t){
+  if(typeof window.alVolver === "function") window.alVolver(t);
+  irA(t);
+}
 function volverAtras(){
   const o=$("modalOverlay");
   if(o && o.classList.contains("visible")){ cerrarModal(); return true; }   // 1º cierra modal
   const act=pasoActivo();
-  const ini=window.VOLVER_INICIO;
-  if(ini && act && act!==ini && (window.VOLVER_MAP||{})[act]){ irA(ini); return true; }
   const t=(window.VOLVER_MAP||{})[act];
-  if(t){ irA(t); return true; }
+  if(t){ irAtras(t); return true; }
   // Paso raíz: antes se dejaba salir de la app y en planta eso era un deslogueo
   // casual. Si la página define onSalirApp, pide confirmación y no sale.
   if(typeof window.onSalirApp === "function"){ window.onSalirApp(); return true; }
@@ -890,9 +893,10 @@ function initOperario(){
     else if(id==="pasoModulos"){ sel.modulo=null; sel.op=null; }
     else if(id==="pasoOps"){ sel.op=null; }
     pintarCrumb(id);
+    guardarProgreso(id);
     const b=$("btnVolverHdr"); if(!b) return;
     const destino = VOLVER_OPERARIO[id];
-    if(destino){ b.style.display="inline-block"; b.onclick=()=>irA(destino); }
+    if(destino){ b.style.display="inline-block"; b.onclick=()=>irAtras(destino); }
     else b.style.display="none";
   };
   $("inputOF").addEventListener("input", pintarSugerencias);
@@ -904,13 +908,17 @@ function initOperario(){
          botón atrás desde ahí caía en `onSalirApp` → "¿Cerrar sesión?".
          `volverAtras` cierra el modal primero, así que el riesgo desaparece.
      El estajero sí conserva la pantalla: no tiene área propia y es su raíz. */
-  const btnCambiar=$("btnCambiarAreaEst");
-  if(btnCambiar){
-    btnCambiar.style.display="block";
-    btnCambiar.onclick = ()=> (s.cargo==='ESTAJERO')
-      ? (hidratarAreas().then(()=>pintarAreasEstajero(s)), irA("pasoAreaEstajero"))
-      : abrirCambioArea(s);
-  }
+  /* El botón está en las tres pantallas de inicio (OF, OF de Acabado y
+     lotes): antes solo estaba en la de OF y quien entraba a ACABADO o a un
+     área por lotes no tenía cómo pasarse a otra sin cerrar sesión. */
+  const irAreas = ()=> (s.cargo==='ESTAJERO')
+    ? (hidratarAreas().then(()=>pintarAreasEstajero(s)), irA("pasoAreaEstajero"))
+    : abrirCambioArea(s);
+  document.querySelectorAll("#btnCambiarAreaEst,.js-cambiar-area").forEach(b=>{ b.style.display="block"; b.onclick=irAreas; });
+  window.alVolver = (t)=>{
+    if(t==="pasoOps" && sel.of && sel.modulo) pintarOperaciones();
+    else if(t==="pasoModulos" && sel.of) pintarModulos();
+  };
   if(s.cargo==='ESTAJERO'){
     $("tituloArea").textContent = "ESTAJERO";
     irA("pasoAreaEstajero");
@@ -921,9 +929,12 @@ function initOperario(){
     cargarTodo(s);
   }
   window.VOLVER_MAP = VOLVER_OPERARIO;
-  // Atrás siempre devuelve a la lista de OF (o a la de Acabado, según el área).
-  if(window.VOLVER_INICIO!=="pasoLotes") window.VOLVER_INICIO = ES_ACABADO ? "pasoAcabOF" : "pasoOF";   // CORTE/REPROCESO: lotes (parche 116)
-  window.onSalirApp = confirmarSalir;
+  // Antes de la OF viene el área: atrás en la pantalla de inicio abre el
+  // cambio de área (con "Cerrar sesión" abajo). El estajero tiene su pantalla.
+  window.onSalirApp = ()=>{
+    if(s.cargo==='ESTAJERO' && pasoActivo()!=="pasoAreaEstajero"){ hidratarAreas().then(()=>pintarAreasEstajero(s)); irA("pasoAreaEstajero"); return; }
+    if(s.cargo==='ESTAJERO') confirmarSalir(); else abrirCambioArea(s, true);
+  };
   initBackTrap();
 }
 
@@ -942,12 +953,13 @@ function confirmarSalir(){
 
 /* Cambio de área en modal: sin pantalla nueva y sin tocar el paso activo, así
    que el botón atrás no puede confundirse con cerrar sesión. */
-async function abrirCambioArea(s){
+async function abrirCambioArea(s, desdeAtras){
   abrirModal(`<h2>¿En qué área vas a trabajar?</h2>
     <div class="sub" style="margin-bottom:10px;">Toca el área. Lo que ya registraste no se pierde.</div>
     <div class="grid-areas grid-areas-modal" id="gridAreaModal">${cargandoHTML("Cargando áreas…")}</div>
     <div class="modal-acciones">
-      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">${desdeAtras?"SEGUIR AQUÍ":"CANCELAR"}</button>
+      ${desdeAtras?`<button class="btn-secundario btn-modal-cancelar" onclick="confirmarSalir()">CERRAR SESIÓN</button>`:""}
     </div>`);
   await hidratarAreas();
   const g=$("gridAreaModal"); if(!g) return;   // lo cerró antes de que cargara
@@ -995,8 +1007,12 @@ function pedirHoraArea(s, a){
       // Sin red o sin el parche en la base: se cambia igual, el reparto cae a producción.
       if(e.message==="Sesión vencida") return;
     }
+    // Parche 122: salir de un área por lotes borra la elección de hoy (sin el parche, no pasa nada).
+    if(!AREAS_LOTE.includes(a)){ try{ await rpc("fn_lote_elegir_area",{p_dni:s.dni,p_token:s.token,p_area:a}); }catch(e){} }
     cerrarModal();
     AREA_ESTAJERO = a;
+    // Queda en la sesión: si el celular recarga la página, sigue en esta área.
+    { const ss=sesionActual(); if(ss && ss.cargo!=='ESTAJERO'){ ss.area=a; guardarSesion(ss); s.area=a; } }
     $("tituloArea").textContent = a;
     cargarTodo(s);
   };
@@ -1040,6 +1056,7 @@ function resetEstadoArea(){
 }
 
 async function cargarTodo(s){
+  PROG_PAUSA=true;
   resetEstadoArea();
   irA("pasoCarga");
   const area = AREA_ESTAJERO || s.area;
@@ -1091,10 +1108,11 @@ async function cargarTodo(s){
     irA("pasoOF");
     if(typeof opInicio==="function") opInicio();   // inicio con el día y "Sigue donde te quedaste"
     if(typeof ssEnviar==="function"){ ssPintar(); ssEnviar(); }   // parche 110: lo que quedó sin señal
+    await restaurarProgreso(s, area);
   }catch(e){
     $("zonaCarga").innerHTML = `<div class="vacio-msg">${esc(e.message)}</div>`;
     mostrarError("No se pudo cargar. Revisa la conexión y vuelve a intentar.");
-  }
+  }finally{ PROG_PAUSA=false; }
 }
 /* Ticket derivado (parche 29): misma forma que una fila del almacén. */
 function mapDerivado(t){
@@ -1659,6 +1677,52 @@ async function refrescarAcabado(s, area, volverA){
   }
   else if(act==="pasoAcabCant" && (ACAB.tipo || ACAB.op)) acabDetalle();
 }
+/* Pulso automático cada minuto (dinamico.js): solo el avance del día del
+   encabezado. Antes recargaba el área entera (6 consultas) y repintaba la
+   pantalla mientras el operario marcaba paquetes: la lista saltaba y, con la
+   base lenta, la OF quedaba vacía y se perdía lo marcado. La recarga completa
+   queda en el botón ↻. */
+async function pulsoOperario(){
+  const s=sesionActual(); if(!s) return;
+  if(ES_ACABADO){ await refrescarMetasAcabado(); return; }
+  try{ const d=await rpc("fn_mi_dia",{p_dni:s.dni,p_token:s.token}); if(d && d.ok!==false){ setAvance(d); if(pasoActivo()==="pasoOF" && typeof opPintarHoy==="function") opPintarHoy(); } }catch(e){}
+}
+/* Progreso del operario (OF, módulo, operación y paquetes marcados) guardado en
+   el celular: si la página se recarga (el celular la descarta al cambiar de
+   app, se jala hacia abajo, o se actualiza la versión) vuelve a donde estaba
+   con lo marcado. Vale 3 horas y solo para la misma persona y área. */
+const PROG_KEY="stx_prog", PROG_MS=3*3600*1000;
+let PROG_PAUSA=false;   // mientras carga el área no se pisa lo guardado
+function guardarProgreso(paso){
+  try{
+    if(PROG_PAUSA || ES_ACABADO) return;
+    const s=sesionActual(); if(!s) return;
+    const p=paso||pasoActivo();
+    if(["pasoOF","pasoAcabOF","pasoLotes"].includes(p)){ localStorage.removeItem(PROG_KEY); return; }
+    if(!sel.of || !["pasoModulos","pasoOps","pasoTickets","pasoConf"].includes(p)) return;
+    localStorage.setItem(PROG_KEY, JSON.stringify({dni:s.dni, area:AREA_ESTAJERO||s.area, paso:p,
+      of:sel.of, modulo:sel.modulo, op:sel.op, cods:Object.keys(marcados), t:Date.now()}));
+  }catch(e){}
+}
+async function restaurarProgreso(s, area){
+  let g=null; try{ g=JSON.parse(localStorage.getItem(PROG_KEY)||"null"); }catch(e){}
+  if(!g || g.dni!==s.dni || g.area!==area || Date.now()-g.t>PROG_MS || !g.of || ES_ACABADO) return;
+  if(pasoActivo()!=="pasoOF") return;   // ya se movió mientras cargaba
+  try{ await Promise.all([cargarTicketsDeOF(g.of), cargarOpAdOF(g.of)]); }catch(e){ return; }
+  if(pasoActivo()!=="pasoOF" || !ALM.tickets.some(t=>t.of===g.of)) return;
+  sel.of=g.of; sel.modulo=g.modulo||null; sel.op=g.op||null;
+  if(sel.modulo && !ALM.tickets.some(t=>t.of===sel.of && t.modulo===sel.modulo)){ sel.modulo=null; sel.op=null; }
+  if(sel.op && !ticketsActuales().length) sel.op=null;
+  if(sel.op){
+    modoSel=true; marcados={};
+    ticketsActuales().forEach(t=>{ if((g.cods||[]).includes(t.codigo) && !RECL[t.codigo]) marcados[t.codigo]=t; });
+    if(typeof OPI!=="undefined") OPI.tomados=false;
+    pintarTickets(); irA("pasoTickets");
+    const n=Object.keys(marcados).length;
+    if(n) mostrarOk(`Seguiste donde te quedaste: ${n} paquete${n===1?"":"s"} marcado${n===1?"":"s"}`);
+  } else if(sel.modulo){ pintarOperaciones(); irA("pasoOps"); }
+  else { pintarModulos(); irA("pasoModulos"); }
+}
 async function recargarMiEficiencia(){
   const s=sesionActual(); if(!s){ location.href="index.html"; return; }
   const b=$("btnRecargar"); if(b) b.classList.add("girando");
@@ -1692,21 +1756,30 @@ async function recargarMiEficiencia(){
                : Promise.resolve([]),   // sin Sheet, el reclamo viene por OF (parche 67)
         rpc("fn_mi_dia", {p_dni:s.dni, p_token:s.token}),
         rpc("fn_residuales", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
-        rpc("fn_ofs_area", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[]),
-        rpc("fn_mis_paquetes", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>[])
+        rpc("fn_ofs_area", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>null),
+        rpc("fn_mis_paquetes", {p_dni:s.dni, p_token:s.token, p_area:area}).catch(()=>null)
       ]);
-      const prev = ALM;
+      const prev = ALM, prevOF = OF_LISTA;
       ALM = alm;
       if(alm._err && !alm.tickets.length && prev) ALM = prev;   // no perder lo que ya había
       RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
-      OF_LISTA = armarOFS(alm.tickets, ofs);
+      // Si fn_ofs_area no respondió (base lenta), se queda la lista de antes:
+      // sin esto la OF que estaba marcando desaparecía y se perdía lo marcado.
+      OF_LISTA = ofs===null ? prevOF : armarOFS(alm.tickets, ofs);
+      if(ofs===null && prev) ALM.tickets = ALM.tickets.concat(prev.tickets.filter(t=>!t.residual && !alm.tickets.some(x=>x.codigo===t.codigo)));
       OF_CARGADAS = new Set();
       if(Array.isArray(res) && res.length) ALM.tickets = ALM.tickets.concat(res.map(mapResidual));
       // Solo se vuelve a bajar la OF que el operario está mirando (parche 67).
-      if(sel.of){ try{ await cargarTicketsDeOF(sel.of); }catch(e){ mostrarError(e.message); } }
-      MISPAQ = Array.isArray(mp) ? mp : [];
+      if(sel.of){ try{ await cargarTicketsDeOF(sel.of); }catch(e){
+        mostrarError(e.message);
+        // No respondió: se quedan los paquetes que ya tenía de esa OF.
+        const k=normKey(sel.of), ya=new Set(ALM.tickets.map(t=>t.codigo));
+        if(prev) ALM.tickets = ALM.tickets.concat(prev.tickets.filter(t=>normKey(t.of)===k && !ya.has(t.codigo)));
+      } }
+      if(Array.isArray(mp)) MISPAQ = mp;
       aplicarBotonMisPaq();
       setAvance(dia);
+      Object.keys(marcados).forEach(c=>{ if(RECL[c]) delete marcados[c]; });   // ya los tomó otra persona
       // Repinta donde está, y si su selección desapareció lo devuelve atrás.
       if(act==="pasoTickets"){ if(sel.op) pintarTickets(); else volverAOF(); }
       else if(act==="pasoOps"){ if(sel.modulo) pintarOperaciones(); else volverAOF(); }
@@ -1966,6 +2039,7 @@ function esTicketFinal(t){
 }
 function pintarTickets(){
   $("tituloTickets").textContent = sel.op;
+  guardarProgreso("pasoTickets");
   pintarBarraSel();
   const l=$("listaTickets"); l.innerHTML="";
   let lista=ticketsActuales(), sigue=null, tomados=[];
@@ -2286,10 +2360,11 @@ function mostrarExito(){
        operaciones `refrescarAcabado`. Aquí solo se cierra el aviso. */
     if(ES_ACABADO) return;
     if(OPADX.volver){ const v=OPADX.volver; OPADX.volver=null; irA(v); return; }
-    // Costura: vuelve al inicio con el día al día (antes volvía a los paquetes).
-    if($("opSigue") && typeof opiTrasRegistrar==="function"){
-      sel.of=null; sel.modulo=null; sel.op=null; $("inputOF").value=""; pintarSugerencias();
-      irA("pasoOF"); window.scrollTo(0,0); opPintarHoy(); opiTrasRegistrar(); return; }
+    /* Costura: vuelve a las operaciones del módulo donde estaba, para seguir
+       con otra operación u otros paquetes sin buscar la OF de nuevo. */
+    if(typeof opPintarHoy==="function") opPintarHoy();
+    if(typeof opiTrasRegistrar==="function") opiTrasRegistrar();
+    if(sel.of && sel.modulo){ pintarOperaciones(); irA("pasoOps"); window.scrollTo(0,0); return; }
     pintarTickets(); irA("pasoTickets");
   }, 2500);
 }

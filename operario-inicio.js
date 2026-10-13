@@ -129,7 +129,7 @@ async function opiAbrir(i){
   pintarTickets(); irA("pasoTickets"); window.scrollTo(0,0);
   opiPintar();
 }
-/* Tras registrar: vuelve al inicio con el día y las tarjetas al día. */
+/* Tras registrar: deja al día "Tus operaciones" y las tarjetas del inicio. */
 async function opiTrasRegistrar(){
   const s=sesionActual(); if(!s) return;
   try{
@@ -137,4 +137,5 @@ async function opiTrasRegistrar(){
     if(Array.isArray(mp)){ MISPAQ=mp; aplicarBotonMisPaq(); }
   }catch(e){}
   if(pasoActivo()==="pasoOF"){ opiPintar(); opiCargarOFs(); }
+  else if(pasoActivo()==="pasoOps" && sel.of && sel.modulo) pintarOperaciones();
 }

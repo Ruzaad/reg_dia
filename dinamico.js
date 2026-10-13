@@ -701,7 +701,7 @@ function iniciarOtras(){
   }
   if(PAG==="operario"){
     /* El avance del día en el encabezado se mantiene al día sin tocar nada. */
-    const pulso=()=>{if(document.hidden||document.querySelector(".modal-overlay.visible"))return;try{llamar("recargarMiEficiencia");}catch(e){}};
+    const pulso=()=>{if(document.hidden||document.querySelector(".modal-overlay.visible"))return;try{llamar("pulsoOperario");}catch(e){}};
     setInterval(pulso,60000);
   }
 }
