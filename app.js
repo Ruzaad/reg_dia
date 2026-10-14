@@ -641,14 +641,16 @@ let AREA_ESTAJERO = null;   // área elegida por el estajero para este reclamo (
 /* Áreas sin OF que trabajan por lotes (parches 116 y 119). No están en
    areas_config (no tienen Sheet), así que se agregan aparte a las tarjetas de
    elegir área: sin esto nadie podía entrar a CORTE, REPROCESO ni DESPACHO. */
-const AREAS_LOTE = ["CORTE","DESPACHO","REPROCESO"];
+const AREAS_LOTE = ["CORTE","DESPACHO"];
+/* Parche 126: REPROCESO se trabaja como ACABADO (BASE + OF provisional, por cantidad). */
+const AREAS_CANTIDAD = ["REPROCESO"];
 function tarjetasAreasLote(g, actualArea, alElegir){
-  AREAS_LOTE.forEach(a=>{
+  [...AREAS_LOTE, ...AREAS_CANTIDAD].forEach(a=>{
     if(AREAS[a]) return;
     const actual = a===actualArea;
     const c=document.createElement("div");
     c.className="card-area"+(actual?" propia":"");
-    c.innerHTML=`<div class="ca-nombre">${esc(a)}</div><div class="ca-sub">${actual?"Estás aquí":"Por lotes"}</div>`;
+    c.innerHTML=`<div class="ca-nombre">${esc(a)}</div><div class="ca-sub">${actual?"Estás aquí":(AREAS_CANTIDAD.includes(a)?"Por cantidad":"Por lotes")}</div>`;
     c.onclick=()=>alElegir(a, actual);
     g.appendChild(c);
   });
@@ -1060,12 +1062,12 @@ async function cargarTodo(s){
   resetEstadoArea();
   irA("pasoCarga");
   const area = AREA_ESTAJERO || s.area;
-  ES_ACABADO = (area === "ACABADO");
+  ES_ACABADO = (area === "ACABADO" || AREAS_CANTIDAD.includes(area));   // REPROCESO registra por cantidad, como ACABADO (parche 126)
   aplicarModoAcabado();
   pintarCargando($("zonaCarga"),"Cargando "+(ES_ACABADO?"OFs":"almacén")+" de "+area+"…");
   try{
     // ACABADO ya no lee el almacén: registra por cantidad contra el corte real.
-    // Parche 116: CORTE y REPROCESO no tienen OF: trabajan por lotes.
+    // Parche 116: CORTE y DESPACHO no tienen OF: trabajan por lotes. REPROCESO va por cantidad (parche 126).
     if(typeof ltEntrar==="function" && AREAS_LOTE.includes(area)){
       // Parche 122: quien elige el área al entrar trabaja ahí hoy, aunque nadie lo haya marcado EN <área>.
       try{ await rpc("fn_lote_elegir_area",{p_dni:s.dni,p_token:s.token,p_area:area}); }catch(e){ if(e.message==="Sesión vencida") return; }
