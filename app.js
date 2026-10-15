@@ -1308,6 +1308,7 @@ function pintarAcabOps(){
   $("tituloAcabOp").textContent = `${o.articulo}${ACAB.prenda?" · "+ACAB.prenda:""} · OF ${o.of}`;
   $("subAcabOp").textContent = `${o.colores||"—"} · corte real ${qty(o.cant_prog)} und`;
   const l=$("listaAcabOp"); l.innerHTML="";
+  if(recActiva() && REC.of!==o.of) recCargar(o.of, true);
   // Con dos prendas se listan solo las operaciones de la elegida.
   const lista = acabPrendas().length>1 && ACAB.prenda
     ? (o.operaciones||[]).filter(x=>x.prenda===ACAB.prenda)
@@ -1327,6 +1328,12 @@ function pintarAcabOps(){
     /* Completa también se abre, pero en SOLO LECTURA: es la única forma de ver
        quién registró las cantidades de una operación ya cerrada. */
     c.onclick=()=>{ ACAB.op=x; ACAB.tipo=null; acabPedirCant(!queda); };
+    if(recActiva() && REC.of===o.of && REC.info && REC.info.ok && Number(x.n_op)===Number(REC.info.n_op)){
+      const r=document.createElement("button"); r.type="button"; r.className="btn-secundario rec-btn";
+      r.textContent="Reclasificar"+(REC.info.queda>0?` · ${qty(REC.info.queda)} por clasificar`:"");
+      r.onclick=e=>{ e.stopPropagation(); recAbrir(); };
+      c.appendChild(r);
+    }
     l.appendChild(c);
   });
 }
@@ -2017,6 +2024,55 @@ function pintarOperaciones(){
   }
 }
 
+/* --- Reclasificación de REPROCESO (parche 128): color, talla, falla y cantidad,
+   colgada de la penúltima operación del artículo --- */
+const REC={of:null, info:null};
+const recActiva = () => { const s=sesionActual(); return !!s && s.area==="REPROCESO" && ES_ACABADO; };
+async function recCargar(of, repintar){
+  const s=sesionActual(); REC.of=of; REC.info=null;
+  try{ REC.info=await rpc("fn_reproceso_reclasif_info",{p_dni:s.dni,p_token:s.token,p_of:of}); }
+  catch(e){ REC.info=null; }   // sin el parche 128 no aparece el botón
+  if(repintar && REC.of===of && ACAB.of && ACAB.of.of===of && $("pasoAcabOp") && $("pasoAcabOp").classList.contains("activa")) pintarAcabOps();
+}
+function recAbrir(){
+  const i=REC.info; if(!i||!i.ok) return;
+  const filas=(i.filas||[]).map(f=>`<tr><td class="izq">${esc(f.color)}</td><td>${esc(f.talla)}</td><td class="izq">${esc(f.falla)}</td><td>${qty(f.cantidad)}</td>
+    <td><button type="button" class="btn-mini" data-id="${f.id}" aria-label="Anular ${esc(f.falla)}">✕</button></td></tr>`).join("");
+  abrirModal(`<h2>Reclasificar · ${esc(i.articulo)}</h2>
+    <div class="sub" style="margin-bottom:10px;">Lote ${esc(i.of)} · después de ${esc(i.operacion)}. Reportadas <b>${qty(i.hecho)}</b> · por clasificar <b>${qty(i.queda)}</b></div>
+    <div class="modal-campo"><label for="recColor">Color</label><input id="recColor" maxlength="40" list="recColores" autocomplete="off"></div>
+    <datalist id="recColores">${(i.colores||[]).map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+    <div class="modal-campo"><label for="recTalla">Talla</label><input id="recTalla" maxlength="20" autocomplete="off"></div>
+    <div class="modal-campo"><label for="recFalla">Tipo de falla</label><input id="recFalla" maxlength="60" list="recFallas" autocomplete="off"></div>
+    <datalist id="recFallas">${(i.fallas||[]).map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+    <div class="modal-campo"><label for="recCant">Cantidad</label><input id="recCant" type="number" inputmode="numeric" min="1" max="${Math.max(i.queda,1)}"></div>
+    <div class="modal-msg" id="recMsg" role="alert"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" id="recGuardar">GUARDAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>
+    ${filas?`<table class="tabla" style="margin-top:12px"><thead><tr><th class="izq">Color</th><th>Talla</th><th class="izq">Falla</th><th>Cant.</th><th></th></tr></thead><tbody id="recFilas">${filas}</tbody></table>`:""}`);
+  $("recGuardar").onclick=()=>unaVez("recGuardar",[$("recGuardar")],async()=>{
+    const s=sesionActual(), msg=$("recMsg"); msg.textContent="";
+    try{
+      const r=await rpc("fn_reproceso_reclasificar",{p_dni:s.dni,p_token:s.token,p_of:i.of,
+        p_color:$("recColor").value,p_talla:$("recTalla").value,p_falla:$("recFalla").value,p_cant:parseInt($("recCant").value,10)||0});
+      if(!r.ok){ msg.textContent=r.error||"No se pudo guardar"; return; }
+      mostrarOk("Reclasificación guardada");
+      await recCargar(i.of,false); recAbrir(); if($("pasoAcabOp")&&$("pasoAcabOp").classList.contains("activa")) pintarAcabOps();
+    }catch(e){ msg.textContent=e.message; }
+  });
+  const tb=$("recFilas");
+  if(tb) tb.onclick=async e=>{
+    const b=e.target.closest("button[data-id]"); if(!b) return;
+    const s=sesionActual();
+    try{
+      const r=await rpc("fn_reproceso_reclasif_anular",{p_dni:s.dni,p_token:s.token,p_id:Number(b.dataset.id)});
+      if(!r.ok){ $("recMsg").textContent=r.error||"No se pudo anular"; return; }
+      await recCargar(i.of,false); recAbrir(); if($("pasoAcabOp")&&$("pasoAcabOp").classList.contains("activa")) pintarAcabOps();
+    }catch(err){ $("recMsg").textContent=err.message; }
+  };
+}
+
 /* --- paso tickets (numeración protagonista + selección múltiple) --- */
 let modoSel=false, marcados={};
 const LOTE_MAX=60;   // tope de fn_reclamar_lote por llamada
@@ -2631,10 +2687,10 @@ async function verEfPersonaOps(dni, nombre){
 function initSupervisora(){
   const s=sesionActual();
   if(!s || !s.area){ location.href="index.html"; return; }
-  // INGENIERIA puede entrar aquí desde "Operar como → Supervisora": reutiliza esta
+  // Ingeniería y oficina (p. ej. COSTOS) entran aquí desde "Operar como → Supervisora": reutiliza esta
   // pantalla en vez del panel embebido, que se quedaba desactualizado.
   const desdeIng = (()=>{ try{ return !!sessionStorage.getItem("stx_volver_ing"); }catch(e){ return false; } })();
-  if(s.cargo!=="SUPERVISORA" && !(s.cargo==="INGENIERIA" && desdeIng)){
+  if(s.cargo!=="SUPERVISORA" && !(esOficina(s.cargo) && desdeIng)){
     location.href = destinoPorCargo(s.cargo); return; }
   fijarSesion(s);
   SUP_AREA_OVERRIDE=null;

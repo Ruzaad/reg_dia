@@ -1313,6 +1313,8 @@ body[data-pagina="operario"] #pasoTickets.activa{padding-bottom:96px;}
 @media (prefers-reduced-motion:reduce){.opi-spin{animation:none;}}
 .lista-cards[hidden]{display:none;}
 #listaOps .card-fila>div:first-child{min-width:0;}
+#listaAcabOp .card-fila{flex-wrap:wrap;}
+#listaAcabOp .rec-btn{flex:1 1 100%;margin-top:10px;min-height:44px;}
 #listaOps .cf-titulo{overflow-wrap:anywhere;}
 
 /* ===== Buscar y seguir (parche 106) ===== */
