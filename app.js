@@ -641,7 +641,7 @@ let AREA_ESTAJERO = null;   // área elegida por el estajero para este reclamo (
 /* Áreas sin OF que trabajan por lotes (parches 116 y 119). No están en
    areas_config (no tienen Sheet), así que se agregan aparte a las tarjetas de
    elegir área: sin esto nadie podía entrar a CORTE, REPROCESO ni DESPACHO. */
-const AREAS_LOTE = ["CORTE","DESPACHO"];
+const AREAS_LOTE = [];   // DESPACHO y CORTE no se toman por ahora (parche 129)
 /* Parche 126: REPROCESO se trabaja como ACABADO (BASE + OF provisional, por cantidad). */
 const AREAS_CANTIDAD = ["REPROCESO"];
 function tarjetasAreasLote(g, actualArea, alElegir){

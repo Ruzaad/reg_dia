@@ -1705,3 +1705,21 @@ body.prestada::after{content:"";position:fixed;inset:0;border:4px solid var(--vi
 /* Celular del operario: jalar hacia abajo al subir por la lista de paquetes
    recargaba la página entera sin querer. */
 body[data-pagina="operario"]{overscroll-behavior-y:contain;}
+
+/* Reproceso: lotes (parche 129) */
+.lr-filtro{margin:8px 0 14px;}
+.lr-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));}
+.lr-card{background:var(--sup);border:1px solid var(--linea);border-left:4px solid var(--ocre);border-radius:var(--r);padding:14px 16px;box-shadow:var(--sombra-1);}
+.lr-card.cerrado{opacity:.8;border-left-color:var(--linea);}
+.lr-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px;}
+.lr-top b{font-size:18px;color:var(--texto);}
+.lr-top small{display:block;color:var(--suave);font-size:13px;}
+.lr-ops{margin:10px 0;display:grid;gap:5px;}
+.lr-op{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(40px,1fr) auto;gap:8px;align-items:center;font-size:13px;}
+.lr-op .n{overflow-wrap:anywhere;color:var(--texto);}
+.lr-op .b{height:7px;border-radius:6px;background:var(--linea-2);overflow:hidden;display:block;}
+.lr-op .b i{display:block;height:100%;background:var(--azul);}
+.lr-op .v{font-variant-numeric:tabular-nums;color:var(--suave);}
+.lr-pie{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--suave);}
+.lr-btns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+.lr-btns .btn-mini{min-height:40px;}

@@ -39,7 +39,7 @@
         <a class="nav-item" data-tab="pasoFeriados" href="#pasoFeriados">Feriados y fin de semana</a>
         <a class="nav-item" data-tab="pasoBolSin" href="#pasoBolSin">Boletas sin llenar<b class="dyn-cnt" id="bslNavCnt" hidden></b></a>
         <a class="nav-item" data-tab="pasoSueltos" href="#pasoSueltos">Paquetes sueltos</a>
-        <a class="nav-item" data-tab="pasoLotes" href="#pasoLotes">Trabajo por tiempo</a>
+        <a class="nav-item" data-tab="pasoLotes" href="#pasoLotes">Reproceso</a>
         <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
         <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Avance por módulo</a>
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
@@ -983,22 +983,17 @@
       <div id="prZona" aria-live="polite"></div>
     </section>
 
-    <!-- ===================== TRABAJO POR TIEMPO (parche 116) ===================== -->
+    <!-- ===================== REPROCESO: LOTES (parche 129) ===================== -->
     <section class="pantalla" id="pasoLotes">
       <div class="seccion-cab">
-        <h1>Trabajo por tiempo</h1>
-        <p class="seccion-sub">Lotes de DESPACHO y CORTE, que no tienen OF ni BASE. La gente marca EMPEZAR y TERMINAR en su celular;
-        aquí ves las horas, las prendas y los minutos por prenda reales. Con el tiempo de cada tarea que sube Ingeniería, lo que hacen genera
-        minutaje como un ticket, y la cantidad del lote es el tope. Solo ves las áreas que tienes en Permisos (DESPACHO va con ACABADO). REPROCESO ya no va por tiempo: se trabaja como ACABADO, con su base en Bases y el lote como OF provisional (+ Lote de reproceso).</p>
+        <h1>Reproceso</h1>
+        <p class="seccion-sub">Los lotes de REPROCESO son OFs provisionales: el operario los busca por número o artículo y registra cantidades por operación,
+        como en ACABADO. Aquí los creas, ves el avance de cada operación y los abres o cierras (un lote cerrado deja de salirle al personal).
+        La base de cada artículo se sube en Bases, área REPROCESO.</p>
       </div>
       <div class="barra-control" id="ltBarra">
-        <label class="campo"><span>Día</span><input type="date" id="ltFecha" onchange="ltCargarIng()"></label>
-        <label class="campo"><span>Área</span><select id="ltArea" onchange="ltCargarIng()"><option value="">Todas mis áreas</option><option>DESPACHO</option><option>CORTE</option></select></label>
         <span style="flex:1"></span>
-        <button class="btn-mini verde" id="ltNuevoBtn" hidden onclick="ltNuevoIng()">+ Nuevo lote</button>
-        <button class="btn-mini" id="ltTiemposBtn" hidden onclick="ltTiempos()">⏱ Tiempos por tarea</button>
-        <button class="btn-mini verde" id="ltRepBtn" hidden onclick="ltRepAbrir()">+ Lote de reproceso</button>
-        <button class="btn-mini gris" onclick="ltDescargar()">⬇ Descargar XLSX</button>
+        <button class="btn-mini verde" id="ltRepBtn" hidden onclick="ltRepAbrir()">+ Crear lote</button>
       </div>
       <div id="ltIngZona" aria-live="polite"></div>
     </section>
