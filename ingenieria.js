@@ -4114,17 +4114,17 @@ function pintarTkOp(){
     + `${qty(sum(act,"cant"))} und · ${Math.round(sum(act,"minutos"))} min (activos) · ${nsel} seleccionado(s)`;
   const bs=$("tkOpLiberarSel"); if(bs) bs.textContent=`Liberar selección (${nsel})`;
   const fl=k=>tkOpSort.col===k?(tkOpSort.dir===1?" ▲":" ▼"):"";
-  const COLS=[["nombre","Nombre"],["dni","DNI"],["op","Operación"],["hora","Fecha/hora reclamado"],["numeracion","Numeración"],["cant","Cant"],["minutos","Min"],["estado","Estado"]];
+  const COLS=[["nombre","Nombre"],["dni","DNI"],["op","Operación"],["hora","Fecha/hora reclamado"],["fecha","Cuenta el"],["numeracion","Numeración"],["cant","Cant"],["minutos","Min"],["estado","Estado"]];
   const thead=`<thead><tr><th></th>${COLS.map(c=>`<th class="ord${c[0]==="nombre"?" izq":""}" onclick="ordenarTkOp('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}<th></th></tr></thead>`;
   const body=pag.length? pag.map(t=>`<tr${t.estado==='LIBERADO'?' style="opacity:.55;"':''}>
       <td>${(t.estado==='ACTIVO'&&t.id!=null&&puedeEditar(TKOP.area))?`<input type="checkbox" class="sw" ${tkOpMarc[t.id]?"checked":""} onclick="tkOpToggle(${Number(t.id)})">`:""}</td>
       <td class="izq">${esc(t.nombre)}</td><td>${esc(t.dni)}</td>
       <td>${esc(t.op)}${t.causa?`<div class="cf-detalle">${esc(t.causa)}</div>`:""}</td>
-      <td>${esc(t.hora)}${t.fecha&&t.hora&&t.fecha!==String(t.hora).slice(0,10)?`<div class="cf-detalle">Cuenta el ${esc(fechaCorta(t.fecha))}</div>`:""}</td><td>${esc(t.numeracion||"—")}</td>
+      <td>${esc(t.hora)}</td><td>${t.fecha&&t.hora&&t.fecha!==String(t.hora).slice(0,10)?`<b>${esc(fechaCorta(t.fecha))}</b><div class="cf-detalle">movido</div>`:esc(fechaCorta(t.fecha))}</td><td>${esc(t.numeracion||"—")}</td>
       <td><b>${t.cant!=null?qty(t.cant):"—"}</b></td><td>${t.minutos!=null?t.minutos:"—"}</td>
       <td><span class="pill ${t.estado==='ACTIVO'?'ACTIVO':'FALTA'}">${esc(t.estado)}</span></td>
       <td>${(t.estado==='ACTIVO'&&t.id!=null&&puedeEditar(TKOP.area))?`<button class="btn-mini rojo" onclick="liberarTkOp(${Number(t.id)})">LIBERAR</button>`:""}</td></tr>`).join("")
-    : `<tr><td colspan="10"><div class="vacio-msg">Sin tickets reclamados para esta OF</div></td></tr>`;
+    : `<tr><td colspan="11"><div class="vacio-msg">Sin tickets reclamados para esta OF</div></td></tr>`;
   $("tablaTkOp").innerHTML=thead+"<tbody>"+body+"</tbody>";
   const pg=$("tkOpPager");
   if(pg) pg.innerHTML = totP>1
