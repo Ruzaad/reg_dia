@@ -15,7 +15,7 @@ PWA estática (HTML/CSS/JS vanilla, **sin framework y sin build**) para registra
 | `ingenieria.js` | Vista de Ingeniería (el archivo más grande, ~7 200 líneas). |
 | `rediseno.css` | Estilo vigente (paleta en variables CSS `--azul`, `--ocre`, …). `style.css` es la base vieja que sigue cargada debajo. |
 | `dinamico.js` | Capa dinámica que se carga al final de cada página; reutiliza las funciones y RPC existentes. |
-| `lotes.js` | Trabajo por tiempo (CORTE, DESPACHO, REPROCESO: lotes sin OF ni BASE). |
+| `lotes.js` | Vista de lotes de REPROCESO (abrir, cerrar, avance, crear). El trabajo por tiempo de CORTE y DESPACHO quedó sin uso. |
 | `supervisora-hoy.js`, `operario-inicio.js`, `sinsenal.js`, `pedidos.js` | Pantallas de supervisora, inicio del operario, modo sin señal, pedidos de tiempo. |
 | `buscar.js`, `calidad.js`, `asistencia.js`, `feriados.js`, `incidencias.js`, `sueltos.js`, `prestadas.js`, `costos.js`, `inicio.js` | Módulos de Ingeniería (y algunos de supervisora). |
 | `sql/parche_N.sql` + `sql/parche_N_rollback.sql` + `parches/PARCHE_N.md` | Cambios de base, en orden. |
@@ -35,7 +35,7 @@ Herramienta interna para ubicar código sin releer archivos enteros. **No se pub
 
 ## Base de datos (lo más delicado)
 - Proyecto Supabase `lmlwomurgbbzolgbkwtp` (samitex-cost-acab).
-- Cada cambio de base es un **parche numerado**: `sql/parche_N.sql`, su `sql/parche_N_rollback.sql` y `parches/PARCHE_N.md` (problema, cambio, cómo verificar). **Siguiente libre: 129.** El 117 está reservado (plantillas de permisos) y el 108 no se usa. Si hay varios hilos a la vez, el coordinador asigna los números.
+- Cada cambio de base es un **parche numerado**: `sql/parche_N.sql`, su `sql/parche_N_rollback.sql` y `parches/PARCHE_N.md` (problema, cambio, cómo verificar). **Siguiente libre: 130.** El 117 está reservado (plantillas de permisos) y el 108 no se usa. Si hay varios hilos a la vez, el coordinador asigna los números.
 - **Los PRs nunca ejecutan SQL en producción.** Solo Ruzaad lo corre en el SQL Editor de Supabase. Se puede LEER producción para verificar, nunca escribir. Si son varios parches, se le arma UN SQL maestro en una sola transacción (`begin; … commit;`), con su deshacer.
 - El rol `anon` tiene **`statement_timeout` de 3 s**, y un `set statement_timeout` dentro de la función no alarga la sentencia en curso: toda RPC nueva debe medir < 3 s con datos reales.
 - Conviven despliegues con versiones viejas del front contra la misma base: **no rompas una RPC que el front ya usa**. Crea una nueva (u otra sobrecarga) y deja la vieja. Se mantienen a propósito las sobrecargas viejas de `fn_acabado_registrar`, `fn_personal_editar`, `fn_movimiento_hora` y la columna `tickets_cache.actualizado`.

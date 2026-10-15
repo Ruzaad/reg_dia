@@ -64,7 +64,7 @@ function shInit(){
   const mp=$("shMasPin"); if(mp) mp.onclick=abrirCambioPin;
   const ms=$("shMasSalir"); if(ms) ms.onclick=cerrarSesion;
   $("shMasSub").textContent=areaSup();
-  { const lc=$("shMasLotes"); if(lc) lc.hidden=!["CORTE","ACABADO"].includes(areaSup()); }   // parche 116
+  { const lc=$("shMasLotes"); if(lc) lc.hidden=areaSup()!=="REPROCESO"; }   // parche 116
   irA("pasoHoy"); shCargar(true);
 }
 

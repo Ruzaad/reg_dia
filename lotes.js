@@ -9,7 +9,10 @@
    lote es el tope, igual que el corte real en ACABADO.
    Parche 126: REPROCESO ya no trabaja por tiempo. Se trabaja como ACABADO: su
    BASE se sube en Bases y el lote es una OF provisional con su cantidad tope
-   (ltRepAbrir, al final). Aquí solo quedan DESPACHO y CORTE. */
+   (ltRepAbrir, al final).
+   Parche 129: la vista de Ingeniería y de supervisión es solo de REPROCESO (abrir,
+   cerrar, avance). DESPACHO y CORTE no se toman por ahora: no tienen vista ni
+   tarjeta de área (AREAS_LOTE vacío); el código de tramos queda sin uso. */
 
 const LT_AREAS=["DESPACHO","CORTE"];
 const ltSinRep = r => { if(r){ if(r.areas) r.areas=r.areas.filter(a=>a.area!=="REPROCESO"); if(r.lotes) r.lotes=r.lotes.filter(l=>l.area!=="REPROCESO");
@@ -259,139 +262,62 @@ const ltPorRevisarFila = (t, cb) => `<div class="lt-rev"><div class="lt-rev-t"><
     ${t.auto?`<label>Terminó a las<input id="ltRvF${t.id}" type="time" value="${ltHM(t.fin)}"></label>`:""}
     <button type="button" class="btn-mini" id="ltRvB${t.id}" onclick="ltRevisar(${t.id},${cb})">Guardar</button></div></div>`;
 
-/* ---------------- INGENIERÍA ---------------- */
-async function ltCargarIng(){
-  const z=$("ltIngZona"); if(!z) return;
-  const s=ltSes(), f=$("ltFecha"), a=$("ltArea");
-  const bc=$("ltBarra"); if(bc) bc.style.display="";
+/* ---------------- REPROCESO: lotes (Ingeniería y supervisión, parche 129) ----------------
+   Los lotes de REPROCESO son OF provisionales (parche 126). Aquí se ve el avance de
+   cada operación, se abren o cierran (un lote cerrado deja de salirle al operario) y
+   se crean o se corrige su tope. DESPACHO y CORTE ya no se toman: no hay vista. */
+LT.lotes=null; LT.filtro="ABIERTO";
+const LT_FALTA_129 = `<div class="acf-falta"><b>Falta correr el parche 129 en la base.</b> Con él se abren y cierran los lotes de REPROCESO y se ve su avance.</div>`;
+const ltCargarIng = () => ltRepLotes("ltIngZona");
+const ltCargarSup = () => ltRepLotes("ltSupZona");
+function ltRecargar(){ if($("ltIngZona")) ltCargarIng(); else if($("ltSupZona")) ltCargarSup(); }
+async function ltRepLotes(zona){
+  const z=$(zona); if(!z) return;
+  const s=ltSes(); if(!s) return;
   pintarCargando(z,"Cargando lotes…");
   try{
-    const r=await rpc("fn_lotes_panel",{p_dni:s.dni,p_token:s.token,p_area:a?a.value:"",p_fecha:(f&&f.value)||null});
+    const r=await rpc("fn_reproceso_lotes",{p_dni:s.dni,p_token:s.token});
     if(!r.ok){ z.innerHTML=`<div class="vacio-msg">${esc(r.error||"No se pudo")}</div>`; return; }
-    LT.panel=ltSinRep(r); ltPintarIng(); ltRepPuede();
-  }catch(e){ z.innerHTML = ltFalta(e) ? LT_FALTA_HTML : `<div class="vacio-msg">${esc(e.message)}</div>`; }
+    LT.lotes=r; ltRepPintar(zona);
+  }catch(e){ z.innerHTML = ltFalta(e) ? LT_FALTA_129 : `<div class="vacio-msg">${esc(e.message)}</div>`; }
 }
-function ltPintarIng(){
-  const z=$("ltIngZona"), r=LT.panel; if(!z||!r) return;
-  const edita=(r.areas||[]).filter(a=>a.edita).map(a=>a.area);
-  const nb=$("ltNuevoBtn"); if(nb) nb.hidden=!edita.length;
-  const tb=$("ltTiemposBtn"); if(tb) tb.hidden=false;
-  const sum=k=>(r.areas||[]).reduce((s,a)=>s+Number(a[k]||0),0);
-  const kpi=(t,v,c)=>`<div class="kpi"><div class="kpi-num"${c?` style="color:${c}"`:""}>${v}</div><div class="kpi-lbl">${t}</div></div>`;
-  const ls=r.lotes||[], pr=r.por_revisar||[];
-  const std=l=>l.std?`<span class="lt-std">${Number(l.std).toFixed(2)}</span>`:`<span class="lt-sinstd">Sin tiempo</span>`;
-  const real=l=>{ const v=ltReal(l); if(v==null) return `<span class="sub">—</span>`;
-    return `<span class="lt-std${l.std?(v>l.std*1.1?" mal":" bien"):""}">${v.toFixed(2)}</span>`; };
-  const efi=l=>{ const v=ltReal(l); return (l.std&&v)?`<b>${Math.round(l.std/v*100)}%</b>`:`<span class="sub">—</span>`; };
-  const fila=l=>`<tr><td class="izq"><b>${esc(l.destino)}</b><small>L-${l.id} · ${esc(l.tarea)}${l.o_f?` · OF ${esc(l.o_f)}`:""}</small></td><td>${esc(l.area)}</td>
-    <td class="nw">${ltN(l.hecho)} / ${ltN(l.cantidad)}</td>
-    <td><span class="lt-prog${ltPct(l)>=100?" ok":""}"><span class="b"><i style="width:${ltPct(l)}%"></i></span><span>${ltPct(l)}%</span></span></td>
-    <td class="nw">${ltHoras(l.min)}</td>
-    <td>${l.estado==="CERRADO"?`<span class="tag g">Cerrado</span>`:l.ahora?`<span class="lt-vivo">${l.ahora}</span>`:`<span class="sub">0</span>`}</td>
-    <td>${real(l)}</td><td>${std(l)}</td><td>${efi(l)}</td><td class="nw">${l.minutaje?`<b>${ltMj(l.minutaje)}</b>`:`<span class="sub">—</span>`}</td>
-    <td>${l.por_revisar?`<span class="tag r">${l.por_revisar}</span>`:""}</td>
-    <td class="nw"><button class="btn-mini gris" onclick="ltVer(${l.id})">Ver</button></td></tr>`;
-  z.innerHTML=`<div class="kpis" style="margin-bottom:14px">${kpi("Lotes abiertos",sum("abiertos"))}${kpi("Trabajando ahora",sum("ahora"),"var(--exito)")}
-      ${kpi("Horas del día",ltHoras(sum("min")))}${kpi("Minutaje del día",ltMj(sum("minutaje"))+" min","var(--azul)")}${kpi("Por revisar",pr.length,pr.length?"var(--alerta)":"")}</div>
-    ${sum("sin_tiempo")?`<button type="button" class="lt-sintiempo" onclick="ltTiempos()"><b>${sum("sin_tiempo")} ${sum("sin_tiempo")===1?"tarea no tiene":"tareas no tienen"} tiempo</b>
-      <span>Sin tiempo, lo que hacen en esas tareas no genera minutaje: el día queda solo en horas. Súbelo en Tiempos por tarea ›</span></button>`:""}
-    <div class="lt-areas">${(r.areas||[]).map(a=>`<div class="lt-ar"><div class="t">${esc(a.area)} ${a.ahora?`<span class="lt-vivo">${a.ahora} ahora</span>`:""}</div>
-      <div class="n">${ltHoras(a.min)} <small>· ${a.personas} ${a.personas===1?"persona":"personas"}</small></div><div class="s">${a.abiertos} ${a.abiertos===1?"lote abierto":"lotes abiertos"} · ${ltMj(a.minutaje)} min de minutaje${a.edita?"":" · solo lectura"}</div></div>`).join("")}</div>
-    ${pr.length?`<h2 class="lt-h2">Por revisar <span class="sub">(sin cantidad: se cerraron solos o el operario no contó)</span></h2>
-      <div class="lt-revs">${pr.map(t=>edita.includes(t.area)?ltPorRevisarFila(t,"ltCargarIng"):"").join("")}</div>`:""}
-    ${ls.length?`<div class="contenedor-ancho tabla-scroll"><table class="tabla lt-tabla"><thead><tr><th class="izq">Lote</th><th>Área</th><th>Prendas</th><th>Avance</th><th>Horas</th>
-      <th>Ahora</th><th>Min/prenda real</th><th>Tiempo</th><th>Eficiencia</th><th>Minutaje</th><th>Por revisar</th><th></th></tr></thead><tbody>${ls.map(fila).join("")}</tbody></table></div>`
-      :`<div class="vacio-msg">Sin lotes ese día.${edita.length?" Crea el primero con + Nuevo lote.":""}</div>`}
-    <div class="lt-explica">Cuando la tarea tiene tiempo, cada prenda genera <b>minutaje</b> (prendas × tiempo) que entra a la boleta, la eficiencia y los incentivos
-      igual que un ticket, con la fecha del día que se trabajó. La cantidad del lote es el tope, como el corte real en ACABADO.
-      Sin tiempo, el lote solo suma horas aquí. Min/prenda real cuenta solo los tramos con cantidad.</div>`;
+const ltRepPct = l => { const n=(l.ops||[]).length, c=Number(l.cant_prog)||0; if(!n||!c) return 0;
+  return Math.round((l.ops||[]).reduce((s,o)=>s+Math.min(Number(o.hecho)||0,c),0)/(c*n)*100); };
+function ltRepPintar(zona){
+  const z=$(zona), r=LT.lotes; if(!z||!r) return;
+  const todos=r.lotes||[], ab=todos.filter(l=>!l.cerrado), ce=todos.filter(l=>l.cerrado);
+  const ls=LT.filtro==="CERRADO"?ce:ab;
+  const nb=$("ltRepBtn"); if(nb) nb.hidden=!r.edita;
+  const card=l=>{ const pct=ltRepPct(l), c=Number(l.cant_prog)||0;
+    return `<div class="lr-card${l.cerrado?" cerrado":""}">
+      <div class="lr-top"><div><b>${esc(l.of)}</b><small>${esc(l.articulo)} · tope ${ltN(c)} prendas</small></div>
+        <span class="tag ${l.cerrado?"g":"v"}">${l.cerrado?"Cerrado":"Abierto"}</span></div>
+      <div class="lt-prog${pct>=100?" ok":""}"><span class="b"><i style="width:${pct}%"></i></span><span>${pct}%</span></div>
+      <div class="lr-ops">${(l.ops||[]).map(o=>{ const h=Number(o.hecho)||0, p=c?Math.min(100,Math.round(h/c*100)):0;
+        return `<div class="lr-op"><span class="n">${esc(o.n_op)}. ${esc(o.operacion)}</span><span class="b"><i style="width:${p}%"></i></span><span class="v">${ltN(h)}</span></div>`; }).join("")}</div>
+      <div class="lr-pie"><span>${l.personas} ${l.personas===1?"persona":"personas"}</span><span>${ltMj(l.minutos)} min</span>
+        <span>${ltN(l.reclasificado)} reclasificadas</span></div>
+      ${r.edita?`<div class="lr-btns"><button type="button" class="btn-mini ${l.cerrado?"verde":"rojo"}" onclick="ltRepEstado('${esc(l.of)}',${!l.cerrado})">${l.cerrado?"Reabrir":"Cerrar lote"}</button>
+        <button type="button" class="btn-mini gris" onclick="ltRepTope('${esc(l.of)}','${esc(l.articulo)}',${c})">Cambiar tope</button></div>`:""}</div>`; };
+  z.innerHTML=`${zona==="ltSupZona"&&r.edita?`<button type="button" class="lt-go azul" onclick="ltRepAbrir()">+ CREAR LOTE</button>`:""}
+    <div class="lt-seg lr-filtro" role="radiogroup" aria-label="Estado del lote">
+      <button type="button" role="radio" aria-checked="${LT.filtro!=="CERRADO"}" onclick="ltRepFiltro('ABIERTO')">Abiertos <small>${ab.length}</small></button>
+      <button type="button" role="radio" aria-checked="${LT.filtro==="CERRADO"}" onclick="ltRepFiltro('CERRADO')">Cerrados <small>${ce.length}</small></button></div>
+    ${ls.length?`<div class="lr-grid">${ls.map(card).join("")}</div>`
+      :`<div class="vacio-msg">${LT.filtro==="CERRADO"?"No hay lotes cerrados.":"No hay lotes abiertos."}${r.edita&&LT.filtro!=="CERRADO"?" Crea el primero con + Crear lote.":""}</div>`}`;
 }
-async function ltNuevoIng(){
-  const r=LT.panel; const areas=((r&&r.areas)||[]).filter(a=>a.edita).map(a=>a.area); if(!areas.length) return;
-  abrirModal(`<h2>Nuevo lote</h2><div class="sub" style="margin-bottom:10px">Lo ve al instante quien esté hoy en esa área.</div>${ltFormHTML(areas)}
-    <div class="modal-acciones"><button class="btn-principal btn-modal-guardar lt-crear" onclick="ltCrear(()=>{cerrarModal();ltCargarIng();})">CREAR LOTE</button>
-    <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
-  await ltFormIniciar(); $("ltFDest").focus();
-}
-async function ltVer(id){
+function ltRepFiltro(f){ LT.filtro=f; const z=$("ltIngZona")?"ltIngZona":"ltSupZona"; ltRepPintar(z); }
+async function ltRepEstado(of, cerrar){
   const s=ltSes();
-  abrirModal(`<div id="ltDet">${cargandoHTML("Cargando lote…")}</div>`);
-  try{
-    const r=await rpc("fn_lote_detalle",{p_dni:s.dni,p_token:s.token,p_lote:id});
-    const d=$("ltDet"); if(!d) return;
-    if(!r.ok){ d.innerHTML=`<div class="vacio-msg">${esc(r.error||"No se pudo")}</div>`; return; }
-    const l=r.lote, ts=r.tramos||[], rl=ltReal(l);
-    d.innerHTML=`<h2>${esc(l.destino)} · L-${l.id}</h2>
-      <div class="sub" style="margin-bottom:10px">${esc(l.area)} · ${esc(l.tarea)}${l.o_f?` · OF ${esc(l.o_f)}`:""} · ${ltN(l.hecho)} de ${ltN(l.cantidad)} prendas · ${ltHoras(l.min)}${rl?` · ${rl.toFixed(2)} min/prenda`:""}${l.std?` · ${ltMj(l.minutaje)} min de minutaje`:" · tarea sin tiempo"}</div>
-      <div class="tabla-scroll" style="max-height:52vh"><table class="tabla"><thead><tr><th class="izq">Persona</th><th>Día</th><th>Desde</th><th>Hasta</th><th>Min</th><th>Prendas</th><th>Minutaje</th></tr></thead>
-      <tbody>${ts.map(t=>`<tr><td class="izq">${esc(soloApellidos(t.nombre||t.dni))}</td><td>${new Date(t.inicio).toLocaleDateString("es-PE",{timeZone:"America/Lima",day:"2-digit",month:"2-digit"})}</td>
-        <td>${ltHM(t.inicio)}</td><td>${t.fin?ltHM(t.fin):`<span class="lt-vivo">ahora</span>`}${t.auto?` <span class="tag o">solo</span>`:""}</td><td>${Math.round(t.min)}</td>
-        <td>${t.prendas==null?(t.fin?`<span class="tag r">por revisar</span>`:"—"):ltN(t.prendas)}</td><td>${t.minutaje!=null?ltMj(t.minutaje):"—"}</td></tr>`).join("")||`<tr><td colspan="7" class="sub">Nadie trabajó aún en este lote</td></tr>`}</tbody></table></div>
-      ${r.edita?`<div class="lt-cantedit"><label>Cantidad del lote (tope)<input class="inp" id="ltCantLote" type="number" inputmode="numeric" min="${l.hecho||1}" value="${l.cantidad}"></label>
-        <button type="button" class="btn-mini" id="ltCantLoteB" onclick="ltCambiarCant(${l.id})">Cambiar</button><small>Nunca menos de lo ya hecho (${ltN(l.hecho)}).</small></div>`:""}
-      <div class="modal-acciones">${r.edita?(l.estado==="ABIERTO"
-          ?`<button class="btn-principal btn-modal-guardar" style="background:var(--alerta)" onclick="ltCerrar(${l.id},true,()=>{cerrarModal();ltRecargar();})">CERRAR LOTE</button>`
-          :`<button class="btn-principal btn-modal-guardar" onclick="ltCerrar(${l.id},false,()=>{cerrarModal();ltRecargar();})">REABRIR LOTE</button>`):""}
-        <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`;
-  }catch(e){ const d=$("ltDet"); if(d) d.innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`; }
-}
-async function ltCambiarCant(id){
-  const s=ltSes(), i=$("ltCantLote"), c=parseInt(i&&i.value,10);
-  if(!(c>0)){ mostrarError("Pon la cantidad de prendas"); i&&i.focus(); return; }
-  await unaVez("ltCant"+id, botonesDe("#ltCantLoteB"), async()=>{
-    try{ const r=await rpc("fn_lote_cantidad",{p_dni:s.dni,p_token:s.token,p_lote:id,p_cantidad:c});
+  await unaVez("ltRepEst"+of, [], async()=>{
+    try{
+      const r=await rpc("fn_reproceso_lote_estado",{p_dni:s.dni,p_token:s.token,p_of:of,p_cerrar:cerrar});
       if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
-      mostrarOk(`Cantidad del lote: ${ltN(c)}`); cerrarModal(); ltRecargar();
-    }catch(e){ mostrarError(ltFalta(e)?"Falta correr el parche 119 en la base":e.message); }
+      mostrarOk(cerrar?`Lote ${of} cerrado: ya no le sale al personal`:`Lote ${of} abierto otra vez`); ltRecargar();
+    }catch(e){ mostrarError(ltFalta(e)?"Falta correr el parche 129 en la base":e.message); }
   });
 }
-function ltRecargar(){ if($("ltIngZona")) ltCargarIng(); else if($("ltSupZona")) ltCargarSup(); }
-function ltDescargar(){
-  const r=LT.panel; if(!r||!(r.lotes||[]).length){ mostrarError("No hay datos para descargar"); return; }
-  const CAB=["Lote","Área","Destino","Tarea","OF","Estado","Cantidad","Hechas","Horas","Personas","Min/prenda real","Tiempo","Minutaje","Por revisar"];
-  const filas=r.lotes.map(l=>[`L-${l.id}`,l.area,l.destino,l.tarea,l.o_f||"",l.estado,l.cantidad,l.hecho,Math.round(l.min/6)/10,l.personas,
-    ltReal(l)?Number(ltReal(l).toFixed(2)):"",l.std||"",Math.round(Number(l.minutaje||0)*10)/10,l.por_revisar]);
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "LOTES");
-  XLSX.writeFile(wb, `TRABAJO_POR_TIEMPO_${r.fecha||""}.xlsx`);
-}
-
-/* ---------------- SUPERVISORA (celular) ---------------- */
-async function ltCargarSup(){
-  const z=$("ltSupZona"); if(!z) return;
-  const s=sesionActual(); if(!s) return;
-  pintarCargando(z,"Cargando lotes…");
-  try{
-    const r=await rpc("fn_lotes_panel",{p_dni:s.dni,p_token:s.token,p_area:"",p_fecha:null});
-    if(!r.ok){ z.innerHTML=`<div class="vacio-msg">${esc(r.error||"No se pudo")}</div>`; return; }
-    LT.panel=ltSinRep(r); ltPintarSup(); ltRepPuede();
-  }catch(e){ z.innerHTML = ltFalta(e) ? LT_FALTA_HTML : `<div class="vacio-msg">${esc(e.message)}</div>`; }
-}
-function ltPintarSup(){
-  const z=$("ltSupZona"), r=LT.panel; if(!z||!r) return;
-  const areas=(r.areas||[]).filter(a=>a.edita).map(a=>a.area);
-  const ls=(r.lotes||[]).filter(l=>l.estado==="ABIERTO"), pr=r.por_revisar||[];
-  z.innerHTML=`<div class="cel-res">${(r.areas||[]).map(a=>`<div><b>${a.ahora}</b>trabajando en ${esc(a.area)}</div>`).join("")}</div>
-    ${areas.length?`<button type="button" class="lt-go azul" id="ltNuevoSup" onclick="ltNuevoSup()">+ NUEVO LOTE</button><div id="ltFormSup"></div>`:""}
-    <button type="button" class="lt-go azul" id="ltRepSup" hidden onclick="ltRepAbrir()">+ LOTE DE REPROCESO</button>
-    ${pr.length?`<h2 class="lt-h2">Por revisar</h2><div class="lt-revs">${pr.map(t=>ltPorRevisarFila(t,"ltCargarSup")).join("")}</div>`:""}
-    <h2 class="lt-h2">Lotes abiertos</h2>
-    ${ls.length?ls.map(l=>`<div class="cel-card ${l.ahora?"v":"g"}"><div class="cel-top"><b>${esc(l.destino)}</b><span class="tag ${l.ahora?"v":"g"}">${l.ahora} ahora</span></div>
-        <div class="cel-l">${esc(l.area)} · ${esc(l.tarea)} · L-${l.id}${l.o_f?` · OF ${esc(l.o_f)}`:""}</div>
-        <div class="lt-av"><div class="lt-bar"><i style="width:${ltPct(l)}%;background:var(--azul)"></i></div>
-        <div class="m"><span><b>${ltN(l.hecho)}</b> de ${ltN(l.cantidad)} prendas</span><span>${ltHoras(l.min)}${l.std?` · ${ltMj(l.minutaje)} min de minutaje`:" · sin tiempo"}</span></div></div>
-        <div class="cel-btns"><button type="button" class="az" onclick="ltVer(${l.id})">Ver quién</button>
-        <button type="button" class="no" onclick="ltCerrar(${l.id},true,ltCargarSup)">Cerrar lote</button></div></div>`).join("")
-      :`<div class="vacio-msg">No hay lotes abiertos. Crea uno para que tu gente pueda registrar.</div>`}`;
-}
-async function ltNuevoSup(){
-  const r=LT.panel, areas=((r&&r.areas)||[]).filter(a=>a.edita).map(a=>a.area);
-  const z=$("ltFormSup"); if(!z) return;
-  if(z.innerHTML){ z.innerHTML=""; return; }
-  z.innerHTML=ltFormHTML(areas)+`<button type="button" class="lt-go azul lt-crear" onclick="ltCrear(()=>{ $('ltFormSup').innerHTML=''; ltCargarSup(); })">CREAR LOTE</button>
-    <button type="button" class="lt-sec" onclick="$('ltFormSup').innerHTML=''">Cancelar</button>`;
-  await ltFormIniciar(); $("ltFDest").focus();
-}
+async function ltRepTope(of, art, cant){ await ltRepAbrir(); ltRepEditar(of, art, cant); }
 
 /* ---------------- TIEMPOS POR TAREA (parche 119, Ingeniería) ----------------
    Ingeniería sube el tiempo (min por prenda) de cada tarea. Con él, lo que la
@@ -568,7 +494,7 @@ async function ltRepPuede(){
 async function ltRepAbrir(){
   if(!LT.rep) await ltRepPuede();
   if(!(LT.rep&&LT.rep.puede)) return;
-  const r=LT.rep, bs=r.bases||[], ls=r.lotes||[];
+  const r=LT.rep, bs=r.bases||[];
   abrirModal(`<h2>Lote de reproceso</h2>
     <div class="sub" style="margin-bottom:10px">El lote funciona como una OF: el operario lo busca por su número, ve las operaciones de la base y registra cantidades hasta el tope.</div>
     ${bs.length?`<div class="lt-form" id="ltRepForm">
@@ -578,9 +504,6 @@ async function ltRepAbrir(){
       <label class="lt-f"><span>Cantidad máxima de prendas (tope de cada operación)</span><input class="inp" id="ltRepCant" type="number" inputmode="numeric" min="1"></label>
       <div class="modal-msg" id="ltRepMsg" role="alert"></div></div>`
     :`<div class="vacio-msg">REPROCESO no tiene bases todavía. Súbelas en Bases, eligiendo el área REPROCESO, igual que las de ACABADO.</div>`}
-    ${ls.length?`<h2 class="lt-h2">Lotes creados</h2><div class="tabla-scroll" style="max-height:30vh"><table class="tabla"><thead><tr><th class="izq">Lote</th><th>Artículo</th><th>Tope</th><th>Operaciones completas</th><th></th></tr></thead>
-      <tbody>${ls.map(l=>`<tr><td class="izq"><b>${esc(l.of)}</b></td><td>${esc(l.articulo)}</td><td>${ltN(l.cant_prog)}</td><td>${l.completas} de ${l.ops}</td>
-        <td><button type="button" class="btn-mini gris" onclick="ltRepEditar('${esc(l.of)}','${esc(l.articulo)}',${Number(l.cant_prog)})">Cambiar tope</button></td></tr>`).join("")}</tbody></table></div>`:""}
     <div class="modal-acciones">${bs.length?`<button class="btn-principal btn-modal-guardar" id="ltRepOk" onclick="ltRepCrear()">CREAR LOTE</button>`:""}
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`);
   const g=$("ltRepBase");
@@ -604,7 +527,7 @@ async function ltRepCrear(){
       const r=await rpc("fn_reproceso_lote_crear",{p_dni:s.dni,p_token:s.token,p_articulo:b.dataset.v,p_lote:lote,p_cantidad:cant});
       if(!r.ok){ msg.textContent=r.error||"No se pudo crear el lote"; return; }
       mostrarOk(r.actualizado?`Lote ${r.of}: tope ${ltN(cant)} prendas`:`Lote ${r.of} creado: ${ltN(cant)} prendas por operación`);
-      LT.rep=null; await ltRepPuede(); ltRepAbrir();
+      cerrarModal(); LT.rep=null; ltRecargar();
     }catch(e){ msg.textContent=e.message; }
   });
 }
