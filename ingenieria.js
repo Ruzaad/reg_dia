@@ -4120,7 +4120,7 @@ function pintarTkOp(){
       <td>${(t.estado==='ACTIVO'&&t.id!=null&&puedeEditar(TKOP.area))?`<input type="checkbox" class="sw" ${tkOpMarc[t.id]?"checked":""} onclick="tkOpToggle(${Number(t.id)})">`:""}</td>
       <td class="izq">${esc(t.nombre)}</td><td>${esc(t.dni)}</td>
       <td>${esc(t.op)}${t.causa?`<div class="cf-detalle">${esc(t.causa)}</div>`:""}</td>
-      <td>${esc(t.hora)}</td><td>${esc(t.numeracion||"—")}</td>
+      <td>${esc(t.hora)}${t.fecha&&t.hora&&t.fecha!==String(t.hora).slice(0,10)?`<div class="cf-detalle">Cuenta el ${esc(fechaCorta(t.fecha))}</div>`:""}</td><td>${esc(t.numeracion||"—")}</td>
       <td><b>${t.cant!=null?qty(t.cant):"—"}</b></td><td>${t.minutos!=null?t.minutos:"—"}</td>
       <td><span class="pill ${t.estado==='ACTIVO'?'ACTIVO':'FALTA'}">${esc(t.estado)}</span></td>
       <td>${(t.estado==='ACTIVO'&&t.id!=null&&puedeEditar(TKOP.area))?`<button class="btn-mini rojo" onclick="liberarTkOp(${Number(t.id)})">LIBERAR</button>`:""}</td></tr>`).join("")
