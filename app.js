@@ -2687,10 +2687,10 @@ async function verEfPersonaOps(dni, nombre){
 function initSupervisora(){
   const s=sesionActual();
   if(!s || !s.area){ location.href="index.html"; return; }
-  // INGENIERIA puede entrar aquí desde "Operar como → Supervisora": reutiliza esta
+  // Ingeniería y oficina (p. ej. COSTOS) entran aquí desde "Operar como → Supervisora": reutiliza esta
   // pantalla en vez del panel embebido, que se quedaba desactualizado.
   const desdeIng = (()=>{ try{ return !!sessionStorage.getItem("stx_volver_ing"); }catch(e){ return false; } })();
-  if(s.cargo!=="SUPERVISORA" && !(s.cargo==="INGENIERIA" && desdeIng)){
+  if(s.cargo!=="SUPERVISORA" && !(esOficina(s.cargo) && desdeIng)){
     location.href = destinoPorCargo(s.cargo); return; }
   fijarSesion(s);
   SUP_AREA_OVERRIDE=null;
