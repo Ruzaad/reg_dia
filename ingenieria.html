@@ -606,6 +606,23 @@
           <label class="campo"><span>Rango</span><input type="text" id="perMatRango" placeholder="Selecciona fechas" readonly style="min-width:220px;cursor:pointer;"></label>
           <button class="btn-mini" onclick="perCargarMatriz()">Cargar</button>
         </div>
+        <div class="barra-control" id="perMatPeriodo">
+          <label class="campo"><span>Mes</span><select id="perMatMes" onchange="perMatPeriodo('mes')"></select></label>
+          <div class="seg-mini" role="group" aria-label="Periodo">
+            <button class="btn-mini gris" data-p="q1" onclick="perMatPeriodo('q1')">1ra quincena</button>
+            <button class="btn-mini gris" data-p="q2" onclick="perMatPeriodo('q2')">2da quincena</button>
+            <button class="btn-mini gris" data-p="mes" onclick="perMatPeriodo('mes')">Mes completo</button>
+          </div>
+        </div>
+        <div class="barra-control mat-acciones" id="perMatAcc">
+          <span class="sub" style="margin:0;">Seleccionadas: <b id="perMatNSel">0</b></span>
+          <label class="campo"><span>Estado</span><select id="perMatEstado"></select></label>
+          <button class="btn-mini verde" onclick="perMatAplicar()">Aplicar a seleccionadas</button>
+          <button class="btn-mini rojo" onclick="perMatBorrar()">Borrar estado</button>
+          <button class="btn-mini gris" onclick="perMatVacias()">Seleccionar vacías</button>
+          <button class="btn-mini gris" onclick="perMatLimpiar()">Limpiar</button>
+          <span class="sub mat-ayuda">Toca celdas, un nombre (toda su fila) o un día (toda la columna). Mayús + clic marca un bloque. Sábados, domingos y feriados no se marcan.</span>
+        </div>
         <div class="sub" id="perMatResumen"></div>
         <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;">
           <table class="tabla-asis-mes" id="perTablaMatriz"></table>
