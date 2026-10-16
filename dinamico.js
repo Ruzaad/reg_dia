@@ -73,6 +73,13 @@ function quincenas(h){
   const ant=+h.slice(8)<=15?[iso(new Date(y,m-1,16)),iso(new Date(y,m,0))]:[iso(new Date(y,m,1)),iso(new Date(y,m,15))];
   return {act,ant};
 }
+/* G.quin: "act", "ant" o el primer día de cualquier quincena ("2026-09-16"). */
+function quinDe(ini){const y=+ini.slice(0,4),m=+ini.slice(5,7)-1,ult=new Date(y,m+1,0).getDate();
+  return ini.slice(8)==="01"?[ini,ini.slice(0,8)+"15"]:[ini,iso(new Date(y,m,ult))];}
+function quinSel(){if(/^\d{4}-\d{2}-(01|16)$/.test(G.quin||""))return quinDe(G.quin);return quincenas(hoy())[G.quin==="ant"?"ant":"act"];}
+function quinLista(){const out=[];let ini=quincenas(hoy()).act[0];
+  for(let k=0;k<24;k++){out.push(ini);const d=fechaDe(ini);ini=ini.slice(8)==="16"?ini.slice(0,8)+"01":iso(new Date(d.getFullYear(),d.getMonth()-1,16));}
+  return out;}
 
 /* ---------- estado global (se recuerda por pestaña del navegador) ---------- */
 const G={fecha:hoy(),area:"",rango:null,desde:null,hasta:null,quin:"act"};
@@ -147,7 +154,7 @@ const VISTAS=PAG==="ingenieria"?[
   {id:"incCons",tab:"pasoInc",m:"incConsView",modo:"quin",area:1,t:"Incentivos · min. consideración",
    aplicar(){let c=aplQuin();c=areaSel("consArea")||c;return c;},cargar:()=>llamar("cargarCons"),ocultar:["consArea"]},
   {id:"incSus",tab:"pasoInc",m:"incSusView",modo:"quin",area:1,t:"Incentivos · sustento",
-   aplicar(){const q=quincenas(hoy())[G.quin==="ant"?"ant":"act"];
+   aplicar(){const q=quinSel();
      let c=put("susDesde",q[0]);c=put("susHasta",q[1])||c;
      if(c)try{llamar("susCmpAuto");}catch(e){}
      return c;},
@@ -279,7 +286,7 @@ function llenarArea(v){
    filtro diga "nada en esta área" en vez de soltarse y mostrar todas. */
 function conOpcion(a){if(G.area&&![...a.options].some(o=>o.value===G.area)){const o=document.createElement("option");o.textContent=G.area;a.appendChild(o);}}
 function areaVista(v){const a=selArea(v);return a&&a.options.length>1?a.value:G.area;}
-function aplQuin(){const q=quincenas(hoy())[G.quin==="ant"?"ant":"act"];let c=put("incDesde",q[0]);c=put("incHasta",q[1])||c;return c;}
+function aplQuin(){const q=quinSel();let c=put("incDesde",q[0]);c=put("incHasta",q[1])||c;return c;}
 function areaSel(id){const a=$(id);if(!a)return false;const v=[...a.options].some(o=>o.value===G.area)?G.area:(G.area?null:"");if(v===null||a.value===v)return false;a.value=v;return true;}
 
 /* ¿Qué vista está en pantalla? La primera cuya pestaña está activa y cuyo contenedor se ve. */
@@ -392,6 +399,7 @@ function crearCtx(){
     if(t.id==="dynFecha"&&t.value){G.fecha=t.value>hoy()?hoy():t.value;}
     else if(t.id==="dynDesde"||t.id==="dynHasta"){const d=$("dynDesde").value,h=$("dynHasta").value;if(!d||!h)return;G.rango="custom";G.desde=d<=h?d:h;G.hasta=d<=h?h:d;}
     else if(t.id==="dynArea"){G.area=t.value;}
+    else if(t.id==="dynQuin"){const qs=quincenas(hoy());G.quin=t.value===qs.act[0]?"act":t.value===qs.ant[0]?"ant":t.value;}
     else return;
     guardar();refrescar(vistaActual());});
 }
@@ -406,9 +414,9 @@ function pintarCtx(){
   if(v&&v.modo==="rango"){const [d,h]=rangoDe(v),k=rangoKey(v);
     fecha=`<div class="dyn-seg dyn-rangos" role="group" aria-label="Rango">${Object.entries(RANGOS).map(([kk,r])=>`<button data-dyn="rango:${kk}" class="${k===kk?"on":""}">${r.t}</button>`).join("")}</div>
       <span class="dyn-rango"><input type="date" id="dynDesde" value="${d}" max="${hoy()}" aria-label="Desde"><span>a</span><input type="date" id="dynHasta" value="${h}" max="${hoy()}" aria-label="Hasta"></span>`;}
-  if(v&&v.modo==="quin"){const q=quincenas(hoy());
-    fecha=`<div class="dyn-seg" role="group" aria-label="Quincena"><button data-dyn="quin:act" class="${G.quin!=="ant"?"on":""}">Quincena actual</button><button data-dyn="quin:ant" class="${G.quin==="ant"?"on":""}">Anterior</button></div>
-      <span class="dyn-dtxt">${txtFecha((G.quin==="ant"?q.ant:q.act)[0])} – ${txtFecha((G.quin==="ant"?q.ant:q.act)[1])}</span>`;}
+  if(v&&v.modo==="quin"){const q=quinSel(),qs=quincenas(hoy());
+    fecha=`<div class="dyn-seg" role="group" aria-label="Quincena"><button data-dyn="quin:act" class="${q[0]===qs.act[0]?"on":""}">Quincena actual</button><button data-dyn="quin:ant" class="${q[0]===qs.ant[0]?"on":""}">Anterior</button></div>
+      <select id="dynQuin" class="dyn-quin" aria-label="Elegir quincena">${quinLista().map(i=>{const r=quinDe(i);return `<option value="${i}" ${i===q[0]?"selected":""}>${+r[0].slice(8)}–${+r[1].slice(8)} ${MESES[+i.slice(5,7)-1]} ${i.slice(0,4)}</option>`;}).join("")}</select>`;}
   let areas="";
   if(v&&v.area){let L=[];try{L=AREAS_LISTA||[];}catch(e){}
     const s=selArea(v);if(v.soloSel&&s&&s.options.length>1)L=[...s.options].map(o=>o.value).filter(Boolean);
