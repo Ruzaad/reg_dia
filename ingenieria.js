@@ -5002,15 +5002,16 @@ async function descargarInc(){
     }catch(e){}
   }
   const dias=INC.dias||[], bonos=INC.bonos||[];
-  const cab=["ID","USUARIO","DNI","CATEGORIA"]
+  const cab=["ID","AREA","USUARIO","DNI","CATEGORIA"]
     .concat(dias.map(d=>d.fecha))
     .concat(bonos.map(b=>"BONO "+LETRA_BONO(b.n)))
     .concat(["BONO TOTAL","FALTA","TARDANZA","BOLETA","BONIFICACION FINAL","ESTADO"]);
-  const fila=(p,i)=>[i+1,p.nombre,p.dni,p.categoria||""]
+  const fila=(p,i)=>[i+1,p.area||"",p.nombre,p.dni,p.categoria||""]
     .concat(dias.map(d=>{
       const c=(p.dias||{})[d.fecha]||{};
       if(c.etiqueta) return c.etiqueta;
-      return c.ef==null ? "" : Math.round(c.ef)/100;
+      const n=parseFloat(c.ef);
+      return isNaN(n) ? "" : Math.round(n)/100;
     }))
     .concat(bonos.map(b=>+((p.bonos||{})[b.n]||0)))
     .concat([+(p.bono_total||0), (+p.faltas||0)||"", (+p.tardanzas||0)||"",
@@ -5038,7 +5039,53 @@ async function descargarInc(){
       .concat(pcts.map(p=>[p/100].concat(cats.map(c=>m[c+"|"+p]))))),
       "TABLA DE INC.");
   }
-  XLSX.writeFile(wb, "BONIFICACION_"+INC.desde+"_"+INC.hasta+".xlsx");
+  const hojasCf=wb.SheetNames.filter(n=>n!=="TABLA DE INC.");
+  const rango=dias.length && filas.length ? {c0:5, c1:4+dias.length} : null;
+  const buf=incConFormato(XLSX.write(wb,{type:"array",bookType:"xlsx"}), wb, hojasCf, rango);
+  const url=URL.createObjectURL(new Blob([buf],
+    {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  const a=document.createElement("a");
+  a.href=url; a.download="BONIFICACION_"+INC.desde+"_"+INC.hasta+".xlsx";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+/* SheetJS (versión libre) no escribe formato condicional: se agrega al XML de
+   cada hoja dentro del zip. Mismas reglas que `formato de bonificacion`, sobre
+   las columnas de días (F2 en adelante). */
+function incConFormato(arr, wb, hojas, rango){
+  if(!rango) return arr;
+  try{
+    const CFB=XLSX.CFB, z=CFB.read(new Uint8Array(arr),{type:"array"});
+    const dec=new TextDecoder(), enc=new TextEncoder();
+    const ent=p=>z.FileIndex[z.FullPaths.findIndex(x=>x.endsWith("/"+p))];
+    const leer=e=>dec.decode(e.content), poner=(e,t)=>{ e.content=enc.encode(t); e.size=e.content.length; };
+    const dxf=(fill,font)=>`<dxf>${font?`<font><color rgb="FF${font}"/></font>`:""}`
+      + `<fill><patternFill patternType="solid"><fgColor rgb="FF${fill}"/><bgColor rgb="FF${fill}"/></patternFill></fill></dxf>`;
+    const dxfs=[dxf("DA9694","000000"), dxf("FFC000","000000"), dxf("B7DEE8","000000"),
+                dxf("FF0000","FFFFFF"), dxf("FFFF00","9C6500"), dxf("F7F38A","9C5700")];
+    const st=ent("xl/styles.xml");
+    poner(st, leer(st).replace(/<dxfs count="0"\/>/, `<dxfs count="${dxfs.length}">${dxfs.join("")}</dxfs>`));
+    const col=c=>XLSX.utils.encode_col(c);
+    const c0=col(rango.c0), c1=col(rango.c1), f=c0+"2";
+    const texto=(pri,id,t)=>`<cfRule type="containsText" dxfId="${id}" priority="${pri}" operator="containsText" text="${t}">`
+      + `<formula>NOT(ISERROR(SEARCH("${t}",${f})))</formula></cfRule>`;
+    const formula=(pri,id,vals)=>`<cfRule type="expression" dxfId="${id}" priority="${pri}">`
+      + `<formula>OR(${vals.map(v=>`${f}="${v}"`).join(",")})</formula></cfRule>`;
+    hojas.forEach(nombre=>{
+      const ws=wb.Sheets[nombre]; if(!ws || !ws["!ref"]) return;
+      const fin=XLSX.utils.decode_range(ws["!ref"]).e.r+1; if(fin<2) return;
+      const e=ent("xl/worksheets/sheet"+(wb.SheetNames.indexOf(nombre)+1)+".xml"); if(!e) return;
+      const sq=`${f}:${c1}${fin}`;
+      const cf=`<conditionalFormatting sqref="${sq}">`
+        + texto(1,0,"NO E") + texto(2,1,"DM")
+        + `<cfRule type="dataBar" priority="3"><dataBar><cfvo type="min"/><cfvo type="max"/><color rgb="FF638EC6"/></dataBar></cfRule>`
+        + formula(4,2,["APOYO","COMISION","UDP","PH"]) + texto(5,3,"FALTA")
+        + formula(6,4,["LICENCIA","VACACIONES"]) + formula(7,5,["SABADO","DOMINGO"])
+        + `</conditionalFormatting>`;
+      poner(e, leer(e).replace("</sheetData>", "</sheetData>"+cf));
+    });
+    return CFB.write(z,{fileType:"zip",type:"array"});
+  }catch(err){ console.warn("Formato condicional no aplicado", err); return arr; }
 }
 
 /* ================= SUSTENTO DE LA QUINCENA (solo front, sin cambios de base) =================
