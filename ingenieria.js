@@ -5109,9 +5109,13 @@ async function descargarInc(){
     .concat(bonos.map(b=>+((p.bonos||{})[b.n]||0)))
     .concat([+(p.bono_total||0), (+p.faltas||0)||"", (+p.tardanzas||0)||"",
              (+p.boleta||0)||"", +(p.final||0), p.cesado?"CESADO":""]);
+  /* Las eficiencias van como fracción (0.84): con formato % se leen 84%. */
+  const hoja=aoa=>{ const ws=XLSX.utils.aoa_to_sheet(aoa);
+    for(let r=1;r<aoa.length;r++) for(let c=5;c<5+dias.length;c++){
+      const cel=ws[XLSX.utils.encode_cell({r,c})]; if(cel && cel.t==="n") cel.z="0%"; }
+    return ws; };
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,
-    XLSX.utils.aoa_to_sheet([cab].concat(filas.map(fila))), "RESUMEN");
+  XLSX.utils.book_append_sheet(wb, hoja([cab].concat(filas.map(fila))), "RESUMEN");
   const porArea={};
   filas.forEach(p=>{ const k=p.area||"SIN AREA"; (porArea[k]=porArea[k]||[]).push(p); });
   const usados={};
@@ -5120,17 +5124,17 @@ async function descargarInc(){
     let n=String(a).replace(/[:\\/?*[\]]/g,"-").slice(0,31) || "AREA";
     let k=2; while(usados[n]){ n=n.slice(0,29)+"_"+k; k++; }
     usados[n]=true;
-    XLSX.utils.book_append_sheet(wb,
-      XLSX.utils.aoa_to_sheet([cab].concat(porArea[a].map(fila))), n);
+    XLSX.utils.book_append_sheet(wb, hoja([cab].concat(porArea[a].map(fila))), n);
   });
   if(INC_TABLA.length){
     const cats=[...new Set(INC_TABLA.map(x=>x.categoria))].sort();
     const pcts=[...new Set(INC_TABLA.map(x=>x.pct))].sort((x,y)=>x-y);
     const m={}; INC_TABLA.forEach(x=>{ m[x.categoria+"|"+x.pct]=+x.soles; });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+    const wt=XLSX.utils.aoa_to_sheet(
       [["%"].concat(cats.map(c=>"CAT "+c))]
-      .concat(pcts.map(p=>[p/100].concat(cats.map(c=>m[c+"|"+p]))))),
-      "TABLA DE INC.");
+      .concat(pcts.map(p=>[p/100].concat(cats.map(c=>m[c+"|"+p])))));
+    pcts.forEach((p,i)=>{ const cel=wt[XLSX.utils.encode_cell({r:i+1,c:0})]; if(cel) cel.z="0%"; });
+    XLSX.utils.book_append_sheet(wb, wt, "TABLA DE INC.");
   }
   const hojasCf=wb.SheetNames.filter(n=>n!=="TABLA DE INC.");
   const rango=dias.length && filas.length ? {c0:5, c1:4+dias.length} : null;
