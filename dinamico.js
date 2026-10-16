@@ -439,7 +439,12 @@ function puedeVivo(v){
 function latido(){const v=vistaActual();if(puedeVivo(v))refrescar(v,{forzar:true,vivo:true});}
 setInterval(latido,30000);
 let tCambio=null;
-window.addEventListener("datos-cambiaron",()=>{clearTimeout(tCambio);tCambio=setTimeout(()=>{latido();contadores();},700);});
+/* Lo que se escribió en una pestaña también cambia otras (estados por rango → matriz,
+   personal → asistencia): se olvida lo ya cargado para que se recarguen al entrar. */
+window.addEventListener("datos-cambiaron",()=>{const a=vistaActual();VISTAS.forEach(v=>{if(v!==a)v.clave=null;});
+  clearTimeout(tCambio);tCambio=setTimeout(()=>{latido();contadores();},700);});
+/* Una pestaña puede fijar el rango de toda la barra (Matriz: mes o quincena). */
+window.dynRango=(d,h)=>{G.rango="custom";G.desde=d<=h?d:h;G.hasta=d<=h?h:d;guardar();refrescar(vistaActual());};
 
 /* ---------- campos propios de cada vista que ahora cargan solos ---------- */
 let tAuto=null;
@@ -525,7 +530,7 @@ function abrirCmdk(){
     $("dynCk").addEventListener("input",()=>{sel=0;listaCk();});
     $("dynCk").addEventListener("keydown",e=>{if(e.key==="ArrowDown"){sel=Math.min(items.length-1,sel+1);listaCk();e.preventDefault();}else if(e.key==="ArrowUp"){sel=Math.max(0,sel-1);listaCk();e.preventDefault();}else if(e.key==="Enter"&&items[sel])ir(items[sel]);else if(e.key==="Escape")cerrarCmdk();});}
   cmdk.classList.add("on");$("dynCk").value="";sel=0;listaCk();setTimeout(()=>$("dynCk").focus(),10);
-  try{if(!PERS&&ING)rpc("fn_personal_listar",{p_dni_ing:ING.dni,p_token:ING.token,p_area:""}).then(r=>{PERS=(r.items||r||[]).filter?(r.items||r):[];listaCk();}).catch(()=>{});}catch(e){}
+  try{if(!PERS&&ING)rpc("fn_personal_listar",{p_dni_ing:ING.dni,p_token:ING.token,p_area:"",p_incluir_inactivos:false}).then(r=>{const l=r&&(r.personal||r.items||r);PERS=Array.isArray(l)?l:[];listaCk();}).catch(()=>{});}catch(e){}
   try{if(!OFSL&&ING)rpc("fn_ofs_listar",{p_dni:ING.dni,p_token:ING.token,p_buscar:""}).then(r=>{OFSL=Array.isArray(r)?r:[];listaCk();}).catch(()=>{});}catch(e){}
 }
 function cerrarCmdk(){if(cmdk)cmdk.classList.remove("on");}

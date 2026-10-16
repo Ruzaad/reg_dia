@@ -1925,7 +1925,7 @@ async function resetearPin(dni){
 }
 
 /* ================= PERSONAL (CRUD · estados · dashboard · marcar) ================= */
-let PER={tab:"crud",crud:[],crudSel:{},rango:[],rangoSel:{},matriz:{dias:[],personal:[]},matSel:{desde:null,hasta:null},
+let PER={tab:"crud",crud:[],crudSel:{},rango:[],rangoSel:{},matriz:{dias:[],personal:[],noLab:{}},matSel:{desde:null,hasta:null},matCel:new Set(),matAncla:null,matVis:[],
   dash:null,dashSel:{desde:null,hasta:null},alPage:1,
   marcarArea:"",chartLine:null,chartPie:null,fpReady:false};
 function perInit(){
@@ -2123,11 +2123,17 @@ async function perAplicarRango(){
   if(!estado){ mostrarError("Elige un estado"); return; }
   if(!desde||!hasta){ mostrarError("Elige ambas fechas"); return; }
   if(hasta<desde){ mostrarError("La fecha final no puede ser menor"); return; }
-  if(!confirm(`¿Aplicar ${estado} a ${dnis.length} persona(s) del ${desde} al ${hasta}?`)) return;
+  /* Parche 130: sábados, domingos y feriados se saltan (los calcula la base). */
+  const dias=[]; for(let d=new Date(desde+"T12:00:00"), h=new Date(hasta+"T12:00:00"); d<=h; d.setDate(d.getDate()+1)) dias.push(d.toLocaleDateString("sv-SE"));
+  const celdas=[]; dnis.forEach(dni=>dias.forEach(fecha=>celdas.push({dni,fecha})));
+  if(celdas.length>5000){ mostrarError(`Son ${celdas.length} celdas; máximo 5000 por vez. Acorta el rango o divide el grupo.`); return; }
+  if(!confirm(`¿Aplicar ${estado} a ${dnis.length} persona(s) del ${desde} al ${hasta}?\nSábados, domingos y feriados no se marcan.`)) return;
   try{
-    const r=await rpc("fn_asignar_estado_rango",{p_dni:ING.dni,p_token:ING.token,p_dnis:dnis,p_estado:estado,p_fecha_desde:desde,p_fecha_hasta:hasta});
+    const r=await rpc("fn_asistencia_celdas",{p_dni:ING.dni,p_token:ING.token,p_celdas:celdas,p_estado:estado});
     if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
-    mostrarOk(`Estado aplicado a ${dnis.length} persona(s)`); PER.rangoSel={}; perRangoNSelUpd(); perPintarRango();
+    mostrarOk(`${estado} puesto a ${dnis.length} persona(s) · ${r.guardados} día(s)`+(r.saltados?` · ${r.saltados} sin marcar por ser sábado, domingo o feriado`:""));
+    PER.rangoSel={}; perRangoNSelUpd(); perPintarRango();
+    window.dispatchEvent(new Event("datos-cambiaron"));
   }catch(e){ mostrarError(e.message); }
 }
 
@@ -2138,48 +2144,135 @@ async function perCargarMatriz(){
   try{
     const r=await rpc("fn_asistencia_matriz",{p_dni:ING.dni,p_token:ING.token,p_area:$("perMatArea").value,p_desde:PER.matSel.desde,p_hasta:PER.matSel.hasta});
     if(!r.ok){ mostrarError(r.error||"Error"); $("perTablaMatriz").innerHTML=""; return; }
-    PER.matriz={dias:r.dias||[],personal:r.personal||[]}; perPintarMatriz();
+    PER.matriz={dias:r.dias||[],personal:r.personal||[],noLab:r.no_lab||perFinde(r.dias||[])}; PER.matCel.clear(); PER.matAncla=null;
+    if($("perMatEstado")) $("perMatEstado").innerHTML="";
+    perPintarMatriz();
   }catch(e){ $("perTablaMatriz").innerHTML=""; mostrarError(e.message); }
 }
+/* Parche 130: la matriz marca en bloque. Se seleccionan celdas (persona × día),
+   filas enteras o columnas enteras y se les pone un estado o se les borra.
+   Sábados, domingos y feriados (no_lab) no se marcan: la base también los salta. */
+const perMatK=(dni,d)=>dni+"|"+d;
+const perFinde=dias=>{ const o={}; dias.forEach(d=>{ const w=new Date(d+"T12:00:00").getDay(); if(w===6) o[d]="SAB"; else if(w===0) o[d]="DOM"; }); return o; };
+const perMatNoLab=d=>(PER.matriz.noLab||{})[d];
+const perMatLibre=(p,d)=>!perMatNoLab(d)||!!p.registros[d];
+function perMatNSelUpd(){ if($("perMatNSel")) $("perMatNSel").textContent=PER.matCel.size; }
 function perPintarMatriz(){
   const q=normKey($("perMatBuscar").value), dias=PER.matriz.dias;
   const lista=ordAplicar("perTablaMatriz",
     PER.matriz.personal.filter(p=>!q||normKey(p.nombre).includes(q)));
-  $("perMatResumen").textContent=`${lista.length} persona(s) · ${dias.length} día(s)`;
+  PER.matVis=lista;
+  const lab=dias.filter(d=>!perMatNoLab(d));
+  let vacias=0;
   /* Solo la columna Nombre ordena: las demás son los días de la matriz. */
   const om=ordEstado("perTablaMatriz"); om.pintar=perPintarMatriz;
   const fm = om.col==="nombre" ? (om.dir===1?" ▲":" ▼") : "";
   let thead=`<thead><tr><th class="col-nombre-solo ord" onclick="ordCol('perTablaMatriz','nombre')">Nombre${fm}</th>`
-    +dias.map(d=>`<th>${d.slice(8,10)}-${d.slice(5,7)}</th>`).join("")+`</tr></thead>`;
+    +dias.map((d,j)=>{ const nl=perMatNoLab(d);
+      return `<th class="mat-dia${nl?" mat-nolab":""}" onclick="perMatCol(${j})" title="${nl?"No laborable":"Seleccionar el día"}">${d.slice(8,10)}-${d.slice(5,7)}${nl?`<small>${nl==="FER"?"FER":nl==="SAB"?"SÁB":"DOM"}</small>`:""}</th>`; }).join("")
+    +`<th title="Días laborables presentes">Pres.</th><th title="Días laborables con ausencia">Aus.</th><th title="Días laborables sin estado">Vacías</th></tr></thead>`;
   let tbody="<tbody>";
-  if(!lista.length) tbody+=`<tr><td colspan="${dias.length+1}"><div class="vacio-msg">Sin personal</div></td></tr>`;
-  lista.forEach(p=>{
-    tbody+=`<tr><td class="col-nombre-solo"><div>${esc(p.nombre)}</div><div style="font-size:11px;color:#5a6270;font-weight:600">${esc(p.area)}</div></td>`;
-    dias.forEach(d=>{ const est=p.registros[d];
-      tbody+=`<td class="celda-asis" onclick="perEditarCelda('${esc(p.dni)}','${esc(p.nombre).replace(/'/g,"\\'")}','${d}','${esc(est||"")}')">${est?`<span class="pill ${esc(est)}">${esc(est)}</span>`:"—"}</td>`;
+  if(!lista.length) tbody+=`<tr><td colspan="${dias.length+4}"><div class="vacio-msg">Sin personal</div></td></tr>`;
+  lista.forEach((p,i)=>{
+    let pres=0,aus=0,vac=0;
+    lab.forEach(d=>{ const e=p.registros[d]; if(!e) vac++; else if(e==="ACTIVO"||esOtraArea(e)) pres++; else aus++; });
+    vacias+=vac;
+    tbody+=`<tr><td class="col-nombre-solo mat-nom" onclick="perMatFila(${i})" title="Seleccionar toda la fila"><div>${esc(p.nombre)}</div><div style="font-size:11px;color:var(--suave);font-weight:600">${esc(p.area)}</div></td>`;
+    dias.forEach((d,j)=>{ const est=p.registros[d], nl=perMatNoLab(d), sel=PER.matCel.has(perMatK(p.dni,d));
+      tbody+=`<td class="celda-asis${nl?" mat-nolab":""}${sel?" mat-sel":""}" onclick="perMatCelda(event,${i},${j})">${est?`<span class="pill ${esc(est)}">${esc(est)}</span>`:"—"}</td>`;
     });
-    tbody+=`</tr>`;
+    tbody+=`<td><b>${pres}</b></td><td>${aus}</td><td>${vac?`<b style="color:var(--alerta)">${vac}</b>`:"0"}</td></tr>`;
   });
+  $("perMatResumen").textContent=`${lista.length} persona(s) · ${dias.length} día(s), ${lab.length} laborable(s) · ${vacias} celda(s) vacía(s) en días laborables`;
   $("perTablaMatriz").innerHTML=thead+tbody+"</tbody>";
+  perMatNSelUpd(); perMatPeriodoPintar();
 }
-function perEditarCelda(dni,nombre,fecha,actual){
-  const p=PER.matriz.personal.find(x=>x.dni===dni);
-  const opts=estadosOpciones(ESTADOS_ASIS,actual,p&&p.area)||'<option value="">Sin estados</option>';
-  abrirModal(`<h2>${esc(nombre)}</h2><div class="sub" style="margin-bottom:12px;">${esc(fecha)}</div>
-    <div class="modal-campo"><label>Estado</label><select id="pmcEstado">${opts}</select></div>
-    <div class="modal-msg" id="pmcMsg"></div>
-    <div class="modal-acciones">
-      <button class="btn-principal btn-modal-guardar" onclick="perGuardarCelda('${esc(dni)}','${fecha}')">GUARDAR</button>
-      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
+function perMatToggle(celdas){
+  const libres=celdas.filter(([p,d])=>perMatLibre(p,d));
+  if(!libres.length) return;
+  const todas=libres.every(([p,d])=>PER.matCel.has(perMatK(p.dni,d)));
+  libres.forEach(([p,d])=>{ const k=perMatK(p.dni,d); if(todas) PER.matCel.delete(k); else PER.matCel.add(k); });
+  perPintarMatriz();
 }
-async function perGuardarCelda(dni,fecha){
-  const estado=$("pmcEstado").value; if(!estado){ $("pmcMsg").textContent="Elige un estado"; return; }
-  try{
-    const r=await rpc("fn_asignar_estado_rango",{p_dni:ING.dni,p_token:ING.token,p_dnis:[dni],p_estado:estado,p_fecha_desde:fecha,p_fecha_hasta:fecha});
-    if(!r.ok){ $("pmcMsg").textContent=r.error||"No se pudo"; return; }
-    cerrarModal();
-    const p=PER.matriz.personal.find(x=>x.dni===dni); if(p) p.registros[fecha]=estado; perPintarMatriz();
-  }catch(e){ $("pmcMsg").textContent=e.message; }
+function perMatCelda(ev,i,j){
+  const p=PER.matVis[i], d=PER.matriz.dias[j]; if(!p||!d) return;
+  if(ev.shiftKey && PER.matAncla){
+    const [i0,j0]=PER.matAncla, cel=[];
+    for(let a=Math.min(i0,i);a<=Math.max(i0,i);a++) for(let b=Math.min(j0,j);b<=Math.max(j0,j);b++)
+      if(PER.matVis[a]) cel.push([PER.matVis[a],PER.matriz.dias[b]]);
+    cel.filter(([pp,dd])=>perMatLibre(pp,dd)).forEach(([pp,dd])=>PER.matCel.add(perMatK(pp.dni,dd)));
+    perPintarMatriz(); return;
+  }
+  PER.matAncla=[i,j];
+  perMatToggle([[p,d]]);
+}
+function perMatFila(i){ const p=PER.matVis[i]; if(p) perMatToggle(PER.matriz.dias.map(d=>[p,d]).filter(([pp,d])=>!perMatNoLab(d))); }
+function perMatCol(j){ const d=PER.matriz.dias[j]; if(d&&!perMatNoLab(d)) perMatToggle(PER.matVis.map(p=>[p,d])); }
+function perMatVacias(){
+  PER.matVis.forEach(p=>PER.matriz.dias.forEach(d=>{ if(!perMatNoLab(d)&&!p.registros[d]) PER.matCel.add(perMatK(p.dni,d)); }));
+  perPintarMatriz();
+}
+function perMatLimpiar(){ PER.matCel.clear(); PER.matAncla=null; perPintarMatriz(); }
+function perMatSel(){
+  const porDni={}; PER.matriz.personal.forEach(p=>porDni[p.dni]=p);
+  return [...PER.matCel].map(k=>{ const [dni,fecha]=k.split("|"); return {dni,fecha,p:porDni[dni]}; }).filter(c=>c.p);
+}
+async function perMatGuardar(celdas,estado){
+  const r=await rpc("fn_asistencia_celdas",{p_dni:ING.dni,p_token:ING.token,p_celdas:celdas.map(c=>({dni:c.dni,fecha:c.fecha})),p_estado:estado});
+  if(!r.ok){ mostrarError(r.error||"No se pudo"); return null; }
+  celdas.forEach(c=>{ if(!estado) delete c.p.registros[c.fecha]; else if(!perMatNoLab(c.fecha)) c.p.registros[c.fecha]=estado; });
+  PER.matCel.clear(); PER.matAncla=null; perPintarMatriz();
+  window.dispatchEvent(new Event("datos-cambiaron"));
+  return r;
+}
+async function perMatAplicar(){
+  const estado=$("perMatEstado").value;
+  const cel=perMatSel().filter(c=>!perMatNoLab(c.fecha));
+  if(!cel.length){ mostrarError("Selecciona al menos una celda de un día laborable"); return; }
+  if(!estado){ mostrarError("Elige un estado"); return; }
+  const np=new Set(cel.map(c=>c.dni)).size, pisa=cel.filter(c=>c.p.registros[c.fecha]&&c.p.registros[c.fecha]!==estado).length;
+  if(!confirm(`¿Poner ${estado} en ${cel.length} celda(s) de ${np} persona(s)?`+(pisa?`\n${pisa} ya tienen otro estado y se reemplaza.`:""))) return;
+  try{ const r=await perMatGuardar(cel,estado); if(r) mostrarOk(`${estado} puesto en ${r.guardados} celda(s)`); }
+  catch(e){ mostrarError(e.message); }
+}
+async function perMatBorrar(){
+  const cel=perMatSel().filter(c=>c.p.registros[c.fecha]);
+  if(!cel.length){ mostrarError("Las celdas seleccionadas no tienen estado que borrar"); return; }
+  const np=new Set(cel.map(c=>c.dni)).size;
+  if(!confirm(`¿Borrar el estado de ${cel.length} celda(s) de ${np} persona(s)? Quedan vacías (—).`)) return;
+  try{ const r=await perMatGuardar(cel,""); if(r) mostrarOk(`${r.borrados} estado(s) borrado(s)`); }
+  catch(e){ mostrarError(e.message); }
+}
+/* Estructura por meses: la matriz se carga por mes o por quincena, que es como
+   se cierra la asistencia. Va por la barra de fechas para que todas las pestañas
+   de rango queden en el mismo periodo. */
+function perMatMeses(){
+  const s=$("perMatMes"); if(!s||s.options.length) return;
+  const h=new Date(); let o="";
+  for(let k=0;k<6;k++){ const d=new Date(h.getFullYear(),h.getMonth()-k,1), v=d.toLocaleDateString("sv-SE").slice(0,7);
+    o+=`<option value="${v}">${d.toLocaleDateString("es-PE",{month:"long",year:"numeric"})}</option>`; }
+  s.innerHTML=o;
+}
+function perMatRangoDe(p){
+  const m=$("perMatMes").value, [y,mm]=m.split("-").map(Number), ult=new Date(y,mm,0).getDate();
+  return p==="q1"?[m+"-01",m+"-15"]:p==="q2"?[m+"-16",m+"-"+ult]:[m+"-01",m+"-"+String(ult).padStart(2,"0")];
+}
+function perMatPeriodo(p){
+  perMatMeses();
+  let [d,h]=perMatRangoDe(p); const hoy=hoyISO(); if(h>hoy) h=hoy; if(d>h) d=h;
+  PER.matCel.clear(); PER.matAncla=null;
+  if(typeof window.dynRango==="function") window.dynRango(d,h);
+  else { PER.matSel.desde=d; PER.matSel.hasta=h; perCargarMatriz(); }
+}
+function perMatPeriodoPintar(){
+  perMatMeses();
+  const s=$("perMatMes"), d=PER.matSel.desde, h=PER.matSel.hasta; if(!s||!d) return;
+  if([...s.options].some(o=>o.value===d.slice(0,7))) s.value=d.slice(0,7);
+  const hoy=hoyISO(), fin=x=>x>hoy?hoy:x;
+  document.querySelectorAll("#perMatPeriodo [data-p]").forEach(b=>{ const [a,z]=perMatRangoDe(b.dataset.p);
+    b.classList.toggle("on", a===d && fin(z)===h); });
+  const e=$("perMatEstado");
+  if(e && !e.options.length) e.innerHTML=estadosOpciones(ESTADOS_ASIS,"",$("perMatArea").value)||'<option value="">Sin estados</option>';
 }
 
 /* --- Dashboard --- */
