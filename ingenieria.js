@@ -7485,7 +7485,7 @@ function ccDetalle(a,sim){
   const fila=o=>{const av=o.tot?100*(1-(o.bruto??o.pend)/o.tot):0, st=o.estado==="POR_EMPEZAR"&&o.vieja?"VIEJA":o.estado;
     const lb={EN_CURSO:"En curso",POR_EMPEZAR:"Por empezar",QUIETA:"Sin movimiento",VIEJA:"¿Vigente?"}[st];
     return `<tr class="${o.estado==="QUIETA"?"quieta":""}"><td><b>${esc(o.of)}</b></td><td class="izq">${esc(o.articulo)}<div class="cc-sub">${esc(o.prenda||"")} · ${ccN(o.cant)} und</div></td>
-      <td><span class="cc-st ${st}">${lb}</span>${st==="VIEJA"||st==="QUIETA"?`<div><button type="button" class="btn-mini gris cc-no-vig" onclick="ccCompletar('${esc(a.area)}','${esc(o.of)}')">No vigente</button></div>`:""}</td><td class="cc-oc"><span class="cc-av"><i style="width:${av}%"></i></span>${Math.round(av)}%</td>
+      <td><span class="cc-st ${st}">${lb}</span><div><button type="button" class="btn-mini gris cc-no-vig" onclick="ccCompletar('${esc(a.area)}','${esc(o.of)}')">No vigente</button></div></td><td class="cc-oc"><span class="cc-av"><i style="width:${av}%"></i></span>${Math.round(av)}%</td>
       <td><b>${ccN(o.pend)}</b>${o.bruto!=null&&o.bruto-o.pend>=1?`<div class="cc-sub">de ${ccN(o.bruto)} sin reclamar</div>`:""}</td><td>${a.ritmo?(o.pend/a.ritmo).toFixed(1):"—"}</td><td class="cc-oc">${o.ult?fechaCorta(o.ult):"—"}</td><td class="cc-oc">${fechaCorta(o.gen)}</td></tr>`;};
   const head=`<thead><tr><th>OF</th><th class="izq">Artículo</th><th>Estado</th><th class="cc-oc">Avance</th><th>Pendiente (min)</th><th>Días</th><th class="cc-oc">Último ticket</th><th class="cc-oc">Generada</th></tr></thead>`;
   return `<div class="cc-bloque"><h2>${esc(a.area)}: OFs que forman la carga</h2>
