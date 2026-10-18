@@ -231,6 +231,21 @@ function busCopiar(){
   const t=z.innerText.replace(/\n{3,}/g,"\n\n");
   (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(()=>mostrarOk("Copiado"),()=>mostrarError("No se pudo copiar"));
 }
+function busPintarAcabado(a){
+  const ops=a.ops||[], tope=Number(a.cant_prog)||0;
+  if(!ops.length || !tope) return `<section class="bus-caja-b"><h3>ACABADO</h3><p class="bus-sub">Registra por cantidad, no por paquete: ${a.registros} registros de ${a.personas} personas, ${qty(a.und)} und, del ${busDM(a.desde)} al ${busDM(a.hasta)}.</p></section>`;
+  const mods=[]; ops.forEach(o=>{ let m=mods.find(x=>x.modulo===o.modulo); if(!m) mods.push(m={modulo:o.modulo,ops:[],marc:0}); m.ops.push(o); m.marc+=Math.min(o.marcadas,tope); });
+  const marc=mods.reduce((s,m)=>s+m.marc,0), total=ops.length*tope, pct=Math.round(marc/total*100);
+  const hechas=ops.filter(o=>o.marcadas>=tope).length;
+  return `<section class="bus-caja-b"><h3>ACABADO</h3>
+    <div class="bus-kpis">${busKpi(`${pct}%`,`${qty(marc)} de ${qty(total)} marcadas (${qty(tope)} prendas × ${ops.length} operaciones)`,"ok")}${busKpi(a.personas,`personas · ${busDM(a.desde)} → ${busDM(a.hasta)}`,"")}
+    ${busKpi(hechas,`operaciones completas de ${ops.length}`,"")}${busKpi(qty(total-marc),"cantidades libres","lib")}</div>
+    <div class="bus-mods">${mods.map(m=>{ const p=Math.round(m.marc/(m.ops.length*tope)*100);
+      return `<div class="bus-modbar"><span>${esc(m.modulo)}</span><div class="opi-barra"><i style="width:${p}%"></i></div><b>${p}%</b></div>`; }).join("")}</div>
+    ${mods.map(m=>`<h4>${esc(m.modulo)}</h4><div class="tabla-wrap"><table class="tabla bus-tabla"><thead><tr><th>N°</th><th class="izq">Operación</th><th>Marcadas</th><th>Libres</th><th>Avance</th><th>Personas</th><th>Último</th></tr></thead><tbody>${m.ops.map(o=>{ const lib=Math.max(tope-o.marcadas,0), p=Math.min(Math.round(o.marcadas/tope*100),100);
+      return `<tr><td>${o.n_op}</td><td class="izq">${esc(o.operacion)}</td><td><b>${qty(o.marcadas)}</b></td><td>${lib?qty(lib):`<span class="bus-est ok">Completa</span>`}</td><td><div class="opi-barra"><i style="width:${p}%"></i></div></td><td>${o.personas||"—"}</td><td>${o.ultimo?busDM(o.ultimo):"—"}</td></tr>`; }).join("")}</tbody></table></div>`).join("")}
+  </section>`;
+}
 function busPintarOF(){
   const r=BUS.ficha.r, of=r.of||{}, z=$("busCuerpo"), o=esc(of.of||BUS.ficha.a);
   let h=busMigas([`<button type="button" onclick="busInicio()">Buscar</button>`,`OF ${o}`])
@@ -248,7 +263,7 @@ function busPintarOF(){
       ${(a.liberados||[]).length?`<h4>Liberados por motivo</h4><ul class="bus-lib">${a.liberados.map(x=>`<li><span>${esc(x.motivo)}</span><b>${x.n}</b></li>`).join("")}</ul>`:""}
     </section>`;
   });
-  if(r.acabado && r.acabado.registros) h+=`<section class="bus-caja-b"><h3>ACABADO</h3><p class="bus-sub">Registra por cantidad, no por paquete: ${r.acabado.registros} registros de ${r.acabado.personas} personas, ${qty(r.acabado.und)} und, del ${busDM(r.acabado.desde)} al ${busDM(r.acabado.hasta)}.</p></section>`;
+  if(r.acabado && r.acabado.registros) h+=busPintarAcabado(r.acabado);
   if(!(r.areas||[]).length && !(r.acabado&&r.acabado.registros)) h+=`<div class="vacio-msg">Esta OF todavía no tiene tickets generados.</div>`;
   h+=`<div class="bus-acc"><button type="button" class="bus-btn" onclick="busCopiar()">Copiar como texto</button></div>`;
   z.innerHTML=h;
