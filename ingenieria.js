@@ -4401,6 +4401,39 @@ function pintarHis(){
         <td class="his-acciones"><button class="btn-mini gris" onclick="verCambio(${Number(c.id)})">Ver</button> ${estado}</td></tr>`; }).join("")
     + "</tbody>";
 }
+/* Reporte: personas con más incidencias en el rango y filtros del historial (sin los cambios deshechos). */
+function hisRanking(){
+  const acc=$("hisAccion").value, q=normKey($("hisBuscar").value), P={};
+  (HIS||[]).filter(c=>c.accion!=="DESHACER" && !c.deshecho_en && (!acc || c.accion===acc)
+    && (!q || normKey(c.nombre+" "+(c.motivo||"")+" "+((c.resumen||{}).personas||[]).join(" ")+" "+((c.resumen||{}).ofs||[]).join(" ")).includes(q)))
+  .forEach(c=>((c.resumen||{}).personas||[]).forEach(n=>{
+    const p=P[n]||(P[n]={nombre:n,n:0,motivos:{},fechas:new Set(),quien:{},acciones:{}});
+    p.n++; p.fechas.add(String(c.creado).slice(0,10));
+    const m=(c.motivo||"").trim()||"(sin motivo)"; p.motivos[m]=(p.motivos[m]||0)+1;
+    const w=soloApellidos(c.nombre); p.quien[w]=(p.quien[w]||0)+1;
+    const a=HIS_ACC[c.accion]||c.accion; p.acciones[a]=(p.acciones[a]||0)+1;
+  }));
+  const lis=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k} (${v})`).join(", ");
+  return Object.values(P).sort((a,b)=>b.n-a.n||a.nombre.localeCompare(b.nombre)).map(p=>({
+    persona:p.nombre, incidencias:p.n, acciones:lis(p.acciones), motivos:lis(p.motivos), quien:lis(p.quien),
+    fechas:[...p.fechas].sort().map(f=>ddmm(f)).join(", ")}));
+}
+function hisReporte(){
+  const R=hisRanking(), d=$("hisDesde").value, a=$("hisHasta").value;
+  abrirModal(`<h2>Personas con más incidencias</h2>
+    <div class="sub" style="margin-bottom:12px;">Del ${esc(ddmm(d))} al ${esc(ddmm(a))}${$("hisArea").value?` · ${esc($("hisArea").value)}`:""} · cada vez que se liberó, movió o partió un ticket suyo cuenta una incidencia; los cambios deshechos no cuentan.</div>
+    ${R.length?`<div class="tabla-scroll pv-tabla"><table class="tabla"><thead><tr><th>#</th><th class="izq">Persona</th><th>Incid.</th><th class="izq">Qué se hizo</th><th class="izq">Motivos</th><th class="izq">Fechas</th><th class="izq">Quién lo realizó</th></tr></thead><tbody>
+      ${R.map((r,i)=>`<tr><td>${i+1}</td><td class="izq"><b>${esc(soloApellidos(r.persona))}</b></td><td><b>${r.incidencias}</b></td><td class="izq">${esc(r.acciones)}</td><td class="izq">${esc(r.motivos)}</td><td class="izq">${esc(r.fechas)}</td><td class="izq">${esc(r.quien)}</td></tr>`).join("")}
+      </tbody></table></div>`:`<div class="vacio-msg">Sin incidencias en esas fechas</div>`}
+    <div class="modal-acciones">${R.length?`<button class="btn-primario" onclick="hisReporteXlsx()">DESCARGAR EXCEL</button>`:""}<button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`,"modal-ancho");
+}
+function hisReporteXlsx(){
+  const R=hisRanking(), d=$("hisDesde").value, a=$("hisHasta").value;
+  const aoa=[["#","PERSONA","INCIDENCIAS","QUÉ SE HIZO","MOTIVOS","FECHAS","QUIÉN LO REALIZÓ"]].concat(R.map((r,i)=>[i+1,r.persona,r.incidencias,r.acciones,r.motivos,r.fechas,r.quien]));
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws["!cols"]=[{wch:4},{wch:34},{wch:12},{wch:28},{wch:50},{wch:30},{wch:34}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Incidencias");
+  XLSX.writeFile(wb,`INCIDENCIAS_${d}_a_${a}.xlsx`);
+}
 async function verCambio(id){
   const c=(HIS||[]).find(x=>Number(x.id)===Number(id)); if(!c) return;
   abrirModal(cargandoHTML("Cargando…"),"modal-ancho");
