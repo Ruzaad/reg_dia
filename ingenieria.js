@@ -7340,7 +7340,7 @@ async function cargarCarga(){
   try{
     const r=await rpc("fn_carga_capacidad",{p_dni:ING.dni,p_token:ING.token,p_area:""});
     if(!r || !r.ok){ mostrarError((r&&r.error)||"Error"); $("ccZona").innerHTML=""; return; }
-    CC=r; ccPintar();
+    CC=r; CC_CHK=new Set(); ccPintar();
   }catch(e){
     if(/Could not find the function|PGRST202/i.test(e.message||"")){ $("ccZona").innerHTML=`<div class="acf-falta"><b>Falta correr el parche 107 en la base.</b> Con él, esta pantalla calcula cuántos días de trabajo le quedan a cada área frente a su ritmo real.</div>`; return; }
     mostrarError(e.message); $("ccZona").innerHTML=""; }
@@ -7353,8 +7353,62 @@ async function ccCompletar(area,of){
     const r=await rpc("fn_of_completar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_of:String(of),p_completar:true});
     if(!r || r.ok===false){ mostrarError((r&&r.error)||"No se pudo completar"); return; }
     mostrarOk(`OF ${of} completada en ${area} (${r.modulos} módulo${r.modulos===1?"":"s"} cerrado${r.modulos===1?"":"s"})`);
-    await cargarCarga();
+    CC_CERR.area=null; await cargarCarga();
   }catch(e){ mostrarError(/fn_of_completar/.test(e.message)?"Falta aplicar el parche 132 en la base":e.message); }
+}
+let CC_CHK=new Set(), CC_CERR={area:null,rows:[],abierto:false};
+function ccBtnVarias(){
+  const n=[...CC_CHK].filter(k=>k.startsWith(CC_SEL+"|")).length;
+  document.querySelectorAll(".cc-btn-varias").forEach(b=>{ b.disabled=!n; b.textContent=n?`No vigente (${n})`:"No vigente"; });
+}
+function ccMarcar(area,of,on){ const k=area+"|"+of; on?CC_CHK.add(k):CC_CHK.delete(k); ccBtnVarias(); }
+function ccMarcarTodas(el){
+  el.closest("table").querySelectorAll("tbody input[type=checkbox]").forEach(c=>{ if(c.checked!==el.checked){ c.checked=el.checked; c.onchange(); } });
+}
+async function ccCompletarVarias(){
+  const items=[...CC_CHK].filter(k=>k.startsWith(CC_SEL+"|")).map(k=>{ const i=k.indexOf("|"); return {area:k.slice(0,i),of:k.slice(i+1)}; });
+  if(!items.length) return;
+  if(!confirm(`¿Cerrar ${items.length} OF como no vigentes en ${CC_SEL}?\n\nQuedarán COMPLETADAS: se cierran todos sus módulos y nadie podrá reclamar sus tickets.\nPuedes deshacerlo desde "OFs cerradas" aquí mismo.`)) return;
+  try{
+    const r=await rpc("fn_ofs_completar_varias",{p_dni:ING.dni,p_token:ING.token,p_items:items,p_completar:true});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"No se pudo cerrar"); return; }
+    mostrarOk(`${r.ofs} OF cerrada${r.ofs===1?"":"s"} en ${CC_SEL}`);
+    CC_CHK=new Set(); CC_CERR.area=null; await cargarCarga();
+    if(CC_CERR.abierto) ccCerradasCargar();
+  }catch(e){ mostrarError(/fn_ofs_completar_varias/.test(e.message)?"Falta aplicar el parche 134 en la base":e.message); }
+}
+async function ccReabrir(items){
+  if(!items.length) return;
+  if(!confirm(`¿Reabrir ${items.length} OF en ${CC_SEL}?\n\nVuelven a contar como carga y se pueden reclamar sus tickets.`)) return;
+  try{
+    const r=await rpc("fn_ofs_completar_varias",{p_dni:ING.dni,p_token:ING.token,p_items:items,p_completar:false});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"No se pudo reabrir"); return; }
+    mostrarOk(`${r.ofs} OF reabierta${r.ofs===1?"":"s"}`);
+    CC_CERR.area=null; await cargarCarga(); ccCerradasCargar();
+  }catch(e){ mostrarError(e.message); }
+}
+function ccReabrirMarcadas(){
+  ccReabrir([...document.querySelectorAll("#ccCerrBody tbody input:checked")].map(c=>({area:CC_SEL,of:c.dataset.of})));
+}
+function ccCerradasToggle(el){ CC_CERR.abierto=el.open; if(el.open && CC_CERR.area!==CC_SEL) ccCerradasCargar(); }
+async function ccCerradasCargar(){
+  const a=CC_SEL, b=$("ccCerrBody"); if(b) b.innerHTML=cargandoHTML("Buscando OFs cerradas…");
+  try{
+    const r=await rpc("fn_ofs_completadas",{p_dni:ING.dni,p_token:ING.token,p_area:a});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); return; }
+    CC_CERR={area:a,rows:r.ofs||[],abierto:true};
+  }catch(e){
+    mostrarError(/fn_ofs_completadas/.test(e.message)?"Falta aplicar el parche 134 en la base":e.message); return; }
+  const b2=$("ccCerrBody"); if(b2) b2.innerHTML=ccCerradasHTML();
+}
+function ccCerradasHTML(){
+  if(CC_CERR.area!==CC_SEL) return "";
+  const r=CC_CERR.rows;
+  if(!r.length) return `<p class="cc-sub">Ninguna OF cerrada en ${esc(CC_SEL)}.</p>`;
+  return `<div class="cc-barra"><button type="button" class="btn-mini" onclick="ccReabrirMarcadas()">Reabrir marcadas</button></div>
+    <div class="contenedor-ancho tabla-scroll" style="max-height:40vh"><table class="tabla cc-tabla"><thead><tr><th><input type="checkbox" onchange="ccMarcarTodas(this)" aria-label="Marcar todas"></th><th>OF</th><th class="izq">Artículo</th><th>Módulos cerrados</th><th>Cerrada por</th><th>Cuándo</th><th></th></tr></thead><tbody>
+    ${r.map(o=>`<tr><td><input type="checkbox" data-of="${esc(o.of)}"></td><td><b>${esc(o.of)}</b></td><td class="izq">${esc(o.articulo||"—")}<div class="cc-sub">${esc(o.prenda||"")}${o.cant?` · ${ccN(o.cant)} und`:""}</div></td><td>${o.modulos}</td><td>${esc(o.por||"—")}</td><td class="cc-oc">${esc(o.cuando||"")}</td>
+      <td><button type="button" class="btn-mini gris" onclick="ccReabrir([{area:CC_SEL,of:'${esc(o.of)}'}])">Reabrir</button></td></tr>`).join("")}</tbody></table></div>`;
 }
 /* Simula los próximos días hábiles: cada área de costura gasta su ritmo por día hasta
    acabar su carga; lo que gasta se convierte en llegada a ACABADO. */
@@ -7399,6 +7453,8 @@ function ccPintar(){
     +ccTimeline(areas,sim,pp)
     +ccDetalle(CC.areas.find(a=>a.area===CC_SEL),sim)
     +ccDeDonde();
+  ccBtnVarias();
+  if(CC_CERR.abierto && CC_CERR.area!==CC_SEL) ccCerradasCargar();
 }
 function ccAvisos(areas){
   const b=areas.filter(a=>a.tipo==="BASE"), q=b.reduce((s,a)=>s+a.quietas.min,0), nq=b.reduce((s,a)=>s+a.quietas.n,0);
@@ -7484,17 +7540,20 @@ function ccDetalle(a,sim){
   const vis=a.ofs.filter(o=>o.estado!=="QUIETA"), q=a.ofs.filter(o=>o.estado==="QUIETA");
   const fila=o=>{const av=o.tot?100*(1-(o.bruto??o.pend)/o.tot):0, st=o.estado==="POR_EMPEZAR"&&o.vieja?"VIEJA":o.estado;
     const lb={EN_CURSO:"En curso",POR_EMPEZAR:"Por empezar",QUIETA:"Sin movimiento",VIEJA:"¿Vigente?"}[st];
-    return `<tr class="${o.estado==="QUIETA"?"quieta":""}"><td><b>${esc(o.of)}</b></td><td class="izq">${esc(o.articulo)}<div class="cc-sub">${esc(o.prenda||"")} · ${ccN(o.cant)} und</div></td>
+    return `<tr class="${o.estado==="QUIETA"?"quieta":""}"><td><input type="checkbox" ${CC_CHK.has(a.area+"|"+o.of)?"checked":""} onchange="ccMarcar('${esc(a.area)}','${esc(o.of)}',this.checked)" aria-label="Marcar OF ${esc(o.of)}"></td><td><b>${esc(o.of)}</b></td><td class="izq">${esc(o.articulo)}<div class="cc-sub">${esc(o.prenda||"")} · ${ccN(o.cant)} und</div></td>
       <td><span class="cc-st ${st}">${lb}</span><div><button type="button" class="btn-mini gris cc-no-vig" onclick="ccCompletar('${esc(a.area)}','${esc(o.of)}')">No vigente</button></div></td><td class="cc-oc"><span class="cc-av"><i style="width:${av}%"></i></span>${Math.round(av)}%</td>
       <td><b>${ccN(o.pend)}</b>${o.bruto!=null&&o.bruto-o.pend>=1?`<div class="cc-sub">de ${ccN(o.bruto)} sin reclamar</div>`:""}</td><td>${a.ritmo?(o.pend/a.ritmo).toFixed(1):"—"}</td><td class="cc-oc">${o.ult?fechaCorta(o.ult):"—"}</td><td class="cc-oc">${fechaCorta(o.gen)}</td></tr>`;};
-  const head=`<thead><tr><th>OF</th><th class="izq">Artículo</th><th>Estado</th><th class="cc-oc">Avance</th><th>Pendiente (min)</th><th>Días</th><th class="cc-oc">Último ticket</th><th class="cc-oc">Generada</th></tr></thead>`;
+  const head=`<thead><tr><th><input type="checkbox" onchange="ccMarcarTodas(this)" aria-label="Marcar todas"></th><th>OF</th><th class="izq">Artículo</th><th>Estado</th><th class="cc-oc">Avance</th><th>Pendiente (min)</th><th>Días</th><th class="cc-oc">Último ticket</th><th class="cc-oc">Generada</th></tr></thead>`;
   return `<div class="cc-bloque"><h2>${esc(a.area)}: OFs que forman la carga</h2>
     <p class="cc-sub">Ordenadas por minutos pendientes. “Días” es lo que esa OF le ocupa al área a su ritmo de ${ccN(a.ritmo)} min/día.</p>
+    <div class="cc-barra"><button type="button" class="btn-mini cc-btn-varias" onclick="ccCompletarVarias()" disabled>No vigente</button><span class="cc-sub">Marca varias OF y ciérralas de una vez.</span></div>
     <div class="contenedor-ancho tabla-scroll" style="max-height:60vh"><table class="tabla cc-tabla">${head}<tbody>${vis.map(fila).join("")}</tbody></table></div>
     ${q.length?`<details class="cc-q"><summary>${q.length} OFs sin movimiento hace más de 7 días hábiles · ${ccN(a.quietas.min)} min que no se cuentan</summary>
       <p class="cc-sub" style="margin-top:6px">Tuvieron tickets reclamados pero nada en la última semana y media. Casi siempre son operaciones sueltas que nadie marcó;
       si de verdad están terminadas, “No vigente” las marca COMPLETADAS y las saca de aquí.</p>
+      <div class="cc-barra"><button type="button" class="btn-mini cc-btn-varias" onclick="ccCompletarVarias()" disabled>No vigente</button></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:40vh"><table class="tabla cc-tabla">${head}<tbody>${q.map(fila).join("")}</tbody></table></div></details>`:""}
+    <details class="cc-q" ${CC_CERR.abierto?"open":""} ontoggle="ccCerradasToggle(this)"><summary>OFs cerradas en ${esc(a.area)} (para reabrir si se cerraron por error)</summary><div id="ccCerrBody">${ccCerradasHTML()}</div></details>
   </div>`;
 }
 function ccDeDonde(){
