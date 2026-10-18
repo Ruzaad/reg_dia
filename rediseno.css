@@ -1742,3 +1742,5 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .lr-pie{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--suave);}
 .lr-btns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
 .lr-btns .btn-mini{min-height:40px;}
+.cc-barra{display:flex;align-items:center;gap:10px;margin:8px 0}
+.cc-barra .btn-mini:disabled{opacity:.45;cursor:default}
