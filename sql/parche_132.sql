@@ -1,7 +1,42 @@
--- PARCHE 132 — Buscar y Seguir: ACABADO por cantidades (marcadas y libres por operación y módulo)
+-- PARCHE 132 — Buscar y Seguir: ACABADO por cantidades; OF COMPLETADA (cerrar todos los módulos)
 -- fn_traza_of: misma firma y misma salida; 'acabado' suma cant_prog y ops[{n_op,modulo,operacion,marcadas,personas,ultimo}].
+-- fn_of_completar (nueva): marca una OF como COMPLETADA en un área (cierra todos sus módulos, así sus
+--   tickets dejan de contar como pendientes y nadie más los reclama) o la reabre. Solo INGENIERIA.
+--   Al dar "No vigente" en Carga vs capacidad se usa esta función; 'completada' en fn_traza_of
+--   deja ver el estado y reabrir desde Buscar y Seguir.
 -- Rollback: parche_132_rollback.sql
 begin;
+
+create or replace function public.fn_of_completar(p_dni text, p_token uuid, p_area text, p_of text, p_completar boolean)
+ returns json
+ language plpgsql
+ security definer
+ set search_path to 'public'
+as $function$
+declare s operarios; v_n int;
+begin
+  s := _auth(p_dni, p_token);
+  if s.cargo <> 'INGENIERIA' then raise exception 'NO_AUTORIZADA'; end if;
+  if coalesce(trim(p_area),'') = '' or coalesce(trim(p_of),'') = '' then
+    return json_build_object('ok', false, 'error', 'Área y OF son obligatorias');
+  end if;
+  if p_completar then
+    insert into modulos_cerrados(area, o_f, modulo, cerrado_por)
+    select distinct t.area, t.o_f, upper(trim(t.modulo)), s.dni
+      from tickets_cache t
+     where t.area = p_area and t.o_f = upper(trim(p_of)) and coalesce(trim(t.modulo),'') <> ''
+    on conflict (area, o_f, modulo) do nothing;
+    get diagnostics v_n = row_count;
+  else
+    delete from modulos_cerrados where area = p_area and upper(trim(o_f)) = upper(trim(p_of));
+    get diagnostics v_n = row_count;
+  end if;
+  return json_build_object('ok', true, 'completada', p_completar, 'modulos', v_n);
+exception when others then
+  if SQLERRM like '%SESION_INVALIDA%' or SQLERRM like '%NO_AUTORIZADA%' then raise; end if;
+  return json_build_object('ok', false, 'error', SQLERRM);
+end $function$;
+
 
 -- Ficha de OF (parche 132): ACABADO suma 'cant_prog' y 'ops' (cantidad marcada por operación).
 create or replace function public.fn_traza_of(p_dni text, p_token uuid, p_of text)
@@ -22,7 +57,8 @@ begin
 
   with tk as (
     select t.area, t.modulo, t.n_op, t.op, t.codigo, t.desde, t.hasta,
-           exists (select 1 from reclamos r where r.area = t.area and r.codigo = t.codigo and r.estado = 'ACTIVO') reg
+           exists (select 1 from reclamos r where r.area = t.area and r.codigo = t.codigo and r.estado = 'ACTIVO') reg,
+           exists (select 1 from modulos_cerrados c where c.area = t.area and c.o_f = t.o_f and upper(trim(c.modulo)) = upper(trim(t.modulo))) cer
       from tickets_cache t
      where t.o_f = p_of and (v_areas is null or t.area = any(v_areas))
   ), rc as (
@@ -38,8 +74,10 @@ begin
       'ultimo', (select to_char(max(fecha),'YYYY-MM-DD') from rc where rc.area = a.area and rc.estado = 'ACTIVO'),
       'otro_dia', (select count(*) from rc where rc.area = a.area and rc.estado = 'ACTIVO' and rc.motivo_fecha is not null),
       'modulos', (select json_agg(m order by m.min_op) from (
-          select tk.modulo, min(tk.n_op) min_op, count(*) tickets, count(*) filter (where tk.reg) registrados
+          select tk.modulo, min(tk.n_op) min_op, count(*) tickets, count(*) filter (where tk.reg) registrados,
+                 bool_and(tk.cer) cerrado
             from tk where tk.area = a.area group by tk.modulo) m),
+      'completada', (select bool_and(tk.cer) from tk where tk.area = a.area),
       'huecos', (select json_agg(h order by h.desde) from (
           select tk.desde, tk.hasta, count(*) filter (where not tk.reg) faltan, count(*) ops
             from tk where tk.area = a.area group by tk.desde, tk.hasta
@@ -79,5 +117,6 @@ exception when others then
 end $function$;
 
 grant execute on function public.fn_traza_of(text, uuid, text) to anon, authenticated;
+grant execute on function public.fn_of_completar(text, uuid, text, text, boolean) to anon, authenticated;
 
 commit;

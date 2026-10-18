@@ -241,10 +241,19 @@ function busPintarAcabado(a){
     <div class="bus-kpis">${busKpi(`${pct}%`,`${qty(marc)} de ${qty(total)} marcadas (${qty(tope)} prendas × ${ops.length} operaciones)`,"ok")}${busKpi(a.personas,`personas · ${busDM(a.desde)} → ${busDM(a.hasta)}`,"")}
     ${busKpi(hechas,`operaciones completas de ${ops.length}`,"")}${busKpi(qty(total-marc),"cantidades libres","lib")}</div>
     <div class="bus-mods">${mods.map(m=>{ const p=Math.round(m.marc/(m.ops.length*tope)*100);
-      return `<div class="bus-modbar"><span>${esc(m.modulo)}</span><div class="opi-barra"><i style="width:${p}%"></i></div><b>${p}%</b></div>`; }).join("")}</div>
+      return `<div class="bus-modbar"><span>${esc(m.modulo)}${m.cerrado?" · cerrado":""}</span><div class="opi-barra"><i style="width:${p}%"></i></div><b>${p}%</b></div>`; }).join("")}</div>
     ${mods.map(m=>`<h4>${esc(m.modulo)}</h4><div class="tabla-wrap"><table class="tabla bus-tabla"><thead><tr><th>N°</th><th class="izq">Operación</th><th>Marcadas</th><th>Libres</th><th>Avance</th><th>Personas</th><th>Último</th></tr></thead><tbody>${m.ops.map(o=>{ const lib=Math.max(tope-o.marcadas,0), p=Math.min(Math.round(o.marcadas/tope*100),100);
       return `<tr><td>${o.n_op}</td><td class="izq">${esc(o.operacion)}</td><td><b>${qty(o.marcadas)}</b></td><td>${lib?qty(lib):`<span class="bus-est ok">Completa</span>`}</td><td><div class="opi-barra"><i style="width:${p}%"></i></div></td><td>${o.personas||"—"}</td><td>${o.ultimo?busDM(o.ultimo):"—"}</td></tr>`; }).join("")}</tbody></table></div>`).join("")}
   </section>`;
+}
+async function busReabrir(area,of){
+  if(!confirm(`¿Reabrir la OF ${of} en ${area}? Se abren todos sus módulos y sus tickets sin reclamar vuelven a contar.`)) return;
+  try{
+    const s=busSes(), r=await rpc("fn_of_completar",{p_dni:s.dni,p_token:s.token,p_area:area,p_of:String(of),p_completar:false});
+    if(!r||r.ok===false){ mostrarError((r&&r.error)||"No se pudo reabrir"); return; }
+    mostrarOk(`OF ${of} reabierta en ${area}`);
+    busAbrir("of",of);
+  }catch(e){ mostrarError(e.message); }
 }
 function busPintarOF(){
   const r=BUS.ficha.r, of=r.of||{}, z=$("busCuerpo"), o=esc(of.of||BUS.ficha.a);
@@ -253,11 +262,12 @@ function busPintarOF(){
       <div class="bus-tit"><h2>OF ${o}</h2>${of.fecha_carga?`<span>Cargada <b>${busDMH(of.fecha_carga)}</b>${of.cargado_por?` por <b>${esc(of.cargado_por)}</b>`:""}</span>`:""}</div>`;
   (r.areas||[]).forEach(a=>{
     const pct=a.tickets?Math.round(a.registrados/a.tickets*100):0;
-    h+=`<section class="bus-caja-b"><h3>${esc(a.area)}</h3>
+    h+=`<section class="bus-caja-b"><h3>${esc(a.area)}${a.completada?` <span class="bus-est ok">COMPLETADA</span>`:""}</h3>
+      ${a.completada&&busEsIng()?`<p class="bus-sub">Sus módulos están cerrados: no cuenta como pendiente ni se pueden reclamar sus tickets. <button type="button" class="bus-btn" onclick="busReabrir('${esc(a.area)}','${o}')">Reabrir</button></p>`:""}
       <div class="bus-kpis">${busKpi(`${pct}%`,`${a.registrados} de ${a.tickets} tickets registrados`,"ok")}${busKpi(a.personas,`personas · ${busDM(a.primero)} → ${busDM(a.ultimo)}`,"")}
       ${busKpi(a.otro_dia,"registrados otro día","otro")}${busKpi((a.liberados||[]).reduce((s,x)=>s+x.n,0),"liberados","lib")}</div>
       <div class="bus-mods">${(a.modulos||[]).map(m=>{ const p=m.tickets?Math.round(m.registrados/m.tickets*100):0;
-        return `<div class="bus-modbar"><span>${esc(m.modulo)}</span><div class="opi-barra"><i style="width:${p}%"></i></div><b>${p}%</b></div>`; }).join("")}</div>
+        return `<div class="bus-modbar"><span>${esc(m.modulo)}${m.cerrado?" · cerrado":""}</span><div class="opi-barra"><i style="width:${p}%"></i></div><b>${p}%</b></div>`; }).join("")}</div>
       ${(a.huecos||[]).length?`<h4>Paquetes con hueco</h4><p class="bus-sub">Prendas que avanzaron pero con operaciones sin registrar. Toca uno para ver su ficha.</p>
         <div class="bus-huecos">${a.huecos.map(x=>`<button type="button" onclick="busAbrir('paquete','${o}',${x.desde})"><b>${x.desde}-${x.hasta}</b><span>faltan ${x.faltan} de ${x.ops}</span></button>`).join("")}</div>`:""}
       ${(a.liberados||[]).length?`<h4>Liberados por motivo</h4><ul class="bus-lib">${a.liberados.map(x=>`<li><span>${esc(x.motivo)}</span><b>${x.n}</b></li>`).join("")}</ul>`:""}

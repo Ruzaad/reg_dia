@@ -1,6 +1,8 @@
 -- ROLLBACK parche 132: vuelve fn_traza_of a la versión del parche 106 (sin 'ops' en acabado)
 begin;
 
+drop function if exists public.fn_of_completar(text, uuid, text, text, boolean);
+
 -- Ficha de OF: avance por área y módulo, paquetes con hueco y liberados.
 create or replace function public.fn_traza_of(p_dni text, p_token uuid, p_of text)
  returns json

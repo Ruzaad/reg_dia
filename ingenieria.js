@@ -57,7 +57,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
     if(NAV_TABS.includes(t)) activarTab(t);
   });
 
-  ["fechaEf","fechaTk","fechaMod"].forEach(id=>{ const el=$(id); if(el) el.value = hoyISO(); });
+  ["fechaEf","fechaTk"].forEach(id=>{ const el=$(id); if(el) el.value = hoyISO(); });
 
   // Áreas desde la base de datos (incluye CORTE, REPROCESOS, etc.)
   await hidratarAreas();                 // config de Sheets desde areas_config
@@ -102,7 +102,7 @@ function cmpVal(va, vb){
 }
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoInicio","pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
+const NAV_TABS=["pasoInicio","pasoTk","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
   "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoFeriados","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
@@ -130,7 +130,6 @@ function activarTab(tab){
   TABS_VISTAS.add(tab);
   if(tab==='pasoIncid') cargarIncidI();
   else if(tab==='pasoTk') cargarTk();
-  else if(tab==='pasoMod') cargarMod();
   else if(tab==='pasoOpsOF') opfInit();
   else if(tab==='pasoAsis') perInit();
   else if(tab==='pasoOpArea') cargarOpArea();
@@ -240,7 +239,7 @@ function aplicarPestanas(){
 function areasPropiasPorDefecto(){
   if(PERM_LIBRE()) return;
   const mias=areasEdita(); if(!mias.length) return;
-  ["areaBase","perArea","areaTk","areaMod","areaOp","areaFec","areaInci","filtroAreaEf","filtroAreaEfR",
+  ["areaBase","perArea","areaTk","areaOp","areaFec","areaInci","filtroAreaEf","filtroAreaEfR",
    "perRangoArea","perDashArea","perMatArea","dbModArea","exArea","opadArea","movArea","areaGen","heArea","areaInciPend"]
     .forEach(id=>{
       const s=$(id); if(!s || s.dataset.permDef) return;
@@ -368,7 +367,6 @@ function poblarSelectsArea(){
   $("filtroAreaEf").innerHTML   = elige + AREAS_LISTA.map(op).join("");   // Efi. Área: requiere elegir
   $("filtroAreaEfR").innerHTML  = todas + AREAS_LISTA.map(op).join("");
   if($("areaTk"))  $("areaTk").innerHTML  = todas + AREAS_LISTA.map(op).join("");
-  if($("areaMod")) $("areaMod").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("areaOp"))  $("areaOp").innerHTML  = elige + AREAS_LISTA.map(op).join("");
   if($("areaFec")) $("areaFec").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("areaInci")) $("areaInci").innerHTML = todas + AREAS_LISTA.map(op).join("");
@@ -392,7 +390,6 @@ function recargarIngenieria(){
   else if(act("pasoEf")) cargarEf();
   else if(act("pasoDia")){ if(EFR.personal.length) cargarEfRango(); }
   else if(act("pasoTk")) cargarTk();
-  else if(act("pasoMod")) cargarMod();
   else if(act("pasoBases")) cargarBases();
   else if(act("pasoAsis")) perReload();
   else if(act("pasoDash")) dashTab(DASH_TAB||'asis');
@@ -1343,86 +1340,6 @@ async function opEntrar(){
   }catch(e){ msg.textContent=e.message; }
 }
 
-/* ================= TICKETS POR MÓDULO (% de avance) =================
-   Avance del módulo = unidades que pasaron su ÚLTIMA operación (mayor N°OP
-   por artículo+módulo en BASE) / meta de la OF (hoja "OF", col CANT PROG).
-   No se muestra numeración: se muestra la CANTIDAD. */
-/* MOD_ARTS es la cascada (artículo → sus OF) y MOD_DATA las tarjetas de la OF
-   elegida, ya agrupadas por el servidor (parche 56). Antes se bajaban TODOS los
-   tickets del área desde siempre y se agrupaban aquí: con el sistema creciendo
-   eso eran decenas de miles de filas para pintar cuatro tarjetas. */
-let MOD_ARTS=[], MOD_DATA=null, modArea="", MOD_META={};
-async function cargarMod(reset){
-  modArea = $("areaMod") ? $("areaMod").value : "";
-  if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
-  $("modGate").style.display="none";
-  pintarCargando($("zonaModulos"),"Cargando…");
-  $("resumenMod").textContent="";
-  try{
-    const r = await rpc("fn_mod_avance",{p_dni:ING.dni,p_token:ING.token,
-      p_area:modArea, p_articulo:"", p_of:"", p_hasta:($("fechaMod")||{}).value||null});
-    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); MOD_ARTS=[]; }
-    else MOD_ARTS = r.articulos||[];
-    /* La meta sale de `ofs.cant_prog` y la hoja Google es respaldo (parche 53).
-       Se conserva porque las OF anteriores al parche 26 solo están en la hoja. */
-    try{ MOD_META = await metasOF([modArea]); }catch(e){ MOD_META={}; }
-    // Solo al CAMBIAR de área se reinicia la cascada Artículo → OF; al recargar
-    // o al volver a la pestaña se conserva lo que el usuario ya había elegido.
-    if(reset && $("artMod")){ $("artMod").value=""; MOD_DATA=null; }
-    cerrarArtDrop();
-    poblarOfMod();
-    await cargarModOF();
-  }catch(e){ $("zonaModulos").innerHTML=""; mostrarError(e.message); }
-}
-/* Pide al servidor las tarjetas de la OF elegida. Sin artículo u OF no pide nada. */
-async function cargarModOF(){
-  const art=modArtActual(), of=$("ofModSel")?$("ofModSel").value:"";
-  if(!art || !of){ MOD_DATA=null; pintarMod(); return; }
-  pintarCargando($("zonaModulos"),"Cargando módulos…");
-  try{
-    const r=await rpc("fn_mod_avance",{p_dni:ING.dni,p_token:ING.token,
-      p_area:modArea, p_articulo:art, p_of:of, p_hasta:($("fechaMod")||{}).value||null});
-    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); MOD_DATA=null; }
-    else MOD_DATA=r;
-    pintarMod();
-  }catch(e){ $("zonaModulos").innerHTML=""; mostrarError(e.message); }
-}
-function filtrarModArea(a){
-  modArea=a; MOD_DATA=null;
-  if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
-  cargarMod(true);
-}
-/* --- Cascada Artículo → OF (autocompletado desde los tickets cargados) --- */
-function modArtActual(){
-  const q=normKey($("artMod")?$("artMod").value:"");
-  if(!q) return "";
-  const a=MOD_ARTS.find(x=>normKey(x.articulo)===q);
-  return a ? a.articulo : "";
-}
-let ART_MATCH=[];
-/* Autocompletado por coincidencia (contains) con dropdown propio y estilizado. */
-function renderArtDrop(){
-  const inp=$("artMod"), drop=$("artModDrop"); if(!inp||!drop) return;
-  const q=normKey(inp.value);
-  const arts=MOD_ARTS.map(x=>x.articulo).sort((a,b)=>a.localeCompare(b,"es"));
-  ART_MATCH = (q ? arts.filter(a=>normKey(a).includes(q)) : arts).slice(0,60);
-  if(!ART_MATCH.length){ drop.style.display="none"; drop.innerHTML=""; return; }
-  drop.innerHTML = ART_MATCH.map((a,i)=>`<div class="ac-item" onmousedown="elegirArtMod(${i})">${esc(a)}</div>`).join("");
-  drop.style.display="block";
-}
-function elegirArtMod(i){ const a=ART_MATCH[i]; if(a==null) return; $("artMod").value=a; cerrarArtDrop(); poblarOfMod(); cargarModOF(); }
-function cerrarArtDrop(){ const d=$("artModDrop"); if(d) d.style.display="none"; }
-function poblarOfMod(){
-  const sel=$("ofModSel"); if(!sel) return;
-  const art=modArtActual();
-  const prev=sel.value;
-  if(!art){ sel.innerHTML=`<option value="">Ninguna</option>`; return; }
-  const a=MOD_ARTS.find(x=>x.articulo===art);
-  const ofs=((a&&a.ofs)||[]).slice().sort((x,y)=>String(x).localeCompare(String(y),"es"));
-  sel.innerHTML=`<option value="">Ninguna</option>`+ofs.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("");
-  if(prev && ofs.includes(prev)) sel.value=prev;
-}
-function onArtModInput(){ renderArtDrop(); poblarOfMod(); cargarModOF(); }
 /* Lee la hoja OF (meta por OF). Devuelve { OF(normalizada): cantidadMeta }. */
 async function cargarMetaOF(area){
   const cfg = AREAS[area];
@@ -1443,77 +1360,6 @@ async function cargarMetaOF(area){
   }
   return m;
 }
-/* Módulos cerrados: ingeniería bloquea el reclamo de tickets de un módulo. */
-let MOD_GRUPOS=[];
-async function toggleModulo(idx, cerrar){
-  const g=MOD_GRUPOS[idx]; if(!g) return;
-  const accion = cerrar ? "cerrar" : "liberar";
-  if(!confirm(`¿Deseas ${accion} el módulo "${g.modulo}" de la OF ${g.of}?\n`
-    + (cerrar ? "Nadie podrá reclamar sus tickets hasta que lo liberes." : "Se podrán volver a reclamar sus tickets."))) return;
-  try{
-    const r=await rpc("fn_modulo_cerrar",{p_dni:ING.dni,p_token:ING.token,p_area:modArea,p_of:g.of,p_modulo:g.modulo,p_cerrar:cerrar});
-    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
-    await cargarModOF();   // el estado de cerrado viene del servidor
-  }catch(e){ mostrarError(e.message); }
-}
-function pintarMod(){
-  if(!modArea) return;
-  // Cascada estricta: no se muestra nada hasta elegir Artículo y luego una OF.
-  const art = modArtActual();
-  const of  = $("ofModSel") ? $("ofModSel").value : "";
-  if(!art || !of){
-    $("resumenMod").textContent = `${modArea} · elige artículo y OF`;
-    $("zonaModulos").innerHTML = `<div class="vacio-msg">Elige un artículo y luego una OF para ver los módulos.</div>`;
-    return;
-  }
-  /* Ya viene agrupado del servidor (parche 56): aquí solo se pinta. */
-  const mods = (MOD_DATA && MOD_DATA.modulos) || [];
-  MOD_GRUPOS = mods;   // referencia por índice para cerrar/liberar
-  const tks = mods.reduce((a,m)=>a+(m.tks||0),0);
-  $("resumenMod").textContent = `${modArea} · ${mods.length} módulo(s) con actividad · ${tks} tickets`;
-  if(!mods.length){ $("zonaModulos").innerHTML=`<div class="vacio-msg">Sin tickets activos para esta área/OF</div>`; return; }
-  $("zonaModulos").innerHTML = mods.map((g,idx)=>{
-    /* `cant_prog` de `ofs` manda; la hoja Google queda de respaldo para las OF
-       anteriores al parche 26. */
-    const meta = Number(g.cant_prog) || MOD_META[normKey(g.of)] || 0;
-    const pct = meta>0 ? Math.min(100, Math.round(g.ultima/meta*100)) : null;
-    const ops = g.ops||[];
-    const lastOp = g.op_ultima;
-    const cerrado = !!g.cerrado;
-    const barra = pct==null
-      ? `<div class="avance-nometa">Sube el balance/OF para calcular el avance</div>`
-      : `<div class="avance-bar"><div class="avance-fill ${pct>=80?'alto':pct<40?'bajo':''}" style="width:${pct}%"></div>
-           <span class="avance-lbl">${pct}%</span></div>`;
-    const metaTxt = pct==null ? ""
-      : `<div class="avance-sub">${Math.round(g.ultima)} de ${Math.round(meta)} und · última op.: <b>${esc(lastOp||"—")}</b></div>`;
-    return `<div class="mod-card${cerrado?' mod-cerrado':''}">
-      <div class="mod-head-fija">
-        <div class="mod-head-top">
-          <div class="mod-nombre">${esc(g.modulo)}${cerrado?' <span class="mod-badge-cerrado">CERRADO</span>':''}</div>
-          <button class="btn-mini ${cerrado?'verde':'rojo'}" onclick="toggleModulo(${idx}, ${cerrado?'false':'true'})">${cerrado?'Liberar módulo':'Cerrar módulo'}</button>
-        </div>
-        <div class="mod-sub">OF ${esc(g.of)} · ${esc(g.articulo)} · ${ops.length} operación(es) · ${g.tks} tickets</div>
-        <div class="mod-avance">${barra}${metaTxt}</div>
-      </div>
-      <details class="mod-ops">
-        <summary>Ver operaciones (${ops.length})</summary>
-        <div class="mod-ops-body">
-        ${ops.map(op=>{
-          const personas=op.personas||[];
-          return `<details class="mod-op">
-            <summary class="mod-op-head"><span class="mod-op-nom">${esc(op.op)}</span>
-              <span class="mod-op-sub">${Math.round(op.cant)} und · ${personas.length} operario(s)</span></summary>
-            ${personas.map(p=>`<div class="mod-persona">
-              <div class="mp-cab"><b>${esc(soloApellidos(p.nombre||p.dni))}</b><span>${Math.round(p.cant)} und</span></div>
-            </div>`).join("")}
-          </details>`;
-        }).join("")}
-        </div>
-      </details>
-    </div>`;
-  }).join("");
-}
-
 /* ================= EFICIENCIAS ================= */
 let EF=null, efSort={col:null,dir:1};
 /* `ef` y `prod/disp` son del ÁREA que se está viendo; `ef_dia` es el día
@@ -7297,6 +7143,17 @@ async function cargarCarga(){
     if(/Could not find the function|PGRST202/i.test(e.message||"")){ $("ccZona").innerHTML=`<div class="acf-falta"><b>Falta correr el parche 107 en la base.</b> Con él, esta pantalla calcula cuántos días de trabajo le quedan a cada área frente a su ritmo real.</div>`; return; }
     mostrarError(e.message); $("ccZona").innerHTML=""; }
 }
+/* "No vigente": la OF queda COMPLETADA en esa área (se cierran todos sus módulos), así sus tickets sin
+   reclamar dejan de contar y nadie más los reclama. Se puede reabrir desde Buscar y Seguir. */
+async function ccCompletar(area,of){
+  if(!confirm(`¿La OF ${of} ya no está vigente en ${area}?\n\nQuedará COMPLETADA: se cierran todos sus módulos, sus tickets sin reclamar dejan de contar y nadie podrá reclamarlos.\nPuedes reabrirla desde Buscar y Seguir.`)) return;
+  try{
+    const r=await rpc("fn_of_completar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_of:String(of),p_completar:true});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"No se pudo completar"); return; }
+    mostrarOk(`OF ${of} completada en ${area} (${r.modulos} módulo${r.modulos===1?"":"s"} cerrado${r.modulos===1?"":"s"})`);
+    await cargarCarga();
+  }catch(e){ mostrarError(/fn_of_completar/.test(e.message)?"Falta aplicar el parche 132 en la base":e.message); }
+}
 /* Simula los próximos días hábiles: cada área de costura gasta su ritmo por día hasta
    acabar su carga; lo que gasta se convierte en llegada a ACABADO. */
 function ccSimular(){
@@ -7426,7 +7283,7 @@ function ccDetalle(a,sim){
   const fila=o=>{const av=o.tot?100*(1-(o.bruto??o.pend)/o.tot):0, st=o.estado==="POR_EMPEZAR"&&o.vieja?"VIEJA":o.estado;
     const lb={EN_CURSO:"En curso",POR_EMPEZAR:"Por empezar",QUIETA:"Sin movimiento",VIEJA:"¿Vigente?"}[st];
     return `<tr class="${o.estado==="QUIETA"?"quieta":""}"><td><b>${esc(o.of)}</b></td><td class="izq">${esc(o.articulo)}<div class="cc-sub">${esc(o.prenda||"")} · ${ccN(o.cant)} und</div></td>
-      <td><span class="cc-st ${st}">${lb}</span></td><td class="cc-oc"><span class="cc-av"><i style="width:${av}%"></i></span>${Math.round(av)}%</td>
+      <td><span class="cc-st ${st}">${lb}</span>${st==="VIEJA"||st==="QUIETA"?`<div><button type="button" class="btn-mini gris" onclick="ccCompletar('${esc(a.area)}','${esc(o.of)}')">No vigente</button></div>`:""}</td><td class="cc-oc"><span class="cc-av"><i style="width:${av}%"></i></span>${Math.round(av)}%</td>
       <td><b>${ccN(o.pend)}</b>${o.bruto!=null&&o.bruto-o.pend>=1?`<div class="cc-sub">de ${ccN(o.bruto)} sin reclamar</div>`:""}</td><td>${a.ritmo?(o.pend/a.ritmo).toFixed(1):"—"}</td><td class="cc-oc">${o.ult?fechaCorta(o.ult):"—"}</td><td class="cc-oc">${fechaCorta(o.gen)}</td></tr>`;};
   const head=`<thead><tr><th>OF</th><th class="izq">Artículo</th><th>Estado</th><th class="cc-oc">Avance</th><th>Pendiente (min)</th><th>Días</th><th class="cc-oc">Último ticket</th><th class="cc-oc">Generada</th></tr></thead>`;
   return `<div class="cc-bloque"><h2>${esc(a.area)}: OFs que forman la carga</h2>
@@ -7434,7 +7291,7 @@ function ccDetalle(a,sim){
     <div class="contenedor-ancho tabla-scroll" style="max-height:60vh"><table class="tabla cc-tabla">${head}<tbody>${vis.map(fila).join("")}</tbody></table></div>
     ${q.length?`<details class="cc-q"><summary>${q.length} OFs sin movimiento hace más de 7 días hábiles · ${ccN(a.quietas.min)} min que no se cuentan</summary>
       <p class="cc-sub" style="margin-top:6px">Tuvieron tickets reclamados pero nada en la última semana y media. Casi siempre son operaciones sueltas que nadie marcó;
-      si de verdad están terminadas, cerrar el módulo las saca de aquí.</p>
+      si de verdad están terminadas, “No vigente” las marca COMPLETADAS y las saca de aquí.</p>
       <div class="contenedor-ancho tabla-scroll" style="max-height:40vh"><table class="tabla cc-tabla">${head}<tbody>${q.map(fila).join("")}</tbody></table></div></details>`:""}
   </div>`;
 }

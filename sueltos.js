@@ -116,19 +116,12 @@ async function psVer(area, of){
     $("psDet").innerHTML=`<div class="tabla-scroll"><table class="tabla ps-tabla"><thead><tr><th class="izq">Módulo</th><th class="izq">Operación</th><th>Paq.</th>
         <th class="izq">Paquetes sueltos</th><th>Min</th><th class="izq">Quién hizo la mayoría</th><th>Saltado desde</th></tr></thead>
         <tbody>${ops.map(fila).join("")}</tbody></table></div>
-      <div class="ps-pie"><button class="btn-mini" onclick="psCopiar()">📋 Copiar lista para WhatsApp</button>
-        <button class="btn-mini gris" onclick="psCerrar();irAvanceModulo('${esc(area)}','${esc(of)}')">Abrir en Avance por módulo</button></div>
+      <div class="ps-pie"><button class="btn-mini" onclick="psCopiar()">📋 Copiar lista para WhatsApp</button></div>
       <p class="sub ps-pista">"Quién hizo la mayoría" es solo una pista: es quien registró más paquetes de esa operación en esta OF. Nada se asigna solo.</p>`;
   }catch(e){ $("psDet").innerHTML=`<div class="vacio-msg">${esc(e.message)}</div>`; }
 }
 function psEsc(e){ if(e.key==="Escape") psCerrar(); }
 function psCerrar(){ document.querySelectorAll(".ps-velo,.ps-panel").forEach(x=>x.remove()); document.removeEventListener("keydown", psEsc); }
-function irAvanceModulo(area, of){
-  if(typeof activarTab!=="function") return;
-  activarTab("pasoMod");
-  setTimeout(()=>{ const a=$("areaMod"); if(a){ a.value=area; a.dispatchEvent(new Event("change")); }
-    const o=$("ofMod")||$("modOF"); if(o){ o.value=of; o.dispatchEvent(new Event("change")); } }, 50);
-}
 /* Texto para WhatsApp: OF, operación y paquetes. */
 function psTexto(of, ops, area){
   return `*OF ${of}* · ${area}\nPaquetes sin registrar:\n`

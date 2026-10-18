@@ -41,7 +41,6 @@
         <a class="nav-item" data-tab="pasoSueltos" href="#pasoSueltos">Paquetes sueltos</a>
         <a class="nav-item" data-tab="pasoLotes" href="#pasoLotes">Reproceso</a>
         <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
-        <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Avance por módulo</a>
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
         <a class="nav-item" data-tab="pasoOfs" href="#pasoOfs">OFs registradas</a>
         <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Resumen de OF</a>
@@ -480,30 +479,6 @@
         <div class="pager" id="opePager"></div>
       </div>
 
-    </section>
-
-    <!-- ===================== POR MÓDULO ===================== -->
-    <section class="pantalla" id="pasoMod">
-      <div class="seccion-cab">
-        <h1>Avance por módulo</h1>
-        <p class="seccion-sub">Acumulado hasta la fecha elegida. Avance por módulo (última operación vs meta de la OF); las operaciones son colapsables.</p>
-      </div>
-      <div class="barra-control">
-        <label class="campo"><span>Área</span>
-          <select id="areaMod" onchange="filtrarModArea(this.value)"></select></label>
-        <label class="campo autocomplete"><span>Artículo</span>
-          <input type="text" id="artMod" placeholder="Escribe artículo…" autocomplete="off"
-            oninput="onArtModInput()" onfocus="renderArtDrop()" onblur="setTimeout(cerrarArtDrop,150)">
-          <div id="artModDrop" class="autocomplete-drop" style="display:none;"></div></label>
-        <label class="campo"><span>OF</span>
-          <select id="ofModSel" onchange="cargarModOF()"><option value="">Ninguna</option></select></label>
-        <label class="campo"><span>Hasta la fecha</span>
-          <input type="date" id="fechaMod" onchange="cargarMod()"></label>
-        <button class="btn-mini" onclick="cargarMod()">Cargar</button>
-      </div>
-      <div id="modGate" class="estado-vacio">Selecciona un área para mostrar sus módulos.</div>
-      <div class="sub" id="resumenMod"></div>
-      <div id="zonaModulos" class="mod-grid"></div>
     </section>
 
     <!-- ===================== BASES ===================== -->
