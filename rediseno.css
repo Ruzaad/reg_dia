@@ -523,6 +523,10 @@ body[data-pagina="ingenieria"] .ing-main .tabs{justify-content:flex-start;margin
 .fab-area-btn{border:1px solid var(--linea);border-radius:10px;font-size:13px;font-weight:600;box-shadow:var(--sombra-2);}
 .fab-area-btn.activo{background:var(--azul);border-color:var(--azul);}
 .base-edit-bar{background:var(--ocre-t);border:1px solid #EBD3AE;}
+.base-atajos{flex-basis:100%;order:9;font:500 12.5px var(--sans);color:var(--tenue);}
+.base-atajos kbd{font-family:var(--mono);font-size:12px;background:var(--sup-2);border:1px solid var(--linea);border-bottom-width:2px;border-radius:6px;padding:1px 6px;color:var(--texto);}
+.aviso-borrar{background:var(--alerta-t);border:1.5px solid var(--alerta);color:var(--alerta);font-weight:800;border-radius:12px;padding:12px 14px;margin-bottom:12px;}
+.aviso-borrar[hidden]{display:none;}
 .he-def{background:var(--ocre-t);border-color:#EBD3AE;}
 .he-pie{border:1px solid var(--linea);box-shadow:0 -4px 16px rgba(11,45,91,.08);}
 .of-area{font-weight:600;}

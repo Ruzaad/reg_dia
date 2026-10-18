@@ -5656,18 +5656,43 @@ function baseNCambios(){
   return Object.keys(BASE_DIRTY).reduce((n,id)=>n+Object.keys(BASE_DIRTY[id]).length,0);
 }
 /* Escribir en una celda solo toca el mapa y el contador: sin repintar. */
-function baseCampo(el){
-  const id=el.dataset.id, k=el.dataset.k, orig=BASE_MAP[id];
-  if(!orig) return;
+function baseAsignar(id,k,valor){
+  const orig=BASE_MAP[id]; if(!orig) return null;
   const num=BASE_NUM_COLS.includes(k);
-  const igual = num ? Number(el.value)===Number(orig[k])
-                    : String(el.value).trim()===String(orig[k]==null?"":orig[k]).trim();
+  const igual = num ? Number(valor)===Number(orig[k])
+                    : String(valor).trim()===String(orig[k]==null?"":orig[k]).trim();
   const d = BASE_DIRTY[id] = BASE_DIRTY[id] || {};
-  if(igual) delete d[k]; else d[k] = num ? Number(el.value) : el.value;
+  if(igual) delete d[k]; else d[k] = num ? Number(valor) : valor;
   if(!Object.keys(d).length) delete BASE_DIRTY[id];
+  return igual;
+}
+function baseCampo(el){
+  const id=el.dataset.id, igual=baseAsignar(id,el.dataset.k,el.value);
+  if(igual===null) return;
   el.classList.toggle("cambiada", !igual);
   const tr=el.closest("tr"); if(tr) tr.classList.toggle("fila-cambiada", !!BASE_DIRTY[id]);
   baseBarraEdicion();
+}
+/* Atajos de hoja de cálculo en la edición en lote: Enter/↓ baja, ↑ sube, ←/→ cambian de columna
+   y Ctrl+Enter copia esta celda a toda la columna de las filas filtradas (todas las páginas). */
+function baseTecla(ev, el){
+  const k=el.dataset.k, tr=el.closest("tr");
+  const col=[...document.querySelectorAll(`#tablaBases .base-in[data-k="${k}"]`)], i=col.indexOf(el);
+  const ir=t=>{ if(t){ t.focus(); t.select(); ev.preventDefault(); } };
+  if(ev.key==="Enter" && (ev.ctrlKey||ev.metaKey)){
+    ev.preventDefault();
+    const filas=basesFiltradas(); let n=0;
+    filas.forEach(b=>{ if(String(b.id)!==el.dataset.id){ baseAsignar(b.id,k,el.value); n++; } });
+    col.forEach(o=>{ if(o!==el){ o.value=el.value; baseCampo(o); } });
+    baseBarraEdicion();
+    mostrarOk(`${BASE_COLS.find(c=>c.k===k).t}: "${el.value}" copiado a ${n} fila(s)`);
+    return;
+  }
+  if(ev.key==="Enter"||ev.key==="ArrowDown") return ir(col[i+1]);
+  if(ev.key==="ArrowUp") return ir(col[i-1]);
+  const fila=[...tr.querySelectorAll(".base-in")], j=fila.indexOf(el);
+  if(ev.key==="ArrowRight" && (el.type==="number"||el.selectionStart>=el.value.length)) return ir(fila[j+1]);
+  if(ev.key==="ArrowLeft"  && (el.type==="number"||el.selectionStart<=0)) return ir(fila[j-1]);
 }
 function baseBarraEdicion(){
   const bar=$("basesEditBar"); if(!bar) return;
@@ -5866,7 +5891,7 @@ async function guardarUltima(k, auto){
 function baseInput(b,k){
   const num=BASE_NUM_COLS.includes(k);
   return `<input class="base-in${num?" num":""}${baseSucia(b,k)?" cambiada":""}"
-    data-id="${b.id}" data-k="${k}" oninput="baseCampo(this)"
+    data-id="${b.id}" data-k="${k}" oninput="baseCampo(this)" onkeydown="baseTecla(event,this)"
     ${num?`type="number" step="${k==="std"?"0.01":"1"}" min="0"`:'type="text"'}
     value="${esc(baseValor(b,k))}">`;
 }
@@ -5925,22 +5950,49 @@ function descargarBase(){
 function abrirModalBorrarArt(){
   const arts=[...new Set((BASE||[]).map(b=>norm(b.articulo)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
   if(!arts.length){ mostrarError("Carga una base primero"); return; }
-  const opts=arts.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join("");
+  DEL_ARTS=arts;
   abrirModal(`
     <h2 style="margin:0 0 12px;color:var(--azul);font-size:20px;">Borrar artículo</h2>
-    <label class="campo" style="margin-bottom:12px;"><span>Artículo</span>
-      <select id="delArtSel" style="border:2px solid #cfd8e6;border-radius:10px;padding:9px 12px;font-size:15px;font-weight:600;"
-        onchange="$('delArtMsg').textContent='SEGURO QUE DESEAS BORRAR: ART '+this.value+' ?'">${opts}</select></label>
-    <div id="delArtMsg" style="background:#fdeceb;border:1.5px solid var(--alerta);color:var(--alerta);font-weight:800;border-radius:12px;padding:12px 14px;margin-bottom:12px;">SEGURO QUE DESEAS BORRAR: ART ${esc(arts[0])} ?</div>
+    <label class="campo autocomplete" style="margin-bottom:12px;"><span>Escribe el artículo de ${esc($("areaBase").value)}</span>
+      <input type="text" id="delArtIn" autocomplete="off" style="border:2px solid #cfd8e6;border-radius:10px;padding:9px 12px;font-size:15px;font-weight:600;" placeholder="Ej. P00206" oninput="delArtSugerir()" onkeydown="delArtTecla(event)">
+      <div id="delArtDrop" class="autocomplete-drop" style="display:none;"></div></label>
+    <div id="delArtMsg" class="aviso-borrar" hidden></div>
     <p class="seccion-sub" style="margin:0 0 16px;">Se eliminarán TODAS las operaciones de ese artículo. No se puede deshacer.</p>
     <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
       <button class="btn-mini gris" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn-mini rojo" onclick="confirmarBorrarArt()">Confirmar borrado</button>
+      <button class="btn-mini rojo" id="delArtOk" onclick="confirmarBorrarArt()" disabled>Confirmar borrado</button>
     </div>`);
+  const i=$("delArtIn"); if(i){ i.focus(); delArtSugerir(); }
+}
+let DEL_ARTS=[], DEL_COINC=[];
+function delArtElegido(){
+  const q=normKey(($("delArtIn")||{}).value||"");
+  return q ? (DEL_ARTS.find(a=>normKey(a)===q)||"") : "";
+}
+function delArtSugerir(){
+  const inp=$("delArtIn"), drop=$("delArtDrop"); if(!inp||!drop) return;
+  const q=normKey(inp.value), ex=delArtElegido();
+  DEL_COINC = q ? DEL_ARTS.filter(a=>normKey(a).includes(q)).slice(0,8) : DEL_ARTS.slice(0,8);
+  if(ex || !DEL_COINC.length){ drop.style.display="none"; drop.innerHTML=""; }
+  else{
+    drop.innerHTML=DEL_COINC.map((a,i)=>`<div class="ac-item" onmousedown="delArtElegir(${i})">${esc(a)}</div>`).join("");
+    drop.style.display="block";
+  }
+  const m=$("delArtMsg"), ok=$("delArtOk");
+  if(m){ m.hidden=!ex; m.textContent=ex?`SEGURO QUE DESEAS BORRAR: ART ${ex} ?`:""; }
+  if(ok) ok.disabled=!ex;
+  if(q && !ex && !DEL_COINC.length && m){ m.hidden=false; m.textContent="Ningún artículo de esta área coincide"; if(ok) ok.disabled=true; }
+}
+function delArtElegir(i){ const a=DEL_COINC[i]; if(a==null) return; $("delArtIn").value=a; delArtSugerir(); }
+function delArtTecla(ev){
+  if(ev.key==="Enter"){
+    ev.preventDefault();
+    if(delArtElegido()){ confirmarBorrarArt(); return; }
+    if(DEL_COINC.length===1) delArtElegir(0);
+  }
 }
 async function confirmarBorrarArt(){
-  const sel=$("delArtSel"); if(!sel) return;
-  const art=sel.value; if(!art) return;
+  const art=delArtElegido(); if(!art) return;
   const area=$("areaBase").value;
   try{
     const r=await rpc("fn_base_articulo_eliminar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:art});
