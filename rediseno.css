@@ -1105,6 +1105,7 @@ body[data-pagina="supervisora"] .grid-personal{max-width:1100px;width:100%;margi
 .cc-de summary{cursor:pointer;font-weight:700;font-size:14px}
 .cc-de ol{margin:8px 0 0;padding-left:20px} .cc-de li{margin-bottom:6px}
 .cc-de code{font:12px var(--mono);background:var(--sup-2);padding:1px 5px;border-radius:5px}
+.cc-no-vig{padding:3px 10px;font-size:12px;margin-top:5px;}
 .cc-st{font-size:10.5px;font-weight:800;letter-spacing:.3px;border-radius:999px;padding:2px 8px;white-space:nowrap}
 .cc-st.EN_CURSO{background:var(--exito-t);color:var(--exito)} .cc-st.POR_EMPEZAR{background:var(--azul-t);color:var(--titulo)} .cc-st.QUIETA{background:var(--sup-2);color:var(--tenue)} .cc-st.VIEJA{background:var(--ocre-t);color:var(--aviso)}
 .cc-tabla tr.quieta td{color:var(--tenue)}

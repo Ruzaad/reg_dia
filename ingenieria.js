@@ -1794,6 +1794,7 @@ function perReload(){
   else if(PER.tab==="rango") perCargarRango();
   else if(PER.tab==="matriz") perCargarMatriz();
   else if(PER.tab==="marcar") perMarcarInit();
+  else if(PER.tab==="est") perCargarEst();
 }
 function perTab(t){
   /* 'marcar' ya no tiene botón (lo hace supervisora): si llega por hash viejo,
@@ -1801,10 +1802,159 @@ function perTab(t){
   if(t==="marcar") t="crud";
   PER.tab=t;
   [["crud","perCrud","perTabCrud"],["rango","perRango","perTabRango"],["matriz","perMatriz","perTabMatriz"],
-   ["marcar","perMarcar","perTabMarcar"],["mov","perMov","perTabMov"]]
+   ["marcar","perMarcar","perTabMarcar"],["mov","perMov","perTabMov"],["est","perEst","perTabEst"]]
     .forEach(x=>{ if($(x[1])) $(x[1]).hidden=x[0]!==t; if($(x[2])) $(x[2]).classList.toggle("activo",x[0]===t); });
   if(t==="mov"){ if($("movFecha")&&!$("movFecha").value) $("movFecha").value=hoyISO(); cargarMovs(); return; }
+  if(t==="est"){ estInit(); return; }
   perReload();
+}
+
+/* ===== Estructura de personal por mes (parche 133) =====
+   Quién pertenece a cada área ese mes (distinto de dónde apoya hoy), MOD/MOI, cargo, ingreso y baja.
+   De aquí salen el Excel de inicio de mes y, luego, los cálculos por área. */
+let EST={mes:"",filas:[],sin:[],hayAnt:false};
+function estMesActual(){ return ($("estMes")&&$("estMes").value||hoyISO().slice(0,7))+"-01"; }
+function estInit(){
+  const m=$("estMes"); if(m && !m.value) m.value=hoyISO().slice(0,7);
+  const s=$("estArea"); if(s && !s.options.length) s.innerHTML=opcionesAreaVista();
+  perCargarEst();
+}
+async function perCargarEst(){
+  const mes=estMesActual(), area=($("estArea")||{}).value||"";
+  pintarCargando($("estTabla"),"Cargando…");
+  try{
+    const r=await rpc("fn_estructura_mes",{p_dni:ING.dni,p_token:ING.token,p_mes:mes,p_area:area});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); $("estTabla").innerHTML=""; return; }
+    EST={mes:r.mes,filas:r.filas||[],sin:r.sin_estructura||[],hayAnt:!!r.hay_anterior};
+    perPintarEst();
+  }catch(e){
+    $("estTabla").innerHTML="";
+    mostrarError(/fn_estructura_mes|Could not find the function|PGRST202/i.test(e.message)?"Falta aplicar el parche 133 en la base":e.message);
+  }
+}
+const estNombreArea=f=>f.area+(f.subarea?" - "+f.subarea:"");
+function estEnMes(f){ const ini=EST.mes; return !f.desde || f.desde<=ini; }   // venía a inicio de mes
+function perPintarEst(){
+  const q=normKey(($("estBuscar")||{}).value||"");
+  const todas=EST.filas, lista=todas.filter(f=>!q||normKey(f.nombre+" "+f.dni+" "+(f.cargo||"")+" "+estNombreArea(f)).includes(q));
+  const mod=todas.filter(f=>f.tipo==="MOD").length, moi=todas.length-mod;
+  const altas=todas.filter(f=>f.desde&&f.desde>EST.mes).length, bajas=todas.filter(f=>f.hasta).length;
+  const apoyo=todas.filter(f=>f.en_sistema&&f.estado_bd==="ACTIVO"&&f.area_actual&&f.area_actual!==f.area).length;
+  $("estKpis").innerHTML=busKpi(todas.length,"personas en la estructura","ok")+busKpi(mod,"MOD","")+busKpi(moi,"MOI","")
+    +busKpi(altas,"ingresos del mes","otro")+busKpi(bajas,"bajas","lib")+busKpi(apoyo,"hoy apoyan en otra área","");
+  const av=[];
+  if(!todas.length) av.push(`<div class="vacio-msg">Este mes aún no tiene estructura.${EST.hayAnt?` Puedes <b>copiar del mes anterior</b> a quienes siguen y luego ajustar ingresos, bajas y cambios de área.`:""}</div>`);
+  if(EST.sin.length) av.push(`<div class="acf-falta"><b>${EST.sin.length} persona(s) activas en el sistema no están en la estructura de este mes:</b> ${esc(EST.sin.slice(0,8).map(p=>soloApellidos(p.nombre)).join(", "))}${EST.sin.length>8?"…":""}. Agrégalas con “+ Agregar a la estructura”.</div>`);
+  $("estAviso").innerHTML=av.join("");
+  const cp=$("estCopiar"); if(cp) cp.hidden=!(EST.hayAnt && !todas.length);
+  $("estResumen").textContent=`${lista.length} de ${todas.length} persona(s)`;
+  if(!lista.length){ $("estTabla").innerHTML=""; return; }
+  $("estTabla").innerHTML=`<thead><tr><th>Tipo</th><th class="izq">Cargo</th><th class="izq">Área</th><th>DNI</th><th class="izq">Apellido y nombre</th><th>Ingreso</th><th>Baja</th><th class="izq">Hoy está en</th><th class="izq">Observación</th><th></th></tr></thead><tbody>`
+    +lista.map(f=>{
+      const apoya=f.en_sistema&&f.estado_bd==="ACTIVO"&&f.area_actual&&f.area_actual!==f.area;
+      const hoy=!f.en_sistema?`<span class="tag">Sin usuario en el sistema</span>`
+        : f.estado_bd!=="ACTIVO"?`<span class="pill LIBERADO">INACTIVO</span>`
+        : apoya?`<span class="pill EN" title="${esc((f.movs||[]).map(m=>ddmm(m.fecha)+": "+m.de+" → "+m.a).join(" · "))}">Apoya en ${esc(f.area_actual)}</span>`:"";
+      return `<tr${f.hasta?' class="his-tenue"':""}><td><b>${esc(f.tipo)}</b></td><td class="izq">${esc(f.cargo||"—")}</td><td class="izq">${esc(estNombreArea(f))}</td>
+        <td>${esc(f.dni)}</td><td class="izq"><b>${esc(f.nombre)}</b></td>
+        <td>${f.desde?esc(ddmm(f.desde)):"—"}</td><td>${f.hasta?`<span class="pill LIBERADO">${esc(ddmm(f.hasta))}</span>`:"—"}</td>
+        <td class="izq">${hoy}</td><td class="izq">${esc(f.nota||"")}</td>
+        <td data-edita><button class="btn-mini gris" onclick="abrirModalEst('${esc(f.dni)}')">Editar</button></td></tr>`; }).join("")+"</tbody>";
+}
+function abrirModalEst(dni){
+  const f=dni?EST.filas.find(x=>x.dni===dni):null;
+  const d=f||{dni:"",nombre:"",area:($("estArea")||{}).value||(AREAS_LISTA[0]||""),subarea:"",tipo:"MOD",cargo:"",desde:"",hasta:"",nota:""};
+  const areas=[...new Set([d.area,...AREAS_LISTA.filter(a=>puedeEditar(a)),"LIQUIDACION"])].filter(Boolean);
+  const cargos=[...new Set(EST.filas.map(x=>x.cargo).filter(Boolean))].sort();
+  abrirModal(`<h2>${f?"Editar en la estructura":"Agregar a la estructura"}</h2>
+    <div class="sub" style="margin-bottom:10px;">Mes: <b>${esc(EST.mes.slice(0,7))}</b>. El área de aquí es la <b>oficial</b>; si alguien solo apoya en otra área, no se cambia aquí.</div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>DNI</label><input id="meDni" value="${esc(d.dni)}" ${f?"disabled":""} maxlength="15" oninput="estBuscarDni()"></div>
+      <div class="modal-campo"><label>Apellido y nombre</label><input id="meNombre" value="${esc(d.nombre)}" maxlength="120"></div>
+    </div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>Área</label><select id="meArea">${areas.map(a=>`<option ${a===d.area?"selected":""}>${esc(a)}</option>`).join("")}</select></div>
+      <div class="modal-campo"><label>Subárea (opcional)</label><input id="meSub" list="meSubL" value="${esc(d.subarea||"")}" placeholder="Ej. CAMISA"><datalist id="meSubL"><option>CAMISA</option><option>SACO</option><option>PANTALÓN</option></datalist></div>
+    </div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>Tipo</label><select id="meTipo"><option ${d.tipo==="MOD"?"selected":""}>MOD</option><option ${d.tipo==="MOI"?"selected":""}>MOI</option></select></div>
+      <div class="modal-campo"><label>Cargo</label><input id="meCargo" list="meCargoL" value="${esc(d.cargo||"")}" placeholder="Ej. COSTURERO"><datalist id="meCargoL">${cargos.map(c=>`<option>${esc(c)}</option>`).join("")}</datalist></div>
+    </div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>Ingreso (si fue en el mes)</label><input type="date" id="meDesde" value="${esc(d.desde||"")}"></div>
+      <div class="modal-campo"><label>Baja (si se fue)</label><input type="date" id="meHasta" value="${esc(d.hasta||"")}"></div>
+    </div>
+    <div class="modal-campo"><label>Observación</label><input id="meNota" value="${esc(d.nota||"")}" maxlength="200"></div>
+    <div class="modal-msg" id="meMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="estGuardar()">GUARDAR</button>
+      ${f?`<button class="btn-pin" onclick="estQuitar('${esc(d.dni)}')">QUITAR DEL MES</button>`:""}
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+}
+async function estBuscarDni(){
+  const dni=$("meDni").value.trim(); if(dni.length<6||$("meNombre").value.trim()) return;
+  try{
+    const r=await rpc("fn_personal_detalle",{p_dni_ing:ING.dni,p_token:ING.token,p_dni:dni});
+    if(r&&r.ok&&r.nombres_apellidos){
+      $("meNombre").value=r.nombres_apellidos;
+      const a=$("meArea"); if(a&&[...a.options].some(o=>o.value===r.area_origen)) a.value=r.area_origen;
+      if(r.cargo==="SUPERVISORA"){ $("meTipo").value="MOI"; if(!$("meCargo").value) $("meCargo").value="SUPERVISOR"; }
+    }
+  }catch(e){}
+}
+async function estGuardar(){
+  const g=id=>$(id).value.trim();
+  if(!g("meDni")||!g("meNombre")){ $("meMsg").textContent="DNI y nombre son obligatorios"; return; }
+  try{
+    const r=await rpc("fn_estructura_guardar",{p_dni_ing:ING.dni,p_token:ING.token,p_mes:EST.mes,p_dni:g("meDni"),p_nombre:g("meNombre"),
+      p_area:$("meArea").value,p_subarea:g("meSub"),p_tipo:$("meTipo").value,p_cargo:g("meCargo"),
+      p_desde:g("meDesde")||null,p_hasta:g("meHasta")||null,p_nota:g("meNota")});
+    if(!r||r.ok===false){ $("meMsg").textContent=(r&&r.error)||"No se pudo guardar"; return; }
+    cerrarModal(); mostrarOk("Estructura guardada"); await perCargarEst();
+  }catch(e){ $("meMsg").textContent=e.message; }
+}
+async function estQuitar(dni){
+  if(!confirm(`¿Quitar a ${dni} de la estructura de ${EST.mes.slice(0,7)}? Úsalo solo si fue un error; para una renuncia pon la fecha de baja.`)) return;
+  try{
+    const r=await rpc("fn_estructura_quitar",{p_dni_ing:ING.dni,p_token:ING.token,p_mes:EST.mes,p_dni:dni});
+    if(!r||r.ok===false){ mostrarError((r&&r.error)||"No se pudo quitar"); return; }
+    cerrarModal(); mostrarOk("Quitado de la estructura"); await perCargarEst();
+  }catch(e){ mostrarError(e.message); }
+}
+async function estCopiar(){
+  if(!confirm(`¿Copiar la estructura del mes anterior a ${EST.mes.slice(0,7)}? Pasan quienes siguen activos; luego ajustas ingresos, bajas y cambios de área.`)) return;
+  try{
+    const r=await rpc("fn_estructura_copiar",{p_dni_ing:ING.dni,p_token:ING.token,p_mes:EST.mes});
+    if(!r||r.ok===false){ mostrarError((r&&r.error)||"No se pudo copiar"); return; }
+    mostrarOk(`${r.copiados} persona(s) copiadas`); await perCargarEst();
+  }catch(e){ mostrarError(e.message); }
+}
+/* Excel para enviar por correo: hoja ESTRUCTURA con el formato de siempre (quienes estaban a inicio de mes),
+   más ALTAS Y BAJAS y APOYO EN OTRA ÁREA. */
+function estExcel(){
+  const F=EST.filas; if(!F.length){ mostrarError("No hay estructura para descargar"); return; }
+  const ini=F.filter(estEnMes), n={};
+  const fila=f=>{ const a=estNombreArea(f); n[a]=(n[a]||0)+1; return [f.tipo,f.cargo||"",n[a],a,f.dni,f.nombre]; };
+  const aoa=[["TIPO DE TRABAJADOR","CARGO","N°","ÁREA","DNI","APELLIDO Y NOMBRE"]].concat(ini.map(fila));
+  const modPorArea={}; ini.filter(f=>f.tipo==="MOD").forEach(f=>{ const a=estNombreArea(f); modPorArea[a]=(modPorArea[a]||0)+1; });
+  const nMod=ini.filter(f=>f.tipo==="MOD").length, nMoi=ini.length-nMod;
+  const resumen=[["ÁREAS","MOD"],...Object.keys(modPorArea).sort().map(a=>[a,modPorArea[a]]),["Total MOD",nMod],["Total MOI",nMoi],["TOTAL",ini.length]];
+  resumen.forEach((r,i)=>{ aoa[i]=(aoa[i]||["","","","","",""]).concat(["",r[0],r[1]]); });
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"]=[{wch:12},{wch:14},{wch:5},{wch:22},{wch:11},{wch:42},{wch:3},{wch:22},{wch:8}];
+  const mov=[["TIPO","DNI","APELLIDO Y NOMBRE","ÁREA","MOVIMIENTO","FECHA","OBSERVACIÓN"]];
+  F.filter(f=>!estEnMes(f)).forEach(f=>mov.push([f.tipo,f.dni,f.nombre,estNombreArea(f),"INGRESO",f.desde||"",f.nota||""]));
+  F.filter(f=>f.hasta).forEach(f=>mov.push([f.tipo,f.dni,f.nombre,estNombreArea(f),"BAJA",f.hasta,f.nota||""]));
+  const apoyo=[["DNI","APELLIDO Y NOMBRE","ÁREA OFICIAL","HOY ESTÁ EN","MOVIMIENTOS DEL MES"]];
+  F.filter(f=>f.en_sistema&&f.estado_bd==="ACTIVO"&&f.area_actual&&f.area_actual!==f.area)
+    .forEach(f=>apoyo.push([f.dni,f.nombre,estNombreArea(f),f.area_actual,(f.movs||[]).map(m=>`${m.fecha}: ${m.de} → ${m.a}`).join(" | ")]));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"ESTRUCTURA");
+  const w2=XLSX.utils.aoa_to_sheet(mov); w2["!cols"]=[{wch:7},{wch:11},{wch:42},{wch:22},{wch:12},{wch:12},{wch:50}]; XLSX.utils.book_append_sheet(wb,w2,"ALTAS Y BAJAS");
+  const w3=XLSX.utils.aoa_to_sheet(apoyo); w3["!cols"]=[{wch:11},{wch:42},{wch:22},{wch:22},{wch:60}]; XLSX.utils.book_append_sheet(wb,w3,"APOYO EN OTRA ÁREA");
+  const area=($("estArea")||{}).value;
+  XLSX.writeFile(wb,`ESTRUCTURA_${EST.mes.slice(0,7)}${area?"_"+area.replace(/ /g,"_"):""}.xlsx`);
 }
 
 /* ===== Movimientos de área (parche 33) =====
@@ -7335,7 +7485,7 @@ function ccDetalle(a,sim){
   const fila=o=>{const av=o.tot?100*(1-(o.bruto??o.pend)/o.tot):0, st=o.estado==="POR_EMPEZAR"&&o.vieja?"VIEJA":o.estado;
     const lb={EN_CURSO:"En curso",POR_EMPEZAR:"Por empezar",QUIETA:"Sin movimiento",VIEJA:"¿Vigente?"}[st];
     return `<tr class="${o.estado==="QUIETA"?"quieta":""}"><td><b>${esc(o.of)}</b></td><td class="izq">${esc(o.articulo)}<div class="cc-sub">${esc(o.prenda||"")} · ${ccN(o.cant)} und</div></td>
-      <td><span class="cc-st ${st}">${lb}</span>${st==="VIEJA"||st==="QUIETA"?`<div><button type="button" class="btn-mini gris" onclick="ccCompletar('${esc(a.area)}','${esc(o.of)}')">No vigente</button></div>`:""}</td><td class="cc-oc"><span class="cc-av"><i style="width:${av}%"></i></span>${Math.round(av)}%</td>
+      <td><span class="cc-st ${st}">${lb}</span>${st==="VIEJA"||st==="QUIETA"?`<div><button type="button" class="btn-mini gris cc-no-vig" onclick="ccCompletar('${esc(a.area)}','${esc(o.of)}')">No vigente</button></div>`:""}</td><td class="cc-oc"><span class="cc-av"><i style="width:${av}%"></i></span>${Math.round(av)}%</td>
       <td><b>${ccN(o.pend)}</b>${o.bruto!=null&&o.bruto-o.pend>=1?`<div class="cc-sub">de ${ccN(o.bruto)} sin reclamar</div>`:""}</td><td>${a.ritmo?(o.pend/a.ritmo).toFixed(1):"—"}</td><td class="cc-oc">${o.ult?fechaCorta(o.ult):"—"}</td><td class="cc-oc">${fechaCorta(o.gen)}</td></tr>`;};
   const head=`<thead><tr><th>OF</th><th class="izq">Artículo</th><th>Estado</th><th class="cc-oc">Avance</th><th>Pendiente (min)</th><th>Días</th><th class="cc-oc">Último ticket</th><th class="cc-oc">Generada</th></tr></thead>`;
   return `<div class="cc-bloque"><h2>${esc(a.area)}: OFs que forman la carga</h2>

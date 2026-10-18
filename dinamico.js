@@ -179,6 +179,7 @@ const VISTAS=PAG==="ingenieria"?[
   {id:"perMat",tab:"pasoAsis",m:"perMatriz",modo:"rango",def:"semana",area:1,t:"Personal · matriz",
    aplicar(){const [d,h]=rangoDe(this);let c=false;try{if(PER.matSel.desde!==d||PER.matSel.hasta!==h){PER.matSel.desde=d;PER.matSel.hasta=h;c=true;}}catch(e){}putFp("perMatRango",d,h);c=areaSel("perMatArea")||c;return c;},
    cargar:()=>llamar("perCargarMatriz"),ocultar:["perMatRango","perMatArea"]},
+  {id:"perEst",tab:"pasoAsis",m:"perEst",modo:null,area:1,t:"Personal · estructura",aplicar(){return areaSel("estArea");},cargar:()=>llamar("perCargarEst"),ocultar:["estArea"]},
   {id:"perMov",tab:"pasoAsis",m:"perMov",modo:"dia",area:1,live:1,t:"Personal · movimientos",
    aplicar(){let c=put("movFecha",G.fecha);c=areaSel("movArea")||c;return c;},cargar:()=>llamar("cargarMovs"),ocultar:["movFecha","movArea"]},
   {id:"bases",tab:"pasoBases",m:"pasoBases",modo:null,area:1,areaReq:1,t:"Bases",
@@ -547,7 +548,7 @@ function listaCk(){
 function ir(x){cerrarCmdk();x.go();}
 function irVista(v){activarTab(v.tab);setTimeout(()=>{const m={tkOp:()=>tkVista("op"),tkRep:()=>tkVista("rep"),tkOpe:()=>tkVista("ope"),tkActual:()=>tkVista("actual"),efR:()=>efVista("dia"),
   incMod:()=>incVista("mod"),incEfm:()=>incVista("efm"),incCons:()=>incVista("cons"),incTabla:()=>incVista("tabla"),dashEf:()=>dashTab("ef"),dashCant:()=>dashTab("cant"),dashMod:()=>dashTab("mod"),
-  perRango:()=>perTab("rango"),perMat:()=>perTab("matriz"),perMov:()=>perTab("mov"),inciPend:()=>inciVista("pend"),inciHE:()=>inciVista("he"),inciApl:()=>inciVista("apl")}[v.id];if(m)m();},60);}
+  perRango:()=>perTab("rango"),perMat:()=>perTab("matriz"),perMov:()=>perTab("mov"),perEst:()=>perTab("est"),inciPend:()=>inciVista("pend"),inciHE:()=>inciVista("he"),inciApl:()=>inciVista("apl")}[v.id];if(m)m();},60);}
 /* =====================================================================
    TECLADO · INGENIERÍA
    Ctrl+K buscador · Alt+1…9 secciones del menú · Shift+←/→ sub-pestañas ·
