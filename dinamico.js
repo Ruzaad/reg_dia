@@ -124,9 +124,6 @@ const VISTAS=PAG==="ingenieria"?[
   {id:"tkOpe",tab:"pasoTk",m:"tkOpeView",modo:"rango",def:"lab5",area:1,t:"Resumen x operario",
    aplicar(){const [d,h]=rangoDe(this);let c=put("opeDesde",d);c=put("opeHasta",h)||c;c=put("opeArea",G.area)||c;if(!G.area&&$("opeArea")&&$("opeArea").value){$("opeArea").value="";c=true;}return c;},
    cargar:()=>llamar("cargarOpe"),ocultar:["opeDesde","opeHasta","opeArea"]},
-  {id:"mod",tab:"pasoMod",m:"pasoMod",modo:"dia",area:1,areaReq:1,live:1,t:"Avance por módulo",
-   aplicar(){let c=put("fechaMod",G.fecha);if(put("areaMod",G.area)){c=true;if($("artMod"))$("artMod").value="";}return c;},
-   cargar:()=>llamar("cargarMod"),auto:["artMod"],ocultar:["fechaMod","areaMod"],despues(){chipsMod();}},
   {id:"gen",tab:"pasoGen",m:"pasoGen",modo:null,area:1,areaReq:1,soloSel:1,t:"Generar tickets",
    aplicar(){const a=$("areaGen");if(a&&G.area&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;llamar("genAreaChange");}return false;},ocultar:["areaGen"]},
   {id:"ofs",tab:"pasoOfs",m:"pasoOfs",modo:null,t:"OFs registradas",live:1,cargar:()=>llamar("cargarOfs")},
@@ -182,6 +179,7 @@ const VISTAS=PAG==="ingenieria"?[
   {id:"perMat",tab:"pasoAsis",m:"perMatriz",modo:"rango",def:"semana",area:1,t:"Personal · matriz",
    aplicar(){const [d,h]=rangoDe(this);let c=false;try{if(PER.matSel.desde!==d||PER.matSel.hasta!==h){PER.matSel.desde=d;PER.matSel.hasta=h;c=true;}}catch(e){}putFp("perMatRango",d,h);c=areaSel("perMatArea")||c;return c;},
    cargar:()=>llamar("perCargarMatriz"),ocultar:["perMatRango","perMatArea"]},
+  {id:"perEst",tab:"pasoAsis",m:"perEst",modo:null,area:1,t:"Personal · estructura",aplicar(){return areaSel("estArea");},cargar:()=>llamar("perCargarEst"),ocultar:["estArea"]},
   {id:"perMov",tab:"pasoAsis",m:"perMov",modo:"dia",area:1,live:1,t:"Personal · movimientos",
    aplicar(){let c=put("movFecha",G.fecha);c=areaSel("movArea")||c;return c;},cargar:()=>llamar("cargarMovs"),ocultar:["movFecha","movArea"]},
   {id:"bases",tab:"pasoBases",m:"pasoBases",modo:null,area:1,areaReq:1,t:"Bases",
@@ -238,16 +236,6 @@ function fichas(ancla,id,lista,activo,pick){
     z.addEventListener("click",e=>{const b=e.target.closest("[data-of]");if(b)z._pick(b.dataset.of,b.dataset.art);});}
   z._pick=pick;
   z.innerHTML=lista.length?`<span class="dyn-ofs-t">OF del área</span>`+lista.map(o=>`<button class="dyn-chip ${String(o.of)===String(activo)?"on":""}" data-of="${escH(o.of)}" data-art="${escH(o.art||"")}"><b>${escH(o.of)}</b>${o.art?` · ${escH(o.art)}`:""}${o.extra?`<small>${escH(o.extra)}</small>`:""}</button>`).join(""):"";
-}
-function chipsMod(){
-  let arts=[];try{arts=MOD_ARTS||[];}catch(e){}
-  const lista=[];arts.forEach(a=>(a.ofs||[]).forEach(of=>lista.push({of,art:a.articulo})));
-  lista.sort((a,b)=>String(b.of).localeCompare(String(a.of),"es",{numeric:true}));
-  const bc=document.querySelector("#pasoMod .barra-control");
-  const cur=$("ofModSel")?$("ofModSel").value:"";
-  const pick=(of,art)=>{$("artMod").value=art;llamar("poblarOfMod");$("ofModSel").value=of;llamar("cargarModOF");chipsMod();};
-  fichas(bc,"dynOfsMod",lista.slice(0,14),cur,pick);
-  if(!cur&&lista.length&&G.area)pick(lista[0].of,lista[0].art);
 }
 let OFS_CACHE=null;
 function chipsOF(v,inputId){
@@ -560,7 +548,7 @@ function listaCk(){
 function ir(x){cerrarCmdk();x.go();}
 function irVista(v){activarTab(v.tab);setTimeout(()=>{const m={tkOp:()=>tkVista("op"),tkRep:()=>tkVista("rep"),tkOpe:()=>tkVista("ope"),tkActual:()=>tkVista("actual"),efR:()=>efVista("dia"),
   incMod:()=>incVista("mod"),incEfm:()=>incVista("efm"),incCons:()=>incVista("cons"),incTabla:()=>incVista("tabla"),dashEf:()=>dashTab("ef"),dashCant:()=>dashTab("cant"),dashMod:()=>dashTab("mod"),
-  perRango:()=>perTab("rango"),perMat:()=>perTab("matriz"),perMov:()=>perTab("mov"),inciPend:()=>inciVista("pend"),inciHE:()=>inciVista("he"),inciApl:()=>inciVista("apl")}[v.id];if(m)m();},60);}
+  perRango:()=>perTab("rango"),perMat:()=>perTab("matriz"),perMov:()=>perTab("mov"),perEst:()=>perTab("est"),inciPend:()=>inciVista("pend"),inciHE:()=>inciVista("he"),inciApl:()=>inciVista("apl")}[v.id];if(m)m();},60);}
 /* =====================================================================
    TECLADO · INGENIERÍA
    Ctrl+K buscador · Alt+1…9 secciones del menú · Shift+←/→ sub-pestañas ·
@@ -662,7 +650,7 @@ function contadores(){
 /* =====================================================================
    ARRANQUE · INGENIERÍA
    ===================================================================== */
-const GRUPOS={pasoBuscar:"Tickets",pasoSueltos:"Tickets",pasoLotes:"Tickets",pasoPrestadas:"Gestión",pasoAsisConf:"Tickets",pasoFeriados:"Tickets",pasoTk:"Tickets",pasoMod:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
+const GRUPOS={pasoBuscar:"Tickets",pasoSueltos:"Tickets",pasoLotes:"Tickets",pasoPrestadas:"Gestión",pasoAsisConf:"Tickets",pasoFeriados:"Tickets",pasoTk:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
   pasoEf:"Eficiencia",pasoAudit:"Eficiencia",pasoInc:"Eficiencia",pasoDash:"Dashboards",pasoCarga:"Planificación",
   pasoAsis:"Gestión",pasoBases:"Gestión",pasoBaseLog:"Gestión",pasoCalBase:"Gestión",pasoIncid:"Gestión",pasoFechas:"Gestión",pasoPermisos:"Gestión",
   pasoCostosBase:"Costos",pasoCostosHoy:"Costos",pasoCostosInc:"Costos",pasoCostosAsis:"Costos",

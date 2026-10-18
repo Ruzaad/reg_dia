@@ -57,7 +57,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
     if(NAV_TABS.includes(t)) activarTab(t);
   });
 
-  ["fechaEf","fechaTk","fechaMod"].forEach(id=>{ const el=$(id); if(el) el.value = hoyISO(); });
+  ["fechaEf","fechaTk"].forEach(id=>{ const el=$(id); if(el) el.value = hoyISO(); });
 
   // Áreas desde la base de datos (incluye CORTE, REPROCESOS, etc.)
   await hidratarAreas();                 // config de Sheets desde areas_config
@@ -102,7 +102,7 @@ function cmpVal(va, vb){
 }
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoInicio","pasoTk","pasoMod","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
+const NAV_TABS=["pasoInicio","pasoTk","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
   "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoFeriados","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
@@ -130,7 +130,6 @@ function activarTab(tab){
   TABS_VISTAS.add(tab);
   if(tab==='pasoIncid') cargarIncidI();
   else if(tab==='pasoTk') cargarTk();
-  else if(tab==='pasoMod') cargarMod();
   else if(tab==='pasoOpsOF') opfInit();
   else if(tab==='pasoAsis') perInit();
   else if(tab==='pasoOpArea') cargarOpArea();
@@ -240,7 +239,7 @@ function aplicarPestanas(){
 function areasPropiasPorDefecto(){
   if(PERM_LIBRE()) return;
   const mias=areasEdita(); if(!mias.length) return;
-  ["areaBase","perArea","areaTk","areaMod","areaOp","areaFec","areaInci","filtroAreaEf","filtroAreaEfR",
+  ["areaBase","perArea","areaTk","areaOp","areaFec","areaInci","filtroAreaEf","filtroAreaEfR",
    "perRangoArea","perDashArea","perMatArea","dbModArea","exArea","opadArea","movArea","areaGen","heArea","areaInciPend"]
     .forEach(id=>{
       const s=$(id); if(!s || s.dataset.permDef) return;
@@ -368,7 +367,6 @@ function poblarSelectsArea(){
   $("filtroAreaEf").innerHTML   = elige + AREAS_LISTA.map(op).join("");   // Efi. Área: requiere elegir
   $("filtroAreaEfR").innerHTML  = todas + AREAS_LISTA.map(op).join("");
   if($("areaTk"))  $("areaTk").innerHTML  = todas + AREAS_LISTA.map(op).join("");
-  if($("areaMod")) $("areaMod").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("areaOp"))  $("areaOp").innerHTML  = elige + AREAS_LISTA.map(op).join("");
   if($("areaFec")) $("areaFec").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("areaInci")) $("areaInci").innerHTML = todas + AREAS_LISTA.map(op).join("");
@@ -392,7 +390,6 @@ function recargarIngenieria(){
   else if(act("pasoEf")) cargarEf();
   else if(act("pasoDia")){ if(EFR.personal.length) cargarEfRango(); }
   else if(act("pasoTk")) cargarTk();
-  else if(act("pasoMod")) cargarMod();
   else if(act("pasoBases")) cargarBases();
   else if(act("pasoAsis")) perReload();
   else if(act("pasoDash")) dashTab(DASH_TAB||'asis');
@@ -1343,86 +1340,6 @@ async function opEntrar(){
   }catch(e){ msg.textContent=e.message; }
 }
 
-/* ================= TICKETS POR MÓDULO (% de avance) =================
-   Avance del módulo = unidades que pasaron su ÚLTIMA operación (mayor N°OP
-   por artículo+módulo en BASE) / meta de la OF (hoja "OF", col CANT PROG).
-   No se muestra numeración: se muestra la CANTIDAD. */
-/* MOD_ARTS es la cascada (artículo → sus OF) y MOD_DATA las tarjetas de la OF
-   elegida, ya agrupadas por el servidor (parche 56). Antes se bajaban TODOS los
-   tickets del área desde siempre y se agrupaban aquí: con el sistema creciendo
-   eso eran decenas de miles de filas para pintar cuatro tarjetas. */
-let MOD_ARTS=[], MOD_DATA=null, modArea="", MOD_META={};
-async function cargarMod(reset){
-  modArea = $("areaMod") ? $("areaMod").value : "";
-  if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
-  $("modGate").style.display="none";
-  pintarCargando($("zonaModulos"),"Cargando…");
-  $("resumenMod").textContent="";
-  try{
-    const r = await rpc("fn_mod_avance",{p_dni:ING.dni,p_token:ING.token,
-      p_area:modArea, p_articulo:"", p_of:"", p_hasta:($("fechaMod")||{}).value||null});
-    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); MOD_ARTS=[]; }
-    else MOD_ARTS = r.articulos||[];
-    /* La meta sale de `ofs.cant_prog` y la hoja Google es respaldo (parche 53).
-       Se conserva porque las OF anteriores al parche 26 solo están en la hoja. */
-    try{ MOD_META = await metasOF([modArea]); }catch(e){ MOD_META={}; }
-    // Solo al CAMBIAR de área se reinicia la cascada Artículo → OF; al recargar
-    // o al volver a la pestaña se conserva lo que el usuario ya había elegido.
-    if(reset && $("artMod")){ $("artMod").value=""; MOD_DATA=null; }
-    cerrarArtDrop();
-    poblarOfMod();
-    await cargarModOF();
-  }catch(e){ $("zonaModulos").innerHTML=""; mostrarError(e.message); }
-}
-/* Pide al servidor las tarjetas de la OF elegida. Sin artículo u OF no pide nada. */
-async function cargarModOF(){
-  const art=modArtActual(), of=$("ofModSel")?$("ofModSel").value:"";
-  if(!art || !of){ MOD_DATA=null; pintarMod(); return; }
-  pintarCargando($("zonaModulos"),"Cargando módulos…");
-  try{
-    const r=await rpc("fn_mod_avance",{p_dni:ING.dni,p_token:ING.token,
-      p_area:modArea, p_articulo:art, p_of:of, p_hasta:($("fechaMod")||{}).value||null});
-    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); MOD_DATA=null; }
-    else MOD_DATA=r;
-    pintarMod();
-  }catch(e){ $("zonaModulos").innerHTML=""; mostrarError(e.message); }
-}
-function filtrarModArea(a){
-  modArea=a; MOD_DATA=null;
-  if(!modArea){ $("modGate").style.display="block"; $("zonaModulos").innerHTML=""; $("resumenMod").textContent=""; return; }
-  cargarMod(true);
-}
-/* --- Cascada Artículo → OF (autocompletado desde los tickets cargados) --- */
-function modArtActual(){
-  const q=normKey($("artMod")?$("artMod").value:"");
-  if(!q) return "";
-  const a=MOD_ARTS.find(x=>normKey(x.articulo)===q);
-  return a ? a.articulo : "";
-}
-let ART_MATCH=[];
-/* Autocompletado por coincidencia (contains) con dropdown propio y estilizado. */
-function renderArtDrop(){
-  const inp=$("artMod"), drop=$("artModDrop"); if(!inp||!drop) return;
-  const q=normKey(inp.value);
-  const arts=MOD_ARTS.map(x=>x.articulo).sort((a,b)=>a.localeCompare(b,"es"));
-  ART_MATCH = (q ? arts.filter(a=>normKey(a).includes(q)) : arts).slice(0,60);
-  if(!ART_MATCH.length){ drop.style.display="none"; drop.innerHTML=""; return; }
-  drop.innerHTML = ART_MATCH.map((a,i)=>`<div class="ac-item" onmousedown="elegirArtMod(${i})">${esc(a)}</div>`).join("");
-  drop.style.display="block";
-}
-function elegirArtMod(i){ const a=ART_MATCH[i]; if(a==null) return; $("artMod").value=a; cerrarArtDrop(); poblarOfMod(); cargarModOF(); }
-function cerrarArtDrop(){ const d=$("artModDrop"); if(d) d.style.display="none"; }
-function poblarOfMod(){
-  const sel=$("ofModSel"); if(!sel) return;
-  const art=modArtActual();
-  const prev=sel.value;
-  if(!art){ sel.innerHTML=`<option value="">Ninguna</option>`; return; }
-  const a=MOD_ARTS.find(x=>x.articulo===art);
-  const ofs=((a&&a.ofs)||[]).slice().sort((x,y)=>String(x).localeCompare(String(y),"es"));
-  sel.innerHTML=`<option value="">Ninguna</option>`+ofs.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("");
-  if(prev && ofs.includes(prev)) sel.value=prev;
-}
-function onArtModInput(){ renderArtDrop(); poblarOfMod(); cargarModOF(); }
 /* Lee la hoja OF (meta por OF). Devuelve { OF(normalizada): cantidadMeta }. */
 async function cargarMetaOF(area){
   const cfg = AREAS[area];
@@ -1443,77 +1360,6 @@ async function cargarMetaOF(area){
   }
   return m;
 }
-/* Módulos cerrados: ingeniería bloquea el reclamo de tickets de un módulo. */
-let MOD_GRUPOS=[];
-async function toggleModulo(idx, cerrar){
-  const g=MOD_GRUPOS[idx]; if(!g) return;
-  const accion = cerrar ? "cerrar" : "liberar";
-  if(!confirm(`¿Deseas ${accion} el módulo "${g.modulo}" de la OF ${g.of}?\n`
-    + (cerrar ? "Nadie podrá reclamar sus tickets hasta que lo liberes." : "Se podrán volver a reclamar sus tickets."))) return;
-  try{
-    const r=await rpc("fn_modulo_cerrar",{p_dni:ING.dni,p_token:ING.token,p_area:modArea,p_of:g.of,p_modulo:g.modulo,p_cerrar:cerrar});
-    if(!r.ok){ mostrarError(r.error||"No se pudo"); return; }
-    await cargarModOF();   // el estado de cerrado viene del servidor
-  }catch(e){ mostrarError(e.message); }
-}
-function pintarMod(){
-  if(!modArea) return;
-  // Cascada estricta: no se muestra nada hasta elegir Artículo y luego una OF.
-  const art = modArtActual();
-  const of  = $("ofModSel") ? $("ofModSel").value : "";
-  if(!art || !of){
-    $("resumenMod").textContent = `${modArea} · elige artículo y OF`;
-    $("zonaModulos").innerHTML = `<div class="vacio-msg">Elige un artículo y luego una OF para ver los módulos.</div>`;
-    return;
-  }
-  /* Ya viene agrupado del servidor (parche 56): aquí solo se pinta. */
-  const mods = (MOD_DATA && MOD_DATA.modulos) || [];
-  MOD_GRUPOS = mods;   // referencia por índice para cerrar/liberar
-  const tks = mods.reduce((a,m)=>a+(m.tks||0),0);
-  $("resumenMod").textContent = `${modArea} · ${mods.length} módulo(s) con actividad · ${tks} tickets`;
-  if(!mods.length){ $("zonaModulos").innerHTML=`<div class="vacio-msg">Sin tickets activos para esta área/OF</div>`; return; }
-  $("zonaModulos").innerHTML = mods.map((g,idx)=>{
-    /* `cant_prog` de `ofs` manda; la hoja Google queda de respaldo para las OF
-       anteriores al parche 26. */
-    const meta = Number(g.cant_prog) || MOD_META[normKey(g.of)] || 0;
-    const pct = meta>0 ? Math.min(100, Math.round(g.ultima/meta*100)) : null;
-    const ops = g.ops||[];
-    const lastOp = g.op_ultima;
-    const cerrado = !!g.cerrado;
-    const barra = pct==null
-      ? `<div class="avance-nometa">Sube el balance/OF para calcular el avance</div>`
-      : `<div class="avance-bar"><div class="avance-fill ${pct>=80?'alto':pct<40?'bajo':''}" style="width:${pct}%"></div>
-           <span class="avance-lbl">${pct}%</span></div>`;
-    const metaTxt = pct==null ? ""
-      : `<div class="avance-sub">${Math.round(g.ultima)} de ${Math.round(meta)} und · última op.: <b>${esc(lastOp||"—")}</b></div>`;
-    return `<div class="mod-card${cerrado?' mod-cerrado':''}">
-      <div class="mod-head-fija">
-        <div class="mod-head-top">
-          <div class="mod-nombre">${esc(g.modulo)}${cerrado?' <span class="mod-badge-cerrado">CERRADO</span>':''}</div>
-          <button class="btn-mini ${cerrado?'verde':'rojo'}" onclick="toggleModulo(${idx}, ${cerrado?'false':'true'})">${cerrado?'Liberar módulo':'Cerrar módulo'}</button>
-        </div>
-        <div class="mod-sub">OF ${esc(g.of)} · ${esc(g.articulo)} · ${ops.length} operación(es) · ${g.tks} tickets</div>
-        <div class="mod-avance">${barra}${metaTxt}</div>
-      </div>
-      <details class="mod-ops">
-        <summary>Ver operaciones (${ops.length})</summary>
-        <div class="mod-ops-body">
-        ${ops.map(op=>{
-          const personas=op.personas||[];
-          return `<details class="mod-op">
-            <summary class="mod-op-head"><span class="mod-op-nom">${esc(op.op)}</span>
-              <span class="mod-op-sub">${Math.round(op.cant)} und · ${personas.length} operario(s)</span></summary>
-            ${personas.map(p=>`<div class="mod-persona">
-              <div class="mp-cab"><b>${esc(soloApellidos(p.nombre||p.dni))}</b><span>${Math.round(p.cant)} und</span></div>
-            </div>`).join("")}
-          </details>`;
-        }).join("")}
-        </div>
-      </details>
-    </div>`;
-  }).join("");
-}
-
 /* ================= EFICIENCIAS ================= */
 let EF=null, efSort={col:null,dir:1};
 /* `ef` y `prod/disp` son del ÁREA que se está viendo; `ef_dia` es el día
@@ -1948,6 +1794,7 @@ function perReload(){
   else if(PER.tab==="rango") perCargarRango();
   else if(PER.tab==="matriz") perCargarMatriz();
   else if(PER.tab==="marcar") perMarcarInit();
+  else if(PER.tab==="est") perCargarEst();
 }
 function perTab(t){
   /* 'marcar' ya no tiene botón (lo hace supervisora): si llega por hash viejo,
@@ -1955,10 +1802,159 @@ function perTab(t){
   if(t==="marcar") t="crud";
   PER.tab=t;
   [["crud","perCrud","perTabCrud"],["rango","perRango","perTabRango"],["matriz","perMatriz","perTabMatriz"],
-   ["marcar","perMarcar","perTabMarcar"],["mov","perMov","perTabMov"]]
+   ["marcar","perMarcar","perTabMarcar"],["mov","perMov","perTabMov"],["est","perEst","perTabEst"]]
     .forEach(x=>{ if($(x[1])) $(x[1]).hidden=x[0]!==t; if($(x[2])) $(x[2]).classList.toggle("activo",x[0]===t); });
   if(t==="mov"){ if($("movFecha")&&!$("movFecha").value) $("movFecha").value=hoyISO(); cargarMovs(); return; }
+  if(t==="est"){ estInit(); return; }
   perReload();
+}
+
+/* ===== Estructura de personal por mes (parche 133) =====
+   Quién pertenece a cada área ese mes (distinto de dónde apoya hoy), MOD/MOI, cargo, ingreso y baja.
+   De aquí salen el Excel de inicio de mes y, luego, los cálculos por área. */
+let EST={mes:"",filas:[],sin:[],hayAnt:false};
+function estMesActual(){ return ($("estMes")&&$("estMes").value||hoyISO().slice(0,7))+"-01"; }
+function estInit(){
+  const m=$("estMes"); if(m && !m.value) m.value=hoyISO().slice(0,7);
+  const s=$("estArea"); if(s && !s.options.length) s.innerHTML=opcionesAreaVista();
+  perCargarEst();
+}
+async function perCargarEst(){
+  const mes=estMesActual(), area=($("estArea")||{}).value||"";
+  pintarCargando($("estTabla"),"Cargando…");
+  try{
+    const r=await rpc("fn_estructura_mes",{p_dni:ING.dni,p_token:ING.token,p_mes:mes,p_area:area});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); $("estTabla").innerHTML=""; return; }
+    EST={mes:r.mes,filas:r.filas||[],sin:r.sin_estructura||[],hayAnt:!!r.hay_anterior};
+    perPintarEst();
+  }catch(e){
+    $("estTabla").innerHTML="";
+    mostrarError(/fn_estructura_mes|Could not find the function|PGRST202/i.test(e.message)?"Falta aplicar el parche 133 en la base":e.message);
+  }
+}
+const estNombreArea=f=>f.area+(f.subarea?" - "+f.subarea:"");
+function estEnMes(f){ const ini=EST.mes; return !f.desde || f.desde<=ini; }   // venía a inicio de mes
+function perPintarEst(){
+  const q=normKey(($("estBuscar")||{}).value||"");
+  const todas=EST.filas, lista=todas.filter(f=>!q||normKey(f.nombre+" "+f.dni+" "+(f.cargo||"")+" "+estNombreArea(f)).includes(q));
+  const mod=todas.filter(f=>f.tipo==="MOD").length, moi=todas.length-mod;
+  const altas=todas.filter(f=>f.desde&&f.desde>EST.mes).length, bajas=todas.filter(f=>f.hasta).length;
+  const apoyo=todas.filter(f=>f.en_sistema&&f.estado_bd==="ACTIVO"&&f.area_actual&&f.area_actual!==f.area).length;
+  $("estKpis").innerHTML=busKpi(todas.length,"personas en la estructura","ok")+busKpi(mod,"MOD","")+busKpi(moi,"MOI","")
+    +busKpi(altas,"ingresos del mes","otro")+busKpi(bajas,"bajas","lib")+busKpi(apoyo,"hoy apoyan en otra área","");
+  const av=[];
+  if(!todas.length) av.push(`<div class="vacio-msg">Este mes aún no tiene estructura.${EST.hayAnt?` Puedes <b>copiar del mes anterior</b> a quienes siguen y luego ajustar ingresos, bajas y cambios de área.`:""}</div>`);
+  if(EST.sin.length) av.push(`<div class="acf-falta"><b>${EST.sin.length} persona(s) activas en el sistema no están en la estructura de este mes:</b> ${esc(EST.sin.slice(0,8).map(p=>soloApellidos(p.nombre)).join(", "))}${EST.sin.length>8?"…":""}. Agrégalas con “+ Agregar a la estructura”.</div>`);
+  $("estAviso").innerHTML=av.join("");
+  const cp=$("estCopiar"); if(cp) cp.hidden=!(EST.hayAnt && !todas.length);
+  $("estResumen").textContent=`${lista.length} de ${todas.length} persona(s)`;
+  if(!lista.length){ $("estTabla").innerHTML=""; return; }
+  $("estTabla").innerHTML=`<thead><tr><th>Tipo</th><th class="izq">Cargo</th><th class="izq">Área</th><th>DNI</th><th class="izq">Apellido y nombre</th><th>Ingreso</th><th>Baja</th><th class="izq">Hoy está en</th><th class="izq">Observación</th><th></th></tr></thead><tbody>`
+    +lista.map(f=>{
+      const apoya=f.en_sistema&&f.estado_bd==="ACTIVO"&&f.area_actual&&f.area_actual!==f.area;
+      const hoy=!f.en_sistema?`<span class="tag">Sin usuario en el sistema</span>`
+        : f.estado_bd!=="ACTIVO"?`<span class="pill LIBERADO">INACTIVO</span>`
+        : apoya?`<span class="pill EN" title="${esc((f.movs||[]).map(m=>ddmm(m.fecha)+": "+m.de+" → "+m.a).join(" · "))}">Apoya en ${esc(f.area_actual)}</span>`:"";
+      return `<tr${f.hasta?' class="his-tenue"':""}><td><b>${esc(f.tipo)}</b></td><td class="izq">${esc(f.cargo||"—")}</td><td class="izq">${esc(estNombreArea(f))}</td>
+        <td>${esc(f.dni)}</td><td class="izq"><b>${esc(f.nombre)}</b></td>
+        <td>${f.desde?esc(ddmm(f.desde)):"—"}</td><td>${f.hasta?`<span class="pill LIBERADO">${esc(ddmm(f.hasta))}</span>`:"—"}</td>
+        <td class="izq">${hoy}</td><td class="izq">${esc(f.nota||"")}</td>
+        <td data-edita><button class="btn-mini gris" onclick="abrirModalEst('${esc(f.dni)}')">Editar</button></td></tr>`; }).join("")+"</tbody>";
+}
+function abrirModalEst(dni){
+  const f=dni?EST.filas.find(x=>x.dni===dni):null;
+  const d=f||{dni:"",nombre:"",area:($("estArea")||{}).value||(AREAS_LISTA[0]||""),subarea:"",tipo:"MOD",cargo:"",desde:"",hasta:"",nota:""};
+  const areas=[...new Set([d.area,...AREAS_LISTA.filter(a=>puedeEditar(a)),"LIQUIDACION"])].filter(Boolean);
+  const cargos=[...new Set(EST.filas.map(x=>x.cargo).filter(Boolean))].sort();
+  abrirModal(`<h2>${f?"Editar en la estructura":"Agregar a la estructura"}</h2>
+    <div class="sub" style="margin-bottom:10px;">Mes: <b>${esc(EST.mes.slice(0,7))}</b>. El área de aquí es la <b>oficial</b>; si alguien solo apoya en otra área, no se cambia aquí.</div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>DNI</label><input id="meDni" value="${esc(d.dni)}" ${f?"disabled":""} maxlength="15" oninput="estBuscarDni()"></div>
+      <div class="modal-campo"><label>Apellido y nombre</label><input id="meNombre" value="${esc(d.nombre)}" maxlength="120"></div>
+    </div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>Área</label><select id="meArea">${areas.map(a=>`<option ${a===d.area?"selected":""}>${esc(a)}</option>`).join("")}</select></div>
+      <div class="modal-campo"><label>Subárea (opcional)</label><input id="meSub" list="meSubL" value="${esc(d.subarea||"")}" placeholder="Ej. CAMISA"><datalist id="meSubL"><option>CAMISA</option><option>SACO</option><option>PANTALÓN</option></datalist></div>
+    </div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>Tipo</label><select id="meTipo"><option ${d.tipo==="MOD"?"selected":""}>MOD</option><option ${d.tipo==="MOI"?"selected":""}>MOI</option></select></div>
+      <div class="modal-campo"><label>Cargo</label><input id="meCargo" list="meCargoL" value="${esc(d.cargo||"")}" placeholder="Ej. COSTURERO"><datalist id="meCargoL">${cargos.map(c=>`<option>${esc(c)}</option>`).join("")}</datalist></div>
+    </div>
+    <div class="modal-2col">
+      <div class="modal-campo"><label>Ingreso (si fue en el mes)</label><input type="date" id="meDesde" value="${esc(d.desde||"")}"></div>
+      <div class="modal-campo"><label>Baja (si se fue)</label><input type="date" id="meHasta" value="${esc(d.hasta||"")}"></div>
+    </div>
+    <div class="modal-campo"><label>Observación</label><input id="meNota" value="${esc(d.nota||"")}" maxlength="200"></div>
+    <div class="modal-msg" id="meMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="estGuardar()">GUARDAR</button>
+      ${f?`<button class="btn-pin" onclick="estQuitar('${esc(d.dni)}')">QUITAR DEL MES</button>`:""}
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`);
+}
+async function estBuscarDni(){
+  const dni=$("meDni").value.trim(); if(dni.length<6||$("meNombre").value.trim()) return;
+  try{
+    const r=await rpc("fn_personal_detalle",{p_dni_ing:ING.dni,p_token:ING.token,p_dni:dni});
+    if(r&&r.ok&&r.nombres_apellidos){
+      $("meNombre").value=r.nombres_apellidos;
+      const a=$("meArea"); if(a&&[...a.options].some(o=>o.value===r.area_origen)) a.value=r.area_origen;
+      if(r.cargo==="SUPERVISORA"){ $("meTipo").value="MOI"; if(!$("meCargo").value) $("meCargo").value="SUPERVISOR"; }
+    }
+  }catch(e){}
+}
+async function estGuardar(){
+  const g=id=>$(id).value.trim();
+  if(!g("meDni")||!g("meNombre")){ $("meMsg").textContent="DNI y nombre son obligatorios"; return; }
+  try{
+    const r=await rpc("fn_estructura_guardar",{p_dni_ing:ING.dni,p_token:ING.token,p_mes:EST.mes,p_dni:g("meDni"),p_nombre:g("meNombre"),
+      p_area:$("meArea").value,p_subarea:g("meSub"),p_tipo:$("meTipo").value,p_cargo:g("meCargo"),
+      p_desde:g("meDesde")||null,p_hasta:g("meHasta")||null,p_nota:g("meNota")});
+    if(!r||r.ok===false){ $("meMsg").textContent=(r&&r.error)||"No se pudo guardar"; return; }
+    cerrarModal(); mostrarOk("Estructura guardada"); await perCargarEst();
+  }catch(e){ $("meMsg").textContent=e.message; }
+}
+async function estQuitar(dni){
+  if(!confirm(`¿Quitar a ${dni} de la estructura de ${EST.mes.slice(0,7)}? Úsalo solo si fue un error; para una renuncia pon la fecha de baja.`)) return;
+  try{
+    const r=await rpc("fn_estructura_quitar",{p_dni_ing:ING.dni,p_token:ING.token,p_mes:EST.mes,p_dni:dni});
+    if(!r||r.ok===false){ mostrarError((r&&r.error)||"No se pudo quitar"); return; }
+    cerrarModal(); mostrarOk("Quitado de la estructura"); await perCargarEst();
+  }catch(e){ mostrarError(e.message); }
+}
+async function estCopiar(){
+  if(!confirm(`¿Copiar la estructura del mes anterior a ${EST.mes.slice(0,7)}? Pasan quienes siguen activos; luego ajustas ingresos, bajas y cambios de área.`)) return;
+  try{
+    const r=await rpc("fn_estructura_copiar",{p_dni_ing:ING.dni,p_token:ING.token,p_mes:EST.mes});
+    if(!r||r.ok===false){ mostrarError((r&&r.error)||"No se pudo copiar"); return; }
+    mostrarOk(`${r.copiados} persona(s) copiadas`); await perCargarEst();
+  }catch(e){ mostrarError(e.message); }
+}
+/* Excel para enviar por correo: hoja ESTRUCTURA con el formato de siempre (quienes estaban a inicio de mes),
+   más ALTAS Y BAJAS y APOYO EN OTRA ÁREA. */
+function estExcel(){
+  const F=EST.filas; if(!F.length){ mostrarError("No hay estructura para descargar"); return; }
+  const ini=F.filter(estEnMes), n={};
+  const fila=f=>{ const a=estNombreArea(f); n[a]=(n[a]||0)+1; return [f.tipo,f.cargo||"",n[a],a,f.dni,f.nombre]; };
+  const aoa=[["TIPO DE TRABAJADOR","CARGO","N°","ÁREA","DNI","APELLIDO Y NOMBRE"]].concat(ini.map(fila));
+  const modPorArea={}; ini.filter(f=>f.tipo==="MOD").forEach(f=>{ const a=estNombreArea(f); modPorArea[a]=(modPorArea[a]||0)+1; });
+  const nMod=ini.filter(f=>f.tipo==="MOD").length, nMoi=ini.length-nMod;
+  const resumen=[["ÁREAS","MOD"],...Object.keys(modPorArea).sort().map(a=>[a,modPorArea[a]]),["Total MOD",nMod],["Total MOI",nMoi],["TOTAL",ini.length]];
+  resumen.forEach((r,i)=>{ aoa[i]=(aoa[i]||["","","","","",""]).concat(["",r[0],r[1]]); });
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"]=[{wch:12},{wch:14},{wch:5},{wch:22},{wch:11},{wch:42},{wch:3},{wch:22},{wch:8}];
+  const mov=[["TIPO","DNI","APELLIDO Y NOMBRE","ÁREA","MOVIMIENTO","FECHA","OBSERVACIÓN"]];
+  F.filter(f=>!estEnMes(f)).forEach(f=>mov.push([f.tipo,f.dni,f.nombre,estNombreArea(f),"INGRESO",f.desde||"",f.nota||""]));
+  F.filter(f=>f.hasta).forEach(f=>mov.push([f.tipo,f.dni,f.nombre,estNombreArea(f),"BAJA",f.hasta,f.nota||""]));
+  const apoyo=[["DNI","APELLIDO Y NOMBRE","ÁREA OFICIAL","HOY ESTÁ EN","MOVIMIENTOS DEL MES"]];
+  F.filter(f=>f.en_sistema&&f.estado_bd==="ACTIVO"&&f.area_actual&&f.area_actual!==f.area)
+    .forEach(f=>apoyo.push([f.dni,f.nombre,estNombreArea(f),f.area_actual,(f.movs||[]).map(m=>`${m.fecha}: ${m.de} → ${m.a}`).join(" | ")]));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"ESTRUCTURA");
+  const w2=XLSX.utils.aoa_to_sheet(mov); w2["!cols"]=[{wch:7},{wch:11},{wch:42},{wch:22},{wch:12},{wch:12},{wch:50}]; XLSX.utils.book_append_sheet(wb,w2,"ALTAS Y BAJAS");
+  const w3=XLSX.utils.aoa_to_sheet(apoyo); w3["!cols"]=[{wch:11},{wch:42},{wch:22},{wch:22},{wch:60}]; XLSX.utils.book_append_sheet(wb,w3,"APOYO EN OTRA ÁREA");
+  const area=($("estArea")||{}).value;
+  XLSX.writeFile(wb,`ESTRUCTURA_${EST.mes.slice(0,7)}${area?"_"+area.replace(/ /g,"_"):""}.xlsx`);
 }
 
 /* ===== Movimientos de área (parche 33) =====
@@ -4401,6 +4397,39 @@ function pintarHis(){
         <td class="his-acciones"><button class="btn-mini gris" onclick="verCambio(${Number(c.id)})">Ver</button> ${estado}</td></tr>`; }).join("")
     + "</tbody>";
 }
+/* Reporte: personas con más incidencias en el rango y filtros del historial (sin los cambios deshechos). */
+function hisRanking(){
+  const acc=$("hisAccion").value, q=normKey($("hisBuscar").value), P={};
+  (HIS||[]).filter(c=>c.accion!=="DESHACER" && !c.deshecho_en && (!acc || c.accion===acc)
+    && (!q || normKey(c.nombre+" "+(c.motivo||"")+" "+((c.resumen||{}).personas||[]).join(" ")+" "+((c.resumen||{}).ofs||[]).join(" ")).includes(q)))
+  .forEach(c=>((c.resumen||{}).personas||[]).forEach(n=>{
+    const p=P[n]||(P[n]={nombre:n,n:0,motivos:{},fechas:new Set(),quien:{},acciones:{}});
+    p.n++; p.fechas.add(String(c.creado).slice(0,10));
+    const m=(c.motivo||"").trim()||"(sin motivo)"; p.motivos[m]=(p.motivos[m]||0)+1;
+    const w=soloApellidos(c.nombre); p.quien[w]=(p.quien[w]||0)+1;
+    const a=HIS_ACC[c.accion]||c.accion; p.acciones[a]=(p.acciones[a]||0)+1;
+  }));
+  const lis=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k} (${v})`).join(", ");
+  return Object.values(P).sort((a,b)=>b.n-a.n||a.nombre.localeCompare(b.nombre)).map(p=>({
+    persona:p.nombre, incidencias:p.n, acciones:lis(p.acciones), motivos:lis(p.motivos), quien:lis(p.quien),
+    fechas:[...p.fechas].sort().map(f=>ddmm(f)).join(", ")}));
+}
+function hisReporte(){
+  const R=hisRanking(), d=$("hisDesde").value, a=$("hisHasta").value;
+  abrirModal(`<h2>Personas con más incidencias</h2>
+    <div class="sub" style="margin-bottom:12px;">Del ${esc(ddmm(d))} al ${esc(ddmm(a))}${$("hisArea").value?` · ${esc($("hisArea").value)}`:""} · cada vez que se liberó, movió o partió un ticket suyo cuenta una incidencia; los cambios deshechos no cuentan.</div>
+    ${R.length?`<div class="tabla-scroll pv-tabla"><table class="tabla"><thead><tr><th>#</th><th class="izq">Persona</th><th>Incid.</th><th class="izq">Qué se hizo</th><th class="izq">Motivos</th><th class="izq">Fechas</th><th class="izq">Quién lo realizó</th></tr></thead><tbody>
+      ${R.map((r,i)=>`<tr><td>${i+1}</td><td class="izq"><b>${esc(soloApellidos(r.persona))}</b></td><td><b>${r.incidencias}</b></td><td class="izq">${esc(r.acciones)}</td><td class="izq">${esc(r.motivos)}</td><td class="izq">${esc(r.fechas)}</td><td class="izq">${esc(r.quien)}</td></tr>`).join("")}
+      </tbody></table></div>`:`<div class="vacio-msg">Sin incidencias en esas fechas</div>`}
+    <div class="modal-acciones">${R.length?`<button class="btn-primario" onclick="hisReporteXlsx()">DESCARGAR EXCEL</button>`:""}<button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`,"modal-ancho");
+}
+function hisReporteXlsx(){
+  const R=hisRanking(), d=$("hisDesde").value, a=$("hisHasta").value;
+  const aoa=[["#","PERSONA","INCIDENCIAS","QUÉ SE HIZO","MOTIVOS","FECHAS","QUIÉN LO REALIZÓ"]].concat(R.map((r,i)=>[i+1,r.persona,r.incidencias,r.acciones,r.motivos,r.fechas,r.quien]));
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws["!cols"]=[{wch:4},{wch:34},{wch:12},{wch:28},{wch:50},{wch:30},{wch:34}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Incidencias");
+  XLSX.writeFile(wb,`INCIDENCIAS_${d}_a_${a}.xlsx`);
+}
 async function verCambio(id){
   const c=(HIS||[]).find(x=>Number(x.id)===Number(id)); if(!c) return;
   abrirModal(cargandoHTML("Cargando…"),"modal-ancho");
@@ -5109,9 +5138,13 @@ async function descargarInc(){
     .concat(bonos.map(b=>+((p.bonos||{})[b.n]||0)))
     .concat([+(p.bono_total||0), (+p.faltas||0)||"", (+p.tardanzas||0)||"",
              (+p.boleta||0)||"", +(p.final||0), p.cesado?"CESADO":""]);
+  /* Las eficiencias van como fracción (0.84): con formato % se leen 84%. */
+  const hoja=aoa=>{ const ws=XLSX.utils.aoa_to_sheet(aoa);
+    for(let r=1;r<aoa.length;r++) for(let c=5;c<5+dias.length;c++){
+      const cel=ws[XLSX.utils.encode_cell({r,c})]; if(cel && cel.t==="n") cel.z="0%"; }
+    return ws; };
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,
-    XLSX.utils.aoa_to_sheet([cab].concat(filas.map(fila))), "RESUMEN");
+  XLSX.utils.book_append_sheet(wb, hoja([cab].concat(filas.map(fila))), "RESUMEN");
   const porArea={};
   filas.forEach(p=>{ const k=p.area||"SIN AREA"; (porArea[k]=porArea[k]||[]).push(p); });
   const usados={};
@@ -5120,17 +5153,17 @@ async function descargarInc(){
     let n=String(a).replace(/[:\\/?*[\]]/g,"-").slice(0,31) || "AREA";
     let k=2; while(usados[n]){ n=n.slice(0,29)+"_"+k; k++; }
     usados[n]=true;
-    XLSX.utils.book_append_sheet(wb,
-      XLSX.utils.aoa_to_sheet([cab].concat(porArea[a].map(fila))), n);
+    XLSX.utils.book_append_sheet(wb, hoja([cab].concat(porArea[a].map(fila))), n);
   });
   if(INC_TABLA.length){
     const cats=[...new Set(INC_TABLA.map(x=>x.categoria))].sort();
     const pcts=[...new Set(INC_TABLA.map(x=>x.pct))].sort((x,y)=>x-y);
     const m={}; INC_TABLA.forEach(x=>{ m[x.categoria+"|"+x.pct]=+x.soles; });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+    const wt=XLSX.utils.aoa_to_sheet(
       [["%"].concat(cats.map(c=>"CAT "+c))]
-      .concat(pcts.map(p=>[p/100].concat(cats.map(c=>m[c+"|"+p]))))),
-      "TABLA DE INC.");
+      .concat(pcts.map(p=>[p/100].concat(cats.map(c=>m[c+"|"+p])))));
+    pcts.forEach((p,i)=>{ const cel=wt[XLSX.utils.encode_cell({r:i+1,c:0})]; if(cel) cel.z="0%"; });
+    XLSX.utils.book_append_sheet(wb, wt, "TABLA DE INC.");
   }
   const hojasCf=wb.SheetNames.filter(n=>n!=="TABLA DE INC.");
   const rango=dias.length && filas.length ? {c0:5, c1:4+dias.length} : null;
@@ -5773,18 +5806,43 @@ function baseNCambios(){
   return Object.keys(BASE_DIRTY).reduce((n,id)=>n+Object.keys(BASE_DIRTY[id]).length,0);
 }
 /* Escribir en una celda solo toca el mapa y el contador: sin repintar. */
-function baseCampo(el){
-  const id=el.dataset.id, k=el.dataset.k, orig=BASE_MAP[id];
-  if(!orig) return;
+function baseAsignar(id,k,valor){
+  const orig=BASE_MAP[id]; if(!orig) return null;
   const num=BASE_NUM_COLS.includes(k);
-  const igual = num ? Number(el.value)===Number(orig[k])
-                    : String(el.value).trim()===String(orig[k]==null?"":orig[k]).trim();
+  const igual = num ? Number(valor)===Number(orig[k])
+                    : String(valor).trim()===String(orig[k]==null?"":orig[k]).trim();
   const d = BASE_DIRTY[id] = BASE_DIRTY[id] || {};
-  if(igual) delete d[k]; else d[k] = num ? Number(el.value) : el.value;
+  if(igual) delete d[k]; else d[k] = num ? Number(valor) : valor;
   if(!Object.keys(d).length) delete BASE_DIRTY[id];
+  return igual;
+}
+function baseCampo(el){
+  const id=el.dataset.id, igual=baseAsignar(id,el.dataset.k,el.value);
+  if(igual===null) return;
   el.classList.toggle("cambiada", !igual);
   const tr=el.closest("tr"); if(tr) tr.classList.toggle("fila-cambiada", !!BASE_DIRTY[id]);
   baseBarraEdicion();
+}
+/* Atajos de hoja de cálculo en la edición en lote: Enter/↓ baja, ↑ sube, ←/→ cambian de columna
+   y Ctrl+Enter copia esta celda a toda la columna de las filas filtradas (todas las páginas). */
+function baseTecla(ev, el){
+  const k=el.dataset.k, tr=el.closest("tr");
+  const col=[...document.querySelectorAll(`#tablaBases .base-in[data-k="${k}"]`)], i=col.indexOf(el);
+  const ir=t=>{ if(t){ t.focus(); t.select(); ev.preventDefault(); } };
+  if(ev.key==="Enter" && (ev.ctrlKey||ev.metaKey)){
+    ev.preventDefault();
+    const filas=basesFiltradas(); let n=0;
+    filas.forEach(b=>{ if(String(b.id)!==el.dataset.id){ baseAsignar(b.id,k,el.value); n++; } });
+    col.forEach(o=>{ if(o!==el){ o.value=el.value; baseCampo(o); } });
+    baseBarraEdicion();
+    mostrarOk(`${BASE_COLS.find(c=>c.k===k).t}: "${el.value}" copiado a ${n} fila(s)`);
+    return;
+  }
+  if(ev.key==="Enter"||ev.key==="ArrowDown") return ir(col[i+1]);
+  if(ev.key==="ArrowUp") return ir(col[i-1]);
+  const fila=[...tr.querySelectorAll(".base-in")], j=fila.indexOf(el);
+  if(ev.key==="ArrowRight" && (el.type==="number"||el.selectionStart>=el.value.length)) return ir(fila[j+1]);
+  if(ev.key==="ArrowLeft"  && (el.type==="number"||el.selectionStart<=0)) return ir(fila[j-1]);
 }
 function baseBarraEdicion(){
   const bar=$("basesEditBar"); if(!bar) return;
@@ -5983,7 +6041,7 @@ async function guardarUltima(k, auto){
 function baseInput(b,k){
   const num=BASE_NUM_COLS.includes(k);
   return `<input class="base-in${num?" num":""}${baseSucia(b,k)?" cambiada":""}"
-    data-id="${b.id}" data-k="${k}" oninput="baseCampo(this)"
+    data-id="${b.id}" data-k="${k}" oninput="baseCampo(this)" onkeydown="baseTecla(event,this)"
     ${num?`type="number" step="${k==="std"?"0.01":"1"}" min="0"`:'type="text"'}
     value="${esc(baseValor(b,k))}">`;
 }
@@ -6042,22 +6100,49 @@ function descargarBase(){
 function abrirModalBorrarArt(){
   const arts=[...new Set((BASE||[]).map(b=>norm(b.articulo)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
   if(!arts.length){ mostrarError("Carga una base primero"); return; }
-  const opts=arts.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join("");
+  DEL_ARTS=arts;
   abrirModal(`
     <h2 style="margin:0 0 12px;color:var(--azul);font-size:20px;">Borrar artículo</h2>
-    <label class="campo" style="margin-bottom:12px;"><span>Artículo</span>
-      <select id="delArtSel" style="border:2px solid #cfd8e6;border-radius:10px;padding:9px 12px;font-size:15px;font-weight:600;"
-        onchange="$('delArtMsg').textContent='SEGURO QUE DESEAS BORRAR: ART '+this.value+' ?'">${opts}</select></label>
-    <div id="delArtMsg" style="background:#fdeceb;border:1.5px solid var(--alerta);color:var(--alerta);font-weight:800;border-radius:12px;padding:12px 14px;margin-bottom:12px;">SEGURO QUE DESEAS BORRAR: ART ${esc(arts[0])} ?</div>
+    <label class="campo autocomplete" style="margin-bottom:12px;"><span>Escribe el artículo de ${esc($("areaBase").value)}</span>
+      <input type="text" id="delArtIn" autocomplete="off" style="border:2px solid #cfd8e6;border-radius:10px;padding:9px 12px;font-size:15px;font-weight:600;" placeholder="Ej. P00206" oninput="delArtSugerir()" onkeydown="delArtTecla(event)">
+      <div id="delArtDrop" class="autocomplete-drop" style="display:none;"></div></label>
+    <div id="delArtMsg" class="aviso-borrar" hidden></div>
     <p class="seccion-sub" style="margin:0 0 16px;">Se eliminarán TODAS las operaciones de ese artículo. No se puede deshacer.</p>
     <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
       <button class="btn-mini gris" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn-mini rojo" onclick="confirmarBorrarArt()">Confirmar borrado</button>
+      <button class="btn-mini rojo" id="delArtOk" onclick="confirmarBorrarArt()" disabled>Confirmar borrado</button>
     </div>`);
+  const i=$("delArtIn"); if(i){ i.focus(); delArtSugerir(); }
+}
+let DEL_ARTS=[], DEL_COINC=[];
+function delArtElegido(){
+  const q=normKey(($("delArtIn")||{}).value||"");
+  return q ? (DEL_ARTS.find(a=>normKey(a)===q)||"") : "";
+}
+function delArtSugerir(){
+  const inp=$("delArtIn"), drop=$("delArtDrop"); if(!inp||!drop) return;
+  const q=normKey(inp.value), ex=delArtElegido();
+  DEL_COINC = q ? DEL_ARTS.filter(a=>normKey(a).includes(q)).slice(0,8) : DEL_ARTS.slice(0,8);
+  if(ex || !DEL_COINC.length){ drop.style.display="none"; drop.innerHTML=""; }
+  else{
+    drop.innerHTML=DEL_COINC.map((a,i)=>`<div class="ac-item" onmousedown="delArtElegir(${i})">${esc(a)}</div>`).join("");
+    drop.style.display="block";
+  }
+  const m=$("delArtMsg"), ok=$("delArtOk");
+  if(m){ m.hidden=!ex; m.textContent=ex?`SEGURO QUE DESEAS BORRAR: ART ${ex} ?`:""; }
+  if(ok) ok.disabled=!ex;
+  if(q && !ex && !DEL_COINC.length && m){ m.hidden=false; m.textContent="Ningún artículo de esta área coincide"; if(ok) ok.disabled=true; }
+}
+function delArtElegir(i){ const a=DEL_COINC[i]; if(a==null) return; $("delArtIn").value=a; delArtSugerir(); }
+function delArtTecla(ev){
+  if(ev.key==="Enter"){
+    ev.preventDefault();
+    if(delArtElegido()){ confirmarBorrarArt(); return; }
+    if(DEL_COINC.length===1) delArtElegir(0);
+  }
 }
 async function confirmarBorrarArt(){
-  const sel=$("delArtSel"); if(!sel) return;
-  const art=sel.value; if(!art) return;
+  const art=delArtElegido(); if(!art) return;
   const area=$("areaBase").value;
   try{
     const r=await rpc("fn_base_articulo_eliminar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:art});
@@ -7260,6 +7345,17 @@ async function cargarCarga(){
     if(/Could not find the function|PGRST202/i.test(e.message||"")){ $("ccZona").innerHTML=`<div class="acf-falta"><b>Falta correr el parche 107 en la base.</b> Con él, esta pantalla calcula cuántos días de trabajo le quedan a cada área frente a su ritmo real.</div>`; return; }
     mostrarError(e.message); $("ccZona").innerHTML=""; }
 }
+/* "No vigente": la OF queda COMPLETADA en esa área (se cierran todos sus módulos), así sus tickets sin
+   reclamar dejan de contar y nadie más los reclama. Se puede reabrir desde Buscar y Seguir. */
+async function ccCompletar(area,of){
+  if(!confirm(`¿La OF ${of} ya no está vigente en ${area}?\n\nQuedará COMPLETADA: se cierran todos sus módulos, sus tickets sin reclamar dejan de contar y nadie podrá reclamarlos.\nPuedes reabrirla desde Buscar y Seguir.`)) return;
+  try{
+    const r=await rpc("fn_of_completar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_of:String(of),p_completar:true});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"No se pudo completar"); return; }
+    mostrarOk(`OF ${of} completada en ${area} (${r.modulos} módulo${r.modulos===1?"":"s"} cerrado${r.modulos===1?"":"s"})`);
+    await cargarCarga();
+  }catch(e){ mostrarError(/fn_of_completar/.test(e.message)?"Falta aplicar el parche 132 en la base":e.message); }
+}
 /* Simula los próximos días hábiles: cada área de costura gasta su ritmo por día hasta
    acabar su carga; lo que gasta se convierte en llegada a ACABADO. */
 function ccSimular(){
@@ -7389,7 +7485,7 @@ function ccDetalle(a,sim){
   const fila=o=>{const av=o.tot?100*(1-(o.bruto??o.pend)/o.tot):0, st=o.estado==="POR_EMPEZAR"&&o.vieja?"VIEJA":o.estado;
     const lb={EN_CURSO:"En curso",POR_EMPEZAR:"Por empezar",QUIETA:"Sin movimiento",VIEJA:"¿Vigente?"}[st];
     return `<tr class="${o.estado==="QUIETA"?"quieta":""}"><td><b>${esc(o.of)}</b></td><td class="izq">${esc(o.articulo)}<div class="cc-sub">${esc(o.prenda||"")} · ${ccN(o.cant)} und</div></td>
-      <td><span class="cc-st ${st}">${lb}</span></td><td class="cc-oc"><span class="cc-av"><i style="width:${av}%"></i></span>${Math.round(av)}%</td>
+      <td><span class="cc-st ${st}">${lb}</span><div><button type="button" class="btn-mini gris cc-no-vig" onclick="ccCompletar('${esc(a.area)}','${esc(o.of)}')">No vigente</button></div></td><td class="cc-oc"><span class="cc-av"><i style="width:${av}%"></i></span>${Math.round(av)}%</td>
       <td><b>${ccN(o.pend)}</b>${o.bruto!=null&&o.bruto-o.pend>=1?`<div class="cc-sub">de ${ccN(o.bruto)} sin reclamar</div>`:""}</td><td>${a.ritmo?(o.pend/a.ritmo).toFixed(1):"—"}</td><td class="cc-oc">${o.ult?fechaCorta(o.ult):"—"}</td><td class="cc-oc">${fechaCorta(o.gen)}</td></tr>`;};
   const head=`<thead><tr><th>OF</th><th class="izq">Artículo</th><th>Estado</th><th class="cc-oc">Avance</th><th>Pendiente (min)</th><th>Días</th><th class="cc-oc">Último ticket</th><th class="cc-oc">Generada</th></tr></thead>`;
   return `<div class="cc-bloque"><h2>${esc(a.area)}: OFs que forman la carga</h2>
@@ -7397,7 +7493,7 @@ function ccDetalle(a,sim){
     <div class="contenedor-ancho tabla-scroll" style="max-height:60vh"><table class="tabla cc-tabla">${head}<tbody>${vis.map(fila).join("")}</tbody></table></div>
     ${q.length?`<details class="cc-q"><summary>${q.length} OFs sin movimiento hace más de 7 días hábiles · ${ccN(a.quietas.min)} min que no se cuentan</summary>
       <p class="cc-sub" style="margin-top:6px">Tuvieron tickets reclamados pero nada en la última semana y media. Casi siempre son operaciones sueltas que nadie marcó;
-      si de verdad están terminadas, cerrar el módulo las saca de aquí.</p>
+      si de verdad están terminadas, “No vigente” las marca COMPLETADAS y las saca de aquí.</p>
       <div class="contenedor-ancho tabla-scroll" style="max-height:40vh"><table class="tabla cc-tabla">${head}<tbody>${q.map(fila).join("")}</tbody></table></div></details>`:""}
   </div>`;
 }

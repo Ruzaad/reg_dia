@@ -41,7 +41,6 @@
         <a class="nav-item" data-tab="pasoSueltos" href="#pasoSueltos">Paquetes sueltos</a>
         <a class="nav-item" data-tab="pasoLotes" href="#pasoLotes">Reproceso</a>
         <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
-        <a class="nav-item" data-tab="pasoMod" href="#pasoMod">Avance por módulo</a>
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
         <a class="nav-item" data-tab="pasoOfs" href="#pasoOfs">OFs registradas</a>
         <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Resumen de OF</a>
@@ -392,6 +391,7 @@
             <option value="">Todas</option><option value="LIBERAR">Liberó</option><option value="MOVER">Movió de día</option>
             <option value="PARTIR">Partió</option><option value="DESHACER">Deshizo</option></select></label>
           <label class="campo"><span>Buscar</span><input type="text" id="hisBuscar" placeholder="Quién / persona / OF / motivo…" oninput="pintarHis()"></label>
+          <button type="button" class="btn-mini" onclick="hisReporte()">REPORTE DE INCIDENCIAS</button>
         </div>
         <div class="sub" id="resumenHis"></div>
         <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;">
@@ -481,30 +481,6 @@
 
     </section>
 
-    <!-- ===================== POR MÓDULO ===================== -->
-    <section class="pantalla" id="pasoMod">
-      <div class="seccion-cab">
-        <h1>Avance por módulo</h1>
-        <p class="seccion-sub">Acumulado hasta la fecha elegida. Avance por módulo (última operación vs meta de la OF); las operaciones son colapsables.</p>
-      </div>
-      <div class="barra-control">
-        <label class="campo"><span>Área</span>
-          <select id="areaMod" onchange="filtrarModArea(this.value)"></select></label>
-        <label class="campo autocomplete"><span>Artículo</span>
-          <input type="text" id="artMod" placeholder="Escribe artículo…" autocomplete="off"
-            oninput="onArtModInput()" onfocus="renderArtDrop()" onblur="setTimeout(cerrarArtDrop,150)">
-          <div id="artModDrop" class="autocomplete-drop" style="display:none;"></div></label>
-        <label class="campo"><span>OF</span>
-          <select id="ofModSel" onchange="cargarModOF()"><option value="">Ninguna</option></select></label>
-        <label class="campo"><span>Hasta la fecha</span>
-          <input type="date" id="fechaMod" onchange="cargarMod()"></label>
-        <button class="btn-mini" onclick="cargarMod()">Cargar</button>
-      </div>
-      <div id="modGate" class="estado-vacio">Selecciona un área para mostrar sus módulos.</div>
-      <div class="sub" id="resumenMod"></div>
-      <div id="zonaModulos" class="mod-grid"></div>
-    </section>
-
     <!-- ===================== BASES ===================== -->
     <section class="pantalla" id="pasoBases" data-area-sel="areaBase">
       <div class="fila-filtros">
@@ -531,6 +507,7 @@
            vista mientras haya algo pendiente. -->
       <div class="contenedor-ancho base-edit-bar" id="basesEditBar" hidden>
         <span id="basesEditInfo"></span>
+        <small class="base-atajos"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> copia esta celda a toda la columna · <kbd>Enter</kbd> / <kbd>↓</kbd> baja · <kbd>↑</kbd> sube · <kbd>←</kbd> <kbd>→</kbd> cambian de columna</small>
         <button class="btn-mini verde" id="btnGuardarLote" onclick="guardarBasesLote()">GUARDAR CAMBIOS</button>
         <button class="btn-mini gris" onclick="basesModoEdicion(false)">CANCELAR</button>
       </div>
@@ -555,6 +532,7 @@
         <!-- MARCAR ASISTENCIA retirado del menú de Ingeniería: lo hace supervisora
              desde su propia vista. El panel #perMarcar y su JS siguen en el
              archivo, sin punto de entrada, a la espera de confirmar el borrado. -->
+        <button id="perTabEst" class="tab" onclick="perTab('est')">ESTRUCTURA</button>
         <button id="perTabMov" class="tab" onclick="perTab('mov')">MOVIMIENTOS</button>
       </div>
 
@@ -647,6 +625,22 @@
           <div id="perMarcarResumen" hidden></div>
         </div>
       </div>
+      <!-- Estructura por mes -->
+      <div id="perEst" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Mes</span><input type="month" id="estMes" onchange="perCargarEst()"></label>
+          <label class="campo"><span>Área</span><select id="estArea" onchange="perCargarEst()"></select></label>
+          <label class="campo"><span>Buscar</span><input type="text" id="estBuscar" placeholder="Nombre / DNI / cargo…" oninput="perPintarEst()"></label>
+          <button data-edita class="btn-mini verde" onclick="abrirModalEst(null)">+ Agregar a la estructura</button>
+          <button data-edita class="btn-mini" id="estCopiar" onclick="estCopiar()" hidden>Copiar del mes anterior</button>
+          <button class="btn-mini verde" onclick="estExcel()">DESCARGAR EXCEL</button>
+        </div>
+        <div class="bus-kpis" id="estKpis"></div>
+        <div id="estAviso"></div>
+        <div class="sub" id="estResumen"></div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;"><table class="tabla" id="estTabla"></table></div>
+      </div>
+
       <div id="perMov" hidden>
         <div class="barra-control">
           <label class="campo"><span>Área</span><select id="movArea" onchange="cargarMovs()"></select></label>
