@@ -24,7 +24,7 @@ function shAyerIso(){ const f=asyFecha(shHoyIso()); f.setDate(f.getDate()-1); re
 function shHoraLima(){ const a=new Date(new Date().toLocaleString("en-US",{timeZone:"America/Lima"})); return a.getHours()+a.getMinutes()/60; }
 const shTarde = () => shHoraLima() >= 14;
 function shFechaLarga(iso){ const f=asyFecha(iso); return `${SH_DIAS_L[f.getDay()]} ${f.getDate()}`; }
-function shFaltaParche(e){ return /fn_sup_he|404|PGRST202|Could not find/i.test(String(e&&e.message||e)); }
+function shFaltaParche(e){ return /fn_sup_he|fn_sup_horas_fecha|404|PGRST202|Could not find/i.test(String(e&&e.message||e)); }
 function shNombres(lista){
   const n=lista.map(x=>{ const ap=soloApellidos(x.nombre||x).split(" ")[0]; return ap.charAt(0)+ap.slice(1).toLowerCase(); });
   return n.length<=3 ? n.join(", ").replace(/, ([^,]*)$/," y $1") : `${n.slice(0,3).join(", ")} y ${n.length-3} más`;
@@ -168,36 +168,45 @@ function shIrLotes(){ pararAvance(); irA("pasoLotesSup"); window.scrollTo(0,0); 
 function shIrSueltos(){ pararAvance(); irA("pasoSueltosSup"); window.scrollTo(0,0); psCargarSup(); }
 
 /* ---------- Horas extra ---------- */
-const SHE={dia:"hoy", h:2, items:[], marc:new Set(), ultima:null, guardando:false, falta:false};
+const SHE={dia:"hoy", f:null, h:2, jor:575, items:[], marc:new Set(), ultima:null, guardando:false, falta:false};
+const sheMax = () => SHE.jor===0 ? 12 : 4;
 function shIrHE(dia){
   pararAvance(); irA("pasoHE"); window.scrollTo(0,0);
   SHE.dia=dia||"hoy"; SHE.marc.clear(); $("sheBuscar").value="";
   sheCargar();
 }
-function sheFecha(){ return SHE.dia==="hoy"?shHoyIso():shAyerIso(); }
+function sheFecha(){ return SHE.dia==="otro"&&SHE.f ? SHE.f : SHE.dia==="hoy"?shHoyIso():shAyerIso(); }
+function shePasadas(){ const f=asyFecha(shHoyIso()); f.setDate(f.getDate()-15); return asyIso(f); }
 async function sheCargar(){
   const s=sesionActual(); if(!s) return;
   $("sheSegHoy").innerHTML=`Hoy<small>${esc(asyTxt(shHoyIso()))}</small>`;
   $("sheSegAyer").innerHTML=`Ayer<small>${esc(asyTxt(shAyerIso()))}</small>`;
   ["Hoy","Ayer"].forEach(k=>{ const b=$("sheSeg"+k), on=SHE.dia===k.toLowerCase(); b.classList.toggle("sel",on); b.setAttribute("aria-selected",on); });
+  const fi=$("sheFecha"); fi.min=shePasadas(); fi.max=shHoyIso(); fi.value=SHE.dia==="otro"?SHE.f:"";
   $("sheSub").textContent=areaSup();
   const L=$("sheLista"); L.innerHTML=cargandoHTML("Cargando personal…");
   SHE.items=[]; SHE.ultima=null; SHE.falta=false;
   try{
     const r=await rpc("fn_sup_he_lista",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),p_fecha:sheFecha()});
     if(!r||r.ok===false){ mostrarError((r&&r.error)||"No se pudo cargar"); }
-    else { SHE.items=r.items||[]; SHE.ultima=r.ultima||null; }
+    else {
+      SHE.items=r.items||[]; SHE.ultima=r.ultima||null;
+      const antes=SHE.jor; SHE.jor=r.jornada===0?0:575;
+      if(SHE.jor===0 && antes!==0) SHE.h=8; else if(SHE.jor!==0 && SHE.h>4) SHE.h=2;
+    }
   }catch(e){
     if(shFaltaParche(e)) SHE.falta=true; else mostrarError(e.message);
   }
   shePintar();
 }
 const sheHtxt = h => (Math.round(h*10)/10).toString().replace(".",",")+" h";
-function sheCabe(p){ return !p.ausente && (Number(p.he_min)||0)+SHE.h*60 <= 240; }
+function sheCabe(p){ return !p.ausente && (SHE.jor===0 || (Number(p.he_min)||0)+SHE.h*60 <= 240); }
 function shePintar(){
   $("sheHoras").textContent=sheHtxt(SHE.h);
   $("sheHorasSub").textContent=`por persona · ${Math.round(SHE.h*60)} min`;
-  $("sheMenos").disabled=SHE.h<=0.5; $("sheMas").disabled=SHE.h>=4;
+  $("sheMenos").disabled=SHE.h<=0.5; $("sheMas").disabled=SHE.h>=sheMax();
+  const nota=$("sheNota"); nota.hidden=SHE.jor!==0||SHE.falta;
+  if(!nota.hidden) nota.textContent="Día no laborable: se registran horas trabajadas (hasta 12 h). Si ya tenía, se reemplaza.";
   const L=$("sheLista"), M=$("sheMismos");
   if(SHE.falta){
     M.hidden=true;
@@ -220,7 +229,7 @@ function shePintar(){
     if(ap[1]) sub.push(esc(ap[1].trim()));
     if(p.ausente) sub.push(`<em>${esc(p.estado)}: no se registra</em>`);
     else {
-      sub.push(`${SHE.dia} ${Number(p.tickets)||0} tickets`);
+      sub.push(`${SHE.dia==="otro"?"ese día":SHE.dia} ${Number(p.tickets)||0} tickets`);
       if(ya>0) sub.push(cabe?`ya tiene ${sheHtxt(ya)}`:`<em>ya tiene ${sheHtxt(ya)}; el tope es 4 h</em>`);
     }
     return `<button type="button" class="she-p${m?" sel":""}" role="checkbox" aria-checked="${m}" ${cabe?"":"disabled"} onclick="sheToggle('${esc(p.dni)}')">
@@ -233,15 +242,21 @@ function sheResumen(){
   const n=SHE.items.filter(p=>SHE.marc.has(p.dni)&&sheCabe(p)).length;
   const b=$("sheGuardar");
   b.disabled=!n||SHE.guardando||SHE.falta;
-  b.textContent=SHE.guardando?"Registrando…":n?`Registrar ${sheHtxt(SHE.h)} a ${n} persona${n===1?"":"s"}`:"Marca a quién se quedó";
+  b.textContent=SHE.guardando?"Registrando…":n?`Registrar ${sheHtxt(SHE.h)}${SHE.jor===0?" trabajadas":""} a ${n} persona${n===1?"":"s"}`:"Marca a quién se quedó";
 }
 function sheToggle(dni){ SHE.marc.has(dni)?SHE.marc.delete(dni):SHE.marc.add(dni); shePintar(); }
-function sheHorasMas(d){ SHE.h=Math.min(4,Math.max(0.5,SHE.h+d)); shePintar(); }
+function sheHorasMas(d){ SHE.h=Math.min(sheMax(),Math.max(0.5,SHE.h+d)); shePintar(); }
 function sheDia(d){ if(SHE.dia===d) return; SHE.dia=d; SHE.marc.clear(); sheCargar(); }
+function sheElegir(v){
+  if(!v) return;
+  if(v===shHoyIso()) return sheDia("hoy");
+  if(v===shAyerIso()) return sheDia("ayer");
+  SHE.dia="otro"; SHE.f=v; SHE.marc.clear(); sheCargar();
+}
 function sheMismos(){
   const u=SHE.ultima; if(!u) return;
   (u.dnis||[]).forEach(d=>{ const p=SHE.items.find(x=>x.dni===d); if(p&&sheCabe(p)) SHE.marc.add(d); });
-  if(u.minutos){ const h=Math.min(4,Math.max(0.5,Math.round(u.minutos/30)/2)); SHE.h=h; }
+  if(u.minutos){ const h=Math.min(sheMax(),Math.max(0.5,Math.round(u.minutos/30)/2)); SHE.h=h; }
   shePintar();
 }
 async function sheRegistrar(){
@@ -252,16 +267,21 @@ async function sheRegistrar(){
   SHE.guardando=true; sheResumen();
   const min=Math.round(SHE.h*60), fecha=sheFecha();
   try{
-    const r = s.cargo==="SUPERVISORA"
-      ? await rpc("fn_sup_horas_extra",{p_dni:s.dni,p_token:s.token,p_fecha:fecha,p_minutos:min,p_dnis:sel})
-      : await rpc("fn_ocurrencia",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),p_tipo:"HORA_EXTRA",p_minutos:min,p_detalle:"Horas extra (vista de supervisora)",p_dnis:sel,p_fecha:fecha});
+    let r;
+    if(s.cargo==="SUPERVISORA"){
+      try{ r=await rpc("fn_sup_horas_fecha",{p_dni:s.dni,p_token:s.token,p_fecha:fecha,p_minutos:min,p_dnis:sel}); }
+      catch(e){
+        if(!shFaltaParche(e) || SHE.jor===0 || SHE.dia==="otro") throw e;
+        r=await rpc("fn_sup_horas_extra",{p_dni:s.dni,p_token:s.token,p_fecha:fecha,p_minutos:min,p_dnis:sel});
+      }
+    } else r=await rpc("fn_ocurrencia",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),p_tipo:"HORA_EXTRA",p_minutos:min,p_detalle:"Horas extra (vista de supervisora)",p_dnis:sel,p_fecha:fecha});
     if(!r||!r.ok){ mostrarError((r&&r.error)||"No se pudo registrar"); }
     else {
       const om=r.omitidos||[];
-      mostrarOk(`Horas extra registradas a ${r.afectados} persona${r.afectados===1?"":"s"}`+(om.length?` · sin registrar: ${om.join(", ")}`:""));
+      mostrarOk(`${SHE.jor===0?"Horas trabajadas":"Horas extra"} registradas a ${r.afectados} persona${r.afectados===1?"":"s"}`+(om.length?` · sin registrar: ${om.join(", ")}`:""));
       SHE.marc.clear(); SH.cargado=0;
     }
-  }catch(e){ mostrarError(shFaltaParche(e)?"Falta correr el parche 112 en la base":e.message); }
+  }catch(e){ mostrarError(shFaltaParche(e)?"Falta correr el parche 135 en la base":e.message); }
   finally{ SHE.guardando=false; }
   await sheCargar();
 }

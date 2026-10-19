@@ -52,7 +52,7 @@
     <div class="sh-h">Consultar</div>
     <button type="button" class="sh-card" onclick="shIrAsis('hoy')"><span class="sh-ic cal" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M9 15l2 2 4-4"/></svg></span><span class="sh-tx"><b>Asistencia</b><span>Ayer y hoy, persona por persona</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" onclick="shAbrir('tabIncidencias')"><span class="sh-ic mano" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V11M11 11V5a1.5 1.5 0 0 1 3 0v6M14 11V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-.5A5.5 5.5 0 0 1 6 17l-2-3.5a1.5 1.5 0 0 1 2.6-1.5L8 14"/></svg></span><span class="sh-tx"><b>Pedidos del personal</b><span>Ajustes de tiempo y regresos</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
-    <button type="button" class="sh-card" onclick="shIrHE('hoy')"><span class="sh-ic reloj" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><span class="sh-tx"><b>Horas extra</b><span>Hoy o ayer, hasta 4 h por persona</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
+    <button type="button" class="sh-card" onclick="shIrHE('hoy')"><span class="sh-ic reloj" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><span class="sh-tx"><b>Horas extra</b><span>Elige el día: extras o fin de semana</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" onclick="shAbrir('tabSupBases')"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/></svg></span><span class="sh-tx"><b>Bases del área</b><span>Artículos y tiempos STD</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" onclick="shAbrir('tabEfPersonal')"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 16l5-5 4 3 7-7M15 7h5v5"/></svg></span><span class="sh-tx"><b>Eficiencias</b><span>Por persona y por día</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" onclick="shAbrir('tabReclamos')"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 0 0 4v4h16v-4a2 2 0 0 1 0-4V4H4zM10 4v12"/></svg></span><span class="sh-tx"><b>Quién reclamó</b><span>OF, módulo y operación</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
@@ -99,6 +99,8 @@
       <button type="button" role="tab" id="sheSegHoy" onclick="sheDia('hoy')">Hoy</button>
       <button type="button" role="tab" id="sheSegAyer" onclick="sheDia('ayer')">Ayer</button>
     </div>
+    <label class="she-fecha" for="sheFecha"><span>Otro día</span><input type="date" id="sheFecha" onchange="sheElegir(this.value)"></label>
+    <div class="she-dia" id="sheNota" hidden></div>
     <div class="she-horas">
       <button type="button" id="sheMenos" onclick="sheHorasMas(-0.5)" aria-label="Media hora menos">−</button>
       <div><b id="sheHoras" aria-live="polite">2 h</b><span id="sheHorasSub"></span></div>
