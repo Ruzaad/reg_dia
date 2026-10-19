@@ -2100,15 +2100,12 @@ function pintarTickets(){
   guardarProgreso("pasoTickets");
   pintarBarraSel();
   const l=$("listaTickets"); l.innerHTML="";
-  let lista=ticketsActuales(), sigue=null, tomados=[];
-  if(!ES_ACABADO && typeof opiSigue==="function"){
-    const sg=opiSigue(sel.of, sel.modulo, sel.op); sigue=sg&&sg.t?{t:sg.t,ult:sg.ult}:null;
-    const lib=lista.filter(t=>!RECL[t.codigo]);
-    tomados=lista.filter(t=>RECL[t.codigo]);
-    if(sigue){ const k=lib.indexOf(sigue.t); if(k>0) lib.unshift(...lib.splice(k)); }
-    lista=lib;
-    $("subTickets").textContent = lib.length
-      ? `${lib.length} libre${lib.length===1?"":"s"}${sigue?". Arriba el que sigue al último que registraste":""}. Toca todos los que hiciste.`
+  let lista=ticketsActuales(), sigue=null;
+  if(!ES_ACABADO){
+    lista=lista.slice().sort((x,y)=>String(x.num).localeCompare(String(y.num),undefined,{numeric:true}));
+    const lib=lista.filter(t=>!RECL[t.codigo]).length;
+    $("subTickets").textContent = lib
+      ? `${lib} libre${lib===1?"":"s"} de ${lista.length}, en orden de numeración. Toca todos los que hiciste.`
       : "No quedan paquetes libres en esta operación.";
   }
   const pintar=t=>{
@@ -2191,14 +2188,6 @@ function pintarTickets(){
     return c;
   };
   lista.forEach(t=>l.appendChild(pintar(t)));
-  if(tomados.length){
-    const d=document.createElement("button"); d.type="button"; d.className="opi-plegado";
-    const ab=typeof OPI!=="undefined" && OPI.tomados;
-    d.innerHTML=`<span>${tomados.length} ya tomado${tomados.length===1?"":"s"} por otras personas</span><b>${ab?"ocultar ▴":"ver ▾"}</b>`;
-    d.onclick=()=>{ OPI.tomados=!OPI.tomados; pintarTickets(); };
-    l.appendChild(d);
-    if(ab) tomados.forEach(t=>l.appendChild(pintar(t)));
-  }
 }
 function pintarBarraSel(){
   const libres = ticketsActuales().filter(t=>!RECL[t.codigo]);
@@ -2208,7 +2197,7 @@ function pintarBarraSel(){
   /* Costura: botón fijo abajo con lo marcado; "marcar todos" queda arriba. */
   if(!ES_ACABADO && modoSel){
     const cant=Object.values(marcados).reduce((a,t)=>a+(+t.cant||0),0);
-    b.innerHTML = libres.length>1 ? `<button class="btn-sel" onclick="marcarTodos()">MARCAR TODOS (${libres.length})</button>` : "";
+    b.innerHTML = libres.length>1 ? `<button class="btn-sel" onclick="marcarTodos()">${todosMarcados()?"DESMARCAR TODOS":`MARCAR TODOS (${libres.length})`}</button>` : "";
     const f=$("opiRegistrar");
     if(f){ f.hidden=false; f.disabled=!nSel;
       f.innerHTML = nSel
@@ -2225,16 +2214,22 @@ function pintarBarraSel(){
     const cantSel = Object.values(marcados).reduce((a,t)=>a+(+t.cant||0),0);
     const resumen = ES_ACABADO ? `${qty(cantSel)} und` : `${nSel} · ${Math.round(minSel*10)/10} min`;
     b.innerHTML = `
-      <button class="btn-sel" onclick="marcarTodos()">MARCAR TODOS (${libres.length})</button>
+      <button class="btn-sel" onclick="marcarTodos()">${todosMarcados()?"DESMARCAR TODOS":`MARCAR TODOS (${libres.length})`}</button>
       <button class="btn-sel primario" ${nSel?"":"disabled"} onclick="confirmarLote()">REGISTRAR ${resumen}</button>
       <button class="btn-sel cancelar" onclick="cancelarSel()">CANCELAR</button>`;
   }
 }
 function activarSel(){ modoSel=true; marcados={}; pintarTickets(); }
 function cancelarSel(){ modoSel=false; marcados={}; pintarTickets(); }
+function todosMarcados(){
+  const libres=ticketsActuales().filter(t=>!RECL[t.codigo]);
+  return libres.length>0 && libres.every(t=>marcados[t.codigo]);
+}
+/* 1 toque marca todos los libres; con todos marcados, el siguiente toque los desmarca. */
 function marcarTodos(){
+  const quitar=todosMarcados();
   marcados={};
-  ticketsActuales().forEach(t=>{ if(!RECL[t.codigo]) marcados[t.codigo]=t; });
+  if(!quitar) ticketsActuales().forEach(t=>{ if(!RECL[t.codigo]) marcados[t.codigo]=t; });
   pintarTickets();
 }
 /* parche 92: la confirmación dice a nombre de quién va, leído de la sesión en
