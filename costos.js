@@ -395,89 +395,188 @@ async function cbDescargarXlsx(){
   document.body.appendChild(l); l.click(); l.remove(); setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
 
-/* ================= REPORTE DE HOY =================
-   Igual que Tickets › Reporte de hoy de ingeniería, pero con el criterio de
-   Costos: "Según el área" toma la penúltima operación en CAMISA COSTURA y la
-   última en el resto. La operación se cambia sin volver a pedir datos. */
-let CH={fecha:"", area:null, tk:[], ult:{}, inc:[]};
+/* ================= REPORTE DE HOY (parche 138) =================
+   Todo lo que pasó por producción en el día. La jornada de cada persona viene
+   de _disp_reparto (la regla de la eficiencia): si solo tiene tickets en otra
+   área, va completa a esa área. "Según el área" toma la penúltima operación en
+   CAMISA COSTURA y la última en el resto; cambiar la operación no vuelve a
+   pedir datos. La OF de Costos es de 10 dígitos: 4 + ceros + la OF de planta. */
+let CH={fecha:"", area:null, tk:[], ult:{}, sam:{}, per:[], est:{}, inc:[], op:"a", fInc:"sin", abiertas:new Set()};
 const CH_PENULTIMA=new Set(["CAMISA COSTURA"]);
+const ofCostos = o => /^\d{1,9}$/.test(String(o||"").trim()) ? "4"+String(o).trim().padStart(9,"0") : "";
+const areaCorta = a => String(a||"").replace(" COSTURA","");
+const n0 = v => v==null||v==="" ? "" : qtyI(v);
 function chInit(){
   costosAreas("chArea", true);
   if(!$("chFecha").value) $("chFecha").value=hoyISO();
   cargarCostosHoy();
 }
+function chOpcion(m){
+  CH.op=m;
+  document.querySelectorAll("#chOpTabs .tab").forEach(b=>b.classList.toggle("activo", b.dataset.op===m));
+  pintarCostosHoy();
+}
+function chIncFiltro(f){
+  CH.fInc=f;
+  document.querySelectorAll("#chIncChips .dyn-chip").forEach(b=>b.classList.toggle("on", b.dataset.f===f));
+  pintarCostosHoy();
+}
+function chOfAbrir(k){ CH.abiertas.has(k)?CH.abiertas.delete(k):CH.abiertas.add(k); pintarCostosHoy(); }
 async function cargarCostosHoy(){
   const f=$("chFecha").value, area=$("chArea").value;
   if(!f){ mostrarError("Indica la fecha"); return; }
-  pintarCargando($("chTablaTk"),"Cargando…"); pintarCargando($("chTablaInc"),"Cargando…");
+  ["chTablaArea","chTablaMov","chTablaTk","chTablaInc"].forEach(t=>pintarCargando($(t),"Cargando…"));
+  const limpiar=()=>["chTablaArea","chTablaMov","chTablaTk","chTablaInc"].forEach(t=>$(t).innerHTML="");
   try{
-    const r=await rpc("fn_costos_reporte",{p_dni:ING.dni,p_token:ING.token,p_fecha:f,p_area:area});
-    if(!r||!r.ok){ mostrarError((r&&r.error)||"No se pudo cargar el reporte"); $("chTablaTk").innerHTML=""; $("chTablaInc").innerHTML=""; return; }
-    CH={fecha:f, area, tk:r.tickets||[], inc:r.incidencias||[], ult:{}};
+    const r=await rpc("fn_costos_reporte_dia",{p_dni:ING.dni,p_token:ING.token,p_fecha:f,p_area:area});
+    if(!r||!r.ok){ limpiar(); mostrarError((r&&r.error)||"No se pudo cargar el reporte"); return; }
+    CH={...CH, fecha:f, area, tk:r.tickets||[], inc:r.incidencias||[], per:r.personal||[], ult:{}, sam:{}, est:{}, abiertas:new Set()};
     (r.ultimas||[]).forEach(u=>{ CH.ult[u.area+"|"+u.articulo]=u; });
+    (r.sam||[]).forEach(s=>{ CH.sam[s.area+"|"+s.articulo]=Number(s.sam)||0; });
+    (r.estructura||[]).forEach(e=>{ CH.est[e.area]=Number(e.personas)||0; });
     pintarCostosHoy();
-  }catch(e){ $("chTablaTk").innerHTML=""; $("chTablaInc").innerHTML=""; mostrarError(e.message); }
+  }catch(e){
+    limpiar();
+    mostrarError(/Could not find the function/i.test(e.message) ? "Falta correr el parche 138 en Supabase" : e.message);
+  }
 }
 function chModo(area){
-  const m=$("chOp").value;
-  if(m==="a") return CH_PENULTIMA.has(area)?"p":"u";
-  return m;
+  if(CH.op==="a") return CH_PENULTIMA.has(area)?"p":"u";
+  return CH.op;
 }
-function chFilas(){
+/* Una fila por área + OF + artículo, con sus operaciones dentro. */
+function chOfs(){
   const grp={}; let sinNop=0, sinBase=0;
   CH.tk.forEach(t=>{
-    const u=CH.ult[t.area+"|"+t.articulo];
-    if(!u){ sinBase+=Number(t.tks)||0; return; }
-    if(t.nop==null){ sinNop+=Number(t.tks)||0; return; }
-    const modo=chModo(t.area), obj=modo==="u"?u.n1:u.n2;
-    if(obj==null || Number(t.nop)!==Number(obj)) return;
-    const k=t.area+"|"+t.op+"|"+t.of;
-    const g=grp[k]=grp[k]||{area:t.area, op:norm(t.op)||"(sin operación)", of:norm(t.of)||"(sin OF)", modo, cant:0, tks:0};
-    g.cant+=Number(t.cant)||0; g.tks+=Number(t.tks)||0;
+    const k=t.area+"|"+(t.of||"")+"|"+t.articulo;
+    const g=grp[k]=grp[k]||{k, area:t.area, of:norm(t.of)||"(sin OF)", of10:ofCostos(t.of), articulo:t.articulo||"",
+      prenda:t.prenda||"", sam:CH.sam[t.area+"|"+t.articulo]||0, modo:chModo(t.area), min:0, tks:0, per:0, cant:null, ops:[]};
+    const u=CH.ult[t.area+"|"+t.articulo], obj=u ? (g.modo==="u"?u.n1:u.n2) : null;
+    const cuenta = obj!=null && t.nop!=null && Number(t.nop)===Number(obj);
+    if(!u) sinBase+=Number(t.tks)||0; else if(t.nop==null) sinNop+=Number(t.tks)||0;
+    g.min+=Number(t.minutos)||0; g.tks+=Number(t.tks)||0; g.per=Math.max(g.per, Number(t.personas)||0);
+    if(cuenta) g.cant=(g.cant||0)+(Number(t.cant)||0);
+    g.ops.push({nop:t.nop, op:norm(t.op)||"(sin operación)", std:Number(t.std)||0, cant:Number(t.cant)||0,
+      min:Number(t.minutos)||0, tks:Number(t.tks)||0, per:Number(t.personas)||0, cuenta});
   });
-  const filas=Object.values(grp).sort((a,b)=>a.area.localeCompare(b.area,"es")
-    || a.op.localeCompare(b.op,"es",{numeric:true}) || a.of.localeCompare(b.of,"es",{numeric:true}));
+  const toks=String($("chBuscar").value||"").split(/\s+/).map(normKey).filter(Boolean);
+  const filas=Object.values(grp).filter(g=>!toks.length || toks.every(x=>normKey([g.of,g.of10,g.articulo,g.prenda,g.area].join(" ")).includes(x)));
+  filas.forEach(g=>{ g.eq=g.sam?g.min/g.sam:null; g.ops.sort((a,b)=>(Number(a.nop)||0)-(Number(b.nop)||0)); });
   return {filas, sinNop, sinBase};
 }
+/* Personal: por persona, sus áreas del día. */
+function chPersonas(){
+  const p={};
+  CH.per.forEach(x=>{ const k=x.nombre+"|"+x.area_est;
+    (p[k]=p[k]||{nombre:x.nombre, cargo:x.cargo||"", est:x.area_est||"", modo:x.modo||"", areas:[]}).areas.push(x); });
+  return Object.values(p);
+}
 function pintarCostosHoy(){
-  const {filas, sinNop, sinBase}=chFilas();
-  const todas=!CH.area, total=filas.reduce((a,x)=>a+x.cant,0);
-  const m=$("chOp").value;
+  const {filas, sinNop, sinBase}=chOfs();
+  const pers=chPersonas(), todas=!CH.area;
+  const fuera=pers.filter(p=>p.areas.some(a=>a.area!==p.est));
+  const he=CH.inc.filter(o=>o.tipo==="HORA_EXTRA"), noHe=CH.inc.filter(o=>o.tipo!=="HORA_EXTRA");
+  const minHe=he.reduce((a,o)=>a+(Number(o.minutos)||0),0), minInc=noHe.reduce((a,o)=>a+(Number(o.minutos)||0),0);
+  const jor=CH.per.filter(x=>todas||x.area===CH.area).reduce((a,x)=>a+(Number(x.jornada)||0),0);
+  const prod=CH.tk.reduce((a,t)=>a+(Number(t.minutos)||0),0);
+  const dia=fuera.filter(p=>p.areas.every(a=>a.area!==p.est)).length;
+  $("chKpis").innerHTML = kpi("Personas que trabajaron", pers.filter(p=>todas||p.areas.some(a=>a.area===CH.area)).length)
+    + kpi("Trabajaron fuera de su área", `${fuera.length}`, "var(--violeta)")
+    + kpi("Minutos de jornada", qtyI(jor)) + kpi("Minutos producidos", qtyI(prod), "var(--azul)")
+    + kpi("Minutos de horas extra", qtyI(minHe)) + kpi("Minutos en incidencias", qtyI(Math.abs(minInc)), "var(--alerta)");
+  $("chSubArea").textContent = fuera.length ? `${dia} prestados todo el día · ${fuera.length-dia} en dos áreas` : "";
+
+  // Por área
+  const ar={}; const A=a=>ar[a]=ar[a]||{area:a, est:CH.est[a]||0, propia:0, dia:0, dos:0, rec:0, jor:0, he:0, inc:0, prod:0};
+  pers.forEach(p=>{
+    const enOtra=p.areas.some(a=>a.area!==p.est), soloOtra=p.areas.every(a=>a.area!==p.est);
+    if(p.est){ const e=A(p.est); if(!enOtra) e.propia++; else if(soloOtra) e.dia++; else e.dos++; }
+    p.areas.forEach(a=>{ const x=A(a.area); x.jor+=Number(a.jornada)||0; if(a.area!==p.est) x.rec++; });
+  });
+  CH.tk.forEach(t=>{ A(t.area).prod+=Number(t.minutos)||0; });
+  CH.inc.forEach(o=>{ const x=A(o.area), m=Number(o.minutos)||0; if(o.tipo==="HORA_EXTRA") x.he+=m; else x.inc+=-m; });
+  Object.keys(CH.est).forEach(A);
+  const areas=Object.values(ar).filter(x=>todas||x.area===CH.area).filter(x=>x.prod||x.jor||x.inc||x.he).sort((a,b)=>a.area.localeCompare(b.area,"es"));
+  const tot=areas.reduce((t,x)=>{ ["est","propia","dia","dos","rec","jor","he","inc","prod"].forEach(k=>t[k]+=x[k]); return t; },
+    {area:"TOTAL", est:0, propia:0, dia:0, dos:0, rec:0, jor:0, he:0, inc:0, prod:0});
+  const filaArea=(x,cls)=>`<tr${cls}><td class="izq"><b>${esc(x.area)}</b></td><td class="n">${x.est||""}</td><td class="n">${x.propia||""}</td>
+    <td class="n">${x.dia?`<span class="ch-menos">−${x.dia}</span>`:""}</td><td class="n">${x.dos||""}</td>
+    <td class="n">${x.rec?`<span class="ch-mas">+${x.rec}</span>`:""}</td><td class="n">${n0(x.jor)}</td><td class="n">${x.he?n0(x.he):""}</td>
+    <td class="n">${x.inc?n0(x.inc):""}</td><td class="n"><b>${n0(x.prod)}</b></td></tr>`;
+  $("chTablaArea").innerHTML = `<thead><tr><th class="izq">Área</th><th class="n">En estructura</th><th class="n">Trabajaron en su área</th>
+    <th class="n">Prestados todo el día</th><th class="n">En dos áreas</th><th class="n">Recibidos de otra área</th><th class="n">Min. jornada</th>
+    <th class="n">Horas extra (min)</th><th class="n">Incidencias (min)</th><th class="n">Min. producidos</th></tr></thead><tbody>`
+    + (areas.length ? areas.map(x=>filaArea(x,"")).join("") + (areas.length>1?filaArea(tot,' class="cb-sub"'):"")
+      : `<tr><td colspan="10"><div class="vacio-msg">Sin producción ese día</div></td></tr>`) + "</tbody>";
+
+  // Fuera de su área
+  const modoTxt=p=>{ const otras=p.areas.filter(a=>a.area!==p.est);
+    if(p.areas.length===1) return `<span class="pill EN">Todo el día en ${esc(areaCorta(otras[0].area))}</span><span class="sub">no registró nada en ${esc(areaCorta(p.est))}</span>`;
+    return `<span class="pill">${p.modo==="HORA"?"Según la hora del cambio de área":"Repartido según lo producido"}</span>`; };
+  $("chTablaMov").innerHTML = `<thead><tr><th class="izq">Personal</th><th class="izq">Cargo</th><th class="izq">Área (estructura)</th>
+    <th class="izq">Trabajó en</th><th class="n">Min. producidos</th><th class="n">Jornada asignada</th><th class="izq">Cómo se contó</th></tr></thead><tbody>`
+    + (fuera.length ? fuera.sort((a,b)=>a.est.localeCompare(b.est,"es")||a.nombre.localeCompare(b.nombre,"es")).map(p=>
+        p.areas.sort((a,b)=>(a.area===p.est?0:1)-(b.area===p.est?0:1)).map((a,i)=>`<tr>
+          ${i?"":`<td class="izq" rowspan="${p.areas.length}"><b>${esc(p.nombre)}</b></td><td class="izq" rowspan="${p.areas.length}">${esc(p.cargo)}</td><td class="izq" rowspan="${p.areas.length}">${esc(areaCorta(p.est))}</td>`}
+          <td class="izq">${a.area===p.est?`<span class="sub">${esc(areaCorta(a.area))}</span>`:`<span class="ch-fuera">${esc(areaCorta(a.area))}</span>`}</td>
+          <td class="n">${n0(a.minutos)}</td><td class="n"><b>${n0(a.jornada)}</b></td>
+          ${i?"":`<td class="izq ch-modo" rowspan="${p.areas.length}">${modoTxt(p)}</td>`}</tr>`).join("")).join("")
+      : `<tr><td colspan="7"><div class="vacio-msg">Nadie trabajó fuera de su área ese día</div></td></tr>`) + "</tbody>";
+
+  // Producción por OF, con sus operaciones dentro
+  const m=CH.op;
   const etiqueta = m==="u"?"última operación":m==="p"?"penúltima operación"
-    : (CH.area ? (CH_PENULTIMA.has(CH.area)?"penúltima operación":"última operación") : "penúltima en camisa, última en el resto");
-  $("chTitTk").textContent="Tickets activos · "+etiqueta;
-  const minInc=CH.inc.reduce((a,o)=>a+(Number(o.minutos)||0),0);
-  $("chKpis").innerHTML = kpi("Unidades", qtyI(total), "var(--azul)") + kpi("OF", new Set(filas.map(x=>x.of)).size)
-    + kpi("Tickets", qtyI(filas.reduce((a,x)=>a+x.tks,0))) + kpi("Incidencias", CH.inc.length)
-    + kpi("Minutos de incidencias", (minInc>0?"+":"")+Math.round(minInc), minInc<0?"var(--alerta)":"var(--exito)");
-  const cols=(todas?[{k:"area",t:"Área",cls:"izq"}]:[]).concat([{k:"op",t:"Operación",cls:"izq"},{k:"of",t:"OF"},{k:"cant",t:"Cantidad total"},{k:"tks",t:"Tickets"}]);
+    : (CH.area ? (CH_PENULTIMA.has(CH.area)?"penúltima operación":"última operación") : "penúltima en CAMISA, última en el resto");
+  $("chTitTk").innerHTML = `Producción por OF <span class="sub">prendas en la ${esc(etiqueta)} · toca una OF para ver sus operaciones</span>`;
+  const cols=(todas?[{k:"area",t:"Área",cls:"izq"}]:[]).concat([{k:"of",t:"OF",cls:"izq"},{k:"articulo",t:"Artículo",cls:"izq"},{k:"prenda",t:"Prenda",cls:"izq"},
+    {k:"sam",t:"S.A.M",cls:"n"},{k:"cant",t:"Cantidad producida",cls:"n"},{k:"min",t:"Min. producidos",cls:"n"},{k:"eq",t:"Prendas equivalentes",cls:"n"},
+    {k:"per",t:"Personas",cls:"n"},{k:"tks",t:"Tickets",cls:"n"}]);
+  const porDef=(a,b)=>a.area.localeCompare(b.area,"es") || b.min-a.min;
   $("chTablaTk").innerHTML = ordThead("chTablaTk", cols, pintarCostosHoy) + "<tbody>"
-    + (filas.length ? ordAplicar("chTablaTk", filas).map(x=>`<tr>${todas?`<td class="izq">${esc(x.area)}${x.modo==="p"?' <small class="sub">(penúltima)</small>':""}</td>`:""}
-        <td class="izq">${esc(x.op)}</td><td>${esc(x.of)}</td><td class="rep-num">${qty(x.cant)}</td><td>${x.tks}</td></tr>`).join("")
-      : `<tr><td colspan="${cols.length}"><div class="vacio-msg">Sin tickets activos en la ${esc(etiqueta)}</div></td></tr>`)
+    + (filas.length ? ordAplicar("chTablaTk", filas, porDef).map(g=>{ const ab=CH.abiertas.has(g.k);
+        return `<tr class="ch-fila${ab?" abierta":""}" data-k="${esc(g.k)}" onclick="chOfAbrir(this.dataset.k)">
+          ${todas?`<td class="izq">${esc(areaCorta(g.area))}</td>`:""}
+          <td class="izq"><div class="ch-of">${esc(g.of10||g.of)}<small>${g.of10?"OF "+esc(g.of):"sin OF numérica"}</small></div></td>
+          <td class="izq"><b>${esc(g.articulo)}</b></td><td class="izq">${esc(g.prenda)}</td><td class="n">${g.sam?g.sam.toFixed(2):""}</td>
+          <td class="n">${!CH.ult[g.area+"|"+g.articulo]?'<span class="sub">sin BASE</span>':g.cant==null?'<span class="sub">en proceso</span>':qtyI(g.cant)+(g.modo==="p"?' <small class="sub">(penúlt.)</small>':"")}</td>
+          <td class="n"><b>${qtyI(g.min)}</b></td><td class="n">${g.eq==null?"":qtyI(g.eq)}</td><td class="n">${g.per}</td><td class="n">${g.tks}</td></tr>`
+          + g.ops.map(o=>`<tr class="ch-op${o.cuenta?" cuenta":""}"${ab?"":" hidden"}>${todas?"<td></td>":""}
+            <td class="izq" colspan="3">${o.nop!=null?`<span class="sub">N°${esc(o.nop)}</span> `:""}${esc(o.op)}${o.cuenta?' <span class="pill CERRADO">cuenta</span>':""}</td>
+            <td class="n">${o.std?num2(o.std):""}</td><td class="n">${qtyI(o.cant)}</td><td class="n">${qty(o.min)}</td><td></td>
+            <td class="n">${o.per}</td><td class="n">${o.tks}</td></tr>`).join(""); }).join("")
+      : `<tr><td colspan="${cols.length}"><div class="vacio-msg">Sin tickets ese día</div></td></tr>`)
     + "</tbody>";
-  const fuera=[]; if(sinNop) fuera.push(`${sinNop} sin N°OP`); if(sinBase) fuera.push(`${sinBase} sin BASE del artículo`);
-  $("chPieTk").textContent=(filas.length?`${filas.length} fila(s) · ${qty(total)} und en total`:"")
-    + (fuera.length?`${filas.length?" · ":""}fuera del cálculo: ${fuera.join(", ")} ticket(s)`:"");
-  const icol=(todas?[{k:"area",t:"Área",cls:"izq"}]:[]).concat([{k:"nombre",t:"Personal",cls:"izq"},{k:"minutos",t:"Minutos"},{k:"tipo",t:"Tipo"},{k:"detalle",t:"Descripción",cls:"izq"}]);
+  const out=[]; if(sinNop) out.push(`${sinNop} sin N°OP`); if(sinBase) out.push(`${sinBase} sin BASE del artículo`);
+  $("chPieTk").textContent=(filas.length?`${filas.length} OF · ${qtyI(prod)} min producidos · prendas equivalentes = minutos ÷ S.A.M`:"")
+    + (out.length?` · no cuentan para la cantidad: ${out.join(", ")} ticket(s)`:"");
+
+  // Incidencias
+  const lista = CH.fInc==="sin"?noHe : CH.fInc==="he"?he : CH.inc;
+  const sum=lista.reduce((a,o)=>a+(Number(o.minutos)||0),0);
+  const icol=(todas?[{k:"area",t:"Área",cls:"izq"}]:[]).concat([{k:"nombre",t:"Personal",cls:"izq"},{k:"tipo",t:"Tipo"},{k:"minutos",t:"Minutos",cls:"n"},{k:"detalle",t:"Descripción",cls:"izq"},{k:"hora",t:"Hora"}]);
   $("chTablaInc").innerHTML = ordThead("chTablaInc", icol, pintarCostosHoy) + "<tbody>"
-    + (CH.inc.length ? ordAplicar("chTablaInc", CH.inc).map(o=>{ const mi=Number(o.minutos)||0;
-        return `<tr>${todas?`<td class="izq">${esc(o.area||"")}</td>`:""}<td class="izq">${esc(o.nombre||"")}</td>
-          <td class="rep-num" style="color:${mi<0?"var(--alerta)":"var(--exito)"}">${mi>0?"+":""}${mi}</td>
-          <td>${esc(TIPO_LBL(o.tipo))}</td><td class="izq">${esc(o.detalle||"")}</td></tr>`; }).join("")
-      : `<tr><td colspan="${icol.length}"><div class="vacio-msg">Sin incidencias ese día</div></td></tr>`)
+    + (lista.length ? ordAplicar("chTablaInc", lista).map(o=>{ const mi=Number(o.minutos)||0;
+        return `<tr>${todas?`<td class="izq">${esc(areaCorta(o.area))}</td>`:""}<td class="izq">${esc(o.nombre||"")}</td><td>${esc(TIPO_LBL(o.tipo))}</td>
+          <td class="n rep-num" style="color:${mi<0?"var(--alerta)":"var(--exito)"}">${mi>0?"+":""}${mi}</td>
+          <td class="izq desc">${esc(o.detalle||"")}</td><td>${esc(o.hora||"")}</td></tr>`; }).join("")
+      : `<tr><td colspan="${icol.length}"><div class="vacio-msg">Sin incidencias con ese filtro</div></td></tr>`)
     + "</tbody>";
-  $("chPieInc").textContent = CH.inc.length ? `${CH.inc.length} incidencia(s) · ${minInc>0?"+":""}${Math.round(minInc)} min` : "";
+  $("chPieInc").textContent = lista.length ? `${lista.length} incidencia(s) · ${sum>0?"+":""}${Math.round(sum)} min` : "";
 }
 function chDescargar(){
   if(!CH.fecha){ mostrarError("Carga el reporte primero"); return; }
-  const {filas}=chFilas();
-  const ws1=XLSX.utils.aoa_to_sheet([["Área","Operación","OF","Cantidad","Tickets","Cuenta"],
-    ...filas.map(x=>[x.area,x.op,x.of,x.cant,x.tks,x.modo==="p"?"Penúltima":"Última"])]);
-  const ws2=XLSX.utils.aoa_to_sheet([["Área","Personal","Minutos","Tipo","Descripción","Hora"],
+  const {filas}=chOfs();
+  const ws1=XLSX.utils.aoa_to_sheet([["Área","OF Costos","OF","Artículo","Prenda","S.A.M","Cantidad producida","Cuenta","Min. producidos","Prendas equivalentes","Personas","Tickets"],
+    ...filas.map(g=>[g.area,g.of10,g.of,g.articulo,g.prenda,g.sam||"",g.cant??"",g.modo==="p"?"Penúltima":"Última",Math.round(g.min*100)/100,g.eq==null?"":Math.round(g.eq*10)/10,g.per,g.tks])]);
+  const ws2=XLSX.utils.aoa_to_sheet([["Área","OF Costos","OF","Artículo","Prenda","N°OP","Operación","STD","Cantidad","Minutos","Personas","Tickets","Cuenta"],
+    ...filas.flatMap(g=>g.ops.map(o=>[g.area,g.of10,g.of,g.articulo,g.prenda,o.nop??"",o.op,o.std,o.cant,Math.round(o.min*100)/100,o.per,o.tks,o.cuenta?"Sí":""]))]);
+  const ws3=XLSX.utils.aoa_to_sheet([["Personal","Cargo","Área (estructura)","Trabajó en","Min. producidos","Jornada asignada"],
+    ...CH.per.map(x=>[x.nombre,x.cargo||"",x.area_est||"",x.area,Number(x.minutos)||0,Number(x.jornada)||0])]);
+  const ws4=XLSX.utils.aoa_to_sheet([["Área","Personal","Minutos","Tipo","Descripción","Hora"],
     ...CH.inc.map(o=>[o.area,o.nombre,Number(o.minutos)||0,TIPO_LBL(o.tipo),o.detalle||"",o.hora||""])]);
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws1, "Tickets activos"); XLSX.utils.book_append_sheet(wb, ws2, "Incidencias");
+  XLSX.utils.book_append_sheet(wb, ws1, "Producción por OF"); XLSX.utils.book_append_sheet(wb, ws2, "Por operación");
+  XLSX.utils.book_append_sheet(wb, ws3, "Personal"); XLSX.utils.book_append_sheet(wb, ws4, "Incidencias");
   XLSX.writeFile(wb, `REPORTE_HOY_${nombreArchivo(CH.area||"TODAS")}_${CH.fecha}.xlsx`);
 }
 
