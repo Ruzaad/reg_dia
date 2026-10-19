@@ -858,6 +858,31 @@ body[data-pagina="supervisora"] .grid-personal{max-width:1100px;width:100%;margi
 .cb-datos dd.cb-man{background:var(--ocre-t);border-radius:4px;padding:0 6px;}
 .cb-horas{align-self:center;white-space:nowrap;}
 .cb-prod{padding:12px 16px 16px;border-top:1px solid var(--linea-2);}
+/* Costos › Reporte de hoy (parche 138): por área, personal fuera de su área y OF que se despliega por operación. */
+.ch-tit{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:22px 0 8px;}
+.ch-tit .sub{font-weight:600;}
+.ch-chips{display:flex;gap:6px;margin-left:auto;}
+.ch-t td{white-space:nowrap;}
+.ch-t th{white-space:normal;line-height:1.25;vertical-align:bottom;}
+.ch-t td.n,.ch-t th.n{text-align:right;}
+.ch-t td.n{font-family:var(--mono);}
+.ch-t td.desc{white-space:normal;min-width:260px;}
+.ch-t tr.cb-sub td{font-family:inherit;}
+.ch-mas{color:var(--exito);font-family:var(--mono);font-weight:700;}
+.ch-menos{color:var(--violeta);font-family:var(--mono);font-weight:700;}
+.ch-fuera{color:var(--violeta);font-weight:700;}
+.ch-of{font-family:var(--mono);font-weight:700;color:var(--titulo);}
+.ch-of small{display:block;font-family:var(--sans);font-weight:600;font-size:11px;color:var(--tenue);}
+.ch-ofs{font-family:var(--mono);font-size:12.5px;white-space:normal!important;max-width:260px;}
+.ch-modo{white-space:normal!important;min-width:180px;}
+.ch-modo .sub{display:block;font-size:11.5px;margin-top:2px;}
+.ch-t tr.ch-fila{cursor:pointer;}
+.ch-t tr.ch-fila td:first-child::before{content:"▸";display:inline-block;width:14px;color:var(--tenue);transition:transform .15s;}
+.ch-t tr.ch-fila.abierta td:first-child::before{transform:rotate(90deg);}
+.ch-t tr.ch-op td{background:var(--sup-2);font-size:12.5px;}
+.ch-t tr.ch-op td:first-child{padding-left:30px;}
+.ch-t tr.ch-op.cuenta td{background:var(--azul-t);font-weight:700;}
+.ch-t tr.ch-op[hidden]{display:none;}
 .cb-prod-tit{font-size:12px;font-weight:700;color:var(--suave);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;
   display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
 .cb-prod-tit b{color:var(--texto);font-family:var(--mono);font-size:15px;}
