@@ -2030,11 +2030,15 @@ const REC={of:null, info:null};
 const recActiva = () => { const s=sesionActual(); return !!s && s.area==="REPROCESO" && ES_ACABADO; };
 async function recCargar(of, repintar){
   const s=sesionActual(); REC.of=of; REC.info=null;
-  try{ REC.info=await rpc("fn_reproceso_reclasif_info",{p_dni:s.dni,p_token:s.token,p_of:of}); }
-  catch(e){ REC.info=null; }   // sin el parche 128 no aparece el botón
+  try{ REC.info=await rpc("fn_reproceso_reclasif_info2",{p_dni:s.dni,p_token:s.token,p_of:of}); REC.v2=true; }
+  catch(e){   // sin el parche 136: la pantalla de antes
+    REC.v2=false;
+    try{ REC.info=await rpc("fn_reproceso_reclasif_info",{p_dni:s.dni,p_token:s.token,p_of:of}); }
+    catch(e2){ REC.info=null; }   // sin el parche 128 no aparece el botón
+  }
   if(repintar && REC.of===of && ACAB.of && ACAB.of.of===of && $("pasoAcabOp") && $("pasoAcabOp").classList.contains("activa")) pintarAcabOps();
 }
-function recAbrir(){
+function recAbrirViejo(){
   const i=REC.info; if(!i||!i.ok) return;
   const filas=(i.filas||[]).map(f=>`<tr><td class="izq">${esc(f.color)}</td><td>${esc(f.talla)}</td><td class="izq">${esc(f.falla)}</td><td>${qty(f.cantidad)}</td>
     <td><button type="button" class="btn-mini" data-id="${f.id}" aria-label="Anular ${esc(f.falla)}">✕</button></td></tr>`).join("");
@@ -2058,7 +2062,7 @@ function recAbrir(){
         p_color:$("recColor").value,p_talla:$("recTalla").value,p_falla:$("recFalla").value,p_cant:parseInt($("recCant").value,10)||0});
       if(!r.ok){ msg.textContent=r.error||"No se pudo guardar"; return; }
       mostrarOk("Reclasificación guardada");
-      await recCargar(i.of,false); recAbrir(); if($("pasoAcabOp")&&$("pasoAcabOp").classList.contains("activa")) pintarAcabOps();
+      await recCargar(i.of,false); recAbrirViejo(); if($("pasoAcabOp")&&$("pasoAcabOp").classList.contains("activa")) pintarAcabOps();
     }catch(e){ msg.textContent=e.message; }
   });
   const tb=$("recFilas");
@@ -2068,9 +2072,129 @@ function recAbrir(){
     try{
       const r=await rpc("fn_reproceso_reclasif_anular",{p_dni:s.dni,p_token:s.token,p_id:Number(b.dataset.id)});
       if(!r.ok){ $("recMsg").textContent=r.error||"No se pudo anular"; return; }
-      await recCargar(i.of,false); recAbrir(); if($("pasoAcabOp")&&$("pasoAcabOp").classList.contains("activa")) pintarAcabOps();
+      await recCargar(i.of,false); recAbrirViejo(); if($("pasoAcabOp")&&$("pasoAcabOp").classList.contains("activa")) pintarAcabOps();
     }catch(err){ $("recMsg").textContent=err.message; }
   };
+}
+
+/* Parche 136: color y falla con botones, cantidad por talla y todo lo de una falla en un solo
+   guardado ("tanda"). Sin el parche cae a recAbrirViejo. */
+const REC_FALLAS=["MANCHA","HILO SUELTO","COSTURA ABIERTA","HUECO","TONO","MEDIDA"];
+const recUnicos = xs => [...new Set(xs.filter(Boolean))];
+const recTot = () => Object.values(REC.sel.v).reduce((a,b)=>a+b,0);
+function recAbrir(){
+  const i=REC.info; if(!i||!i.ok) return;
+  if(!REC.v2) return recAbrirViejo();
+  const ult=(i.tandas||[])[0];
+  REC.sel={color:(ult&&ult.color)||(i.colores2||[])[0]||"", falla:"", v:{}, act:null, buf:"", ext:{c:[],f:[],t:[]}, add:"", msg:""};
+  abrirModal(`<div id="rcCuerpo"></div>`);
+  $("rcCuerpo").onclick=recClic;
+  recPintar();
+}
+function recChips(lista, sel, dato, aria){
+  return lista.map(x=>`<button type="button" class="rc-chip${x===sel?" on":""}" data-${dato}="${esc(x)}" aria-pressed="${x===sel}">${esc(x)}</button>`).join("")
+    +`<button type="button" class="rc-chip mas" data-mas="${dato}" aria-label="${aria}">+ otro</button>`;
+}
+function recPintar(){
+  const i=REC.info, S=REC.sel, z=$("rcCuerpo"); if(!z||!i) return;
+  const tot=recTot(), queda=Number(i.queda)||0, hecho=Number(i.hecho)||0, pct=hecho?Math.round((hecho-queda)/hecho*100):0;
+  const colores=recUnicos([...(i.colores2||i.colores||[]), S.color, ...S.ext.c]);
+  const fallas=recUnicos([...(i.fallas||[]), ...REC_FALLAS, S.falla, ...S.ext.f]);
+  const tallas=recUnicos([...(i.tallas||[]), ...S.ext.t]);
+  const nT=Object.values(S.v).filter(Boolean).length, pasa=tot>queda;
+  const celdas=i.celdas||[], tallasCuadro=recUnicos(tallas.filter(t=>celdas.some(c=>c.talla===t)));
+  const fallasCuadro=recUnicos(celdas.map(c=>c.falla));
+  const cel=(f,t)=>celdas.filter(c=>c.falla===f&&c.talla===t).reduce((a,c)=>a+Number(c.cant),0);
+  const add = S.add ? `<div class="rc-add"><input id="rcAdd" maxlength="${S.add==="t"?20:S.add==="c"?40:60}" placeholder="${S.add==="t"?"Talla":S.add==="c"?"Color":"Tipo de falla"}" autocomplete="off" aria-label="Nuevo valor">
+      <button type="button" class="btn-mini" data-acc="addok">Agregar</button><button type="button" class="btn-mini gris" data-acc="addno">Cancelar</button></div>` : "";
+  z.innerHTML=`<h2>Reclasificar · ${esc(i.articulo)}</h2>
+    <div class="sub" style="margin-bottom:10px;">Lote ${esc(i.of)} · después de ${esc(i.operacion)}</div>
+    <div class="rc-avance"><span>Clasificadas <b>${qty(hecho-queda)}</b> de ${qty(hecho)}</span><span>Faltan <b>${qty(queda)}</b></span></div>
+    <div class="rc-barra"><i style="width:${pct}%"></i></div>
+    <div class="rc-sec"><div class="rc-lbl">Color</div><div class="rc-chips">${recChips(colores,S.color,"c","Otro color")}</div></div>
+    <div class="rc-sec"><div class="rc-lbl">Tipo de falla</div><div class="rc-chips">${recChips(fallas,S.falla,"f","Otro tipo de falla")}</div></div>
+    ${add}
+    <div class="rc-sec"><div class="rc-lbl">¿Cuántas de cada talla?</div><div class="rc-tallas">
+      ${tallas.map(t=>{ const n=S.v[t]||0; return `<div class="rc-t${n?" lleno":""}${S.act===t?" foco":""}">
+        <span class="rc-tz">${esc(t)}</span>
+        <button type="button" class="rc-b" data-mn="${esc(t)}" aria-label="Quitar una talla ${esc(t)}">−</button>
+        <button type="button" class="rc-v" data-t="${esc(t)}" aria-label="Cantidad talla ${esc(t)}">${S.act===t?(S.buf||"_"):(n||"·")}</button>
+        <button type="button" class="rc-b" data-pl="${esc(t)}" aria-label="Agregar una talla ${esc(t)}">+</button></div>`; }).join("")}
+      </div>
+      <button type="button" class="rc-otra" data-mas="t">+ otra talla</button>
+      ${S.act!==null?`<div class="rc-teclado">
+        <div class="rc-tit"><b>${esc(S.falla||"Falla")} · talla ${esc(S.act)}</b></div>
+        <div class="rc-disp">${S.buf||"0"}</div>
+        <div class="rc-rapidos">${[5,10,12,20,50].map(n=>`<button type="button" data-q="${n}">${n}</button>`).join("")}</div>
+        <div class="rc-teclas">${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" data-d="${n}">${n}</button>`).join("")}
+          <button type="button" class="borrar" data-acc="borrar">⌫ borrar</button><button type="button" data-d="0">0</button>
+          <button type="button" class="sig" data-acc="sig">${tallas.indexOf(S.act)<tallas.length-1?esc(tallas[tallas.indexOf(S.act)+1])+" ›":"Listo ✓"}</button></div></div>`:""}
+    </div>
+    <div class="modal-msg" id="recMsg" role="alert">${esc(S.msg||(pasa?`Solo faltan ${qty(queda)} prendas por clasificar`:""))}</div>
+    <div class="rc-resumen">${tot?`<b>${qty(tot)}</b> prendas · ${esc(S.color||"sin color")} · ${esc(S.falla||"elige la falla")} · ${nT} talla${nT>1?"s":""}`:"Elige la falla y pon las cantidades"}</div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" id="recGuardar" data-acc="guardar"${(!tot||!S.falla||!S.color||pasa)?" disabled":""}>GUARDAR${tot?" "+qty(tot)+" PRENDAS":""}</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>
+    ${celdas.length?`<div class="rc-sec"><div class="rc-lbl">Lo clasificado en este lote</div><div class="tabla-scroll"><table class="tabla rc-tabla"><thead><tr><th class="izq">Falla</th>${tallasCuadro.map(t=>`<th>${esc(t)}</th>`).join("")}<th>Total</th></tr></thead><tbody>
+      ${fallasCuadro.map(f=>`<tr><td class="izq">${esc(f)}</td>${tallasCuadro.map(t=>{const c=cel(f,t);return `<td>${c?qty(c):"·"}</td>`;}).join("")}<td><b>${qty(tallasCuadro.reduce((a,t)=>a+cel(f,t),0))}</b></td></tr>`).join("")}
+      </tbody></table></div></div>`:""}
+    ${(i.tandas||[]).length?`<div class="rc-sec"><div class="rc-lbl">Últimas guardadas <em>toca ✕ si te equivocaste</em></div>
+      ${i.tandas.slice(0,8).map(t=>`<div class="rc-tanda"><span class="rc-q">${qty(t.cant)}</span>
+        <div class="rc-d">${esc(t.falla)} · ${esc(t.color)}<small>${(t.tallas||[]).map(x=>esc(x.talla)+"·"+qty(x.cant)).join("  ")}</small></div>
+        <button type="button" class="btn-mini rojo" data-an="${esc(t.k)}" aria-label="Anular ${esc(t.falla)}">✕ Anular</button></div>`).join("")}</div>`:""}`;
+  const a=$("rcAdd"); if(a) a.focus();
+}
+async function recClic(e){
+  const b=e.target.closest("button"); if(!b) return;
+  const S=REC.sel, d=b.dataset, i=REC.info;
+  S.msg="";
+  if(d.c!==undefined){ S.color=d.c; }
+  else if(d.f!==undefined){ S.falla=S.falla===d.f?"":d.f; }
+  else if(d.mas){ S.add=d.mas; }
+  else if(d.t!==undefined){ S.act=S.act===d.t?null:d.t; S.buf=S.act&&S.v[S.act]?String(S.v[S.act]):""; }
+  else if(d.pl!==undefined){ S.v[d.pl]=Math.min(99999,(S.v[d.pl]||0)+1); }
+  else if(d.mn!==undefined){ S.v[d.mn]=Math.max(0,(S.v[d.mn]||0)-1); if(!S.v[d.mn]) delete S.v[d.mn]; }
+  else if(d.d!==undefined && S.act!==null){ S.buf=(S.buf==="0"?"":S.buf)+d.d; S.buf=S.buf.slice(0,5); if(+S.buf) S.v[S.act]=+S.buf; else delete S.v[S.act]; }
+  else if(d.q!==undefined && S.act!==null){ S.buf=d.q; S.v[S.act]=+d.q; }
+  else if(d.acc==="borrar" && S.act!==null){ S.buf=S.buf.slice(0,-1); if(+S.buf) S.v[S.act]=+S.buf; else delete S.v[S.act]; }
+  else if(d.acc==="sig"){
+    const ts=recUnicos([...(i.tallas||[]), ...S.ext.t]), k=ts.indexOf(S.act);
+    S.act = k>=0 && k<ts.length-1 ? ts[k+1] : null; S.buf = S.act&&S.v[S.act] ? String(S.v[S.act]) : "";
+  }
+  else if(d.acc==="addno"){ S.add=""; }
+  else if(d.acc==="addok"){
+    const v=($("rcAdd").value||"").trim().toUpperCase(); const k=S.add;
+    if(v){ if(k==="c"){ S.ext.c.push(v); S.color=v; } else if(k==="f"){ S.ext.f.push(v); S.falla=v; } else { S.ext.t.push(v); S.act=v; S.buf=""; } }
+    S.add="";
+  }
+  else if(d.acc==="guardar"){ return recGuardar(); }
+  else if(d.an){ return recAnular(d.an); }
+  else return;
+  recPintar();
+}
+async function recGuardar(){
+  const i=REC.info, S=REC.sel, s=sesionActual();
+  if(REC.guardando || !i || !s) return;
+  REC.guardando=true; const g=$("recGuardar"); if(g){ g.disabled=true; g.setAttribute("aria-busy","true"); }
+  try{
+    const tallas=Object.entries(S.v).filter(([,n])=>n>0).map(([talla,cant])=>({talla,cant}));
+    const r=await rpc("fn_reproceso_reclasificar_varias",{p_dni:s.dni,p_token:s.token,p_of:i.of,p_color:S.color,p_falla:S.falla,p_tallas:tallas});
+    if(!r.ok){ S.msg=r.error||"No se pudo guardar"; recPintar(); return; }
+    const falla=S.falla;
+    S.v={}; S.act=null; S.buf=""; S.falla="";
+    await recCargar(i.of,true);
+    mostrarOk(`Guardadas ${qty(r.guardadas)} · ${falla}`);
+    recPintar();
+  }catch(e){ S.msg=e.message; recPintar(); }
+  finally{ REC.guardando=false; }
+}
+async function recAnular(k){
+  const i=REC.info, s=sesionActual(); if(!i||!s) return;
+  try{
+    const r=await rpc("fn_reproceso_reclasif_anular_tanda",{p_dni:s.dni,p_token:s.token,p_k:k});
+    if(!r.ok){ REC.sel.msg=r.error||"No se pudo anular"; recPintar(); return; }
+    await recCargar(i.of,true); recPintar();
+  }catch(e){ REC.sel.msg=e.message; recPintar(); }
 }
 
 /* --- paso tickets (numeración protagonista + selección múltiple) --- */
