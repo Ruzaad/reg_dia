@@ -1748,3 +1748,44 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .she-fecha input{flex:1;min-height:48px;border:1px solid var(--linea);border-radius:var(--r);padding:8px 12px;font:400 17px var(--sans);background:var(--sup);color:var(--texto);box-sizing:border-box;}
 .she-dia{background:var(--ocre-t);color:var(--titulo);border-radius:var(--r);padding:10px 14px;margin:0 0 12px;font:500 15px var(--sans);}
 .she-dia[hidden]{display:none;}
+/* ---------- Reclasificar rápido (parche 136) ---------- */
+.rc-avance{display:flex;justify-content:space-between;font-size:13px;color:var(--suave);margin-bottom:6px}
+.rc-avance b{font-family:var(--mono);color:var(--texto);font-size:15px}
+.rc-barra{height:10px;background:var(--sup-2);border:1px solid var(--linea-2);border-radius:99px;overflow:hidden;margin-bottom:12px}
+.rc-barra i{display:block;height:100%;background:var(--exito);border-radius:99px}
+.rc-sec{margin:0 0 14px}
+.rc-lbl{font-size:12.5px;font-weight:700;color:var(--suave);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.rc-lbl em{font-style:normal;text-transform:none;letter-spacing:0;font-weight:500;color:var(--tenue)}
+.rc-chips{display:flex;flex-wrap:wrap;gap:8px}
+.rc-chip{border:1.5px solid var(--linea);background:var(--sup);color:var(--texto);border-radius:999px;padding:9px 14px;min-height:44px;font:600 14px var(--sans);cursor:pointer}
+.rc-chip.on{background:var(--azul);border-color:var(--azul);color:#fff}
+.rc-chip.mas,.rc-otra{color:var(--enlace);border-style:dashed}
+.rc-otra{margin-top:8px;border:1.5px dashed var(--linea);background:var(--sup);border-radius:999px;padding:8px 14px;min-height:44px;font:600 14px var(--sans);cursor:pointer}
+.rc-add{display:flex;gap:8px;align-items:center;margin:0 0 14px}
+.rc-add input{flex:1;min-height:44px;border:1px solid var(--linea);border-radius:var(--r-s);padding:8px 12px;font:400 16px var(--sans);background:var(--sup);color:var(--texto)}
+.rc-tallas{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rc-t{display:flex;align-items:stretch;border:1.5px solid var(--linea-2);border-radius:var(--r-s);background:var(--sup);overflow:hidden;height:52px}
+.rc-tz{width:44px;display:flex;align-items:center;justify-content:center;font:700 16px var(--mono);color:var(--titulo);background:var(--sup-2);border-right:1px solid var(--linea-2)}
+.rc-b{width:38px;border:0;background:transparent;color:var(--enlace);font:700 22px var(--sans);cursor:pointer}
+.rc-v{flex:1;border:0;background:transparent;font:600 20px var(--mono);color:var(--tenue);cursor:pointer;min-width:0}
+.rc-t.lleno{border-color:var(--exito);background:var(--exito-t)}
+.rc-t.lleno .rc-v{color:var(--exito)}
+.rc-t.foco{border-color:var(--enlace);box-shadow:0 0 0 3px rgba(0,105,217,.18)}
+.rc-t.foco .rc-v{color:var(--enlace)}
+.rc-teclado{margin-top:10px;border:1px solid var(--linea-2);border-radius:var(--r);padding:10px;background:var(--sup-2)}
+.rc-tit{font-size:14px;color:var(--titulo);margin-bottom:6px}
+.rc-disp{font:700 36px var(--mono);text-align:center;border:1.5px solid var(--enlace);border-radius:var(--r);padding:4px;margin-bottom:8px;background:var(--sup);color:var(--titulo)}
+.rc-rapidos{display:flex;gap:6px;margin-bottom:8px}
+.rc-rapidos button{flex:1;min-height:40px;border:1px solid var(--linea);border-radius:10px;background:var(--sup);color:var(--enlace);font:600 16px var(--mono);cursor:pointer}
+.rc-teclas{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.rc-teclas button{min-height:48px;border:1px solid var(--linea);border-radius:12px;background:var(--sup);color:var(--texto);font:600 22px var(--mono);cursor:pointer}
+.rc-teclas .borrar{font:600 14px var(--sans);color:var(--alerta)}
+.rc-teclas .sig{font:700 15px var(--sans);background:var(--azul);color:#fff;border-color:var(--azul)}
+.rc-resumen{font-size:13.5px;color:var(--suave);text-align:center;margin:6px 0}
+.rc-resumen b{color:var(--texto)}
+.rc-tabla td,.rc-tabla th{text-align:right}
+.rc-tabla td.izq,.rc-tabla th.izq{text-align:left}
+.rc-tanda{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--linea-2);font-size:13.5px}
+.rc-tanda:last-child{border-bottom:0}
+.rc-q{font:700 16px var(--mono);min-width:40px;color:var(--titulo)}
+.rc-d{flex:1}.rc-d small{display:block;color:var(--tenue);font-size:12px}
