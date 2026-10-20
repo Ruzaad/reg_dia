@@ -3707,16 +3707,19 @@ function elegirTipo(tipo){
   }
   irA("pasoMinutos");
 }
-/* Minutos de una salida. Sin retorno confirmado se descuenta hasta el fin de
-   jornada (18:20): lo conservador. Al confirmar el regreso se devuelven los
+/* Minutos de una salida, sin el refrigerio (13:00 a 13:45). Sin retorno
+   confirmado se descuenta hasta el fin de jornada (18:20): lo conservador. Al confirmar el regreso se devuelven los
    minutos posteriores, así una hora de retorno optimista nunca regala tiempo. */
 const FIN_JORNADA="18:20", INI_JORNADA="08:00";
 const hm=t=>{ const m=/^(\d{1,2}):(\d{2})$/.exec(String(t||"")); return m?(+m[1])*60+(+m[2]):null; };
+const ALM_INI=hm("13:00"), ALM_FIN=hm("13:45");
+const salidaFuera=t=>{ const v=hm(t); return v!=null && (v<hm(INI_JORNADA) || v>=hm(FIN_JORNADA)); };
 function minSalida(salida, retorno){
   const s=hm(salida), f=hm(FIN_JORNADA), i=hm(INI_JORNADA);
   if(s==null) return 0;
-  const desde=Math.min(Math.max(s,i),f), hasta=retorno!=null?Math.min(hm(retorno),f):f;
-  return Math.max(0, Math.round(hasta-desde));
+  const desde=Math.min(Math.max(s,i),f), hasta=retorno!=null?Math.min(Math.max(hm(retorno),i),f):f;
+  const alm=Math.max(0, Math.min(hasta,ALM_FIN)-Math.max(desde,ALM_INI));
+  return Math.max(0, Math.round(hasta-desde-alm));
 }
 function ocCalcSalida(){
   const noRet=$("ocNoRetorna") && $("ocNoRetorna").checked;
@@ -3725,6 +3728,7 @@ function ocCalcSalida(){
   const s=$("ocSalida")?$("ocSalida").value:"", r=(!noRet && ret)?ret.value:"";
   const z=$("ocSalidaCalc"); if(!z) return;
   if(!s){ z.innerHTML="Indica la hora de salida."; return; }
+  if(salidaFuera(s)){ z.innerHTML=`<b style="color:var(--alerta)">La salida debe estar entre ${INI_JORNADA} y ${FIN_JORNADA}.</b>`; return; }
   if(r && hm(r)<=hm(s)){ z.innerHTML=`<b style="color:var(--alerta)">El retorno debe ser posterior a la salida.</b>`; return; }
   const sinVolver=minSalida(s,null);
   z.innerHTML = (noRet || !r)
@@ -3749,6 +3753,7 @@ async function confirmarSalida(s){
   const noRet=$("ocNoRetorna").checked;
   const retorno=noRet?null:($("ocRetorno").value||null);
   if(!salida){ mostrarError("Indica la hora de salida"); return; }
+  if(salidaFuera(salida)){ mostrarError(`La hora de salida debe estar entre ${INI_JORNADA} y ${FIN_JORNADA}`); return; }
   if(!noRet && !retorno){ mostrarError("Indica la hora de retorno o marca «No retorna»"); return; }
   if(retorno && hm(retorno)<=hm(salida)){ mostrarError("El retorno debe ser posterior a la salida"); return; }
   const btn=$("btnGuardarOc"); btn.disabled=true; btn.textContent="GUARDANDO…";

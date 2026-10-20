@@ -450,7 +450,7 @@ function chOfs(){
   CH.tk.forEach(t=>{
     const k=t.area+"|"+(t.of||"")+"|"+t.articulo;
     const g=grp[k]=grp[k]||{k, area:t.area, of:norm(t.of)||"(sin OF)", of10:ofCostos(t.of), articulo:t.articulo||"",
-      prenda:t.prenda||"", sam:CH.sam[t.area+"|"+t.articulo]||0, modo:chModo(t.area), min:0, tks:0, per:0, cant:null, ops:[]};
+      prenda:t.prenda||"", cant_of:Number(t.cant_of)||null, sam:CH.sam[t.area+"|"+t.articulo]||0, modo:chModo(t.area), min:0, tks:0, per:0, cant:null, ops:[]};
     const u=CH.ult[t.area+"|"+t.articulo], obj=u ? (g.modo==="u"?u.n1:u.n2) : null;
     const cuenta = obj!=null && t.nop!=null && Number(t.nop)===Number(obj);
     if(!u) sinBase+=Number(t.tks)||0; else if(t.nop==null) sinNop+=Number(t.tks)||0;
@@ -514,14 +514,14 @@ function pintarCostosHoy(){
     if(p.areas.length===1) return `<span class="pill EN">Todo el día en ${esc(areaCorta(otras[0].area))}</span><span class="sub">no registró nada en ${esc(areaCorta(p.est))}</span>`;
     return `<span class="pill">${p.modo==="HORA"?"Según la hora del cambio de área":"Repartido según lo producido"}</span>`; };
   $("chTablaMov").innerHTML = `<thead><tr><th class="izq">Personal</th><th class="izq">Cargo</th><th class="izq">Área (estructura)</th>
-    <th class="izq">Trabajó en</th><th class="n">Min. producidos</th><th class="n">Jornada asignada</th><th class="izq">Cómo se contó</th></tr></thead><tbody>`
+    <th class="izq">Trabajó en</th><th class="n">Cantidad</th><th class="n">Min. producidos</th><th class="n">Jornada asignada</th><th class="izq">Cómo se contó</th></tr></thead><tbody>`
     + (fuera.length ? fuera.sort((a,b)=>a.est.localeCompare(b.est,"es")||a.nombre.localeCompare(b.nombre,"es")).map(p=>
         p.areas.sort((a,b)=>(a.area===p.est?0:1)-(b.area===p.est?0:1)).map((a,i)=>`<tr>
           ${i?"":`<td class="izq" rowspan="${p.areas.length}"><b>${esc(p.nombre)}</b></td><td class="izq" rowspan="${p.areas.length}">${esc(p.cargo)}</td><td class="izq" rowspan="${p.areas.length}">${esc(areaCorta(p.est))}</td>`}
           <td class="izq">${a.area===p.est?`<span class="sub">${esc(areaCorta(a.area))}</span>`:`<span class="ch-fuera">${esc(areaCorta(a.area))}</span>`}</td>
-          <td class="n">${n0(a.minutos)}</td><td class="n"><b>${n0(a.jornada)}</b></td>
+          <td class="n">${qtyI(Number(a.cant)||0)}</td><td class="n">${n0(a.minutos)}</td><td class="n"><b>${n0(a.jornada)}</b></td>
           ${i?"":`<td class="izq ch-modo" rowspan="${p.areas.length}">${modoTxt(p)}</td>`}</tr>`).join("")).join("")
-      : `<tr><td colspan="7"><div class="vacio-msg">Nadie trabajó fuera de su área ese día</div></td></tr>`) + "</tbody>";
+      : `<tr><td colspan="8"><div class="vacio-msg">Nadie trabajó fuera de su área ese día</div></td></tr>`) + "</tbody>";
 
   // Producción por OF, con sus operaciones dentro
   const m=CH.op;
@@ -529,7 +529,7 @@ function pintarCostosHoy(){
     : (CH.area ? (CH_PENULTIMA.has(CH.area)?"penúltima operación":"última operación") : "penúltima en CAMISA, última en el resto");
   $("chTitTk").innerHTML = `Producción por OF <span class="sub">prendas en la ${esc(etiqueta)} · toca una OF para ver sus operaciones</span>`;
   const cols=(todas?[{k:"area",t:"Área",cls:"izq"}]:[]).concat([{k:"of",t:"OF",cls:"izq"},{k:"articulo",t:"Artículo",cls:"izq"},{k:"prenda",t:"Prenda",cls:"izq"},
-    {k:"sam",t:"S.A.M",cls:"n"},{k:"cant",t:"Cantidad producida",cls:"n"},{k:"min",t:"Min. producidos",cls:"n"},{k:"eq",t:"Prendas equivalentes",cls:"n"},
+    {k:"sam",t:"S.A.M",cls:"n"},{k:"cant_of",t:"Cant. OF",cls:"n"},{k:"cant",t:"Cantidad producida",cls:"n"},{k:"min",t:"Min. producidos",cls:"n"},{k:"eq",t:"Prendas equivalentes",cls:"n"},
     {k:"per",t:"Personas",cls:"n"},{k:"tks",t:"Tickets",cls:"n"}]);
   const porDef=(a,b)=>a.area.localeCompare(b.area,"es") || b.min-a.min;
   $("chTablaTk").innerHTML = ordThead("chTablaTk", cols, pintarCostosHoy) + "<tbody>"
@@ -537,12 +537,12 @@ function pintarCostosHoy(){
         return `<tr class="ch-fila${ab?" abierta":""}" data-k="${esc(g.k)}" onclick="chOfAbrir(this.dataset.k)">
           ${todas?`<td class="izq">${esc(areaCorta(g.area))}</td>`:""}
           <td class="izq"><div class="ch-of">${esc(g.of10||g.of)}<small>${g.of10?"OF "+esc(g.of):"sin OF numérica"}</small></div></td>
-          <td class="izq"><b>${esc(g.articulo)}</b></td><td class="izq">${esc(g.prenda)}</td><td class="n">${g.sam?g.sam.toFixed(2):""}</td>
+          <td class="izq"><b>${esc(g.articulo)}</b></td><td class="izq">${esc(g.prenda)}</td><td class="n">${g.sam?g.sam.toFixed(2):""}</td><td class="n">${g.cant_of?qtyI(g.cant_of):""}</td>
           <td class="n">${!CH.ult[g.area+"|"+g.articulo]?'<span class="sub">sin BASE</span>':g.cant==null?'<span class="sub">en proceso</span>':qtyI(g.cant)+(g.modo==="p"?' <small class="sub">(penúlt.)</small>':"")}</td>
           <td class="n"><b>${qtyI(g.min)}</b></td><td class="n">${g.eq==null?"":qtyI(g.eq)}</td><td class="n">${g.per}</td><td class="n">${g.tks}</td></tr>`
           + g.ops.map(o=>`<tr class="ch-op${o.cuenta?" cuenta":""}"${ab?"":" hidden"}>${todas?"<td></td>":""}
             <td class="izq" colspan="3">${o.nop!=null?`<span class="sub">N°${esc(o.nop)}</span> `:""}${esc(o.op)}${o.cuenta?' <span class="pill CERRADO">cuenta</span>':""}</td>
-            <td class="n">${o.std?num2(o.std):""}</td><td class="n">${qtyI(o.cant)}</td><td class="n">${qty(o.min)}</td><td></td>
+            <td class="n">${o.std?num2(o.std):""}</td><td></td><td class="n">${qtyI(o.cant)}</td><td class="n">${qty(o.min)}</td><td></td>
             <td class="n">${o.per}</td><td class="n">${o.tks}</td></tr>`).join(""); }).join("")
       : `<tr><td colspan="${cols.length}"><div class="vacio-msg">Sin tickets ese día</div></td></tr>`)
     + "</tbody>";
@@ -566,12 +566,12 @@ function pintarCostosHoy(){
 function chDescargar(){
   if(!CH.fecha){ mostrarError("Carga el reporte primero"); return; }
   const {filas}=chOfs();
-  const ws1=XLSX.utils.aoa_to_sheet([["Área","OF Costos","OF","Artículo","Prenda","S.A.M","Cantidad producida","Cuenta","Min. producidos","Prendas equivalentes","Personas","Tickets"],
-    ...filas.map(g=>[g.area,g.of10,g.of,g.articulo,g.prenda,g.sam||"",g.cant??"",g.modo==="p"?"Penúltima":"Última",Math.round(g.min*100)/100,g.eq==null?"":Math.round(g.eq*10)/10,g.per,g.tks])]);
+  const ws1=XLSX.utils.aoa_to_sheet([["Área","OF Costos","OF","Artículo","Prenda","S.A.M","Cant. OF","Cantidad producida","Cuenta","Min. producidos","Prendas equivalentes","Personas","Tickets"],
+    ...filas.map(g=>[g.area,g.of10,g.of,g.articulo,g.prenda,g.sam||"",g.cant_of??"",g.cant??"",g.modo==="p"?"Penúltima":"Última",Math.round(g.min*100)/100,g.eq==null?"":Math.round(g.eq*10)/10,g.per,g.tks])]);
   const ws2=XLSX.utils.aoa_to_sheet([["Área","OF Costos","OF","Artículo","Prenda","N°OP","Operación","STD","Cantidad","Minutos","Personas","Tickets","Cuenta"],
     ...filas.flatMap(g=>g.ops.map(o=>[g.area,g.of10,g.of,g.articulo,g.prenda,o.nop??"",o.op,o.std,o.cant,Math.round(o.min*100)/100,o.per,o.tks,o.cuenta?"Sí":""]))]);
-  const ws3=XLSX.utils.aoa_to_sheet([["Personal","Cargo","Área (estructura)","Trabajó en","Min. producidos","Jornada asignada"],
-    ...CH.per.map(x=>[x.nombre,x.cargo||"",x.area_est||"",x.area,Number(x.minutos)||0,Number(x.jornada)||0])]);
+  const ws3=XLSX.utils.aoa_to_sheet([["Personal","Cargo","Área (estructura)","Trabajó en","Cantidad","Min. producidos","Jornada asignada"],
+    ...CH.per.map(x=>[x.nombre,x.cargo||"",x.area_est||"",x.area,Number(x.cant)||0,Number(x.minutos)||0,Number(x.jornada)||0])]);
   const ws4=XLSX.utils.aoa_to_sheet([["Área","Personal","Minutos","Tipo","Descripción","Hora"],
     ...CH.inc.map(o=>[o.area,o.nombre,Number(o.minutos)||0,TIPO_LBL(o.tipo),o.detalle||"",o.hora||""])]);
   const wb=XLSX.utils.book_new();
