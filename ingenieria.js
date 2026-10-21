@@ -7057,17 +7057,22 @@ async function abrirModalInci(oc){
       <button class="btn-principal btn-modal-guardar" onclick="guardarIncidencia(${editar?oc.id:"null"})">GUARDAR</button>
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
     </div>`);
-  $("mi_area").onchange=()=>cargarPersonalInci(oc?oc.dni:null);
-  await cargarPersonalInci(oc?oc.dni:null);
+  $("mi_area").onchange=()=>cargarPersonalInci(oc?oc.dni:null, oc&&oc.nombre);
+  await cargarPersonalInci(oc?oc.dni:null, oc&&oc.nombre);
 }
-async function cargarPersonalInci(dniSel){
+/* Al editar, la persona de la incidencia va siempre en la lista y elegida, aunque
+   hoy esté en otra área: si no, quedaba elegida la primera del área y al guardar
+   la incidencia pasaba a otra persona. */
+async function cargarPersonalInci(dniSel, nombreSel){
   const sel=$("mi_dni"); if(!sel) return;
   const area=$("mi_area").value;
   sel.innerHTML=`<option value="">Cargando…</option>`;
   try{
     INCI_PERSONAL=await rpc("fn_personal",{p_dni:ING.dni,p_token:ING.token,p_area:area});
-    if(!Array.isArray(INCI_PERSONAL)||!INCI_PERSONAL.length){ sel.innerHTML=`<option value="">Sin personal en el área</option>`; return; }
-    sel.innerHTML=INCI_PERSONAL.map(p=>`<option value="${esc(p.dni)}"${p.dni===dniSel?" selected":""}>${esc(soloApellidos(p.nombre))} · ${esc(p.dni)}</option>`).join("");
+    if(!Array.isArray(INCI_PERSONAL)||(!INCI_PERSONAL.length&&!dniSel)){ sel.innerHTML=`<option value="">Sin personal en el área</option>`; return; }
+    const lista=dniSel&&!INCI_PERSONAL.some(p=>p.dni===dniSel)
+      ? [{dni:dniSel, nombre:nombreSel||dniSel}, ...INCI_PERSONAL] : INCI_PERSONAL;
+    sel.innerHTML=lista.map(p=>`<option value="${esc(p.dni)}"${p.dni===dniSel?" selected":""}>${esc(soloApellidos(p.nombre))} · ${esc(p.dni)}</option>`).join("");
   }catch(e){ sel.innerHTML=`<option value="">Error al cargar</option>`; }
 }
 async function guardarIncidencia(id){
