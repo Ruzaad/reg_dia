@@ -3803,7 +3803,7 @@ async function confirmarOcurrencia(){
   try{
     const r = esSupervisora
       ? await rpc("fn_solicitud_ocurrencia_crear",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),
-          p_tipo:oc.tipo,p_minutos:minutos,p_detalle:motivo,p_dnis:oc.dnis,p_fecha:fechaOc})
+          p_tipo:oc.tipo,p_minutos:minutos,p_detalle:(motivo||oc.tipo),p_dnis:oc.dnis,p_fecha:fechaOc})
       : await rpc("fn_ocurrencia",{p_dni:s.dni,p_token:s.token,p_area:areaSup(),
           p_tipo:oc.tipo,p_minutos:minutos,p_detalle:(motivo||oc.tipo),p_dnis:oc.dnis,p_fecha:fechaOc});
     btn.disabled=false; btn.textContent="GUARDAR";
