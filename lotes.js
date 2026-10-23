@@ -300,7 +300,8 @@ function ltIngPintar(z, r){
       <div class="lr-pie"><span>${l.personas} ${l.personas===1?"persona":"personas"}</span><span>${ltMj(l.minutos)} min</span>
         <span>${ltN(l.reclasificado)} reclasificadas</span></div>
       ${r.edita?`<div class="lr-btns"><button type="button" class="btn-mini azul" onclick="ltEditarLote('${esc(l.of)}')">Editar</button>
-        <button type="button" class="btn-mini ${l.cerrado?"verde":"rojo"}" onclick="ltRepEstado('${esc(l.of)}',${!l.cerrado})">${l.cerrado?"Reabrir":"Cerrar lote"}</button></div>`:""}</div>`; };
+        <button type="button" class="btn-mini ${l.cerrado?"verde":"rojo"}" onclick="ltRepEstado('${esc(l.of)}',${!l.cerrado})">${l.cerrado?"Reabrir":"Cerrar lote"}</button>
+        <button type="button" class="btn-mini gris" onclick="ltEliminarLote('${esc(l.of)}')">Eliminar</button></div>`:""}</div>`; };
   z.innerHTML=`<div class="kpis lr-kpis">${kpi("Lotes abiertos",ab.length)}${kpi("Prendas en proceso",ltN(ab.reduce((s,l)=>s+(Number(l.cant_prog)||0),0)))}
       ${kpi("Minutos registrados",ltMj(ab.reduce((s,l)=>s+(Number(l.minutos)||0),0)))}${kpi("Avance medio",avance+" %")}</div>
     <div class="lt-seg lr-filtro" role="radiogroup" aria-label="Estado del lote">
@@ -363,6 +364,23 @@ function ltEditarLote(of){
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
   $("ltEdCant").oninput=()=>{ clearTimeout(LT_EDT); LT_EDT=setTimeout(ltEdEfecto,350); };
   $("ltEdCant").focus();
+}
+function ltEliminarLote(of){
+  abrirModal(`<h2>Eliminar lote</h2>
+    <div class="sub" style="margin-bottom:10px">¿Eliminar el lote <b>${esc(of)}</b>? Solo se puede si todavía no tiene registros. Si ya se trabajó en él, ciérralo.</div>
+    <div class="modal-msg" id="ltElMsg" role="alert"></div>
+    <div class="modal-acciones"><button class="btn-principal btn-modal-guardar" id="ltElOk" style="background:var(--alerta)" onclick="ltElConfirmar('${esc(of)}')">ELIMINAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
+}
+async function ltElConfirmar(of){
+  const s=ltSes(), msg=$("ltElMsg");
+  await unaVez("ltElLote"+of, botonesDe("#ltElOk"), async()=>{
+    try{
+      const r=await rpc("fn_reproceso_lote_eliminar",{p_dni:s.dni,p_token:s.token,p_of:of});
+      if(!r.ok){ msg.textContent=r.error||"No se pudo eliminar"; return; }
+      mostrarOk(`Lote ${r.of} eliminado`); cerrarModal(); LT.rep=null; ltRecargar();
+    }catch(e){ msg.textContent=ltFalta(e)?"Falta correr el parche 142 en la base":e.message; }
+  });
 }
 async function ltEdEfecto(){
   const e=$("ltEdEfecto"), c=parseInt($("ltEdCant")&&$("ltEdCant").value,10); if(!e) return;
