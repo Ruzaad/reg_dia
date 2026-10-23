@@ -1765,6 +1765,13 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .lr-op .b i{display:block;height:100%;background:var(--azul);}
 .lr-op .v{font-variant-numeric:tabular-nums;color:var(--suave);}
 .lr-pie{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--suave);}
+.lr-kpis{margin-bottom:14px;}
+.lr-chips{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 10px;}
+.lr-chip{min-width:28px;padding:3px 8px;border-radius:7px;background:var(--linea-2);color:var(--texto);font:600 12px var(--mono);text-align:center;}
+.lr-chip.ok{background:var(--exito);color:#fff;}
+.lr-ef{background:var(--ocre-t);color:var(--titulo);border-radius:var(--r);padding:10px 12px;font-size:14px;margin-top:8px;}
+.lr-ef.ok{color:var(--exito);}
+.lr-ef-p{margin-top:6px;}.lr-ef-p small{display:block;color:var(--suave);}
 .lr-btns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
 .lr-btns .btn-mini{min-height:40px;}
 .cc-barra{display:flex;align-items:center;gap:10px;margin:8px 0}
