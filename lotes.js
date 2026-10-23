@@ -283,8 +283,35 @@ async function ltRepLotes(zona){
 }
 const ltRepPct = l => { const n=(l.ops||[]).length, c=Number(l.cant_prog)||0; if(!n||!c) return 0;
   return Math.round((l.ops||[]).reduce((s,o)=>s+Math.min(Number(o.hecho)||0,c),0)/(c*n)*100); };
+/* Ingeniería: tarjetas con KPIs, chips de operaciones y edición del lote (parche 141). */
+function ltIngPintar(z, r){
+  const todos=r.lotes||[], ab=todos.filter(l=>!l.cerrado), ce=todos.filter(l=>l.cerrado);
+  const ls=LT.filtro==="CERRADO"?ce:ab;
+  const nb=$("ltRepBtn"); if(nb) nb.hidden=!r.edita;
+  const kpi=(t,v)=>`<div class="kpi"><div class="kpi-num">${v}</div><div class="kpi-lbl">${t}</div></div>`;
+  const avance=ab.length?Math.round(ab.reduce((s,l)=>s+ltRepPct(l),0)/ab.length):0;
+  const card=l=>{ const pct=ltRepPct(l), c=Number(l.cant_prog)||0;
+    return `<div class="lr-card${l.cerrado?" cerrado":""}">
+      <div class="lr-top"><div><b>${esc(l.of)}</b><small>${esc(l.articulo)} · ${ltN(c)} prendas</small></div>
+        <span class="tag ${l.cerrado?"g":"v"}">${l.cerrado?"Cerrado":"Abierto"}</span></div>
+      <div class="lr-chips">${(l.ops||[]).map(o=>{ const h=Number(o.hecho)||0;
+        return `<span class="lr-chip${c&&h>=c?" ok":""}" title="${esc(o.operacion)}: ${ltN(h)} de ${ltN(c)}">${esc(o.n_op)}</span>`; }).join("")}</div>
+      <div class="lt-prog${pct>=100?" ok":""}"><span class="b"><i style="width:${pct}%"></i></span><span>${pct}%</span></div>
+      <div class="lr-pie"><span>${l.personas} ${l.personas===1?"persona":"personas"}</span><span>${ltMj(l.minutos)} min</span>
+        <span>${ltN(l.reclasificado)} reclasificadas</span></div>
+      ${r.edita?`<div class="lr-btns"><button type="button" class="btn-mini azul" onclick="ltEditarLote('${esc(l.of)}')">Editar</button>
+        <button type="button" class="btn-mini ${l.cerrado?"verde":"rojo"}" onclick="ltRepEstado('${esc(l.of)}',${!l.cerrado})">${l.cerrado?"Reabrir":"Cerrar lote"}</button></div>`:""}</div>`; };
+  z.innerHTML=`<div class="kpis lr-kpis">${kpi("Lotes abiertos",ab.length)}${kpi("Prendas en proceso",ltN(ab.reduce((s,l)=>s+(Number(l.cant_prog)||0),0)))}
+      ${kpi("Minutos registrados",ltMj(ab.reduce((s,l)=>s+(Number(l.minutos)||0),0)))}${kpi("Avance medio",avance+" %")}</div>
+    <div class="lt-seg lr-filtro" role="radiogroup" aria-label="Estado del lote">
+      <button type="button" role="radio" aria-checked="${LT.filtro!=="CERRADO"}" onclick="ltRepFiltro('ABIERTO')">Abiertos <small>${ab.length}</small></button>
+      <button type="button" role="radio" aria-checked="${LT.filtro==="CERRADO"}" onclick="ltRepFiltro('CERRADO')">Cerrados <small>${ce.length}</small></button></div>
+    ${ls.length?`<div class="lr-grid">${ls.map(card).join("")}</div>`
+      :`<div class="vacio-msg">${LT.filtro==="CERRADO"?"No hay lotes cerrados.":"No hay lotes abiertos."}${r.edita&&LT.filtro!=="CERRADO"?" Crea el primero con + Crear lote.":""}</div>`}`;
+}
 function ltRepPintar(zona){
   const z=$(zona), r=LT.lotes; if(!z||!r) return;
+  if(zona==="ltIngZona") return ltIngPintar(z, r);
   const todos=r.lotes||[], ab=todos.filter(l=>!l.cerrado), ce=todos.filter(l=>l.cerrado);
   const ls=LT.filtro==="CERRADO"?ce:ab;
   const nb=$("ltRepBtn"); if(nb) nb.hidden=!r.edita;
@@ -318,6 +345,53 @@ async function ltRepEstado(of, cerrar){
   });
 }
 async function ltRepTope(of, art, cant){ await ltRepAbrir(); ltRepEditar(of, art, cant); }
+
+/* Editar lote (parche 141): nombre y cantidad. Si la cantidad baja de lo ya notificado, el exceso se
+   resta de los registros repartido por persona y día; antes de guardar se muestra cuánto sería. */
+let LT_ED=null, LT_EDT=null;
+function ltEditarLote(of){
+  const l=((LT.lotes&&LT.lotes.lotes)||[]).find(x=>x.of===of); if(!l) return;
+  LT_ED={of, cant:Number(l.cant_prog)||0};
+  abrirModal(`<h2>Editar lote</h2>
+    <div class="sub" style="margin-bottom:10px">${esc(l.articulo)} · cambia el nombre o la cantidad de prendas del lote.</div>
+    <div class="lt-form">
+      <label class="lt-f"><span>Nombre del lote</span><input class="inp" id="ltEdNom" maxlength="20" autocomplete="off" value="${esc(l.of)}"></label>
+      <label class="lt-f"><span>Cantidad de prendas (tope de cada operación)</span><input class="inp" id="ltEdCant" type="number" inputmode="numeric" min="1" value="${LT_ED.cant}"></label>
+      <div class="lr-efecto" id="ltEdEfecto" aria-live="polite"></div>
+      <div class="modal-msg" id="ltEdMsg" role="alert"></div></div>
+    <div class="modal-acciones"><button class="btn-principal btn-modal-guardar" id="ltEdOk" onclick="ltEdGuardar()">GUARDAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
+  $("ltEdCant").oninput=()=>{ clearTimeout(LT_EDT); LT_EDT=setTimeout(ltEdEfecto,350); };
+  $("ltEdCant").focus();
+}
+async function ltEdEfecto(){
+  const e=$("ltEdEfecto"), c=parseInt($("ltEdCant")&&$("ltEdCant").value,10); if(!e) return;
+  if(!(c>0)){ e.innerHTML=""; return; }
+  const s=ltSes();
+  try{
+    const r=await rpc("fn_reproceso_lote_editar",{p_dni:s.dni,p_token:s.token,p_of:LT_ED.of,p_nombre:$("ltEdNom").value,p_cantidad:c,p_simular:true});
+    if(!e.isConnected) return;
+    if(!r.ok){ e.innerHTML=""; $("ltEdMsg").textContent=r.error||""; return; }
+    $("ltEdMsg").textContent="";
+    if(!(r.descuento_total>0)){ e.innerHTML=`<div class="lr-ef ok">No se quita nada de lo ya registrado.</div>`; return; }
+    e.innerHTML=`<div class="lr-ef">Se descontarán <b>${ltN(r.descuento_total)}</b> prendas de lo ya registrado, repartidas por día para no pegarle a un solo día:
+      ${(r.personas||[]).map(p=>`<div class="lr-ef-p"><b>${esc(p.nombre)}</b> −${ltN(p.quita)} <small>${(p.dias||[]).map(d=>`${esc(String(d.fecha).slice(5))}: ${ltN(d.antes)}→${ltN(d.antes-d.quita)}`).join(" · ")}</small></div>`).join("")}</div>`;
+  }catch(x){ e.innerHTML=ltFalta(x)?`<div class="lr-ef">Falta correr el parche 141 en la base.</div>`:""; }
+}
+async function ltEdGuardar(){
+  const s=ltSes(), msg=$("ltEdMsg"), nom=$("ltEdNom").value.trim(), cant=parseInt($("ltEdCant").value,10);
+  if(!nom){ msg.textContent="Escribe el nombre del lote"; $("ltEdNom").focus(); return; }
+  if(!(cant>0)){ msg.textContent="Pon la cantidad de prendas"; $("ltEdCant").focus(); return; }
+  msg.textContent="";
+  await unaVez("ltEdGuardar", botonesDe("#ltEdOk"), async()=>{
+    try{
+      const r=await rpc("fn_reproceso_lote_editar",{p_dni:s.dni,p_token:s.token,p_of:LT_ED.of,p_nombre:nom,p_cantidad:cant});
+      if(!r.ok){ msg.textContent=r.error||"No se pudo guardar"; return; }
+      mostrarOk(r.descuento_total>0?`Lote ${r.of} guardado: se descontaron ${ltN(r.descuento_total)} prendas`:`Lote ${r.of} guardado`);
+      cerrarModal(); LT.rep=null; ltRecargar();
+    }catch(e){ msg.textContent=ltFalta(e)?"Falta correr el parche 141 en la base":e.message; }
+  });
+}
 
 /* ---------------- TIEMPOS POR TAREA (parche 119, Ingeniería) ----------------
    Ingeniería sube el tiempo (min por prenda) de cada tarea. Con él, lo que la
