@@ -43,6 +43,15 @@ Herramienta interna para ubicar código sin releer archivos enteros. **No se pub
 - Última y penúltima operación de un artículo: usa `_ultimas(área)` (parche 125; el analista puede fijarlas en Bases › ★ ÚLTIMA / PENÚLTIMA), nunca `max(n_op)` a mano. En el front: `ultimasArea()` / `calcularFinalesBase(filas, ult)`.
 - Permisos: `_admin`, `_ing`, `_lector`, `_auth` validan dentro de cada RPC.
 
+## Diseño CHRONOS (vigente para toda interfaz nueva)
+- Marca: CHRONOS · «El tiempo de tu planta, medido.» · TIEMPO · MINUTAJE · PLANTA. Los colores son los de SAMITEX (la empresa los exige): **azul** `#0D2177` (el logo no tiene violeta) y **dorado** `#BC9A48` / `#E3CB86`; fondo claro marfil `#F8F6EF`, fondo oscuro azul noche `#07123F`. Resalte: azul `#3A5BD9` (claro) / `#6F8CFF` (oscuro).
+- Tipografía: Cinzel Bold solo para títulos y logotipo; IBM Plex Sans para datos e interfaz. Respetar logo, aguja dorada y tildes.
+- Dos temas (claro y oscuro) con botón; todo color va en tokens CSS, nunca literal. Verde/ámbar/rojo solo para estado: ≥ 85 / 70–84 / < 70.
+- Responsive a 4 anchos (≥ 1200, 768–1199, < 768, < 420); tablas pasan a tarjetas en celular; objetivos táctiles ≥ 44 px; contraste ≥ 4,5:1.
+- Animación: solo `transform` y `opacity`, menos de 300 ms, `cubic-bezier(.2,.8,.2,1)` (nunca ease-in), escalonado 30–80 ms, respetar `prefers-reduced-motion`.
+- Skills de diseño que se aplican siempre: UI/UX Pro Max (paletas por industria, contraste, tokens semánticos), Frontend Design (evitar el aspecto «hecho por IA», un solo elemento audaz) y Emil Kowalski (animación). Se aplican desde sus resúmenes; no se instalan en la nube.
+- Maqueta de referencia con datos ficticios: `/mnt/project-files/chronos-diseno/chronos.html`. Nunca publicar datos reales como artefacto.
+
 ## Despliegue
 - Se trabaja **directo sobre `main`** (rama de trabajo → PR → fusionar a `main`). `qa` ya no se usa.
 - Al fusionar a `main`, Vercel despliega solo (planta-ruzaad.vercel.app). Netlify y GitHub Pages siguen sirviendo a parte del personal contra la misma base; Ruzaad los republica a mano.
