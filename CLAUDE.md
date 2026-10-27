@@ -50,6 +50,7 @@ Herramienta interna para ubicar código sin releer archivos enteros. **No se pub
 - Responsive a 4 anchos (≥ 1200, 768–1199, < 768, < 420); tablas pasan a tarjetas en celular; objetivos táctiles ≥ 44 px; contraste ≥ 4,5:1.
 - Animación: solo `transform` y `opacity`, menos de 300 ms, `cubic-bezier(.2,.8,.2,1)` (nunca ease-in), escalonado 30–80 ms, respetar `prefers-reduced-motion`.
 - Skills de diseño que se aplican siempre: UI/UX Pro Max (paletas por industria, contraste, tokens semánticos), Frontend Design (evitar el aspecto «hecho por IA», un solo elemento audaz) y Emil Kowalski (animación). Se aplican desde sus resúmenes; no se instalan en la nube.
+- En el código: tokens de color y modo oscuro en `rediseno.css` (`:root`, `data-theme`), tipografía de títulos, marca del encabezado y barra de carga en `chronos.css`, intro animada (horizontal y vertical, una vez por sesión; `?intro=1` la fuerza y `?intro=0` la quita) y barra de carga en `chronos.js`. Ambos se cargan en las 4 páginas; quitar el `<link>` y el `<script>` los desactiva.
 - Maqueta de referencia con datos ficticios: `/mnt/project-files/chronos-diseno/chronos.html`. Nunca publicar datos reales como artefacto.
 
 ## Despliegue
