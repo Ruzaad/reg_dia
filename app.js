@@ -840,7 +840,6 @@ function pintarCrumb(id){
   el.innerHTML = partes.join(' <span class="crumb-sep">\u203A</span> ');
   el.style.display="block";
 }
-let EF_CENSURADA = false;   // operario: ojo para censurar su propia eficiencia
 /* ACABADO: se cuenta CANTIDAD (sin numeración, sin minutaje, sin eficiencia).
    Las metas diarias se retiraron en el parche 40. */
 /* Qué campos ve el personal de COSTURA en su ticket (parche 76). Lo decide
@@ -856,22 +855,39 @@ async function cargarVisibilidad(s){
 }
 const tkVer = k => TK_VIS[k] !== false;
 
+/* Cuántas unidades por hora hay que sacar para rendir 100 %, 90 % y 80 % en la
+   operación elegida: (60 / STD) × X %. Solo se ve al capturar una cantidad. */
+function stdDelPaso(id){
+  if(id==="pasoTickets" || id==="pasoConf"){
+    const t=ALM.tickets.find(t=>t.of===sel.of && t.modulo===sel.modulo && t.op===sel.op);
+    return t && t.std;
+  }
+  if(id==="pasoAcabCant") return ACAB.ver ? null : (ACAB.tipo ? ACAB.tipo.std : ACAB.op && ACAB.op.std);
+  if(id==="pasoOpAdCant") return OPADX.sel && OPADX.sel.std;
+  return null;
+}
+function pintarRitmo(id){
+  const el=$("ritmoOp"); if(!el) return;
+  const std=+stdDelPaso(id);
+  if(!(std>0)){ el.hidden=true; el.innerHTML=""; return; }
+  const u=p=>{ const v=60/std*p/100; return v>=10 ? Math.round(v) : Math.round(v*10)/10; };
+  el.innerHTML=`<span>Por hora</span>`+[100,90,80].map(p=>`<span><i>${p}%</i> <b>${u(p)}</b></span>`).join("");
+  el.hidden=false;
+}
+
 let ES_ACABADO = false, CANT_HOY_ACABADO = 0;
 const qty = v => (Math.round((+v||0)*100)/100);   // cantidad legible (2 dec máx)
 /* Oculta en la cabecera lo que no aplica a Acabado (ojo de eficiencia, ajuste
    de minutos) y ajusta el subtítulo del paso Tickets. */
 function aplicarModoAcabado(){
-  const oj=$("btnOjoEf"), rl=$("btnReloj");
-  /* ACABADO ya ve su eficiencia como costura: sus reclamos llevan STD de la BASE
-     y `minutos` es columna generada (std × cant), así que fn_mi_dia la calcula
-     igual. El ojo de censura vuelve a estar disponible. */
-  if(oj) oj.style.display = "";
+  const rl=$("btnReloj");
   if(rl) rl.style.display = "";   // ajuste de tiempo disponible también en ACABADO
   const lblConf=$("confLabel"); if(lblConf) lblConf.textContent = ES_ACABADO ? "Cantidad" : "Numeración";
   /* ACABADO no pasa por el almacén, así que "Mis paquetes" no aplica. "Mi
      boleta" (parche 93) está en la pantalla de OF de los dos modos y vuelve a
      la de cada uno. */
   const bmp=$("btnMisPaq"); if(bmp) bmp.style.display = ES_ACABADO ? "none" : "";
+  VOLVER_OPERARIO.pasoOpAd = ES_ACABADO ? "pasoAcabOp" : "pasoModulos";
   VOLVER_OPERARIO.pasoBoleta = ES_ACABADO ? "pasoAcabOF" : "pasoOF";
   window.VOLVER_INICIO = ES_ACABADO ? "pasoAcabOF" : "pasoOF";
 }
@@ -885,8 +901,6 @@ function initOperario(){
   { const rb=$("btnReloj"); if(rb) rb.onclick=abrirSolicitudAjuste; }
   { const kb=$("btnLlave"); if(kb) kb.onclick=abrirCambioPin; }
   { const rc=$("btnRecargar"); if(rc) rc.onclick=recargarMiEficiencia; }
-  { const oj=$("btnOjoEf"); if(oj) oj.onclick=()=>{ EF_CENSURADA=!EF_CENSURADA;
-      if(ES_ACABADO) setMetasAcabado({cant_hoy:CANT_HOY_ACABADO}); else setAvance(ULTIMO_DIA); }; }
   botonVolverIng();
   window.onCambioPaso = (id)=>{
     // Al retroceder, limpiar la selección más profunda para que el
@@ -895,6 +909,7 @@ function initOperario(){
     else if(id==="pasoModulos"){ sel.modulo=null; sel.op=null; }
     else if(id==="pasoOps"){ sel.op=null; }
     pintarCrumb(id);
+    pintarRitmo(id);
     guardarProgreso(id);
     const b=$("btnVolverHdr"); if(!b) return;
     const destino = VOLVER_OPERARIO[id];
@@ -1273,6 +1288,10 @@ function pintarAcabOF(){
    intercala un paso para elegirla; con una sola prenda el flujo no cambia. */
 function acabPrendas(){ const p=(ACAB.of&&ACAB.of.prendas)||[]; return Array.isArray(p)?p:[]; }
 function abrirAcabOF(){
+  const of=ACAB.of.of;
+  cargarOpAdOF(of).then(()=>{
+    if(pasoActivo()==="pasoAcabOp" && ACAB.of && ACAB.of.of===of && !ACAB.tipo) pintarAcabOps();
+  });
   const pr=acabPrendas();
   if(pr.length > 1){
     ACAB.prenda=null;
@@ -1313,6 +1332,15 @@ function pintarAcabOps(){
   const lista = acabPrendas().length>1 && ACAB.prenda
     ? (o.operaciones||[]).filter(x=>x.prenda===ACAB.prenda)
     : (o.operaciones||[]);
+  if(OPADX.of===o.of && OPADX.items.length){
+    const c=document.createElement("div");
+    c.className="card-fila";
+    c.innerHTML=`<div><div class="cf-titulo">ADICIONALES</div>
+        <div class="cf-detalle">Desmanche y otros fuera de la BASE para esta OF</div></div>
+      <div class="badge-disp">${OPADX.items.length} op.</div>`;
+    c.onclick=()=>{ pintarOpAd(); irA("pasoOpAd"); };
+    l.appendChild(c);
+  }
   lista.forEach(x=>{
     const meta=Number(o.cant_prog)||0, hecho=Number(x.hecho)||0, queda=Math.max(0,meta-hecho);
     const pct=acabPct(hecho,meta);
@@ -1606,8 +1634,7 @@ let ULTIMO_DIA = {eficiencia:0,minutos_prod:0,minutos_disp:0};
 function setAvance(d){
   ULTIMO_DIA = d || ULTIMO_DIA;
   const b=$("badgeAvance");
-  const ef = EF_CENSURADA ? "****" : (ULTIMO_DIA.eficiencia + "%");
-  b.textContent = `Hoy: ${ef} · ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
+  b.textContent = `Hoy: ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
   b.classList.add("visible");
   if(typeof opPintarHoy==="function") opPintarHoy();
 }
@@ -1621,9 +1648,7 @@ function setMetasAcabado(d, d2){
   CANT_HOY_ACABADO = (d && +d.cant_hoy) || 0;
   if(d2 && d2.minutos_disp != null) ULTIMO_DIA = d2;
   const b=$("badgeAvance");
-  const ef = EF_CENSURADA ? "****" : (ULTIMO_DIA.eficiencia + "%");
-  b.textContent = `Hoy: ${ef} · ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`
-    + ` · ${qty(CANT_HOY_ACABADO)} und`;
+  b.textContent = `Hoy: ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
   b.classList.add("visible");
 }
 async function refrescarMetasAcabado(){
@@ -1911,11 +1936,12 @@ async function opAdRegistrar(){
     const r=await rpc("fn_opad_registrar",{p_dni:s.dni,p_token:s.token,p_area:area,p_id:x.id,p_cant:cant});
     if(!r.ok){ mostrarError(r.error||"No se pudo registrar"); return; }
     await cargarOpAdOF(OPADX.of);
-    pintarOpAd(); pintarModulos();
+    pintarOpAd(); if(!ES_ACABADO) pintarModulos();
     $("exTitulo").textContent="¡Listo, "+s.nombre.split(" ")[0]+"!";
     $("exDetalle").innerHTML = `${qty(cant)} und · ${esc(x.operacion)} · OF ${esc(OPADX.of)}`
       + (r.tope!=null ? `<br>Van ${qty(r.hecho)} de ${qty(r.tope)} und` : "");
     OPADX.volver = OPADX.items.length ? "pasoOpAd" : "pasoModulos";
+    if(ES_ACABADO){ setMetasAcabado(null, r); irA("pasoOpAd"); }
     mostrarExito();
   }catch(e){ mostrarError(e.message); }
   finally{ btn.disabled=false; btn.textContent="REGISTRAR"; }
