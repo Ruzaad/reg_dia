@@ -658,8 +658,8 @@ function ofsRevision(j){
     if(j.hn.fisica!=null) (tot===j.hn.fisica?ok:av)(tot===j.hn.fisica
       ? `Los paquetes suman ${tot} und, igual que la CANTIDAD FÍSICA de la hoja.`
       : `Los paquetes suman ${tot} und y la hoja dice CANTIDAD FÍSICA ${j.hn.fisica}.`);
-    if(j.hn.saltos) av(`${j.hn.saltos} paquete(s) con DESDE / HASTA que no siguen la numeración corrida: revisa la hoja.`);
   }
+  if(j.hn.saltos) av(`${j.hn.saltos} paquete(s) cuya numeración (desde / hasta) no sigue la numeración corrida: revisa la hoja.`);
   const nums=OFS.map(o=>+o.of).filter(n=>n>0), of=+j.hn.of;
   if(of && nums.length && !OFS.some(o=>String(o.of)===String(j.hn.of))){
     const max=Math.max(...nums);
@@ -715,6 +715,8 @@ function parseHN(rows){
     if(fila.includes("TALLA") && fila.includes("CANT")){ hr=r; break; }
   }
   if(hr<0) throw new Error("No se encontró la fila de encabezados (TALLA / CANT).");
+  const hk=(rows[hr]||[]).map(normKey);
+  if(hk.includes("ARTICULO")) return parseHNTickets(rows, hr, hk);
   const bloques=[]; (rows[hr]||[]).forEach((v,c)=>{ if(normKey(v)==="TALLA") bloques.push(c); });
   const tallas=[];
   let totales=0;
@@ -728,6 +730,29 @@ function parseHN(rows){
   });
   return { prenda, articulo, of, tallas, bloques:bloques.length, totales, ceros:tallas.filter(t=>t.cant<=0).length };
 }
+/* Formato TICKETS: una fila por paquete con ARTICULO ("VHPF0021/10446"),
+   TALLA, CANT, PAQ., COLOR y NUMERACION ("1-40"). No trae prenda. */
+function parseHNTickets(rows, hr, hk){
+  const col=k=>hk.indexOf(k), cA=col("ARTICULO"), cT=col("TALLA"), cC=col("CANT"), cP=col("PAQ"), cCo=col("COLOR"), cN=col("NUMERACION");
+  const filas=[]; let totales=0;
+  for(let r=hr+1;r<rows.length;r++){
+    const f=rows[r]||[], talla=f[cT];
+    if(normKey(f[cA]).startsWith("TOTAL")||normKey(talla).startsWith("TOTAL")){ totales++; continue; }
+    if(talla==null || String(talla).trim()==="") continue;
+    const num=cN>=0 ? String(f[cN]||"").match(/(\d+)\D+(\d+)/) : null;
+    filas.push({ art:celTxt(f[cA]), talla:celTxt(talla), cant:parseInt(f[cC])||0, color:cCo>=0?celTxt(f[cCo]):"",
+      paq:cP>=0?parseInt(f[cP])||null:null, desde:num?+num[1]:null, hasta:num?+num[2]:null });
+  }
+  if(filas.length && filas.every(f=>f.paq)) filas.sort((a,b)=>a.paq-b.paq);
+  const a0=(filas.find(f=>f.art)||{}).art||"", m=a0.split("/");
+  let of=(m[1]||"").replace(/\D/g,"");
+  if(/^4\d{9}$/.test(of)) of=of.replace(/^40*/,"");
+  let acum=0, saltos=0;
+  filas.forEach(f=>{ if(f.desde!=null && (f.desde!==acum+1 || f.hasta!==acum+f.cant)) saltos++; acum+=f.cant; });
+  const tallas=filas.map(f=>({talla:f.talla, cant:f.cant, color:f.color}));
+  return { prenda:"", articulo:norm(m[0]).toUpperCase(), of, tallas, bloques:1, totales,
+    ceros:tallas.filter(t=>t.cant<=0).length, saltos, tickets:true };
+}
 /* La hoja se llama "HN" casi siempre; si alguien la renombró, vale la primera
    que tenga la fila TALLA / CANT. */
 function hnHoja(wb){
@@ -740,10 +765,13 @@ function hnHoja(wb){
 /* HN en PDF (formato nuevo del S.I.G.): tabla TALLA · CANT. · PAQ. · COLOR ·
    DESDE · HASTA en uno o más bloques lado a lado. Cada palabra va a la columna
    cuyo encabezado le queda más cerca en horizontal; las filas se ordenan por PAQ. */
-const LIB_PDFJS="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+const LIB_PDFJS=["https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/",
+                 "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/"];
 async function hnPdfPalabras(buf){
-  await cargarLib(LIB_PDFJS+"pdf.min.js");
-  pdfjsLib.GlobalWorkerOptions.workerSrc=LIB_PDFJS+"pdf.worker.min.js";
+  let base=null;
+  for(const b of LIB_PDFJS){ try{ await cargarLib(b+"pdf.min.js"); base=b; break; }catch(e){} }
+  if(!base || !window.pdfjsLib) throw new Error("no se pudo cargar el lector de PDF (revisa la conexión y recarga la página)");
+  pdfjsLib.GlobalWorkerOptions.workerSrc=base+"pdf.worker.min.js";
   const doc=await pdfjsLib.getDocument({data:buf}).promise, out=[];
   for(let n=1;n<=doc.numPages;n++){
     const pg=await doc.getPage(n), alto=pg.getViewport({scale:1}).height;
@@ -2882,7 +2910,7 @@ function ofsDrag(e){
 }
 function ofsSoltar(e){
   e.preventDefault();
-  const f=[...(e.dataTransfer&&e.dataTransfer.files||[])].filter(x=>/\.(xls[xm]?|pdf)$/i.test(x.name));
+  const f=[...(e.dataTransfer&&e.dataTransfer.files||[])].filter(x=>/\.(xls[xm]?|pdf)$/i.test(x.name)||/pdf|sheet|excel/i.test(x.type));
   if(!f.length){ mostrarError("Suelta archivos Excel (.xlsx / .xls / .xlsm) o PDF"); return; }
   ofsLeerArchivos(f);
 }
@@ -2901,7 +2929,8 @@ function ofsLeerArchivos(files){
     lector.onload=async(e)=>{
       const job={id:++OFS_SEQ, name:file.name, size:file.size, hn:null, error:null};
       try{
-        if(/\.pdf$/i.test(file.name)) job.hn=parseHNPdf(await hnPdfPalabras(e.target.result));
+        const ini=new Uint8Array(e.target.result,0,Math.min(4,e.target.result.byteLength));
+        if(String.fromCharCode(...ini)==="%PDF") job.hn=parseHNPdf(await hnPdfPalabras(e.target.result));
         else{
           const wb=XLSX.read(e.target.result,{type:"array"});
           const h=hnHoja(wb);
@@ -2923,7 +2952,7 @@ async function ofsPrepararJobs(){
       if(Array.isArray(r)) OFS=r; }catch(e){}
   }
   await ofsCargarPrendas();
-  OFS_JOBS.forEach(j=>{ if(j.hn && j.pre==null) j.pre=(j.prendas||[]).length ? (j.sug||"") : norm(j.hn.prenda).toUpperCase(); });
+  OFS_JOBS.forEach(j=>{ if(j.hn && j.pre==null) j.pre=(j.prendas||[]).length ? (j.sug||(j.prendas.length===1&&!j.hn.prenda?j.prendas[0]:"")) : norm(j.hn.prenda).toUpperCase(); });
   renderOfsJobs();
 }
 /* La HN dice `TERNO(PANTALÓN)` y la BASE dice `PANTALON`: lo que se guarda
@@ -3021,7 +3050,7 @@ function renderOfsJobs(){
     if(total<=0) avisos.push("La HN no trae cantidades.");
     if(j.hn.ceros) avisos.push(`${j.hn.ceros} fila(s) con cantidad 0: no se guardan como paquete.`);
     if(j.hn.totales) avisos.push(`Se ignoró ${j.hn.totales} fila(s) de TOTAL.`);
-    if(j.hoja && normKey(j.hoja)!=="HN") avisos.push(`El libro no tiene hoja "HN": se leyó "${j.hoja}".`);
+    if(j.hoja && normKey(j.hoja)!=="HN" && !j.hn.tickets) avisos.push(`El libro no tiene hoja "HN": se leyó "${j.hoja}".`);
     if((j.prendas||[]).length>1 && !j.pre)
       avisos.push(`El artículo tiene varias prendas en la BASE (${j.prendas.join(" · ")}) y ninguna encaja con "${j.hn.prenda||"—"}": elígela a mano.`);
     if((j.prendas||[]).length===0 && j.hn.articulo && j.rev==null)
