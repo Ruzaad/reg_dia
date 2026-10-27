@@ -653,6 +653,13 @@ function ofsRevision(j){
     const raras=[...new Set(vivos.map(t=>t.talla).filter(t=>!tallasReg.has(normKey(t))))];
     if(raras.length) av(`Talla(s) que no aparecen en ninguna OF registrada: ${raras.join(", ")}. Revisa si están bien escritas.`);
   }
+  if(j.hn.pdf){
+    const tot=j.hn.tallas.reduce((a,t)=>a+t.cant,0);
+    if(j.hn.fisica!=null) (tot===j.hn.fisica?ok:av)(tot===j.hn.fisica
+      ? `Los paquetes suman ${tot} und, igual que la CANTIDAD FÍSICA de la hoja.`
+      : `Los paquetes suman ${tot} und y la hoja dice CANTIDAD FÍSICA ${j.hn.fisica}.`);
+    if(j.hn.saltos) av(`${j.hn.saltos} paquete(s) con DESDE / HASTA que no siguen la numeración corrida: revisa la hoja.`);
+  }
   const nums=OFS.map(o=>+o.of).filter(n=>n>0), of=+j.hn.of;
   if(of && nums.length && !OFS.some(o=>String(o.of)===String(j.hn.of))){
     const max=Math.max(...nums);
@@ -729,6 +736,80 @@ function hnHoja(wb){
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null,raw:true});
     return rows.slice(0,40).some(f=>{ const k=(f||[]).map(normKey); return k.includes("TALLA")&&k.includes("CANT"); });
   })||null;
+}
+/* HN en PDF (formato nuevo del S.I.G.): tabla TALLA · CANT. · PAQ. · COLOR ·
+   DESDE · HASTA en uno o más bloques lado a lado. Cada palabra va a la columna
+   cuyo encabezado le queda más cerca en horizontal; las filas se ordenan por PAQ. */
+const LIB_PDFJS="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+async function hnPdfPalabras(buf){
+  await cargarLib(LIB_PDFJS+"pdf.min.js");
+  pdfjsLib.GlobalWorkerOptions.workerSrc=LIB_PDFJS+"pdf.worker.min.js";
+  const doc=await pdfjsLib.getDocument({data:buf}).promise, out=[];
+  for(let n=1;n<=doc.numPages;n++){
+    const pg=await doc.getPage(n), alto=pg.getViewport({scale:1}).height;
+    (await pg.getTextContent()).items.forEach(it=>{
+      const s=it.str||""; if(!s.trim()) return;
+      const x0=it.transform[4], y=(n-1)*10000+alto-it.transform[5], ch=(it.width||0)/Math.max(s.length,1);
+      let m; const re=/\S+/g;
+      while((m=re.exec(s))) out.push({s:m[0], x:x0+ch*m.index, w:ch*m[0].length, y});
+    });
+  }
+  return out;
+}
+function parseHNPdf(pal){
+  const lineas=[];
+  [...pal].sort((a,b)=>a.y-b.y||a.x-b.x).forEach(p=>{
+    const l=lineas.find(l=>Math.abs(l.y-p.y)<4);
+    if(l) l.p.push(p); else lineas.push({y:p.y, p:[p]});
+  });
+  lineas.forEach(l=>l.p.sort((a,b)=>a.x-b.x));
+  const txt=l=>l.p.map(p=>p.s).join(" ");
+  const bajo=(etq)=>{
+    for(let i=0;i<lineas.length-1;i++){
+      const e=lineas[i].p.find(p=>normKey(p.s)===etq); if(!e) continue;
+      const v=lineas[i+1].p.find(p=>Math.abs(p.x-e.x)<8);
+      if(v) return v.s;
+    }
+    return "";
+  };
+  const iTit=lineas.findIndex(l=>normKey(txt(l)).includes("HOJADENUMERACION"));
+  const prenda=iTit>=0&&lineas[iTit+1]&&!lineas[iTit+1].p.some(p=>normKey(p.s)==="PEDIDO") ? txt(lineas[iTit+1]) : "";
+  let of=bajo("ORDEN").replace(/\D/g,"");
+  if(/^4\d{9}$/.test(of)) of=of.replace(/^40*/,"");   // 4000010624 → 10624
+  const articulo=bajo("ARTICULO");
+  const cifra=(etq)=>{   // "CANTIDAD FÍSICA": el valor va bajo la palabra CANTIDAD
+    for(let i=0;i<lineas.length-1;i++){
+      const ps=lineas[i].p, k=ps.findIndex((p,j)=>j>0&&normKey(p.s)===etq&&normKey(ps[j-1].s)==="CANTIDAD"); if(k<0) continue;
+      const v=lineas[i+1].p.find(p=>Math.abs(p.x-ps[k-1].x)<8);
+      return v ? parseInt(v.s.replace(/\D/g,""))||null : null;
+    }
+    return null; };
+  const hr=lineas.findIndex(l=>{ const k=l.p.map(p=>normKey(p.s)); return k.includes("TALLA")&&k.includes("CANT"); });
+  if(hr<0) throw new Error("No se encontró la fila de encabezados (TALLA / CANT).");
+  const NOM={TALLA:"talla",CANT:"cant",PAQ:"paq",COLOR:"color",DESDE:"desde",HASTA:"hasta"};
+  const cols=[]; let bloque=-1;
+  lineas[hr].p.forEach(p=>{ const k=NOM[normKey(p.s)]; if(!k) return;
+    if(k==="talla") bloque++;
+    cols.push({k, b:Math.max(bloque,0), c:p.x+p.w/2}); });
+  const filas=[]; let totales=0;
+  for(let i=hr+1;i<lineas.length;i++){
+    const l=lineas[i], k0=normKey(l.p[0].s);
+    if(k0==="COLOR"||k0.startsWith("OBSERVACION")) break;
+    if(k0.startsWith("TOTAL")){ totales++; continue; }
+    const reg={};
+    l.p.forEach(p=>{ const c=p.x+p.w/2;
+      const col=cols.reduce((a,b)=>Math.abs(b.c-c)<Math.abs(a.c-c)?b:a);
+      const r=reg[col.b]||(reg[col.b]={}); r[col.k]=r[col.k]?r[col.k]+" "+p.s:p.s; });
+    Object.values(reg).forEach(r=>{ if(r.talla==null||r.cant==null) return;
+      filas.push({ talla:celTxt(r.talla), cant:parseInt(r.cant)||0, color:celTxt(r.color),
+        paq:parseInt(r.paq)||null, desde:parseInt(r.desde)||null, hasta:parseInt(r.hasta)||null }); });
+  }
+  if(filas.every(f=>f.paq)) filas.sort((a,b)=>a.paq-b.paq);
+  let acum=0, saltos=0;
+  filas.forEach(f=>{ if(f.desde!=null && (f.desde!==acum+1 || f.hasta!==acum+f.cant)) saltos++; acum+=f.cant; });
+  const tallas=filas.map(f=>({talla:f.talla, cant:f.cant, color:f.color}));
+  return { prenda, articulo, of, tallas, bloques:Math.max(bloque+1,1), totales, ceros:tallas.filter(t=>t.cant<=0).length,
+    pdf:true, cantOf:cifra("OF"), fisica:cifra("FISICA"), saltos };
 }
 function jobById(id){ return GEN_JOBS.find(j=>j.id===id); }
 function genQuitarJob(id){
@@ -2801,8 +2882,8 @@ function ofsDrag(e){
 }
 function ofsSoltar(e){
   e.preventDefault();
-  const f=[...(e.dataTransfer&&e.dataTransfer.files||[])].filter(x=>/\.xls[xm]?$/i.test(x.name));
-  if(!f.length){ mostrarError("Suelta archivos Excel (.xlsx / .xls / .xlsm)"); return; }
+  const f=[...(e.dataTransfer&&e.dataTransfer.files||[])].filter(x=>/\.(xls[xm]?|pdf)$/i.test(x.name));
+  if(!f.length){ mostrarError("Suelta archivos Excel (.xlsx / .xls / .xlsm) o PDF"); return; }
   ofsLeerArchivos(f);
 }
 function ofsLeerHN(input){ const f=[...input.files]; input.value=""; ofsLeerArchivos(f); }
@@ -2817,14 +2898,17 @@ function ofsLeerArchivos(files){
   let leidos=0;
   files.forEach(file=>{
     const lector=new FileReader();
-    lector.onload=(e)=>{
+    lector.onload=async(e)=>{
       const job={id:++OFS_SEQ, name:file.name, size:file.size, hn:null, error:null};
       try{
-        const wb=XLSX.read(e.target.result,{type:"array"});
-        const h=hnHoja(wb);
-        if(!h) throw new Error("no se encontró la hoja HN (ni otra con TALLA / CANT)");
-        job.hn=parseHN(XLSX.utils.sheet_to_json(wb.Sheets[h],{header:1,defval:null,raw:true}));
-        job.hoja=h;
+        if(/\.pdf$/i.test(file.name)) job.hn=parseHNPdf(await hnPdfPalabras(e.target.result));
+        else{
+          const wb=XLSX.read(e.target.result,{type:"array"});
+          const h=hnHoja(wb);
+          if(!h) throw new Error("no se encontró la hoja HN (ni otra con TALLA / CANT)");
+          job.hn=parseHN(XLSX.utils.sheet_to_json(wb.Sheets[h],{header:1,defval:null,raw:true}));
+          job.hoja=h;
+        }
       }catch(err){ job.error=err.message; }
       OFS_JOBS.push(job);
       if(++leidos===files.length) ofsPrepararJobs();
