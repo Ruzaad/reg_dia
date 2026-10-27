@@ -1,67 +1,61 @@
 /* =====================================================================
    SAMITEX · Rediseño visual (propuesta)
    Se carga DESPUÉS de style.css y solo cambia la apariencia: mismas clases,
-   mismos ids, mismo HTML. Paleta NOVA (13-oct): azul marino #0B2D5B, azul
-   eléctrico #007BFF, cian #00E0FF y gris grafito #6B7280. Los nombres de las
+   mismos ids, mismo HTML. Identidad CHRONOS (26-oct): azul Samitex #0D2177 y dorado
+   #BC9A48 / #E3CB86 (colores de la empresa), marfil #F8F6EF y azul noche #07123F. Los nombres de las
    variables se quedan (--azul, --ocre, --enlace) para no tocar cada regla:
-   --ocre es ahora el acento cian y --ocre-t sigue siendo el fondo ámbar de los
+   --ocre es ahora el acento dorado y --ocre-t sigue siendo el fondo ámbar de los
    avisos. --enlace es el eléctrico un tono más oscuro para que el texto y los
    botones con letra blanca pasen el contraste AA.
    ===================================================================== */
 :root{
   color-scheme:light;
-  --azul:#0B2D5B; --ocre:#00B4D8; --enlace:#0069D9; --exito:#1E7B3C; --alerta:#B3261E; --violeta:#6B46B8; --aviso:#B7791F;
-  --electrico:#007BFF; --cian:#00E0FF; --grafito:#6B7280;
-  --blanco:#FFFFFF; --gris-fondo:#E2E9F3; --texto:#0E1A2E; --tomado:#A3ADBD; --dorado:#B8901A;
-  --sup:#FFFFFF; --sup-2:#EEF3FA; --linea:#B9C8DD; --linea-2:#D3DEEC;
-  --suave:#4B5563; --tenue:#6B7280;
-  --azul-t:#DCEAFF; --ocre-t:#FBF3E6; --exito-t:#E7F4EC; --alerta-t:#FCECEA;
-  --sombra-1:0 1px 2px rgba(11,45,91,.10),0 2px 6px rgba(11,45,91,.06);
-  --sombra-2:0 2px 4px rgba(11,45,91,.10),0 8px 22px rgba(11,45,91,.12);
-  --sombra-3:0 12px 40px rgba(11,24,52,.22);
+  --azul:#0D2177; --ocre:#BC9A48; --enlace:#0D2177; --exito:#1B7A4B; --alerta:#B3261E; --violeta:#3A5BD9; --aviso:#8A5A00;
+  --electrico:#3A5BD9; --cian:#E3CB86; --grafito:#656D8C;
+  --blanco:#FFFFFF; --gris-fondo:#F8F6EF; --texto:#0F1838; --tomado:#A3A9BF; --dorado:#BC9A48; --dorado-txt:#735A14;
+  --sup:#FFFFFF; --sup-2:#F1EEE3; --linea:#D5CFBC; --linea-2:#E6E1D1;
+  --suave:#4B5476; --tenue:#656D8C;
+  --azul-t:#E4E8F7; --ocre-t:#F6EFD9; --exito-t:#E3F2EA; --alerta-t:#FCECEA;
+  --sombra-1:0 1px 2px rgba(15,24,56,.10),0 2px 6px rgba(15,24,56,.06);
+  --sombra-2:0 2px 4px rgba(15,24,56,.10),0 8px 22px rgba(15,24,56,.12);
+  --sombra-3:0 12px 40px rgba(6,14,51,.22);
   --r:14px; --r-s:10px;
-  --sans:"Fira Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-  --mono:"Fira Code",ui-monospace,Menlo,Consolas,monospace;
-  --sw-off:#D5DCE7;
-  /* Chrome del header y del sidebar: azul marino fijo, no cambia con el
-     tema (igual que en la maqueta de referencia). Separado de --azul porque
-     --azul también hace de texto/acento y en oscuro debe aclararse, cosa
-     que el chrome no debe hacer o se pierde el contraste con el texto
-     blanco que llevan encima. */
-  --hdr:#0B2D5B; --side:#08224A; --titulo:var(--azul); --boton:#0069D9;
+  --sans:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --display:"Cinzel","Trajan Pro","Times New Roman",serif;
+  --sw-off:#D5D0C0;
+  /* Chrome del header y del sidebar: azul Samitex fijo en claro; en oscuro se funde con el fondo.
+     Separado de --azul porque --azul también hace de texto y relleno de botones. */
+  --hdr:#0D2177; --side:#0A1A5E; --titulo:var(--azul); --boton:#0D2177;
 }
-/* ---------- tema oscuro (según el sistema, o el botón del encabezado) ----------
-   Ruzaad pidió tomar como referencia la primera maqueta, que ya traía modo
-   oscuro. --azul ahí se usa a la vez como texto/acento Y como relleno sólido
-   detrás de texto blanco (botones/pestañas activos); por eso no se copia el
-   --azul pálido de la referencia (pensado solo para texto) y se usa un azul
-   medio que funciona en los dos roles. --hdr/--side no se redefinen aquí:
-   quedan fijos al valor claro para que el chrome no cambie de tono. */
+/* ---------- tema oscuro (según el sistema, o el botón del encabezado) ---------- */
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   color-scheme:dark;
-  --azul:#1F6FEB; --ocre:#00E0FF; --enlace:#5BB0FF; --exito:#4DB874; --alerta:#F2877E; --violeta:#A98BEB; --aviso:#E0A94A;
-  --electrico:#3D95FF; --cian:#00E0FF; --grafito:#9CA3AF;
-  --blanco:#0A1220; --gris-fondo:#0A1220; --texto:#EAF0FA; --tomado:#4B5673; --dorado:#E3B274;
-  --sup:#121D32; --sup-2:#192844; --linea:#2D4268; --linea-2:#22344F;
-  --suave:#AEB8C8; --tenue:#8591A6;
-  --azul-t:#16335F; --titulo:#EAF2FF; --boton:#1F6FEB; --ocre-t:#2E2716; --exito-t:#173327; --alerta-t:#3A1B1D;
+  --azul:#3752DA; --ocre:#E3CB86; --enlace:#A8BAFF; --exito:#5FD39A; --alerta:#FF8F86; --violeta:#9DB3FF; --aviso:#F2B84B;
+  --electrico:#6F8CFF; --cian:#E3CB86; --grafito:#8E98BF;
+  --blanco:#060E33; --gris-fondo:#060E33; --texto:#F8F6EF; --tomado:#4B5673; --dorado:#E3CB86; --dorado-txt:#E3CB86;
+  --sup:#0E1A4D; --sup-2:#132261; --linea:#22337C; --linea-2:#1A2A66;
+  --suave:#B7BEDA; --tenue:#8E98BF;
+  --azul-t:#14235E; --titulo:#F8F6EF; --boton:#3752DA; --ocre-t:#2E2716; --exito-t:#10382A; --alerta-t:#3A1B1D;
+  --hdr:#091650; --side:#040A29;
   --sombra-1:0 1px 2px rgba(0,0,0,.35),0 1px 1px rgba(0,0,0,.2);
   --sombra-2:0 1px 2px rgba(0,0,0,.3),0 8px 22px rgba(0,0,0,.35);
   --sombra-3:0 16px 48px rgba(0,0,0,.5);
-  --sw-off:#3A4560;
+  --sw-off:#2A3A7A;
 }}
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --azul:#1F6FEB; --ocre:#00E0FF; --enlace:#5BB0FF; --exito:#4DB874; --alerta:#F2877E; --violeta:#A98BEB; --aviso:#E0A94A;
-  --electrico:#3D95FF; --cian:#00E0FF; --grafito:#9CA3AF;
-  --blanco:#0A1220; --gris-fondo:#0A1220; --texto:#EAF0FA; --tomado:#4B5673; --dorado:#E3B274;
-  --sup:#121D32; --sup-2:#192844; --linea:#2D4268; --linea-2:#22344F;
-  --suave:#AEB8C8; --tenue:#8591A6;
-  --azul-t:#16335F; --titulo:#EAF2FF; --boton:#1F6FEB; --ocre-t:#2E2716; --exito-t:#173327; --alerta-t:#3A1B1D;
+  --azul:#3752DA; --ocre:#E3CB86; --enlace:#A8BAFF; --exito:#5FD39A; --alerta:#FF8F86; --violeta:#9DB3FF; --aviso:#F2B84B;
+  --electrico:#6F8CFF; --cian:#E3CB86; --grafito:#8E98BF;
+  --blanco:#060E33; --gris-fondo:#060E33; --texto:#F8F6EF; --tomado:#4B5673; --dorado:#E3CB86; --dorado-txt:#E3CB86;
+  --sup:#0E1A4D; --sup-2:#132261; --linea:#22337C; --linea-2:#1A2A66;
+  --suave:#B7BEDA; --tenue:#8E98BF;
+  --azul-t:#14235E; --titulo:#F8F6EF; --boton:#3752DA; --ocre-t:#2E2716; --exito-t:#10382A; --alerta-t:#3A1B1D;
+  --hdr:#091650; --side:#040A29;
   --sombra-1:0 1px 2px rgba(0,0,0,.35),0 1px 1px rgba(0,0,0,.2);
   --sombra-2:0 1px 2px rgba(0,0,0,.3),0 8px 22px rgba(0,0,0,.35);
   --sombra-3:0 16px 48px rgba(0,0,0,.5);
-  --sw-off:#3A4560;
+  --sw-off:#2A3A7A;
 }
 body{background:var(--gris-fondo);}
 
@@ -84,7 +78,7 @@ header{background:var(--hdr);color:#fff;padding:10px 16px;gap:10px;min-height:56
 header .titulo{font-size:16px;font-weight:700;letter-spacing:.6px;display:flex;align-items:center;gap:10px;
   flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 header .titulo::before{content:"";flex:0 0 28px;height:28px;border-radius:8px;
-  background:url("icon-192.png") center/cover no-repeat;box-shadow:0 0 0 1px rgba(0,224,255,.35);}
+  background:url("icon-192.png") center/cover no-repeat;box-shadow:0 0 0 1px rgba(227,203,134,.45);}
 /* Los elementos de .badges pasan a ser hijos directos del encabezado: así en
    celular se reparten en dos filas limpias (título + iconos / avance + nombre). */
 header .badges{display:contents;}
@@ -134,7 +128,7 @@ header #btnOjoEf,header #btnRecargar,header #btnReloj,header #btnLlave,header #b
   border-top:1px solid rgba(255,255,255,.08);white-space:nowrap;overflow:hidden;}
 .ritmo-op[hidden]{display:none;}
 .ritmo-op i{font-style:normal;opacity:.8;}
-.ritmo-op b{color:#F1C98F;font-family:"Fira Code",monospace;font-size:13px;}
+.ritmo-op b{color:#F1C98F;font-family:"IBM Plex Mono",monospace;font-size:13px;}
 
 /* ---------- pantallas ---------- */
 .pantalla{padding:20px;}
@@ -477,12 +471,12 @@ body[data-pagina="ingenieria"]{font-family:var(--sans);}
 .ing-sidebar{flex-basis:240px;background:var(--side);padding:12px 10px 20px;border-right:0;}
 .ing-nav{gap:2px;}
 .ing-nav .nav-group{gap:2px;}
-.ing-nav .nav-sep{color:#8FD3F5;font-size:10.5px;font-weight:700;letter-spacing:.8px;margin:12px 8px 4px;padding-top:12px;
+.ing-nav .nav-sep{color:#E3CB86;font-size:10.5px;font-weight:700;letter-spacing:.8px;margin:12px 8px 4px;padding-top:12px;
   border-top:1px solid rgba(255,255,255,.1);white-space:nowrap;}
 .ing-nav .nav-group:first-child .nav-sep{border-top:0;margin-top:2px;padding-top:4px;}
 .ing-nav .nav-item{font-size:14px;font-weight:500;color:#D5E1F6;padding:9px 12px;border-radius:9px;letter-spacing:0;white-space:nowrap;overflow:hidden;}
 .ing-nav .nav-item:hover{background:rgba(255,255,255,.07);color:#fff;}
-.ing-nav .nav-item.activo{background:#fff;color:#0B2D5B;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+.ing-nav .nav-item.activo{background:#fff;color:#0D2177;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.18);}
 /* Escritorio: el menú abierto se queda abierto con sus nombres; el botón ☰ lo
    deja como riel de iconos (con el nombre al pasar el mouse) y otro clic lo
    vuelve a abrir. Nada se expande solo al pasar el cursor. En celular

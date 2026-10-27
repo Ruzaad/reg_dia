@@ -1,0 +1,91 @@
+/* =====================================================================
+   CHRONOS · capa de identidad (26-oct)
+   Se carga DESPUÉS de rediseno.css. Las variables de color viven en rediseno.css;
+   aquí van la tipografía de títulos, la marca del encabezado, la intro animada
+   y la barra de carga. Quitar el <link> y el <script> de chronos deja la app como estaba.
+   ===================================================================== */
+:root{
+  --ig-bg:#E7E6EB; --ig-ring:#A3A1A8; --ig-needle:#8A8890; --ig-head:#8A8890; --ig-letter:#9C9AA2; --ig-tag1:#8A8890; --ig-tag2:#8A8890; --ig-bar:#B4B2B9;
+  --ic-bg:#F8F6EF; --ic-ring:#0D2177; --ic-needle:#BC9A48; --ic-head:#BC9A48; --ic-letter:#0D2177; --ic-acc:#BC9A48; --ic-tag1:#5A6285; --ic-tag2:#0D2177; --ic-bar:#BC9A48;
+  --i-lila:#3A5BD9; --i-glow:#8DA6FF; --i-ui:#0D2177; --i-ui-bg:rgba(13,33,119,.08); --i-ui-line:rgba(13,33,119,.28);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ig-bg:#2A2A2E; --ig-ring:#98969A; --ig-needle:#706E74; --ig-head:#706E74; --ig-letter:#AEACB1; --ig-tag1:#706E74; --ig-tag2:#828086; --ig-bar:#68666E;
+  --ic-bg:#07123F; --ic-ring:#F8F6EF; --ic-needle:#E3CB86; --ic-head:#BC9A48; --ic-letter:#F8F6EF; --ic-acc:#BC9A48; --ic-tag1:#B7C0E6; --ic-tag2:#E3CB86; --ic-bar:#BC9A48;
+  --i-lila:#6F8CFF; --i-glow:#2442C4; --i-ui:#F8F6EF; --i-ui-bg:rgba(248,246,239,.08); --i-ui-line:rgba(248,246,239,.28);
+}}
+:root[data-theme="dark"]{
+  --ig-bg:#2A2A2E; --ig-ring:#98969A; --ig-needle:#706E74; --ig-head:#706E74; --ig-letter:#AEACB1; --ig-tag1:#706E74; --ig-tag2:#828086; --ig-bar:#68666E;
+  --ic-bg:#07123F; --ic-ring:#F8F6EF; --ic-needle:#E3CB86; --ic-head:#BC9A48; --ic-letter:#F8F6EF; --ic-acc:#BC9A48; --ic-tag1:#B7C0E6; --ic-tag2:#E3CB86; --ic-bar:#BC9A48;
+  --i-lila:#6F8CFF; --i-glow:#2442C4; --i-ui:#F8F6EF; --i-ui-bg:rgba(248,246,239,.08); --i-ui-line:rgba(248,246,239,.28);
+}
+h1,header .titulo{font-family:var(--display);letter-spacing:.03em;}
+h1{font-size:22px;}
+header .titulo::before{flex:0 0 30px;height:30px;border-radius:0;box-shadow:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke-linecap='round'%3E%3Cpath d='M68.78 14.68A40 40 0 1 0 90 50' stroke='%23F8F6EF' stroke-width='10.5'/%3E%3Cpath d='M50 50L33.4 28.7' stroke='%23E3CB86' stroke-width='8'/%3E%3Ccircle cx='90' cy='50' r='9.5' fill='%23E3CB86'/%3E%3C/svg%3E") center/contain no-repeat;}
+/* texto dorado: el dorado de relleno no alcanza contraste sobre fondo claro */
+.card-fila .mp-nota,.tk-min,.acab-causa-nota,.acab-hist-causa,.breadcrumb-of b{color:var(--dorado-txt);}
+/* barra de carga: solo aparece si una consulta tarda más de 0,4 s */
+#chronos-barra{position:fixed;top:0;left:0;right:0;height:3px;z-index:99998;overflow:hidden;opacity:0;pointer-events:none;transition:opacity .15s;}
+#chronos-barra.on{opacity:1;}
+#chronos-barra i{position:absolute;inset:0;background:var(--dorado);animation:chronosBarra 1s cubic-bezier(.2,.8,.2,1) infinite;}
+@keyframes chronosBarra{0%{transform:translateX(-100%) scaleX(.4);}100%{transform:translateX(100%) scaleX(.4);}}
+@media (prefers-reduced-motion:reduce){#chronos-barra i{animation:none;transform:none;}}
+/* ===== intro ===== */
+#chronos-intro{position:fixed;inset:0;z-index:100000;background:var(--ig-bg);opacity:1;transition:opacity .3s cubic-bezier(.2,.8,.2,1)}
+#chronos-intro.out{opacity:0;pointer-events:none}
+#chronos-intro[hidden]{display:none}
+#chronos-intro .layer{position:absolute;inset:0;display:grid;place-items:center}
+#chronos-intro svg.scene{width:100vw;height:100vh;height:100dvh;display:block}
+#chronos-intro .gray{background:var(--ig-bg);--ring:var(--ig-ring);--needle:var(--ig-needle);--head:var(--ig-head);--letter:var(--ig-letter);--acc:var(--ig-letter);--tag1:var(--ig-tag1);--tag2:var(--ig-tag2);--bar:var(--ig-bar)}
+#chronos-intro .color{background:var(--ic-bg);--ring:var(--ic-ring);--needle:var(--ic-needle);--head:var(--ic-head);--letter:var(--ic-letter);--acc:var(--ic-acc);--tag1:var(--ic-tag1);--tag2:var(--ic-tag2);--bar:var(--ic-bar);
+  -webkit-mask-image:linear-gradient(110deg,#000 0 45%,transparent 55% 100%);mask-image:linear-gradient(110deg,#000 0 45%,transparent 55% 100%);
+  -webkit-mask-size:300% 100%;mask-size:300% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:100% 0;mask-position:100% 0}
+#chronos-intro .gray .only-color{display:none}
+#chronos-intro .arc{fill:none;stroke:var(--ring);stroke-width:10.5;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100}
+#chronos-intro .hub{fill:var(--ring);opacity:0}
+#chronos-intro .needle{stroke:var(--needle);stroke-width:8;stroke-linecap:round}
+#chronos-intro .needle-rot{transform-box:view-box;transform-origin:50px 50px;transform:rotate(660deg)}
+#chronos-intro .needle-fade{opacity:0}
+#chronos-intro .head-rot{transform-box:view-box;transform-origin:50px 50px;transform:rotate(-62deg)}
+#chronos-intro .head{fill:var(--head);opacity:0;transform-box:fill-box;transform-origin:center}
+#chronos-intro .aura{fill:var(--i-lila);opacity:0;transform-box:fill-box;transform-origin:center}
+#chronos-intro .ltr{font-family:var(--display);font-weight:700;font-size:56px;fill:var(--letter);text-anchor:middle;opacity:0;transform-box:fill-box;transform-origin:center}
+#chronos-intro .ltr.acc{fill:var(--acc)}
+#chronos-intro .tag1{font-family:var(--sans);font-weight:500;font-size:12px;letter-spacing:3.5px;fill:var(--tag1);text-anchor:middle;opacity:0}
+#chronos-intro .tag2{font-family:var(--sans);font-weight:400;font-size:17px;fill:var(--tag2);text-anchor:middle;opacity:0}
+#chronos-intro .track{fill:var(--bar);opacity:0}
+#chronos-intro .fillbar{fill:var(--bar);transform-box:fill-box;transform-origin:left center;transform:scaleX(0)}
+#chronos-intro .barwrap{opacity:0}
+#chronos-intro .glow{opacity:0}
+#chronos-intro.run .arc{animation:i-draw 1s cubic-bezier(.65,0,.35,1) .15s forwards}
+#chronos-intro.run .head-rot{animation:i-orbit 1s cubic-bezier(.65,0,.35,1) .15s forwards}
+#chronos-intro.run .head{animation:i-fadeIn .2s .2s forwards}
+#chronos-intro.run .hub{animation:i-fadeIn .3s .6s forwards}
+#chronos-intro.run .ltr{animation:i-fly .8s cubic-bezier(.34,1.56,.64,1) forwards;animation-delay:calc(.45s + var(--i) * .07s)}
+#chronos-intro.run .needle-fade{animation:i-fadeIn .2s 1s forwards}
+#chronos-intro.run .needle-rot{animation:i-needle 1.9s 1s forwards}
+#chronos-intro.run .color{animation:i-wipe 1s cubic-bezier(.65,0,.35,1) 2.1s forwards}
+#chronos-intro.run .color .head{animation:i-fadeIn .2s .2s forwards,i-flash .5s 2.5s ease-in-out}
+#chronos-intro.run .aura{animation:i-aura .5s 2.5s ease-in-out}
+#chronos-intro.run .glow{animation:i-fadeIn 1s 2.6s forwards}
+#chronos-intro.run .tag1,#chronos-intro.run .tag2{animation:i-fadeIn .5s 3s forwards}
+#chronos-intro.run .barwrap{animation:i-barA 3.6s forwards}
+#chronos-intro.run .fillbar{animation:i-barFill 2.85s linear .25s forwards}
+@keyframes i-draw{to{stroke-dashoffset:0}}
+@keyframes i-orbit{to{transform:rotate(-360deg)}}
+@keyframes i-fadeIn{to{opacity:1}}
+@keyframes i-fly{0%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(var(--r)) scale(1.5)}40%{opacity:1}100%{opacity:1;transform:none}}
+@keyframes i-needle{0%{transform:rotate(660deg);animation-timing-function:cubic-bezier(.33,1,.68,1)}47.4%{transform:rotate(-60deg)}73.7%{transform:rotate(-60deg);animation-timing-function:cubic-bezier(.34,1.56,.64,1)}83.2%{transform:rotate(-30deg)}89.5%{transform:rotate(-30deg);animation-timing-function:cubic-bezier(.34,1.56,.64,1)}98.9%,100%{transform:rotate(0deg)}}
+@keyframes i-wipe{to{-webkit-mask-position:0 0;mask-position:0 0}}
+@keyframes i-flash{50%{fill:var(--i-lila);transform:scale(1.45)}}
+@keyframes i-aura{50%{opacity:.28;transform:scale(1.45)}}
+@keyframes i-barA{0%{opacity:0}4%,89%{opacity:1}100%{opacity:0}}
+@keyframes i-barFill{to{transform:scaleX(1)}}
+#chronos-intro.still .arc{stroke-dashoffset:0}#chronos-intro.still .head-rot{transform:rotate(-360deg)}
+#chronos-intro.still .head,#chronos-intro.still .hub,#chronos-intro.still .needle-fade,#chronos-intro.still .ltr,#chronos-intro.still .tag1,#chronos-intro.still .tag2,#chronos-intro.still .glow{opacity:1}
+#chronos-intro.still .needle-rot{transform:none}#chronos-intro.still .color{-webkit-mask-position:0 0;mask-position:0 0}
+#chronos-intro .skip{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:5;font:500 14px/1 var(--sans);color:var(--i-ui);background:var(--i-ui-bg);border:1px solid var(--i-ui-line);border-radius:999px;padding:12px 18px;min-height:44px}
+#chronos-intro .skip:hover{border-color:var(--ic-acc)}
+
+@media (prefers-reduced-motion:reduce){#chronos-intro *{animation-duration:.01ms!important;animation-delay:0s!important;}}

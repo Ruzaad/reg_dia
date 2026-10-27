@@ -2412,9 +2412,9 @@ function perPintarDash(r){
     kpi("Días laborales",r.dias_laborales);
   const labels=dias.map(d=>d.fecha.slice(8,10)+"-"+d.fecha.slice(5,7));
   const pct=dias.map(d=>r.personal>0?Math.round(d.presentes/r.personal*100):0);
-  perChart("line",{labels,datasets:[{label:"% Presentes",data:pct,borderColor:"#0B2D5B",backgroundColor:"rgba(0,123,255,.12)",fill:true,tension:.3,pointRadius:2}]});
+  perChart("line",{labels,datasets:[{label:"% Presentes",data:pct,borderColor:"#0D2177",backgroundColor:"rgba(58,91,217,.12)",fill:true,tension:.3,pointRadius:2}]});
   const est=r.por_estado||{}, keys=Object.keys(est);
-  const col={ACTIVO:"#1E7B3C",FALTA:"#B3261E",DM:"#D49D53",VACACIONES:"#007BFF",PERMISO:"#8e6bb5"};
+  const col={ACTIVO:"#1E7B3C",FALTA:"#B3261E",DM:"#D49D53",VACACIONES:"#3A5BD9",PERMISO:"#8e6bb5"};
   /* "EN <área>" (parche 97): tonos violeta, uno por área, para que se distingan en la torta. */
   const vio=["#6B46B8","#8B6BD0","#5A3A9E","#A58BE0","#4B2F85","#7C5BC4","#9C7FE0","#6A4FA8","#B9A3EA"];
   keys.filter(esOtraArea).forEach((k,i)=>col[k]=vio[i%vio.length]);
@@ -2503,7 +2503,7 @@ let DB={fpReady:false, efSel:{}, cantSel:{}, modSel:{}, efModo:VER_EF_AREA?"ef":
 let AVOF={items:[], _rows:[]};
 let avofSort={col:null,dir:1};
 function ordenarAvof(col){ if(avofSort.col===col) avofSort.dir*=-1; else avofSort={col,dir:1}; avofPintar(); }
-function DBCOL(i){ const c=["#0B2D5B","#D49D53","#1E7B3C","#007BFF","#8e6bb5","#B3261E","#5e548e","#3a6ea5","#b0722a","#2e8b8b"]; return c[i%c.length]; }
+function DBCOL(i){ const c=["#0D2177","#D49D53","#1E7B3C","#3A5BD9","#8e6bb5","#B3261E","#5e548e","#3a6ea5","#b0722a","#2e8b8b"]; return c[i%c.length]; }
 function dbSemana(){ const hoy=new Date(), lun=new Date(hoy); lun.setDate(hoy.getDate()-((hoy.getDay()+6)%7));
   return {desde:lun.toLocaleDateString("sv-SE"), hasta:hoy.toLocaleDateString("sv-SE")}; }
 function dbFp(id,obj){ if(!window.flatpickr||!$(id)) return; const d=dbSemana(); obj.desde=d.desde; obj.hasta=d.hasta;
