@@ -371,7 +371,7 @@ function poblarSelectsArea(){
   if($("areaFec")) $("areaFec").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("areaInci")) $("areaInci").innerHTML = todas + AREAS_LISTA.map(op).join("");
   if($("exArea")) $("exArea").innerHTML = elige + AREAS_LISTA.map(op).join("");
-  if($("opadArea")) $("opadArea").innerHTML = elige + AREAS_LISTA.filter(a=>a!=="ACABADO").map(op).join("");
+  if($("opadArea")) $("opadArea").innerHTML = elige + AREAS_LISTA.map(op).join("");
   if($("opadOrigenLista")) $("opadOrigenLista").innerHTML = AREAS_LISTA.map(a=>`<option value="${esc(a)}">`).join("");
   if($("movArea")) $("movArea").innerHTML = todas + AREAS_LISTA.map(op).join("");
   // Operaciones por OF y Generar tickets: solo áreas con Sheet en areas_config.

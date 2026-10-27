@@ -121,12 +121,20 @@ header #btnOjoEf,header #btnRecargar,header #btnReloj,header #btnLlave,header #b
   header #btnOjoEf,header #btnRecargar,header #btnReloj,header #btnLlave,header #btnMenu,header #btnTema{width:34px;padding:0;}
   /* Segunda fila: el avance del día y el nombre, a lo ancho. */
   .badge.avance{order:5;flex:1 1 55%;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:center;font-size:12.5px;padding:5px 10px;}
+  /* Operario: título y botones en una sola fila; el avance del día y el nombre en la segunda. */
+  body[data-pagina="operario"] header .titulo{flex:1 1 90px;min-width:0;}
   #quienBadge{order:6;flex:0 1 auto;font-size:12px;padding:5px 10px;max-width:60%;overflow:hidden;text-overflow:ellipsis;}
 }
 
 .breadcrumb-of{background:#0B3172;font-size:13px;font-weight:600;padding:8px 16px;letter-spacing:.2px;
   border-top:1px solid rgba(255,255,255,.08);}
 .breadcrumb-of b{color:#F1C98F;}
+/* Ritmo por hora (operario): unidades/hora a 100, 90 y 80 % de eficiencia. Discreto, una sola línea. */
+.ritmo-op{background:#0B3172;color:rgba(255,255,255,.75);font-size:12px;padding:5px 16px;display:flex;gap:14px;align-items:baseline;
+  border-top:1px solid rgba(255,255,255,.08);white-space:nowrap;overflow:hidden;}
+.ritmo-op[hidden]{display:none;}
+.ritmo-op i{font-style:normal;opacity:.8;}
+.ritmo-op b{color:#F1C98F;font-family:"Fira Code",monospace;font-size:13px;}
 
 /* ---------- pantallas ---------- */
 .pantalla{padding:20px;}
