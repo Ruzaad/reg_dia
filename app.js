@@ -871,7 +871,7 @@ function pintarRitmo(id){
   const std=+stdDelPaso(id);
   if(!(std>0)){ el.hidden=true; el.innerHTML=""; return; }
   const u=p=>{ const v=60/std*p/100; return v>=10 ? Math.round(v) : Math.round(v*10)/10; };
-  el.innerHTML=`<span>Por hora</span>`+[100,90,80].map(p=>`<span><i>${p}%</i> <b>${u(p)}</b></span>`).join("");
+  el.innerHTML=`<span>Unidades por hora</span>`+[100,90,80].map(p=>`<span><i>${p}%</i> <b>${u(p)}</b></span>`).join("");
   el.hidden=false;
 }
 
@@ -1634,7 +1634,7 @@ let ULTIMO_DIA = {eficiencia:0,minutos_prod:0,minutos_disp:0};
 function setAvance(d){
   ULTIMO_DIA = d || ULTIMO_DIA;
   const b=$("badgeAvance");
-  b.textContent = `Hoy: ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
+  b.textContent = `Hoy: ${ULTIMO_DIA.eficiencia}% · ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
   b.classList.add("visible");
   if(typeof opPintarHoy==="function") opPintarHoy();
 }
@@ -1648,7 +1648,7 @@ function setMetasAcabado(d, d2){
   CANT_HOY_ACABADO = (d && +d.cant_hoy) || 0;
   if(d2 && d2.minutos_disp != null) ULTIMO_DIA = d2;
   const b=$("badgeAvance");
-  b.textContent = `Hoy: ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
+  b.textContent = `Hoy: ${ULTIMO_DIA.eficiencia}% · ${ULTIMO_DIA.minutos_prod} de ${ULTIMO_DIA.minutos_disp} min`;
   b.classList.add("visible");
 }
 async function refrescarMetasAcabado(){
