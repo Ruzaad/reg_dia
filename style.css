@@ -644,14 +644,14 @@ a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,
 }
 
 /* Tipografía dashboard (solo Ingeniería): Fira Sans + Fira Code para datos */
-body[data-pagina="ingenieria"]{font-family:"Fira Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
+body[data-pagina="ingenieria"]{font-family:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
 body[data-pagina="ingenieria"] .tabla,
 body[data-pagina="ingenieria"] .tabla-asis-mes{font-variant-numeric:tabular-nums;}
 body[data-pagina="ingenieria"] .kpi-num,
 body[data-pagina="ingenieria"] .ce-num,
 body[data-pagina="ingenieria"] .mod-op-sub,
 body[data-pagina="ingenieria"] .mp-cab span,
-body[data-pagina="ingenieria"] .mod-sub{font-family:"Fira Code","Fira Sans",monospace;font-variant-numeric:tabular-nums;}
+body[data-pagina="ingenieria"] .mod-sub{font-family:"IBM Plex Mono","IBM Plex Sans",monospace;font-variant-numeric:tabular-nums;}
 
 /* Encabezados de sección alineados a la izquierda (dashboard, no centrado).
    Ritmo de espaciado (solo Ingeniería): título↔subtítulo apretados; encabezado
@@ -975,7 +975,7 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .avof-ops .sub{font-size:11px;font-weight:700;margin:0;text-align:inherit;}
 .avof-nop{display:inline-block;min-width:24px;background:var(--gris-fondo);color:var(--suave);
   border-radius:6px;padding:1px 5px;font-size:11px;font-weight:800;text-align:center;
-  font-family:"Fira Code",monospace;}
+  font-family:"IBM Plex Mono",monospace;}
 /* La operación final es la que decide salida y estado del módulo. */
 .avof-ops tr.avof-op-fin>td{background:#f4f7fd;font-weight:800;box-shadow:inset 0 -2px 0 var(--azul);}
 .avof-pct-td{min-width:110px;}
@@ -986,7 +986,7 @@ body[data-pagina="ingenieria"] main{overflow:hidden;padding:0;}
 .avof-pct-fill.alto{background:#cfe9d7;}
 .avof-pct-fill.bajo{background:#f7d9d5;}
 .avof-pct-lbl{position:absolute;inset:0;line-height:18px;font-size:11px;font-weight:800;
-  color:var(--texto);font-family:"Fira Code",monospace;text-align:center;}
+  color:var(--texto);font-family:"IBM Plex Mono",monospace;text-align:center;}
 .ing-main{flex:1;min-width:0;overflow-y:auto;padding:18px;position:relative;}
 .ing-main .pantalla{padding:0;overflow:visible;}
 
@@ -1048,7 +1048,7 @@ body.sidebar-cerrada .ing-sidebar{display:none;}
 .avance-fill.alto{background:var(--exito);}
 .avance-fill.bajo{background:var(--alerta);}
 .avance-lbl{position:absolute;top:0;right:10px;line-height:26px;font-size:13px;font-weight:800;
-  color:var(--texto);font-family:"Fira Code",monospace;}
+  color:var(--texto);font-family:"IBM Plex Mono",monospace;}
 .avance-sub{font-size:12px;color:var(--suave);font-weight:700;margin-top:5px;}
 .avance-nometa{font-size:13px;color:var(--alerta);font-weight:700;padding:6px 0;}
 /* Checkbox inline dentro de la barra de control */
@@ -1101,7 +1101,7 @@ details.mod-op>summary.mod-op-head::before{content:"▸ ";font-size:11px;color:v
 .tk-ops-row{display:flex;justify-content:space-between;gap:8px;padding:7px 12px;font-size:13px;
   border-top:1px solid var(--gris-fondo);}
 .tk-ops-row span:first-child{color:var(--texto);}
-.tk-ops-row span:last-child{font-weight:800;color:var(--azul);font-family:"Fira Code",monospace;white-space:nowrap;}
+.tk-ops-row span:last-child{font-weight:800;color:var(--azul);font-family:"IBM Plex Mono",monospace;white-space:nowrap;}
 .pager{display:flex;gap:12px;align-items:center;justify-content:center;padding:12px 0;flex-wrap:wrap;}
 .pager .pg-info{font-size:13px;font-weight:700;color:var(--suave);}
 .pager .btn-mini[disabled]{opacity:.45;cursor:not-allowed;}
@@ -1196,7 +1196,7 @@ tr.aud-fila:hover{background:var(--azul-t);}
 .ope-card[open]>summary{border-bottom:1px solid var(--gris-fondo);}
 .ope-nom{flex:1;min-width:200px;font-weight:800;color:var(--azul);}
 .ope-nom small{display:block;font-size:12px;font-weight:600;color:var(--suave);}
-.ope-res{font-family:"Fira Code",monospace;font-size:13px;font-weight:700;white-space:nowrap;}
+.ope-res{font-family:"IBM Plex Mono",monospace;font-size:13px;font-weight:700;white-space:nowrap;}
 .ope-card .tabla-scroll{padding:0 8px 8px;}
 .ope-tabla td.ope-dia{color:var(--suave);font-variant-numeric:tabular-nums;}
 .ope-area{font-size:11px;color:var(--suave);}
@@ -1227,7 +1227,7 @@ tr.aud-fila:hover{background:var(--azul-t);}
 .sv-t{font-size:18px;font-weight:800;color:var(--azul);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .sv-t::before,.sv-mt::before{content:"▸ ";color:var(--azul);}
 details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content:"▾ ";}
-.sv-pct{font-size:18px;font-weight:800;font-family:"Fira Code",monospace;flex:none;white-space:nowrap;}
+.sv-pct{font-size:18px;font-weight:800;font-family:"IBM Plex Mono",monospace;flex:none;white-space:nowrap;}
 .sv-sub{font-size:13px;color:var(--suave);margin:3px 0 7px;overflow-wrap:anywhere;}
 .sv-bar{height:8px;background:var(--gris-fondo);border-radius:5px;overflow:hidden;}
 .sv-bar i{display:block;height:100%;background:var(--ocre);}
@@ -1238,7 +1238,7 @@ details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content
 .sv-mr{display:flex;gap:6px;align-items:center;flex:none;}
 .sv-mr .pill{font-size:11px;padding:3px 7px;white-space:nowrap;}
 .pill.COMPLETADO{background:var(--exito-t);color:var(--exito);}
-.sv-mpct{font-weight:800;font-family:"Fira Code",monospace;font-size:14px;white-space:nowrap;}
+.sv-mpct{font-weight:800;font-family:"IBM Plex Mono",monospace;font-size:14px;white-space:nowrap;}
 .sv-mod>summary .sv-bar{grid-column:1/3;height:6px;}
 .sv-mod>summary .sv-f{grid-column:1/3;}
 .sv-f{font-size:12px;color:var(--suave);overflow-wrap:anywhere;}
@@ -1247,7 +1247,7 @@ details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content
 .sv-op{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:2px 8px;align-items:center;padding:6px 0;border-top:1px dashed #e6eaf0;}
 .sv-n{font-size:11px;font-weight:800;color:var(--suave);background:var(--gris-fondo);border-radius:6px;text-align:center;padding:2px 0;}
 .sv-op-t{font-size:13.5px;overflow-wrap:anywhere;min-width:0;}
-.sv-op-c{font-size:13px;font-weight:800;font-family:"Fira Code",monospace;white-space:nowrap;}
+.sv-op-c{font-size:13px;font-weight:800;font-family:"IBM Plex Mono",monospace;white-space:nowrap;}
 /* Avance: el nombre ocupa todo el ancho y debajo van la barra y la cantidad,
    así una operación larga no queda en una columna angosta. */
 .sv-op.av .sv-n{align-self:start;margin-top:2px;}
@@ -1263,25 +1263,25 @@ details[open]>summary .sv-t::before,details[open]>summary .sv-mt::before{content
 .he-step{display:inline-flex;align-items:center;border:2px solid var(--azul);border-radius:10px;overflow:hidden;background:var(--blanco);}
 .he-step button{border:0;background:var(--blanco);color:var(--azul);font-weight:800;width:30px;height:30px;font-size:16px;cursor:pointer;}
 .he-step button:disabled{cursor:default;}
-.he-step b{min-width:50px;text-align:center;font-family:"Fira Code",monospace;font-size:14px;white-space:nowrap;}
+.he-step b{min-width:50px;text-align:center;font-family:"IBM Plex Mono",monospace;font-size:14px;white-space:nowrap;}
 .he-step.off{opacity:.4;}
 .he-tabla td,.he-tabla th{white-space:nowrap;}
 .he-tabla td.izq{white-space:normal;}
 .he-tabla tr.he-off td{color:var(--tenue);}
-.he-min{font-family:"Fira Code",monospace;font-weight:800;}
+.he-min{font-family:"IBM Plex Mono",monospace;font-weight:800;}
 .he-ya{font-size:12px;color:#8a5f18;background:var(--ocre-t);border-radius:8px;padding:2px 7px;font-weight:700;}
 .he-aus{font-size:12px;color:var(--alerta);background:var(--alerta-t);border-radius:8px;padding:2px 7px;font-weight:700;}
 .he-pie{position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
   background:var(--blanco);border:1px solid var(--linea-2);border-radius:14px;padding:12px 16px;margin-top:12px;
   box-shadow:0 -2px 10px rgba(13,59,133,.08);}
-.he-pie .kn{font-family:"Fira Code",monospace;font-weight:800;color:var(--azul);font-size:18px;}
+.he-pie .kn{font-family:"IBM Plex Mono",monospace;font-weight:800;color:var(--azul);font-size:18px;}
 .he-pie-acc{display:flex;gap:8px;flex-wrap:wrap;}
 .he-pie-acc button:disabled{opacity:.5;cursor:default;}
 
 /* Ingeniería · Historial de tiempos de BASE (parche 86) */
 .solo-admin{font-size:12px;font-weight:800;color:#fff;background:var(--azul);border-radius:8px;padding:2px 8px;
   margin-left:8px;vertical-align:middle;white-space:nowrap;}
-.lg-d{font-family:"Fira Code",monospace;font-weight:800;}
+.lg-d{font-family:"IBM Plex Mono",monospace;font-weight:800;}
 .lg-up{color:var(--alerta);} .lg-dn{color:var(--exito);}
 .lg-tag{font-size:11px;font-weight:800;border-radius:6px;padding:2px 6px;white-space:nowrap;}
 .lg-tag.ed{background:var(--azul-t);color:var(--azul);} .lg-tag.nu{background:var(--exito-t);color:var(--exito);}

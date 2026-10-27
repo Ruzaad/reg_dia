@@ -44,7 +44,7 @@ Herramienta interna para ubicar código sin releer archivos enteros. **No se pub
 - Permisos: `_admin`, `_ing`, `_lector`, `_auth` validan dentro de cada RPC.
 
 ## Despliegue
-- Se trabaja **directo sobre `main`** (rama de trabajo → PR → fusionar a `main`). `qa` ya no se usa.
+- Se trabaja **directo sobre `main`** (rama de trabajo → PR → fusionar a `main`). `qa` se usa solo para probar con datos reales antes de subir un cambio grande (p. ej. el rediseño CHRONOS): PR con base `qa`, nunca toca producción; para subirlo a `main` se abre otro PR.
 - Al fusionar a `main`, Vercel despliega solo (planta-ruzaad.vercel.app). Netlify y GitHub Pages siguen sirviendo a parte del personal contra la misma base; Ruzaad los republica a mano.
 - El deploy se comprueba por los estados del commit en GitHub (el proxy de la nube no llega a `*.vercel.app`).
 
