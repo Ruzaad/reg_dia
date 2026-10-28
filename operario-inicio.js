@@ -6,7 +6,7 @@
    Las libres de cada tarjeta se completan en segundo plano bajando esas OF
    (fn_tickets_of, la misma que al abrir una OF), así que no agrega espera. */
 
-const OPI={cargadas:false, cargando:false, bol:null};
+const OPI={cargadas:false, cargando:false, bol:null, meta:null};
 const opiNum = n => { const m=String(n||"").match(/\d+/); return m?Number(m[0]):NaN; };
 
 /* Operaciones recientes: una tarjeta por OF + módulo + operación, la más
@@ -36,8 +36,22 @@ function opiSigue(of, modulo, op){
 
 function opInicio(){
   if(ES_ACABADO) return;
-  opPintarHoy(); opiPintar(); opiBoleta();
+  opPintarHoy(); opiPintar(); opiBoleta(); opiMeta();
   opiCargarOFs();
+}
+/* Meta del día que pone PCP (parche 144). Se pide una vez al día y se guarda en el
+   celular: no agrega espera. Sin meta del área no se muestra nada. */
+async function opiMeta(){
+  const s=sesionActual(); if(!s) return;
+  const k="opi-meta-"+s.dni, hoy=hoyLimaApp();
+  try{ const c=JSON.parse(localStorage.getItem(k)||"null"); if(c && c.f===hoy){ OPI.meta=c.m; opPintarHoy(); return; } }catch(e){}
+  try{
+    const r=await rpc("fn_mi_meta",{p_dni:s.dni,p_token:s.token});
+    if(!r || r.ok===false) return;
+    OPI.meta=Number(r.meta)>0 ? Number(r.meta) : null;
+    try{ localStorage.setItem(k, JSON.stringify({f:hoy, m:OPI.meta})); }catch(e){}
+    opPintarHoy();
+  }catch(e){}
 }
 /* Baja en segundo plano las OF de las tarjetas para saber cuántas libres hay. */
 async function opiCargarOFs(){
@@ -54,10 +68,12 @@ function opPintarHoy(){
   const z=$("opHoy"); if(!z || ES_ACABADO) return;
   const d=ULTIMO_DIA||{}, prod=Number(d.minutos_prod)||0, disp=Number(d.minutos_disp)||575, nt=Number(d.tickets_hoy);
   const pct=Math.max(0,Math.min(100,Math.round(prod/disp*100))), falta=Math.max(0,Math.round(disp-prod));
-  const bol=OPI.bol;
+  const bol=OPI.bol, meta=OPI.meta, pm=meta?Math.round(prod/meta*100):0;
   z.innerHTML=`<div class="opi-hoy-t">Hoy: ${isNaN(nt)?"":`<b>${nt} paquete${nt===1?"":"s"}</b> · `}${Math.round(prod)} de ${Math.round(disp)} min</div>
     <div class="opi-barra" role="progressbar" aria-valuemin="0" aria-valuemax="${Math.round(disp)}" aria-valuenow="${Math.round(prod)}" aria-label="Minutos de hoy"><i style="width:${pct}%"></i></div>
-    <div class="opi-hoy-s">${falta?`Te faltan <b>${falta} min</b> para cubrir tu jornada`:"Ya cubriste tu jornada 👏"}</div>
+    ${meta?`<div class="opi-meta"><span>Meta del día <b>${meta} min</b></span><span>llevas <b>${Math.round(prod)}</b> · ${pm} %</span>
+      <div class="opi-barra opi-barra-meta" role="progressbar" aria-valuemin="0" aria-valuemax="${meta}" aria-valuenow="${Math.round(prod)}" aria-label="Avance hacia la meta del día"><i style="width:${Math.min(100,pm)}%"></i></div></div>`:""}
+    <div class="opi-hoy-s">${meta?(prod<meta?`Te faltan <b>${Math.round(meta-prod)} min</b> para tu meta`:"Ya llegaste a tu meta 👏"):(falta?`Te faltan <b>${falta} min</b> para cubrir tu jornada`:"Ya cubriste tu jornada 👏")}</div>
     ${bol?`<div class="opi-chips">${bol}</div>`:""}`;
 }
 /* Ayer entregado / días pendientes de la quincena (fn_mi_boleta, parche 93). */

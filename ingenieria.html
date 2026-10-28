@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0B2D5B">
+<meta name="theme-color" content="#0D2177">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png" type="image/png">
-<title>Samitex — Ingeniería</title>
+<title>CHRONOS — Ingeniería</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="rediseno.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
@@ -48,6 +48,7 @@
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Planificación</summary>
+        <a class="nav-item" data-tab="pasoPcp" href="#pasoPcp">PCP · Meta y programa</a>
         <a class="nav-item" data-tab="pasoCarga" href="#pasoCarga">Carga vs capacidad</a>
       </details>
       <details class="nav-group" open>
@@ -1055,6 +1056,26 @@
       <div id="acfCuerpo"></div>
     </section>
 
+    <section class="pantalla" id="pasoPcp">
+      <div class="seccion-cab">
+        <h1>PCP · Meta y programa</h1>
+        <p class="seccion-sub">PCP pone la meta del mes de cada área y sube su programa de costura; la salida de corte se lee de la hoja NOTI_CORTE.
+        Con eso se ve si el programa alcanza la meta, quién va atrasado y qué OF arrancan costura sin corte completo.</p>
+      </div>
+      <div class="barra-control pcp-barra">
+        <label class="campo"><span>Mes</span><input type="month" id="pcpMes" onchange="pcpCargar()"></label>
+        <div class="pcp-cargas" id="pcpCargas" hidden>
+          <label class="btn-mini">Subir programa de costura (Excel)<input type="file" accept=".xlsx,.xls,.xlsm" hidden onchange="pcpSubirPrograma(this)"></label>
+          <label class="campo pcp-url"><span>Google Sheets de corte (hoja NOTI_CORTE)</span><input type="url" id="pcpUrl" placeholder="https://docs.google.com/spreadsheets/d/…"></label>
+          <label class="campo"><span>Desde</span><input type="date" id="pcpDesde"></label>
+          <button class="btn-mini" type="button" id="pcpBtnSheets" onclick="pcpLeerSheets()">Leer NOTI_CORTE</button>
+          <label class="btn-mini gris">Subir corte (Excel/CSV)<input type="file" accept=".xlsx,.xls,.csv" hidden onchange="pcpSubirCorte(this)"></label>
+        </div>
+      </div>
+      <div class="acf-kpis" id="pcpKpis"></div>
+      <div id="pcpCuerpo"></div>
+    </section>
+
     <section class="pantalla" id="pasoFeriados">
       <div class="seccion-cab">
         <h1>Feriados y fin de semana</h1>
@@ -1655,6 +1676,7 @@
 <script src="sueltos.js"></script>
 <script src="lotes.js"></script>
 <script src="prestadas.js"></script>
+<script src="pcp.js"></script>
 <script src="dinamico.js"></script>
 </body>
 </html>
