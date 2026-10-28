@@ -162,10 +162,20 @@ function pcpCabeceras(rows, pedidas, alias){
   }
   return null;
 }
+function pcpEstado(msg, tipo){
+  const e=$("pcpEstado"); if(e){ e.textContent=msg; e.className="pcp-estado "+(tipo||""); }
+  if(tipo) toast(msg, tipo==="ok"?"ok":undefined);
+}
 function pcpLeerArchivo(input, fn){
   const file=input.files[0]; input.value=""; if(!file) return;
+  if(typeof XLSX==="undefined"){ pcpEstado("No cargó el lector de Excel (revisa tu conexión y recarga la página)","err"); return; }
+  pcpEstado("Leyendo "+file.name+"…");
   const lr=new FileReader();
-  lr.onload=e=>{ try{ fn(XLSX.read(e.target.result,{type:"array",cellDates:true}), file.name); }catch(err){ toast(err.message); } };
+  lr.onerror=()=>pcpEstado("No se pudo abrir el archivo","err");
+  lr.onload=async e=>{
+    try{ await fn(XLSX.read(e.target.result,{type:"array",cellDates:true}), file.name); }
+    catch(err){ pcpEstado("No se pudo procesar: "+(err&&err.message||err),"err"); }
+  };
   lr.readAsArrayBuffer(file);
 }
 
@@ -193,13 +203,13 @@ async function pcpPrograma(wb, nombre){
     }
     hojas.push(`${pcpCorto(m[1])} ${n}`);
   });
-  if(!filas.length){ toast("No encontré hojas CAMISA, PANTALON o SACO con las columnas ARTICULO, CANT PROG y STD(min)"); return; }
-  if(!confirm(`Programa de costura: ${filas.length} filas (${hojas.join(", ")}).\nReemplaza al programa anterior. ¿Subir?`)) return;
+  if(!filas.length){ pcpEstado("No encontré hojas CAMISA, PANTALON o SACO con las columnas ARTICULO, CANT PROG y STD(min)","err"); return; }
+  pcpEstado(`Subiendo ${filas.length} filas (${hojas.join(", ")})…`);
   try{
     const r=await rpc("fn_pcp_programa_cargar",{p_dni:ING.dni,p_token:ING.token,p_archivo:nombre,p_filas:filas});
     if(!r || !r.ok) throw new Error((r&&r.error)||"No se subió");
-    toast(`Programa subido: ${r.filas} filas`,"ok"); pcpCargar();
-  }catch(e){ toast(e.message); }
+    pcpEstado(`Programa subido: ${r.filas} filas (${hojas.join(", ")})`,"ok"); pcpCargar();
+  }catch(e){ pcpEstado("No se subió el programa: "+e.message,"err"); }
 }
 
 /* NOTI_CORTE: FECHA, ORDEN DE FABRICACION, ARTICULO, COLOR, CLIENTE, CANTIDAD. Solo desde la fecha elegida. */
@@ -216,14 +226,14 @@ function pcpFilasCorte(rows){
   return out;
 }
 async function pcpEnviarCorte(filas, origen){
-  if(!filas.length){ toast("La hoja no trae filas con fecha y cantidad desde "+pcpDM($("pcpDesde").value)); return; }
+  if(!filas.length){ pcpEstado("La hoja no trae filas con fecha y cantidad desde "+pcpDM($("pcpDesde").value),"err"); return; }
   const tot=filas.reduce((s,x)=>s+x.cantidad,0), fs=filas.map(x=>x.fecha).sort();
-  if(!confirm(`NOTI_CORTE: ${filas.length} filas, ${pcpN(tot)} prendas, del ${pcpDM(fs[0])} al ${pcpDM(fs[fs.length-1])}.\nReemplaza lo guardado en esas fechas. ¿Guardar?`)) return;
+  pcpEstado(`Guardando corte: ${filas.length} filas, ${pcpN(tot)} prendas, del ${pcpDM(fs[0])} al ${pcpDM(fs[fs.length-1])}…`);
   try{
     const r=await rpc("fn_pcp_corte_cargar",{p_dni:ING.dni,p_token:ING.token,p_origen:origen,p_filas:filas});
     if(!r || !r.ok) throw new Error((r&&r.error)||"No se guardó");
-    toast(`Corte guardado: ${r.filas} filas`,"ok"); pcpCargar();
-  }catch(e){ toast(e.message); }
+    pcpEstado(`Corte guardado: ${r.filas} filas`,"ok"); pcpCargar();
+  }catch(e){ pcpEstado("No se guardó el corte: "+e.message,"err"); }
 }
 function pcpSubirCorte(input){
   pcpLeerArchivo(input,(wb,nombre)=>{
