@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="rediseno.css">
+<link rel="stylesheet" href="rediseno.css?v=c9">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
 </head>
 <body data-pagina="ingenieria">
@@ -1065,13 +1065,14 @@
       <div class="barra-control pcp-barra">
         <label class="campo"><span>Mes</span><input type="month" id="pcpMes" onchange="pcpCargar()"></label>
         <div class="pcp-cargas" id="pcpCargas" hidden>
-          <label class="btn-mini">Subir programa de costura (Excel)<input type="file" accept=".xlsx,.xls,.xlsm" hidden onchange="pcpSubirPrograma(this)"></label>
+          <button type="button" class="btn-mini" onclick="$('pcpArchPrograma').click()">Subir programa de costura (Excel)</button><input type="file" id="pcpArchPrograma" accept=".xlsx,.xls,.xlsm" hidden onchange="pcpSubirPrograma(this)">
           <label class="campo pcp-url"><span>Google Sheets de corte (hoja NOTI_CORTE)</span><input type="url" id="pcpUrl" placeholder="https://docs.google.com/spreadsheets/d/…"></label>
           <label class="campo"><span>Desde</span><input type="date" id="pcpDesde"></label>
           <button class="btn-mini" type="button" id="pcpBtnSheets" onclick="pcpLeerSheets()">Leer NOTI_CORTE</button>
-          <label class="btn-mini gris">Subir corte (Excel/CSV)<input type="file" accept=".xlsx,.xls,.csv" hidden onchange="pcpSubirCorte(this)"></label>
+          <button type="button" class="btn-mini gris" onclick="$('pcpArchCorte').click()">Subir corte (Excel/CSV)</button><input type="file" id="pcpArchCorte" accept=".xlsx,.xls,.csv" hidden onchange="pcpSubirCorte(this)">
         </div>
       </div>
+      <div id="pcpEstado" class="pcp-estado" role="status" aria-live="polite"></div>
       <div class="acf-kpis" id="pcpKpis"></div>
       <div id="pcpCuerpo"></div>
     </section>
@@ -1664,8 +1665,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="app.js"></script>
-<script src="ingenieria.js"></script>
+<script src="app.js?v=c9"></script>
+<script src="ingenieria.js?v=c9"></script>
 <script src="costos.js"></script>
 <script src="inicio.js"></script>
 <script src="calidad.js"></script>
@@ -1676,7 +1677,8 @@
 <script src="sueltos.js"></script>
 <script src="lotes.js"></script>
 <script src="prestadas.js"></script>
-<script src="pcp.js"></script>
-<script src="dinamico.js"></script>
+<script src="pcp.js?v=c9"></script>
+<script src="dinamico.js?v=c9"></script>
+<script src="intro.js?v=c9"></script>
 </body>
 </html>

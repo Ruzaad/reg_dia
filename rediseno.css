@@ -1870,3 +1870,9 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .pcp-corp .campo>span{font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--suave);text-transform:uppercase;}
 .pcp-in:focus{outline:none;border-color:var(--dorado);box-shadow:0 0 0 3px color-mix(in srgb,var(--dorado) 25%,transparent);}
 .pcp-in::placeholder{color:var(--tenue);font-weight:400;}
+
+/* PCP: línea de estado de la carga */
+.pcp-estado{margin:8px 0;padding:0;font-size:.9rem;color:var(--suave)}
+.pcp-estado:not(:empty){padding:8px 12px;border-left:3px solid var(--dorado);background:var(--sup);border-radius:6px}
+.pcp-estado.ok{border-left-color:#2e9d6a;color:var(--texto,inherit)}
+.pcp-estado.err{border-left-color:#c0392b;color:var(--texto,inherit)}
