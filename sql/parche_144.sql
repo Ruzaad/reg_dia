@@ -221,7 +221,7 @@ begin
   if jsonb_array_length(p_filas) > 5000 then
     return json_build_object('ok', false, 'error', 'Máximo 5000 filas por programa');
   end if;
-  delete from pcp_programa;
+  delete from pcp_programa where true;
   insert into pcp_programa (area, planta, linea, prenda, cliente, pedido, articulo, modelo, color, o_f,
                             cant, cant_prog, std, ini_costura, fin_costura, mes, anio, estatus, observacion)
   select upper(trim(x->>'area')), x->>'planta', x->>'linea', x->>'prenda', x->>'cliente', x->>'pedido',
