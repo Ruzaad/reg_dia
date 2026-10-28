@@ -651,7 +651,7 @@ function contadores(){
    ARRANQUE · INGENIERÍA
    ===================================================================== */
 const GRUPOS={pasoBuscar:"Tickets",pasoSueltos:"Tickets",pasoLotes:"Tickets",pasoPrestadas:"Gestión",pasoAsisConf:"Tickets",pasoFeriados:"Tickets",pasoTk:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
-  pasoEf:"Eficiencia",pasoAudit:"Eficiencia",pasoInc:"Eficiencia",pasoDash:"Dashboards",pasoCarga:"Planificación",
+  pasoEf:"Eficiencia",pasoAudit:"Eficiencia",pasoInc:"Eficiencia",pasoDash:"Dashboards",pasoCarga:"Planificación",pasoPcp:"Planificación",
   pasoAsis:"Gestión",pasoBases:"Gestión",pasoBaseLog:"Gestión",pasoCalBase:"Gestión",pasoIncid:"Gestión",pasoFechas:"Gestión",pasoPermisos:"Gestión",
   pasoCostosBase:"Costos",pasoCostosHoy:"Costos",pasoCostosInc:"Costos",pasoCostosAsis:"Costos",
   pasoSupArea:"Operar como",pasoOpArea:"Operar como"};

@@ -104,7 +104,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoInicio","pasoTk","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoFeriados","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
+  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoFeriados","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoPcp","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -155,6 +155,7 @@ function activarTab(tab){
   else if(tab==='pasoTmpMed') tmInit();
   else if(tab==='pasoTmpFalta') tfInit();
   else if(tab==='pasoCarga') ccInit();
+  else if(tab==='pasoPcp') pcpInit();
   else if(tab==='pasoPermisos') cargarPermisosAdmin();
   else if(tab==='pasoCorr') corrInit();
   else if(COSTOS_TABS.includes(tab)) costosEntrar(tab);
@@ -2412,7 +2413,7 @@ function perPintarDash(r){
     kpi("Días laborales",r.dias_laborales);
   const labels=dias.map(d=>d.fecha.slice(8,10)+"-"+d.fecha.slice(5,7));
   const pct=dias.map(d=>r.personal>0?Math.round(d.presentes/r.personal*100):0);
-  perChart("line",{labels,datasets:[{label:"% Presentes",data:pct,borderColor:"#0B2D5B",backgroundColor:"rgba(0,123,255,.12)",fill:true,tension:.3,pointRadius:2}]});
+  perChart("line",{labels,datasets:[{label:"% Presentes",data:pct,borderColor:"#0D2177",backgroundColor:"rgba(13,33,119,.12)",fill:true,tension:.3,pointRadius:2}]});
   const est=r.por_estado||{}, keys=Object.keys(est);
   const col={ACTIVO:"#1E7B3C",FALTA:"#B3261E",DM:"#D49D53",VACACIONES:"#007BFF",PERMISO:"#8e6bb5"};
   /* "EN <área>" (parche 97): tonos violeta, uno por área, para que se distingan en la torta. */
@@ -2503,7 +2504,7 @@ let DB={fpReady:false, efSel:{}, cantSel:{}, modSel:{}, efModo:VER_EF_AREA?"ef":
 let AVOF={items:[], _rows:[]};
 let avofSort={col:null,dir:1};
 function ordenarAvof(col){ if(avofSort.col===col) avofSort.dir*=-1; else avofSort={col,dir:1}; avofPintar(); }
-function DBCOL(i){ const c=["#0B2D5B","#D49D53","#1E7B3C","#007BFF","#8e6bb5","#B3261E","#5e548e","#3a6ea5","#b0722a","#2e8b8b"]; return c[i%c.length]; }
+function DBCOL(i){ const c=["#0D2177","#BC9A48","#1B7A4B","#5B7FE0","#735A14","#B3261E","#3A5BD9","#8A5A00","#6F8CFF","#2E8B8B"]; return c[i%c.length]; }
 function dbSemana(){ const hoy=new Date(), lun=new Date(hoy); lun.setDate(hoy.getDate()-((hoy.getDay()+6)%7));
   return {desde:lun.toLocaleDateString("sv-SE"), hasta:hoy.toLocaleDateString("sv-SE")}; }
 function dbFp(id,obj){ if(!window.flatpickr||!$(id)) return; const d=dbSemana(); obj.desde=d.desde; obj.hasta=d.hasta;
