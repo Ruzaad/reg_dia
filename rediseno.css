@@ -1,9 +1,9 @@
 /* =====================================================================
    SAMITEX · Rediseño visual (propuesta)
    Se carga DESPUÉS de style.css y solo cambia la apariencia: mismas clases,
-   mismos ids, mismo HTML. Marca CHRONOS (28-oct), colores de SAMITEX: azul
-   #0D2177, dorado #BC9A48 / #E3CB86, fondo marfil #F8F6EF y azul noche
-   #07123F en oscuro. Cinzel solo en títulos; IBM Plex Sans en datos. Los
+   mismos ids, mismo HTML. Paleta CHRONOS (la del artefacto «CHRONOS Diseño»):
+   azul #0D2177, dorado #BC9A48 / #E3CB86, fondo marfil #F8F6EF y azul noche
+   #060E33 en oscuro. Cinzel solo en títulos; IBM Plex Sans en datos. Los
    nombres de las variables se quedan (--azul, --ocre, --enlace) para no tocar
    cada regla: --ocre es el acento dorado y --ocre-t el fondo ámbar de avisos.
    ===================================================================== */
@@ -27,7 +27,7 @@
      tema. Separado de --azul porque --azul también hace de texto/acento y en
      oscuro debe aclararse, cosa que el chrome no debe hacer o se pierde el
      contraste con el texto blanco que llevan encima. */
-  --hdr:#0D2177; --hdr-2:#0A1A5E; --side:#07123F; --titulo:var(--azul); --boton:#0D2177;
+  --hdr:#0D2177; --hdr-2:#0A1A5E; --side:#0D2177; --titulo:var(--azul); --boton:#0D2177;
 }
 /* ---------- tema oscuro CHRONOS (según el sistema, o el botón del encabezado) ----------
    Fondo azul noche y letras marfil para que todo se lea. --azul hace a la vez
@@ -37,27 +37,27 @@
   color-scheme:dark;
   --azul:#3752DA; --ocre:#E3CB86; --enlace:#A8BAFF; --exito:#5FD39A; --alerta:#FF8F86; --violeta:#9DB3FF; --aviso:#F2B84B;
   --electrico:#6F8CFF; --cian:#E3CB86; --grafito:#B7BEDA;
-  --blanco:#07123F; --gris-fondo:#07123F; --texto:#F8F6EF; --tomado:#3A4A85; --dorado:#E3CB86;
-  --sup:#0E1A4D; --sup-2:#132261; --linea:#2A3C86; --linea-2:#1C2B6A;
-  --suave:#C3C9E2; --tenue:#9AA3C8;
+  --blanco:#060E33; --gris-fondo:#060E33; --texto:#F8F6EF; --tomado:#3A4A85; --dorado:#E3CB86;
+  --sup:#0E1A4D; --sup-2:#132261; --linea:#22337C; --linea-2:#1A2A6E;
+  --suave:#B7BEDA; --tenue:#8E98BF;
   --azul-t:#1A2A6E; --titulo:#F8F6EF; --boton:#3752DA; --ocre-t:#352C14; --exito-t:#12372A; --alerta-t:#3D1C22;
   --sombra-1:0 1px 2px rgba(0,0,0,.35),0 1px 1px rgba(0,0,0,.2);
   --sombra-2:0 1px 2px rgba(0,0,0,.3),0 8px 22px rgba(0,0,0,.35);
   --sombra-3:0 16px 48px rgba(0,0,0,.5);
-  --sw-off:#3A4580;
+  --sw-off:#3A4580; --hdr:#040A29; --hdr-2:#0A1440; --side:#040A29;
 }}
 :root[data-theme="dark"]{
   color-scheme:dark;
   --azul:#3752DA; --ocre:#E3CB86; --enlace:#A8BAFF; --exito:#5FD39A; --alerta:#FF8F86; --violeta:#9DB3FF; --aviso:#F2B84B;
   --electrico:#6F8CFF; --cian:#E3CB86; --grafito:#B7BEDA;
-  --blanco:#07123F; --gris-fondo:#07123F; --texto:#F8F6EF; --tomado:#3A4A85; --dorado:#E3CB86;
-  --sup:#0E1A4D; --sup-2:#132261; --linea:#2A3C86; --linea-2:#1C2B6A;
-  --suave:#C3C9E2; --tenue:#9AA3C8;
+  --blanco:#060E33; --gris-fondo:#060E33; --texto:#F8F6EF; --tomado:#3A4A85; --dorado:#E3CB86;
+  --sup:#0E1A4D; --sup-2:#132261; --linea:#22337C; --linea-2:#1A2A6E;
+  --suave:#B7BEDA; --tenue:#8E98BF;
   --azul-t:#1A2A6E; --titulo:#F8F6EF; --boton:#3752DA; --ocre-t:#352C14; --exito-t:#12372A; --alerta-t:#3D1C22;
   --sombra-1:0 1px 2px rgba(0,0,0,.35),0 1px 1px rgba(0,0,0,.2);
   --sombra-2:0 1px 2px rgba(0,0,0,.3),0 8px 22px rgba(0,0,0,.35);
   --sombra-3:0 16px 48px rgba(0,0,0,.5);
-  --sw-off:#3A4580;
+  --sw-off:#3A4580; --hdr:#040A29; --hdr-2:#0A1440; --side:#040A29;
 }
 body{background:var(--gris-fondo);}
 
