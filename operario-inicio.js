@@ -70,16 +70,13 @@ function opPintarHoy(){
   const meta=Math.round(tope*0.8), ef=Math.round(prod/tope*100), falta=Math.max(0,meta-Math.round(prod)), pm=Math.min(100,Math.round(prod/meta*100));
   const niv=prod>=meta?"ok":prod>=meta*0.875?"aviso":"alerta";
   const C=100,R=78, ang=a=>{ const t=(180-a*1.8)*Math.PI/180; return [C+Math.cos(t)*R, C-Math.sin(t)*R]; };
-  const pct=Math.min(100,ef/120*100), [mx,my]=ang(80/120*100), [nx,ny]=ang(pct);
+  const pct=Math.min(100,ef), [mx,my]=ang(80);
   z.innerHTML=`<div class="opi-hoy-t">Mi día${isNaN(nt)?"":` · <b>${nt} paquete${nt===1?"":"s"}</b>`}</div>
-    <svg class="ini-gauge-svg" viewBox="0 0 200 124" role="img" aria-label="Eficiencia ${ef} por ciento">
+    <svg class="ini-gauge-svg opi-gauge" viewBox="0 0 200 108" role="img" aria-label="Eficiencia ${ef} por ciento">
       <path d="M22 100 A78 78 0 0 1 178 100" class="ini-g-pista" pathLength="100"/>
       <path d="M22 100 A78 78 0 0 1 178 100" class="ini-g-val ${niv}" pathLength="100" stroke-dasharray="${pct.toFixed(1)} 100"${pct<.8?' visibility="hidden"':""}/>
-      <line x1="${(C+(mx-C)*.78).toFixed(1)}" y1="${(C+(my-C)*.78).toFixed(1)}" x2="${(C+(mx-C)*1.16).toFixed(1)}" y2="${(C+(my-C)*1.16).toFixed(1)}" class="ini-g-meta"/>
-      <line x1="${C}" y1="${C}" x2="${(C+(nx-C)*.8).toFixed(1)}" y2="${(C+(ny-C)*.8).toFixed(1)}" class="ini-g-aguja"/><circle cx="${C}" cy="${C}" r="5" class="ini-g-eje"/>
-      <text x="${C}" y="${C-12}" class="ini-g-num" text-anchor="middle">${ef}%</text>
-      <text x="${C}" y="${C-1}" class="ini-g-et" text-anchor="middle">EFICIENCIA</text>
-      <text x="22" y="120" class="ini-g-ext" text-anchor="middle">0</text><text x="178" y="120" class="ini-g-ext" text-anchor="middle">120</text></svg>
+      <line x1="${(C+(mx-C)*.82).toFixed(1)}" y1="${(C+(my-C)*.82).toFixed(1)}" x2="${(C+(mx-C)*1.14).toFixed(1)}" y2="${(C+(my-C)*1.14).toFixed(1)}" class="ini-g-meta"/>
+      <text x="${C}" y="88" class="ini-g-num" text-anchor="middle">${ef}%</text></svg>
     <div class="opi-min"><b>${Math.round(prod)}</b><span>min hechos</span></div>
     <div class="opi-meta1">Meta: <b>${meta} min</b> (80% de ${Math.round(tope)})</div>
     <div class="opi-fila"><div class="opi-barra" role="progressbar" aria-valuemin="0" aria-valuemax="${meta}" aria-valuenow="${Math.round(prod)}" aria-label="Avance a tu meta"><i style="width:${pm}%"></i></div><span>${pm}%</span></div>
