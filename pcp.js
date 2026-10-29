@@ -111,18 +111,14 @@ function pcpPintar(){
 
   const c=r.corte||{}, dias=c.dias||[], cc=(r.cargas||{}).CORTE, mx=Math.max(1,...dias.map(d=>+d.c));
   const ult=dias.slice(-10), ritmo=ult.length?ult.reduce((s,d)=>s+(+d.c),0)/ult.length:0;
-  const arr=(r.arranque||[]).map(x=>`<tr><td>${esc(pcpCorto(x.area))}</td><td>${esc(x.o_f||"")}</td><td>${esc(x.articulo||"")}</td><td>${pcpDM(x.ini)}</td>
-      <td class="num">${pcpN(x.cortado)} / ${pcpN(x.cant_prog)}</td><td class="num"><b>${pcpN(x.cant_prog-x.cortado)}</b></td>
-      <td>${x.ini<=r.hoy?`<span class="pcp-pill crit">Ya en costura</span>`:`<span class="pcp-pill warn">Arranca ${pcpDM(x.ini)}</span>`}</td></tr>`).join("");
   const corte=`<section class="pcp-card"><div class="pcp-h"><h2>Salida de corte</h2></div>
     <p class="seccion-sub">${cc?`NOTI_CORTE leída el ${pcpDM(String(cc.en).slice(0,10))} por ${esc(cc.por||"")}: ${cc.filas} filas del ${pcpDM(cc.desde)} al ${pcpDM(cc.hasta)}.`:"Todavía no se lee la hoja NOTI_CORTE."}
     Es lo que sale de corte y queda disponible para costura.</p>
     <div class="acf-kpis">${k(pcpN(c.total),"prendas cortadas en el mes")}${k(pcpN(ritmo),"prendas por día (últimos "+ult.length+" días con corte)")}</div>
-    ${dias.length?`<div class="pcp-dias" role="img" aria-label="Prendas cortadas por día">${dias.map(d=>`<div title="${pcpDM(d.f)}: ${pcpN(d.c)} prendas"><i style="height:${Math.max(3,d.c/mx*100)}%"></i><span>${String(d.f).slice(8,10)}</span></div>`).join("")}</div>`:""}
-    ${arr?`<h3 class="pcp-sub">OF del programa que arrancan costura sin corte completo</h3><div class="tabla-scroll"><table class="tabla pcp-tabla"><thead><tr><th>Área</th><th>OF</th><th>Artículo</th>
-      <th>Inicio costura</th><th class="num">Cortado / programado</th><th class="num">Falta cortar</th><th>Estado</th></tr></thead><tbody>${arr}</tbody></table></div>`:""}</section>`;
+    ${dias.length?`<div class="pcp-dias" role="img" aria-label="Prendas cortadas por día">${dias.map(d=>`<div title="${pcpDM(d.f)}: ${pcpN(d.c)} prendas"><i style="height:${Math.max(3,d.c/mx*100)}%"></i><span>${String(d.f).slice(8,10)}</span></div>`).join("")}</div>`:""}</section>`;
 
-  $("pcpCuerpo").innerHTML=pcpAvisos(r,t)+metas+programa+corte;
+  $("pcpCuerpo").innerHTML=pcpAvisos(r,t)+`<div id="pcpSeg"></div>`+metas+programa+corte;
+  pcpSeguimiento();
 }
 
 const pcpNum=v=>{ if(typeof v==="number") return v; const s=String(v==null?"":v).replace(/[^\d.,\-]/g,""); return s?Number(s.replace(/,/g,"")):NaN; };
