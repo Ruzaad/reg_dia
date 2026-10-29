@@ -2057,3 +2057,11 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .bn-opt.bn-med{font-size:13px;color:var(--aviso);}
 .bn-opt.bn-med.on{color:#fff;}
 .bn-todo{padding:2px 8px;min-height:24px;font-size:12px;margin-top:4px;}
+
+/* ===== Cronogramas (parche 152) ===== */
+.cro-subir{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;}
+.cro-subir .btn-mini{margin:4px 6px 4px 0;}
+.cro-bar{display:inline-block;vertical-align:middle;width:80px;height:7px;border-radius:99px;background:var(--linea-2);overflow:hidden;}
+.cro-bar i{display:block;height:100%;background:var(--aviso);} .cro-bar i.ok{background:var(--exito);}
+#croTabCorte tr[hidden]{display:none;}
+#croTabCorte td.nw{white-space:nowrap;}
