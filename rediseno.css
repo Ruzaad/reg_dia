@@ -2009,3 +2009,8 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .ini-ac-m{text-align:center;font-size:12.5px;color:var(--suave);margin:2px 0 4px;} .ini-ac-m b{font-family:var(--mono);color:var(--texto);}
 .opi-hoy .ini-gauge-svg{max-width:230px;margin:0 auto;} .opi-hoy .ini-g-num{font-size:34px;}
 .opi-tope{float:right;color:var(--tenue);font-size:13px;}
+.opi-hoy .ini-g-num{font-size:30px;}
+.opi-min{text-align:center;margin-top:2px;} .opi-min b{display:block;font:700 34px "Cinzel",var(--mono);color:var(--titulo);line-height:1.1;} .opi-min span{font-size:15px;color:var(--suave);}
+.opi-meta1{text-align:center;font-size:15px;color:var(--suave);margin:8px 0;} .opi-meta1 b{color:var(--titulo);}
+.opi-fila{display:flex;align-items:center;gap:10px;margin-bottom:8px;} .opi-fila .opi-barra{flex:1;margin:0;} .opi-fila span{font-size:13px;color:var(--suave);}
+.opi-hoy .opi-hoy-s{text-align:center;} .opi-hoy .opi-hoy-t{text-align:center;}

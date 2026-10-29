@@ -77,10 +77,13 @@ function opPintarHoy(){
       <path d="M22 100 A78 78 0 0 1 178 100" class="ini-g-val ${niv}" pathLength="100" stroke-dasharray="${pct.toFixed(1)} 100"${pct<.8?' visibility="hidden"':""}/>
       <line x1="${(C+(mx-C)*.78).toFixed(1)}" y1="${(C+(my-C)*.78).toFixed(1)}" x2="${(C+(mx-C)*1.16).toFixed(1)}" y2="${(C+(my-C)*1.16).toFixed(1)}" class="ini-g-meta"/>
       <line x1="${C}" y1="${C}" x2="${(C+(nx-C)*.8).toFixed(1)}" y2="${(C+(ny-C)*.8).toFixed(1)}" class="ini-g-aguja"/><circle cx="${C}" cy="${C}" r="5" class="ini-g-eje"/>
-      <text x="${C}" y="${C+30}" class="ini-g-num" text-anchor="middle">${ef}%</text></svg>
-    <div class="opi-meta"><span>Llevas <b>${Math.round(prod)}</b> min</span><span>Meta <b>${meta}</b> min · 80%</span></div>
-    <div class="opi-barra" role="progressbar" aria-valuemin="0" aria-valuemax="${meta}" aria-valuenow="${Math.round(prod)}" aria-label="Avance a tu meta"><i style="width:${pm}%"></i></div>
-    <div class="opi-hoy-s">${falta?`Te faltan <b>${falta} min</b>`:"¡Llegaste a tu meta! 👏"} <span class="opi-tope">Tope ${Math.round(tope)}</span></div>
+      <text x="${C}" y="${C-12}" class="ini-g-num" text-anchor="middle">${ef}%</text>
+      <text x="${C}" y="${C-1}" class="ini-g-et" text-anchor="middle">EFICIENCIA</text>
+      <text x="22" y="120" class="ini-g-ext" text-anchor="middle">0</text><text x="178" y="120" class="ini-g-ext" text-anchor="middle">120</text></svg>
+    <div class="opi-min"><b>${Math.round(prod)}</b><span>min hechos</span></div>
+    <div class="opi-meta1">Meta: <b>${meta} min</b> (80% de ${Math.round(tope)})</div>
+    <div class="opi-fila"><div class="opi-barra" role="progressbar" aria-valuemin="0" aria-valuemax="${meta}" aria-valuenow="${Math.round(prod)}" aria-label="Avance a tu meta"><i style="width:${pm}%"></i></div><span>${pm}%</span></div>
+    <div class="opi-hoy-s">${falta?`Te faltan <b>${falta} min</b>`:"¡Llegaste a tu meta! 👏"}</div>
     ${OPI.bol?`<div class="opi-chips">${OPI.bol}</div>`:""}`;
 }
 /* Ayer entregado / días pendientes de la quincena (fn_mi_boleta, parche 93). */
