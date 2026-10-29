@@ -2021,3 +2021,5 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .opi-col-main b{font-size:17px;color:var(--titulo);} .opi-col-main>span>span{font-size:14px;color:var(--suave);} .opi-col-main em{font-size:24px;color:var(--titulo);font-style:normal;}
 .opi-col-mas{display:block;width:100%;border:0;border-top:1px solid var(--linea);background:var(--sup-2);padding:9px;font:600 14px var(--sans,inherit);color:var(--enlace);cursor:pointer;}
 .opi-h-btn{display:flex;justify-content:space-between;width:100%;background:none;border:0;cursor:pointer;color:inherit;font:inherit;padding:0 2px 6px;}
+.opi-gauge .ini-g-num{font-size:34px;}
+.ini-mf .ini-mf-b{background:color-mix(in srgb,var(--dorado) 18%,var(--linea-2));}

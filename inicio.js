@@ -155,7 +155,7 @@ function iniMesHtml(F){
   const todas=F.length===(AREAS_LISTA||[]).filter(a=>a&&a!=="INGENIERIA").length;
   const tot=F.reduce((s,x)=>s+ac(x.area),0), met=todas&&+R.meta_mes ? +R.meta_mes : F.reduce((s,x)=>s+metaA(x.area),0);
   const pct=met?tot/met*100:0, mesTxt=INI_MESES[+R.fecha.slice(5,7)-1];
-  const filas=F.filter(x=>metaA(x.area)||ac(x.area)).map(x=>{ const m=metaA(x.area), a=ac(x.area), p=m?Math.min(100,a/m*100):0;
+  const filas=F.filter(x=>metaA(x.area)||ac(x.area)).map(x=>{ const m=metaA(x.area), a=ac(x.area), p=m?Math.min(100,a/m*100):(tot?a/tot*100:0);
     return `<div class="ini-mf"><span class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(iniCorto(x.area))}</span>
       <span class="ini-mf-b"><i style="width:${p.toFixed(1)}%"></i></span><b>${iniN(a)}${m?` <small>/ ${iniN(m)}</small>`:""}</b></div>`; }).join("");
   return `<div class="ini-card-h"><b>Meta de ${mesTxt}</b>${iniPuede("pasoPcp")?`<button type="button" class="ini-link" onclick="activarTab('pasoPcp')">Ver PCP ›</button>`:""}</div>
