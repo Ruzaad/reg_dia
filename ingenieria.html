@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="rediseno.css?v=c11">
+<link rel="stylesheet" href="rediseno.css?v=c12">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
 </head>
 <body data-pagina="ingenieria">
@@ -1116,11 +1116,20 @@
     <section class="pantalla" id="pasoInicio">
       <div class="ini-cab">
         <div><h1 id="iniFecha"></h1><p class="ini-alcance" id="iniAlcance"></p></div>
+        <div class="ini-seg" id="iniSeg" role="group" aria-label="Alcance" hidden>
+          <button type="button" id="iniSegMias" class="activo" onclick="INI.todas=false;iniPintar()">Mis áreas</button>
+          <button type="button" id="iniSegTodas" onclick="INI.todas=true;iniPintar()">Todas</button>
+        </div>
       </div>
-      <h2 class="ini-h2">Necesita tu atención</h2>
-      <div class="ini-avisos" id="iniAvisos" aria-live="polite"></div>
-      <h2 class="ini-h2">Cómo va cada área</h2>
-      <div class="contenedor-ancho tabla-scroll"><table class="tabla ini-tabla" id="iniAreasTab"></table></div>
+      <div class="ini-top">
+        <section class="ini-card ini-gauge" id="iniGauge" aria-live="polite"></section>
+        <div class="ini-kpis" id="iniKpis"></div>
+      </div>
+      <section class="ini-card" id="iniBarras"></section>
+      <section class="ini-card" id="iniAtencion">
+        <div class="ini-card-h"><b>Necesita tu atención</b></div>
+        <div class="ini-avisos" id="iniAvisos" aria-live="polite"></div>
+      </section>
       <p class="ini-pie" id="iniPie"></p>
     </section>
 
@@ -1666,8 +1675,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="app.js?v=c11"></script>
-<script src="ingenieria.js?v=c11"></script>
+<script src="app.js?v=c12"></script>
+<script src="ingenieria.js?v=c12"></script>
 <script src="costos.js"></script>
 <script src="inicio.js"></script>
 <script src="calidad.js"></script>
@@ -1678,9 +1687,9 @@
 <script src="sueltos.js"></script>
 <script src="lotes.js"></script>
 <script src="prestadas.js"></script>
-<script src="pcp.js?v=c11"></script>
-<script src="pcp-seguimiento.js?v=c11"></script>
-<script src="dinamico.js?v=c11"></script>
-<script src="intro.js?v=c11"></script>
+<script src="pcp.js?v=c12"></script>
+<script src="pcp-seguimiento.js?v=c12"></script>
+<script src="dinamico.js?v=c12"></script>
+<script src="intro.js?v=c12"></script>
 </body>
 </html>

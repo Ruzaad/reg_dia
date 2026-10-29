@@ -1922,3 +1922,66 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .gt-filtro{flex:1;max-width:340px;min-height:36px;padding:0 10px;border:1px solid var(--linea);border-radius:8px;background:var(--sup-2);color:var(--texto);font:inherit;}
 .gt-scroll{max-height:540px;overflow:auto;border:1px solid var(--linea-2);border-radius:8px;}
 .gt-f[hidden]{display:none;}
+
+/* Inicio de Ingeniería (parche 148): medidor, tarjetas, barras por área y lista de atención */
+#pasoInicio .ini-cab{justify-content:space-between;align-items:flex-start;flex-wrap:wrap;margin-bottom:18px;}
+.ini-seg{display:inline-flex;gap:4px;padding:3px;border:1px solid var(--linea);border-radius:99px;background:var(--sup);}
+.ini-seg button{border:0;background:none;color:var(--suave);font:600 13.5px var(--sans,inherit);padding:7px 16px;border-radius:99px;cursor:pointer;}
+.ini-seg button.activo{background:var(--azul);color:#fff;}
+.ini-seg[hidden]{display:none;}
+.ini-top{display:grid;grid-template-columns:minmax(260px,330px) 1fr;gap:14px;margin-bottom:14px;}
+.ini-card{background:var(--sup);border:1px solid var(--linea);border-radius:var(--r);box-shadow:var(--sombra-1);padding:16px 18px;margin-bottom:14px;}
+.ini-top .ini-card{margin-bottom:0;}
+.ini-card[hidden]{display:none;}
+.ini-card-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:10px;font-size:14px;color:var(--titulo);}
+.ini-hora{font:600 12.5px var(--mono);color:var(--tenue);}
+.ini-gauge-svg{display:block;width:100%;max-width:300px;margin:4px auto 0;}
+.ini-g-pista,.ini-g-val{fill:none;stroke-width:20;stroke-linecap:round;}
+.ini-g-pista{stroke:var(--linea-2);} .ini-g-val{stroke:var(--tenue);transition:stroke-dasharray .6s ease;}
+.ini-g-val.ok{stroke:var(--exito);} .ini-g-val.aviso{stroke:var(--aviso);} .ini-g-val.alerta{stroke:var(--alerta);}
+.ini-g-meta{stroke:var(--texto);stroke-width:2.5;stroke-linecap:round;}
+.ini-g-aguja{stroke:var(--dorado);stroke-width:5;stroke-linecap:round;} .ini-g-eje{fill:var(--dorado);}
+.ini-g-num{font:700 32px "Cinzel",var(--mono);fill:var(--texto);} .ini-g-et{font:600 9.5px var(--sans,inherit);letter-spacing:1.4px;fill:var(--tenue);}
+.ini-g-ext{font:500 10px var(--mono);fill:var(--tenue);}
+.ini-g-pie{text-align:center;font-size:13.5px;color:var(--suave);margin-top:6px;}
+.ini-gauge-esp{height:150px;display:flex;align-items:center;justify-content:center;}
+.ini-centro{text-align:center;margin:30px 0;}
+.ini-nota{margin:10px 0 0;font-size:11.5px;color:var(--tenue);text-align:center;line-height:1.35;}
+.ini-badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:700;}
+.ini-badge.ok{color:var(--exito);background:var(--exito-t);} .ini-badge.aviso{color:var(--aviso);background:var(--ocre-t);} .ini-badge.alerta{color:var(--alerta);background:var(--alerta-t);}
+.ini-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+.ini-k{display:flex;flex-direction:column;gap:4px;text-align:left;background:var(--sup);border:1px solid var(--linea);border-radius:var(--r);box-shadow:var(--sombra-1);
+  padding:14px 18px;color:var(--texto);font:inherit;text-decoration:none;min-height:104px;justify-content:center;}
+.ini-k-ir{cursor:pointer;} .ini-k-ir:hover,.ini-k-ir:focus-visible{border-color:var(--azul);outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--azul) 30%,transparent);}
+.ini-k-t{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--suave);}
+.ini-k-v{font:700 28px "Cinzel",var(--mono);line-height:1.1;color:var(--texto);font-variant-numeric:tabular-nums;}
+.ini-k-v.ok,.ini-k-s .ok,.ini-k-s.ok{color:var(--exito);} .ini-k-v.aviso,.ini-k-s.aviso{color:var(--aviso);} .ini-k-v.alerta,.ini-k-s.alerta,.ini-k-s .alerta{color:var(--alerta);}
+.ini-k-s{font-size:12.5px;color:var(--suave);}
+.ini-b{display:grid;grid-template-columns:130px 1fr 46px;align-items:center;gap:12px;width:100%;background:none;border:0;padding:7px 0;cursor:pointer;color:var(--texto);font:inherit;text-align:left;}
+.ini-b:hover .ini-b-a{text-decoration:underline;}
+.ini-b-a{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;letter-spacing:.2px;}
+.ini-b-a i,.ini-r-c a{flex:0 0 8px;}
+.ini-b-a i{width:8px;height:8px;border-radius:50%;background:var(--tenue);}
+.ini-b-a i[data-a="CAMISA COSTURA"]{background:#1A56B4;} .ini-b-a i[data-a="PANTALON COSTURA"]{background:#D49D53;} .ini-b-a i[data-a="SACO COSTURA"]{background:#1E7B3C;}
+.ini-b-a i[data-a="ACABADO"]{background:#6B46B8;} .ini-b-a i[data-a="CORTE"]{background:#0F8B8D;}
+.ini-b-pista{position:relative;display:block;height:12px;border-radius:7px;background:var(--linea-2);}
+.ini-b-pista>i{display:block;height:100%;border-radius:7px;background:var(--tenue);transition:width .5s ease;}
+.ini-b-pista>i.ok{background:var(--exito);} .ini-b-pista>i.aviso{background:var(--aviso);} .ini-b-pista>i.alerta{background:var(--alerta);}
+.ini-b-pista>u{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--texto);text-decoration:none;}
+.ini-b>b{font:700 14px var(--mono);text-align:right;} .ini-b>b.ok{color:var(--exito);} .ini-b>b.aviso{color:var(--aviso);} .ini-b>b.alerta{color:var(--alerta);}
+.ini-leyenda{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;font-size:12px;color:var(--suave);}
+.ini-leyenda span{display:inline-flex;align-items:center;gap:6px;}
+.ini-leyenda i{width:9px;height:9px;border-radius:2px;background:var(--tenue);}
+.ini-leyenda i.ok{background:var(--exito);} .ini-leyenda i.aviso{background:var(--aviso);} .ini-leyenda i.alerta{background:var(--alerta);}
+.ini-leyenda u{width:2px;height:12px;background:var(--texto);text-decoration:none;}
+#iniAtencion .ini-avisos{margin:0;gap:0;}
+.ini-r{display:grid;grid-template-columns:44px 1fr auto;gap:14px;align-items:center;padding:12px 4px;border-top:1px solid var(--linea-2);cursor:pointer;border-radius:8px;}
+.ini-r:first-child{border-top:0;} .ini-r:hover,.ini-r:focus-visible{background:var(--sup-2);outline:none;}
+.ini-r-i{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;background:var(--sup-2);color:var(--suave);}
+.ini-r.alerta .ini-r-i{color:var(--alerta);background:var(--alerta-t);} .ini-r.aviso .ini-r-i{color:var(--aviso);background:var(--ocre-t);}
+.ini-r-c{display:flex;flex-direction:column;gap:2px;min-width:0;} .ini-r-c b{font-size:15px;color:var(--texto);}
+.ini-r-c span{font-size:12.5px;color:var(--suave);} .ini-r-c a{color:var(--enlace);text-decoration:underline;text-underline-offset:2px;}
+.ini-r-ir{font-size:22px;color:var(--tenue);}
+.ini-chip{background:none;padding:0 6px 0 0;}
+@media (max-width:900px){.ini-top{grid-template-columns:1fr;} .ini-b{grid-template-columns:100px 1fr 42px;}}
+@media (max-width:520px){.ini-kpis{grid-template-columns:1fr 1fr;gap:10px;} .ini-k{padding:12px;} .ini-k-v{font-size:22px;}}
