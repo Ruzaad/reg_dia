@@ -2051,3 +2051,9 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .bn-img img{width:96px;height:96px;object-fit:cover;border-radius:var(--r-s);border:1px solid var(--linea);cursor:zoom-in;}
 .bn-img button{position:absolute;top:2px;right:2px;background:var(--sup);border:1px solid var(--linea);border-radius:999px;width:26px;height:26px;cursor:pointer;color:var(--texto);}
 @media (max-width:900px){.bn-grid{grid-template-columns:1fr;}}
+.bn-opt{display:block;width:100%;background:var(--sup);color:var(--texto);border:1px solid var(--linea);border-radius:var(--r-s);padding:4px 10px;margin:2px 0;font:inherit;font-family:var(--mono);cursor:pointer;min-height:32px;}
+.bn-opt:hover{border-color:var(--azul);}
+.bn-opt.on{background:var(--azul);border-color:var(--azul);color:#fff;font-weight:700;}
+.bn-opt.bn-med{font-size:13px;color:var(--aviso);}
+.bn-opt.bn-med.on{color:#fff;}
+.bn-todo{padding:2px 8px;min-height:24px;font-size:12px;margin-top:4px;}
