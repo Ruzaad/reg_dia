@@ -59,7 +59,6 @@ function croPintar(){
       <td class="nw"><span class="cro-bar"><i class="${p>=100?"ok":""}" style="width:${p}%"></i></span> ${p} %</td>
       <td>${x.completo?pcpDM(x.completo):"—"}</td><td>${pcpDM(x.ini_costura)}</td><td>${pill(x.estado)}</td></tr>`; }).join("");
   const corte=`<section class="pcp-card"><div class="pcp-h"><h2>Corte → costura</h2></div>
-    <p class="seccion-sub">Una OF queda disponible para costura cuando lo cortado (NOTI_CORTE) llega a lo requerido. «Completo» es el día en que se llegó a esa cantidad.</p>
     <div class="acf-kpis">${kp(n("DISPONIBLE"),"disponibles para costura","verde")}${kp(n("INCOMPLETO"),"con corte incompleto",n("INCOMPLETO")?"rojo":"")}${kp(n("SIN CORTE"),"sin corte todavía")}</div>
     <div class="gt-bar"><input type="search" class="gt-filtro" placeholder="Filtrar por OF, artículo o cliente" oninput="croFiltrar(this.value)" aria-label="Filtrar corte"></div>
     <div class="tabla-scroll pcp-alto"><table class="tabla pcp-tabla" id="croTabCorte"><thead><tr><th>OF</th><th>Artículo</th><th>Cliente</th><th>Área</th><th class="num">Requerido</th><th class="num">Cortado</th><th>Avance</th><th>Completo</th><th>Costura plan</th><th>Estado</th></tr></thead>
@@ -70,7 +69,6 @@ function croPintar(){
       <td class="num"><b>${pcpN(sum(s.llega))}</b></td><td class="num">${pcpN(sum(s.hecho))}</td><td class="num">${pcpN(s.capacidad)}</td>
       <td class="num ${s.capacidad&&sum(s.llega)<s.capacidad*.8?"rojo":""}">${s.capacidad?Math.round(sum(s.llega)/s.capacidad*100)+" %":"—"}</td></tr>`).join("");
   const acab=`<section class="pcp-card"><div class="pcp-h"><h2>Acabado: carga por semana</h2></div>
-    <p class="seccion-sub">Llega = prendas de la penúltima operación de costura × S.A.M de la base de ACABADO del artículo. Capacidad = personas MOD de ACABADO en la estructura × jornada. Carga baja de la capacidad = falta trabajo.</p>
     <div class="pcp-graf"><canvas id="croGSem" role="img" aria-label="Carga semanal de acabado"></canvas></div>
     <div class="tabla-scroll"><table class="tabla pcp-tabla"><thead><tr><th>Semana</th>${subs.map(k=>`<th class="num">Llega ${CRO_SUB[k]}</th>`).join("")}<th class="num">Llega total</th><th class="num">Hecho</th><th class="num">Capacidad</th><th class="num">Carga</th></tr></thead>
     <tbody>${semFilas}</tbody></table></div></section>`;
@@ -99,7 +97,7 @@ function croGantt(){
   const sinBase=(r.ofs||[]).filter(x=>x.sin_base).length;
   const chips=["","CAMISERIA","SACO","PANTALON"].map(k=>`<button type="button" class="btn-mini ${CRO.sub===k?"":"gris"}" onclick="croSubFiltro('${k}')">${k?CRO_SUB[k]:"Todas"}</button>`).join(" ");
   const cab=`<div class="pcp-h"><h2>Acabado por OF</h2><div>${chips}</div></div>
-    <p class="seccion-sub">Arriba, los días en que costura entregó (penúltima operación). Abajo, los días con tickets en ACABADO.${sinBase?` <b class="rojo">${sinBase} OF sin base de ACABADO</b>: entran sin minutos hasta que se cargue su base.`:""}</p>`;
+    ${sinBase?`<p class="seccion-sub"><b class="rojo">${sinBase} OF sin base de ACABADO</b></p>`:""}`;
   if(!G.length){ box.innerHTML=cab+`<p class="seccion-sub">No llegó nada de costura en estas fechas.</p>`; return; }
   const a=pcpDn(r.desde), b=pcpDn(r.hasta), n=b-a+1, hoy=pcpDn(r.hoy);
   const pos=d=>Math.max(0,Math.min(100,(d-a)/n*100)), anc=(d1,d2)=>Math.max(1.2,pos(d2+1)-pos(d1));
