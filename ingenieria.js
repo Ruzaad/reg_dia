@@ -3,7 +3,7 @@
    ============================================================ */
 let ING=null;
 let AREAS_LISTA = Object.keys(AREAS);       // se reemplaza con fn_areas_listar al iniciar
-const CARGOS_LISTA = ["OPERARIO","SUPERVISORA","ESTAJERO"];
+const CARGOS_LISTA = ["OPERARIO","SUPERVISORA"];
 const ESTADOS_OPERARIO = ["ACTIVO","INACTIVO"];
 const CATEGORIAS_LISTA = ["","A","B","C","D"];   // "" = sin asignar (parche 34)
 let ESTADOS_ASIS = [];
@@ -1440,12 +1440,12 @@ async function opEntrar(){
   try{
     const r=await rpc("fn_login",{p_dni:dni,p_pin:pin});
     if(!r.ok){ msg.textContent=r.error||"DNI o PIN incorrectos"; return; }
-    if(r.cargo!=="OPERARIO" && r.cargo!=="ESTAJERO"){ msg.textContent="Ese usuario no es operario"; return; }
+    if(r.cargo!=="OPERARIO"){ msg.textContent="Ese usuario no es operario"; return; }
     // Marca esta pestaña como prestada: la sesión del operario vive solo aquí
     // (sessionStorage) y la de ingeniería sigue intacta en localStorage (parche 92).
     try{ sessionStorage.setItem("stx_volver_ing", localStorage.getItem("stx_sesion")||"1"); }catch(e){}
     guardarSesion({dni:r.dni, nombre:r.nombre, cargo:r.cargo, token:r.token,
-      area:(r.cargo==="ESTAJERO"? null : (r.area_actual||null))});
+      area:(r.area_actual||null)});
     location.href="operario.html";
   }catch(e){ msg.textContent=e.message; }
 }

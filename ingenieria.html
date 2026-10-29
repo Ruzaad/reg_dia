@@ -1116,21 +1116,18 @@
     <section class="pantalla" id="pasoInicio">
       <div class="ini-cab">
         <div><h1 id="iniFecha"></h1><p class="ini-alcance" id="iniAlcance"></p></div>
+        <label class="ini-fecha"><span>Ver día</span><input type="date" id="iniFechaSel" onchange="iniCambiarFecha(this.value)"></label>
         <div class="ini-seg" id="iniSeg" role="group" aria-label="Alcance" hidden>
           <button type="button" id="iniSegMias" class="activo" onclick="INI.todas=false;iniPintar()">Mis áreas</button>
           <button type="button" id="iniSegTodas" onclick="INI.todas=true;iniPintar()">Todas</button>
         </div>
       </div>
-      <div class="ini-top">
-        <section class="ini-card ini-gauge" id="iniGauge" aria-live="polite"></section>
-        <div class="ini-kpis" id="iniKpis"></div>
-      </div>
-      <section class="ini-card" id="iniBarras"></section>
+      <section class="ini-card ini-mes" id="iniMes" aria-live="polite"></section>
+      <div class="ini-areas" id="iniAreas" aria-live="polite"></div>
       <section class="ini-card" id="iniAtencion">
         <div class="ini-card-h"><b>Necesita tu atención</b></div>
         <div class="ini-avisos" id="iniAvisos" aria-live="polite"></div>
       </section>
-      <p class="ini-pie" id="iniPie"></p>
     </section>
 
     <!-- ===================== COSTOS (parche 96): todo de solo lectura ===================== -->
