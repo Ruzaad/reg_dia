@@ -537,7 +537,7 @@ async function cargarAlmacen(nombreArea){
    ============================================================ */
 /* parche 95: todo cargo que no es de planta (Ingeniería, Costos…) entra por
    ingenieria.html y ve solo las pestañas que le dio el administrador. */
-function esOficina(cargo){ return !!cargo && !["OPERARIO","ESTAJERO","SUPERVISORA"].includes(cargo); }
+function esOficina(cargo){ return !!cargo && !["OPERARIO","SUPERVISORA"].includes(cargo); }
 function destinoPorCargo(cargo){
   if(esOficina(cargo)) return "ingenieria.html";
   if(cargo==="SUPERVISORA") return "supervisora.html";
@@ -606,6 +606,10 @@ function initLogin(){
                      admin:r.es_admin===true});
       if(esOficina(r.cargo)){ location.href="ingenieria.html"; return; }
       $("nombreSaludo").textContent = "Hola, " + r.nombre.split(" ")[0];
+      if(r.area_actual){   // ya tiene su área: entra directo, sin elegirla
+        const s=sesionActual(); s.area=r.area_actual; guardarSesion(s);
+        location.href = destinoPorCargo(r.cargo); return;
+      }
       await hidratarAreas();
       pintarAreas(r.cargo);
       irA("pasoArea");
@@ -637,7 +641,7 @@ let ALM=null, RECL={}, sel={of:null,modulo:null,op:null,ticket:null};
    todos en el cambio de turno). OF_LISTA es la lista liviana de OF con su conteo;
    los tickets de una OF se bajan recién al elegirla. */
 let OF_LISTA=[], OF_CARGADAS=new Set();
-let AREA_ESTAJERO = null;   // área elegida por el estajero para este reclamo (no persiste en operarios.area_actual)
+let AREA_ESTAJERO = null;   // área con la que se reclama en esta sesión (nombre histórico; no persiste en operarios.area_actual)
 /* Áreas sin OF que trabajan por lotes (parches 116 y 119). No están en
    areas_config (no tienen Sheet), así que se agregan aparte a las tarjetas de
    elegir área: sin esto nadie podía entrar a CORTE, REPROCESO ni DESPACHO. */
@@ -894,7 +898,7 @@ function aplicarModoAcabado(){
 function initOperario(){
   const s = sesionActual();
   if(!s || !s.area){ location.href="index.html"; return; }
-  if(s.cargo!=="OPERARIO" && s.cargo!=="ESTAJERO"){ location.href = destinoPorCargo(s.cargo); return; }
+  if(s.cargo!=="OPERARIO"){ location.href = destinoPorCargo(s.cargo); return; }
   fijarSesion(s);
   $("quienBadge").textContent = soloApellidos(s.nombre); $("quienBadge").classList.add("visible");
   $("btnSalir").onclick = cerrarSesion;
@@ -928,29 +932,20 @@ function initOperario(){
   /* El botón está en las tres pantallas de inicio (OF, OF de Acabado y
      lotes): antes solo estaba en la de OF y quien entraba a ACABADO o a un
      área por lotes no tenía cómo pasarse a otra sin cerrar sesión. */
-  const irAreas = ()=> (s.cargo==='ESTAJERO')
-    ? (hidratarAreas().then(()=>pintarAreasEstajero(s)), irA("pasoAreaEstajero"))
-    : abrirCambioArea(s);
+  const irAreas = ()=> abrirCambioArea(s);
   document.querySelectorAll("#btnCambiarAreaEst,.js-cambiar-area").forEach(b=>{ b.style.display="block"; b.onclick=irAreas; });
   window.alVolver = (t)=>{
     if(t==="pasoOps" && sel.of && sel.modulo) pintarOperaciones();
     else if(t==="pasoModulos" && sel.of) pintarModulos();
   };
-  if(s.cargo==='ESTAJERO'){
-    $("tituloArea").textContent = "ESTAJERO";
-    irA("pasoAreaEstajero");
-    hidratarAreas().then(()=>pintarAreasEstajero(s));
-  } else {
-    AREA_ESTAJERO = s.area;
-    $("tituloArea").textContent = s.area;
-    cargarTodo(s);
-  }
+  AREA_ESTAJERO = s.area;
+  $("tituloArea").textContent = s.area;
+  cargarTodo(s);
   window.VOLVER_MAP = VOLVER_OPERARIO;
   // Antes de la OF viene el área: atrás en la pantalla de inicio abre el
   // cambio de área (con "Cerrar sesión" abajo). El estajero tiene su pantalla.
   window.onSalirApp = ()=>{
-    if(s.cargo==='ESTAJERO' && pasoActivo()!=="pasoAreaEstajero"){ hidratarAreas().then(()=>pintarAreasEstajero(s)); irA("pasoAreaEstajero"); return; }
-    if(s.cargo==='ESTAJERO') confirmarSalir(); else abrirCambioArea(s, true);
+    abrirCambioArea(s, true);
   };
   initBackTrap();
 }
@@ -1029,31 +1024,11 @@ function pedirHoraArea(s, a){
     cerrarModal();
     AREA_ESTAJERO = a;
     // Queda en la sesión: si el celular recarga la página, sigue en esta área.
-    { const ss=sesionActual(); if(ss && ss.cargo!=='ESTAJERO'){ ss.area=a; guardarSesion(ss); s.area=a; } }
+    { const ss=sesionActual(); if(ss){ ss.area=a; guardarSesion(ss); s.area=a; } }
     $("tituloArea").textContent = a;
     cargarTodo(s);
   };
 }
-function pintarAreasEstajero(s){
-  const g=$("gridAreaEstajero"); if(!g) return;
-  g.innerHTML="";
-  Object.keys(AREAS).forEach(a=>{
-    const cfg=AREAS[a];
-    const c=document.createElement("div");
-    c.className="card-area"+(cfg.habilitada?"":" off");
-    c.innerHTML=`<div class="ca-nombre">${esc(a)}</div>
-      <div class="ca-sub">${cfg.habilitada?"Disponible":"Próximamente"}</div>`;
-    if(cfg.habilitada){
-      c.onclick=()=>{
-        AREA_ESTAJERO = a;
-        $("tituloArea").textContent = "ESTAJERO · " + a;
-        cargarTodo(s);
-      };
-    }
-    g.appendChild(c);
-  });  tarjetasAreasLote(g, null, a=>{ AREA_ESTAJERO = a; $("tituloArea").textContent = "ESTAJERO · " + a; cargarTodo(s); });
-}
-
 /* parche 74: al cambiar de área quedaba viva la selección y los buscadores de
    la anterior (sel/ACAB/marcados y el texto de OF), así que la pantalla
    nueva se pintaba filtrada por una OF que no existe en el área elegida y

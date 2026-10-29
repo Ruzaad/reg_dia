@@ -1,11 +1,11 @@
 /* =====================================================================
    CHRONOS · Inicio de Ingeniería (solo lectura)
-   Al entrar dice cómo va el día de las áreas de la persona (eficiencia de
-   planta, minutos, prendas, personal) y qué necesita su atención. Usa las
-   mismas RPC de las pestañas más fn_inicio_prendas (parche 148); cada tarjeta
-   se pinta sola cuando llega su respuesta y todo lleva a la pestaña que ya existe.
+   Al entrar dice cómo va el día de cada área de la persona (minutos contra el tope
+   de sus asistentes, prendas, personal), la meta del mes y qué necesita su atención.
+   Usa fn_inicio_resumen y fn_inicio_mes (parche 149) más las RPC de las pestañas;
+   cada tarjeta se pinta sola cuando llega su respuesta y lleva a la pestaña que ya existe.
    ===================================================================== */
-let INI={todas:false, d:{}, t0:0, tiempos:{}, meta:85, timer:null};
+let INI={todas:false, d:{}, fecha:null, timer:null};
 const INI_CORTO=a=>String(a||"").replace(" COSTURA","");
 const INI_DIAS=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
 const INI_MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
@@ -30,21 +30,20 @@ const iniPuede=tab=>tabPermitida(tab);
 function iniHayAlgo(){ return ["pasoBolSin","pasoAudit","pasoIncid","pasoEf","pasoAsis","pasoDash"].some(iniPuede); }
 
 function iniRpc(clave, fn, args){
-  const t=performance.now();
+  const fecha=INI.hoy;
   return rpc(fn, Object.assign({p_dni:ING.dni,p_token:ING.token}, args))
-    .then(r=>{ INI.tiempos[clave]=Math.round(performance.now()-t); INI.d[clave]=r; iniPintar(); return r; })
-    .catch(e=>{ INI.tiempos[clave]=Math.round(performance.now()-t); INI.d[clave]={ok:false,error:e.message}; iniPintar(); });
+    .then(r=>{ if(INI.hoy!==fecha) return r; INI.d[clave]=r; iniPintar(); return r; })
+    .catch(e=>{ if(INI.hoy!==fecha) return; INI.d[clave]={ok:false,error:e.message}; iniPintar(); });
 }
 function iniCargar(){
-  const hoy=hoyLima(), ayer=iniAyer(hoy), fb=iniFechaBoletas();
-  INI.d={}; INI.tiempos={}; INI.t0=performance.now(); INI.hoy=hoy; INI.ayer=ayer; INI.fb=fb;
+  const hoy=INI.fecha||hoyLima(), ayer=iniAyer(hoy), fb=iniFechaBoletas();
+  INI.d={}; INI.hoy=hoy; INI.ayer=ayer; INI.fb=fb;
   iniPintar();
+  iniRpc("res","fn_inicio_resumen",{p_fecha:hoy});
+  iniRpc("mes","fn_inicio_mes",{p_fecha:hoy});
   if(iniPuede("pasoBolSin")) iniRpc("bol","fn_boletas_sin_llenar",{p_fecha:fb,p_area:null})
     .then(r=>{ if(r && r.ok) bslNav((r.personas||[]).length, fb); });
   if(iniPuede("pasoAsis")||iniPuede("pasoDash")) iniRpc("asis","fn_asistencia_matriz",{p_area:"",p_desde:hoy,p_hasta:hoy});
-  if(iniPuede("pasoEf")) iniRpc("ef","fn_eficiencia_areas",{p_desde:hoy,p_hasta:hoy})
-    .then(()=>setTimeout(()=>iniRpc("efa","fn_eficiencia_areas",{p_desde:ayer,p_hasta:ayer}),400));   // ayer va después: no frena lo primero
-  iniRpc("pre","fn_inicio_prendas",{p_fecha:hoy});
   if(iniPuede("pasoAudit")) iniRpc("aud","fn_ef_auditoria_v2",{p_desde:ayer,p_hasta:ayer,p_area:"",p_umbral:AUD_ANORMAL,p_pico:20});
   if(iniPuede("pasoIncid")) iniRpc("sol","fn_solicitudes_listar",{p_area:""});
   if(iniPuede("pasoBolSin")) iniRpc("fer","fn_dias_no_laborables",{p_desde:ferSuma(hoy,-45),p_hasta:hoy})   // parche 120
@@ -52,14 +51,15 @@ function iniCargar(){
   clearInterval(INI.timer);   // se refresca solo cada 10 min mientras Inicio esté a la vista
   INI.timer=setInterval(()=>{ const p=$("pasoInicio"); if(p && p.classList.contains("activa") && !document.hidden) iniCargar(); },600000);
 }
+function iniCambiarFecha(v){ INI.fecha = v && v<hoyLima() ? v : null; iniCargar(); }
 
 /* ---------- cálculo por área (solo con lo que devuelven las RPC) ---------- */
 function iniPorArea(areas){
   const d=INI.d, M={};
   areas.forEach(a=>M[a]={area:a});
   if(d.bol && d.bol.ok) (d.bol.areas||[]).forEach(x=>{ if(M[x.area]) M[x.area].bol=x; });
-  if(d.ef && d.ef.ok) (d.ef.areas||[]).forEach(x=>{ if(M[x.area]) M[x.area].ef=x; });
-  if(d.pre && d.pre.ok) (d.pre.areas||[]).forEach(x=>{ if(M[x.area]) M[x.area].pre=+x.prendas||0; });
+  if(d.res && d.res.ok) (d.res.areas||[]).forEach(x=>{ if(M[x.area]) M[x.area].r=x; });
+  if(d.mes && d.mes.ok) (d.mes.areas||[]).forEach(x=>{ if(M[x.area]) M[x.area].mes=+x.acum||0; });
   if(d.aud && d.aud.ok) (d.aud.items||[]).forEach(x=>{ if(M[x.area] && x.ef>=AUD_ANORMAL) M[x.area].aud=(M[x.area].aud||0)+1; });
   if(d.sol && d.sol.ok) (d.sol.items||[]).forEach(x=>{ if(M[x.area]) M[x.area].sol=(M[x.area].sol||0)+1; });
   if(d.asis && d.asis.ok) (d.asis.personal||[]).forEach(p=>{
@@ -102,7 +102,7 @@ function iniAvisos(F){
 /* ---------- pintado ---------- */
 const iniEspera=()=>`<span class="ini-esp" aria-label="Cargando"></span>`;
 const iniN=n=>Math.round(+n||0).toLocaleString("es-PE").replace(/,/g," ");
-const iniNivel=v=>v>=INI.meta?"ok":v>=70?"aviso":"alerta";
+const iniCorto=INI_CORTO;
 const IC={chk:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',shield:'<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/>',cal:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
   msg:'<path d="M4 5h16v11H9l-5 4z"/>',users:'<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M16 5.5a3 3 0 0 1 0 5.6M18 14c2 .6 3.5 2.6 3.5 5"/>'};
 const iniIco=k=>`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[k]||IC.chk}</svg>`;
@@ -113,60 +113,56 @@ function iniFraccion(){
   const w=Math.max(0,Math.min(t,1100)-480)-Math.max(0,Math.min(t,825)-780);
   return {f:Math.min(1,w/575), hora:String(Math.floor(t/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0")};
 }
-/* Minutos y disponible del conjunto de áreas (el disponible sale de minutos ÷ eficiencia de la misma RPC). */
-function iniPlanta(F,k){
-  const d=INI.d[k]; if(!d||!d.ok) return null; let m=0,disp=0;
-  F.forEach(x=>{ const e=((d.areas||[]).find(y=>y.area===x.area)); if(!e) return; const mi=+e.minutos||0, ef=+e.eficiencia||0; m+=mi; if(mi>0&&ef>0) disp+=mi/ef*100; });
-  return {min:m,disp,ef:disp?m/disp*100:null};
-}
-function iniGauge(F,fr){
-  const P=iniPlanta(F,"ef"), W=200, C=100, R=78;
-  const cab=`<div class="ini-card-h"><b>Eficiencia de planta hoy</b><span class="ini-hora">${fr.hora}</span></div>`;
-  if(!("ef" in INI.d)) return cab+`<div class="ini-gauge-esp">${iniEspera()}</div>`;
-  if(!P) return cab+`<p class="ini-tenue ini-centro">sin dato</p>`;
-  const lista=fr.f>=.12 && P.ef!=null, v=lista?P.ef/fr.f:null, pct=lista?Math.max(0,Math.min(120,v))/120*100:0, niv=lista?iniNivel(v):"nd";
-  const ang=a=>{ const r=(180-a*1.8)*Math.PI/180; return [C+Math.cos(r)*R, C-Math.sin(r)*R]; };
-  const [mx,my]=ang(INI.meta/120*100), [nx,ny]=ang(pct), [ix,iy]=[C+(mx-C)*.78,C+(my-C)*.78];
-  const dif=lista?Math.round(Math.abs(v-INI.meta)):0;
-  return cab+`<svg class="ini-gauge-svg" viewBox="0 0 ${W} 124" role="img" aria-label="Eficiencia ${lista?Math.round(v)+" por ciento":"sin dato"}">
+/* Medidor de un área: el arco llega al tope (asistentes × jornada); la marca es la meta mínima (80 % del tope).
+   El día en curso se compara con lo que ya debería llevar según las horas corridas. */
+function iniGaugeArea(r,fr){
+  const W=200,C=100,R=78, tope=+r.tope||0, v=+r.minutos||0, meta=+r.meta_min||0, hoy=INI.hoy===hoyLima();
+  const esp=hoy?Math.max(.05,fr.f):1, pct=tope?Math.min(100,v/tope*100):0, mpct=tope?meta/tope*100:80;
+  const niv=!tope?"nd":v>=meta*esp?"ok":v>=meta*esp*.875?"aviso":"alerta";
+  const ang=a=>{ const t=(180-a*1.8)*Math.PI/180; return [C+Math.cos(t)*R, C-Math.sin(t)*R]; };
+  const [mx,my]=ang(mpct);
+  return `<svg class="ini-gauge-svg" viewBox="0 0 ${W} 112" role="img" aria-label="${iniN(v)} de ${iniN(tope)} minutos, meta mínima ${iniN(meta)}">
       <path d="M${C-R} ${C} A${R} ${R} 0 0 1 ${C+R} ${C}" class="ini-g-pista" pathLength="100"/>
-      <path d="M${C-R} ${C} A${R} ${R} 0 0 1 ${C+R} ${C}" class="ini-g-val ${niv}" pathLength="100" stroke-dasharray="${pct} 100"/>
-      <line x1="${ix.toFixed(1)}" y1="${iy.toFixed(1)}" x2="${(C+(mx-C)*1.16).toFixed(1)}" y2="${(C+(my-C)*1.16).toFixed(1)}" class="ini-g-meta"/>
-      ${lista?`<line x1="${C}" y1="${C}" x2="${(C+(nx-C)*.8).toFixed(1)}" y2="${(C+(ny-C)*.8).toFixed(1)}" class="ini-g-aguja"/><circle cx="${C}" cy="${C}" r="5" class="ini-g-eje"/>`:""}
-      <text x="${C}" y="${C-8}" class="ini-g-num" text-anchor="middle">${lista?Math.round(v)+"%":"—"}</text>
-      <text x="${C}" y="${C+8}" class="ini-g-et" text-anchor="middle">EFICIENCIA</text>
-      <text x="${C-R}" y="${C+20}" class="ini-g-ext" text-anchor="middle">0</text><text x="${C+R}" y="${C+20}" class="ini-g-ext" text-anchor="middle">120</text></svg>
-    <div class="ini-g-pie">${lista?`<span class="ini-badge ${niv}">${niv==="ok"?"En meta":niv==="aviso"?"Atención":"Bajo"}</span> ${niv==="ok"?`${dif} punto${dif===1?"":"s"} sobre la meta`:`a ${dif} punto${dif===1?"":"s"} de la meta`}`
-      : `<span class="ini-tenue">${fr.f<.12?"El turno recién empieza":"Aún sin tickets hoy"}</span>`}</div>
-    <p class="ini-nota">Meta ${INI.meta}% · minutos producidos ÷ disponible, ajustado a las horas corridas del turno.</p>`;
+      <path d="M${C-R} ${C} A${R} ${R} 0 0 1 ${C+R} ${C}" class="ini-g-val ${niv}" pathLength="100" stroke-dasharray="${pct.toFixed(1)} 100"${pct<.8?" visibility=\"hidden\"":""}/>
+      <line x1="${(C+(mx-C)*.78).toFixed(1)}" y1="${(C+(my-C)*.78).toFixed(1)}" x2="${(C+(mx-C)*1.16).toFixed(1)}" y2="${(C+(my-C)*1.16).toFixed(1)}" class="ini-g-meta"/>
+      <text x="${C}" y="${C-6}" class="ini-g-num" text-anchor="middle">${iniN(v)}</text>
+      <text x="${C}" y="${C+10}" class="ini-g-et" text-anchor="middle">MINUTOS</text>
+      <text x="${C-R}" y="${C+20}" class="ini-g-ext" text-anchor="middle">0</text><text x="${C+R}" y="${C+20}" class="ini-g-ext" text-anchor="middle">${iniN(tope)}</text></svg>`;
 }
-function iniKpis(F,fr){
-  const P=iniPlanta(F,"ef"), A=iniPlanta(F,"efa"), K=[];
-  const k=(tit,val,sub,tab,cls)=>`<${tab?`button type="button" onclick="activarTab('${tab}')"`:"div"} class="ini-k${tab?" ini-k-ir":""}"><span class="ini-k-t">${tit}</span><b class="ini-k-v ${cls||""}">${val}</b><span class="ini-k-s ${cls||""}">${sub}</span></${tab?"button":"div"}>`;
-  // minutos
-  let mv=iniEspera(), ms="";
-  if("ef" in INI.d){ if(P){ mv=iniN(P.min); const ay=A&&A.min>0?A.min:0;
-      ms = ay&&fr.f>=.12 ? (()=>{ const r=(P.min/fr.f/ay-1)*100; return `<span class="${r>=0?"ok":"alerta"}">${r>=0?"+":""}${r.toFixed(1).replace(".",",")} %</span> al ritmo vs ayer`; })()
-        : ay ? `ayer cerró ${iniN(ay)}` : ("efa" in INI.d?"":"comparando con ayer…"); } else { mv='<span class="ini-tenue">sin dato</span>'; } }
-  if(iniPuede("pasoEf")) K.push(k("Minutos producidos",mv,ms,"pasoEf"));
-  // prendas
-  let pv=iniEspera(), ps="";
-  if("pre" in INI.d){ if(INI.d.pre && INI.d.pre.ok){ pv=iniN(F.reduce((s,x)=>s+(x.pre||0),0)); const n=F.filter(x=>x.pre>0).length; ps=`${n} área${n===1?"":"s"} activa${n===1?"":"s"}`; }
-    else { pv='<span class="ini-tenue">—</span>'; ps='<span class="ini-tenue">falta el parche 148</span>'; } }
-  K.push(k("Prendas registradas",pv,ps,iniPuede("pasoOfs")?"pasoOfs":null));
-  // personal
-  if(iniPuede("pasoAsis")||iniPuede("pasoDash")){
-    let av=iniEspera(), as="", cl="";
-    if("asis" in INI.d){ if(INI.d.asis && INI.d.asis.ok){ const t=F.reduce((s,x)=>s+(x.as?x.as.tot:0),0), p=F.reduce((s,x)=>s+(x.as?x.as.pres:0),0), m=F.reduce((s,x)=>s+(x.as?x.as.marc:0),0);
-        av=`${iniN(p)} / ${iniN(t)}`; as=t-m>0?`${iniN(t-m)} sin marcar`:"todos marcados"; cl=t-m>0?"aviso":"ok"; } else av='<span class="ini-tenue">sin dato</span>'; }
-    K.push(k("Personal presente",av,as,iniPuede("pasoAsis")?"pasoAsis":"pasoDash",cl));
-  }
-  // por confirmar
-  const C=iniConfirmar(F);
-  let cv=iniEspera(), cs="";
-  if(C.listo){ cv=C.total; cs=C.total?C.partes.map(p=>p[0]).join(", "):"nada pendiente"; }
-  K.push(`<a class="ini-k ini-k-ir" href="#iniAtencion" onclick="event.preventDefault();$('iniAtencion').scrollIntoView({behavior:'smooth',block:'start'})"><span class="ini-k-t">Por confirmar</span><b class="ini-k-v ${C.listo?(C.total?"alerta":"ok"):""}">${cv}</b><span class="ini-k-s ${C.total?"alerta":""}">${esc(cs)}</span></a>`);
-  return K.join("");
+function iniAreaCard(x,fr){
+  const r=x.r, n=iniCorto(x.area);
+  if(!r) return `<section class="ini-card ini-ac"><div class="ini-card-h"><b class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(n)}</b></div><div class="ini-gauge-esp">${iniEspera()}</div></section>`;
+  const t=(l,v)=>`<div><span>${l}</span><b>${v}</b></div>`;
+  return `<section class="ini-card ini-ac"><div class="ini-card-h"><b class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(n)}</b>
+      </div>
+    ${r.tope?iniGaugeArea(r,fr):`<p class="ini-tenue ini-centro">sin asistentes</p>`}
+    ${r.tope?`<p class="ini-ac-m">Meta mínima <b>${iniN(r.meta_min)}</b> · Tope <b>${iniN(r.tope)}</b></p>`:""}
+    <div class="ini-ac-d">${t("Asistentes",`${iniN(r.asistentes)} <small>de ${iniN(r.personal)}</small>`)}${t("Prendas",iniN(r.prendas))}${t("Minutos",iniN(r.minutos))}</div></section>`;
+}
+function iniAreasHtml(F,fr){
+  const L=F.filter(x=>!("res" in INI.d) || (x.r && (x.r.personal||x.r.minutos||x.r.prendas)));
+  if("res" in INI.d && !(INI.d.res&&INI.d.res.ok)) return `<div class="ini-vacio">No se pudo cargar el día. Intenta de nuevo en un momento.</div>`;
+  return L.map(x=>iniAreaCard(x,fr)).join("");
+}
+/* Meta del mes en grande: lo acumulado hasta ayer (guardado) más lo de la fecha mirada. */
+function iniMesHtml(F){
+  if(!("res" in INI.d) || !("mes" in INI.d)) return `<div class="ini-card-h"><b>Meta del mes</b></div><div class="ini-gauge-esp">${iniEspera()}</div>`;
+  const R=INI.d.res, M=INI.d.mes;
+  if(!(R&&R.ok&&M&&M.ok)) return `<div class="ini-card-h"><b>Meta del mes</b></div><p class="ini-tenue">sin dato</p>`;
+  const sel=new Set(F.map(x=>x.area));
+  const ac=a=>(+((M.areas||[]).find(y=>y.area===a)||{}).acum||0)+(+((R.areas||[]).find(y=>y.area===a)||{}).minutos||0);
+  const metaA=a=>+((R.areas||[]).find(y=>y.area===a)||{}).meta_mes||0;
+  const todas=F.length===(AREAS_LISTA||[]).filter(a=>a&&a!=="INGENIERIA").length;
+  const tot=F.reduce((s,x)=>s+ac(x.area),0), met=todas&&+R.meta_mes ? +R.meta_mes : F.reduce((s,x)=>s+metaA(x.area),0);
+  const pct=met?tot/met*100:0, mesTxt=INI_MESES[+R.fecha.slice(5,7)-1];
+  const filas=F.filter(x=>metaA(x.area)||ac(x.area)).map(x=>{ const m=metaA(x.area), a=ac(x.area), p=m?Math.min(100,a/m*100):0;
+    return `<div class="ini-mf"><span class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(iniCorto(x.area))}</span>
+      <span class="ini-mf-b"><i style="width:${p.toFixed(1)}%"></i></span><b>${iniN(a)}${m?` <small>/ ${iniN(m)}</small>`:""}</b></div>`; }).join("");
+  return `<div class="ini-card-h"><b>Meta de ${mesTxt}</b>${iniPuede("pasoPcp")?`<button type="button" class="ini-link" onclick="activarTab('pasoPcp')">Ver PCP ›</button>`:""}</div>
+    <div class="ini-mes-n"><b>${met?iniN(met):"—"}</b><span>minutos de meta</span></div>
+    <div class="ini-mes-n ini-mes-a"><b>${iniN(tot)}</b><span>${met?`a la fecha · ${pct.toFixed(1).replace(".",",")} %`:"a la fecha"}</span></div>
+    ${met?`<div class="ini-mes-bar"><i style="width:${Math.min(100,pct).toFixed(1)}%"></i></div>`:""}
+    <div class="ini-mfs">${filas}</div>`;
 }
 /* Asistencias por marcar (áreas con menos de la mitad marcada), boletas sin llenar y solicitudes de ajuste. */
 function iniConfirmar(F){
@@ -178,17 +174,6 @@ function iniConfirmar(F){
   if(nBo) partes.push([`${nBo} boleta${nBo===1?"":"s"}`,"pasoBolSin"]); if(nSo) partes.push([`${nSo} incidencia${nSo===1?"":"s"}`,"pasoIncid"]);
   return {total:nAs+nBo+nSo, partes, listo:!pend.length};
 }
-function iniBarras(F,fr){
-  const d=INI.d.ef, cab=`<div class="ini-card-h"><b>Eficiencia por área</b><span class="ini-tenue">hoy · meta ${INI.meta}%</span></div>`;
-  if(!iniPuede("pasoEf")) return "";
-  if(!("ef" in INI.d)) return cab+`<div class="ini-vacio chico">${iniEspera()} Calculando…</div>`;
-  if(!d||!d.ok) return cab+`<p class="ini-tenue">sin dato</p>`;
-  const filas=F.map(x=>{ const e=x.ef; if(!e||!(+e.minutos>0)||!(+e.eficiencia>0)||fr.f<.12) return null; const v=+e.eficiencia/fr.f; return {area:x.area,v}; }).filter(Boolean).sort((a,b)=>b.v-a.v);
-  if(!filas.length) return cab+`<p class="ini-tenue">${fr.f<.12?"El turno recién empieza: aún no hay un ritmo que comparar.":"Todavía no hay tickets hoy en estas áreas."}</p>`;
-  return cab+filas.map(x=>`<button type="button" class="ini-b" onclick="activarTab('pasoEf')" title="Ir a Eficiencia"><span class="ini-b-a"><i data-a="${esc(x.area)}"></i>${esc(INI_CORTO(x.area))}</span>
-      <span class="ini-b-pista"><i class="${iniNivel(x.v)}" style="width:${Math.min(100,x.v/120*100)}%"></i><u style="left:${INI.meta/120*100}%" title="Meta ${INI.meta}%"></u></span><b class="${iniNivel(x.v)}">${Math.round(x.v)}%</b></button>`).join("")
-    +`<div class="ini-leyenda"><span><i class="ok"></i>≥ ${INI.meta} en meta</span><span><i class="aviso"></i>70–${INI.meta-1} atención</span><span><i class="alerta"></i>&lt; 70 bajo</span><span><u></u>meta</span></div>`;
-}
 function iniPintar(){
   if(!$("iniAvisos")) return;
   const areas=iniAreas(), F=iniPorArea(areas), fr=iniFraccion();
@@ -199,13 +184,13 @@ function iniPintar(){
   const h=+fr.hora.slice(0,2), saludo=h<12?"Buenos días":h<19?"Buenas tardes":"Buenas noches";
   const nombre=String((ING&&ING.nombre)||"").trim().split(/\s+/)[0]; 
   $("iniFecha").textContent = `${saludo}${nombre?", "+nombre.charAt(0)+nombre.slice(1).toLowerCase():""}`;
-  $("iniAlcance").textContent = `Así va el día en ${alcance} · ${INI.hoy?iniFechaTxt(INI.hoy,true):""}`;
+  $("iniAlcance").textContent = `${alcance} · ${INI.hoy?iniFechaTxt(INI.hoy,true):""}`;
   const puedeAlt=!PERM_LIBRE() && mias.length && leeTodas();
   $("iniSeg").hidden=!puedeAlt;
   if(puedeAlt){ $("iniSegMias").classList.toggle("activo",!INI.todas); $("iniSegTodas").classList.toggle("activo",INI.todas); }
-  $("iniGauge").innerHTML=iniGauge(F,fr);
-  $("iniKpis").innerHTML=iniKpis(F,fr);
-  $("iniBarras").innerHTML=iniBarras(F,fr); $("iniBarras").hidden=!iniPuede("pasoEf");
+  const fi=$("iniFechaSel"); if(fi && document.activeElement!==fi){ fi.max=hoyLima(); fi.value=INI.hoy||""; }
+  $("iniMes").innerHTML=iniMesHtml(F);
+  $("iniAreas").innerHTML=iniAreasHtml(F,fr);
 
   const av=iniAvisos(F).filter(a=>!["pasoBolSin","pasoAsis","pasoDash","pasoIncid"].includes(a.tab)), C=iniConfirmar(F), L=[];
   if(C.listo && C.total) L.push(`<div class="ini-r" role="link" tabindex="0" onclick="activarTab('${C.partes[0][1]}')" onkeydown="if(event.key==='Enter')activarTab('${C.partes[0][1]}')">
@@ -218,6 +203,4 @@ function iniPintar(){
   const pend=!C.listo || ["aud","fer"].some(k=>({aud:"pasoAudit",fer:"pasoBolSin"}[k]&&iniPuede({aud:"pasoAudit",fer:"pasoBolSin"}[k]))&&!(k in INI.d));
   $("iniAvisos").innerHTML = L.join("") || (pend?`<div class="ini-vacio">${iniEspera()} Revisando tus áreas…</div>`:`<div class="ini-vacio ok">Nada pendiente en ${esc(alcance)}.</div>`);
   if(L.length && pend) $("iniAvisos").insertAdjacentHTML("beforeend",`<div class="ini-vacio chico">${iniEspera()} Faltan revisiones…</div>`);
-  const ts=Object.values(INI.tiempos);
-  $("iniPie").textContent = ts.length ? `Actualizado ${fr.hora} · ${ts.length} consultas en paralelo, la más lenta ${Math.max(...ts)} ms · se refresca solo cada 10 min` : "";
 }

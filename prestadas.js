@@ -19,7 +19,7 @@ async function prAbrir(tipo, comoDni, area, motivo){
   // Parche 137: la oficina operando como supervisora entra como SUPERVISORA (igual que en la base).
   const cargo = tipo==="SUP" && !r.es_admin && r.cargo!=="INGENIERIA" ? "SUPERVISORA" : r.cargo;
   guardarSesion({dni:r.dni, nombre:r.nombre, cargo, token:r.token, admin:r.es_admin,
-    area: tipo==="SUP" ? area : (r.cargo==="ESTAJERO" ? null : (r.area_actual||null)),
+    area: tipo==="SUP" ? area : (r.area_actual||null),
     prestada:{id:r.id, tipo, ing:ING.dni, ing_nombre:ING.nombre||ING.dni}});
   location.href = tipo==="SUP" ? "supervisora.html" : "operario.html";
   return r;
