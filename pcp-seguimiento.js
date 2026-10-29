@@ -100,7 +100,7 @@ const pcpPill=e=>{ const x=PCP_EST[e]||["gris",e||"—"]; return `<span class="p
 const pcpRango=(a,b)=>a||b?`${pcpDM(a)} – ${pcpDM(b)}`:"—";
 
 function pcpSegPintar(r){
-  const cr=r.cronograma||[], cp=(r.planes||{}).CRONOGRAMA, ed=PCP.r&&PCP.r.puede_editar;
+  const cr=r.cronograma||[], cp=(r.planes||{}).CRONOGRAMA;
   const cnt=(k,v)=>cr.filter(x=>x[k]===v).length;
   const ct=["A TIEMPO","TARDE","ATRASADO"].reduce((s,e)=>s+cnt("e_corte",e),0), cs=["A TIEMPO","TARDE","SIN ARRANCAR"].reduce((s,e)=>s+cnt("e_costura",e),0);
   const kp=(v,t,c)=>`<div class="acf-k"><b${c?` class="${c}"`:""}>${v}</b><span>${t}</span></div>`;
@@ -111,7 +111,7 @@ function pcpSegPintar(r){
       <td class="num">${pcpN(x.cantidad)}</td><td>${pcpRango(x.ini_corte,x.fin_corte)}</td><td class="num">${pcpN(x.cortado)}</td>
       <td>${x.corte_fin_real?pcpDM(x.corte_fin_real):x.corte_ini_real?"desde "+pcpDM(x.corte_ini_real):"—"}</td><td>${pcpPill(x.e_corte)}</td>
       <td>${pcpDM(x.ini_costura)}</td><td>${x.costura_ini_real?pcpDM(x.costura_ini_real)+(x.costura_avance!=null?` · ${x.costura_avance} %`:""):"—"}</td><td>${pcpPill(x.e_costura)}</td></tr>`).join("");
-  const cumpl=`<section class="pcp-card"><div class="pcp-h"><h2>Cumplimiento del cronograma de corte y costura</h2></div>
+  const cumpl=`<section class="pcp-card" id="pcpSecCump"><div class="pcp-h"><h2>Cumplimiento del cronograma de corte y costura</h2></div>
     <p class="seccion-sub">${cp?`Cronograma «${esc(cp.archivo||"")}» subido el ${pcpDM(String(cp.cargado_en).slice(0,10))} (${cp.filas} órdenes).`:"PCP todavía no sube su cronograma de corte (PDF)."}
     Corte: lo cortado según NOTI_CORTE contra la fecha de fin planificada. Costura: primer día con tickets de costura de esa OF contra el inicio planificado.
     Las filas «SIN OF» se cruzan por artículo y no se puede medir su costura.</p>
@@ -123,7 +123,7 @@ function pcpSegPintar(r){
       <th class="num">Cortado</th><th>Corte real</th><th>Corte</th><th>Inicio costura</th><th>Costura real</th><th>Costura</th></tr></thead><tbody>${tabla}</tbody></table></div>`:""}</section>`;
 
   const semanas=(r.semanas||[]);
-  const sem=`<section class="pcp-card"><div class="pcp-h"><h2>Minutaje semanal: compromiso contra demanda</h2></div>
+  const sem=`<section class="pcp-card" id="pcpSecSem"><div class="pcp-h"><h2>Minutaje semanal: compromiso contra demanda</h2></div>
     <p class="seccion-sub">Compromiso = meta del mes repartida por días laborables de la semana. Demanda = minutos del programa de costura cuyo fin de costura cae en la semana.
     Real = minutos producidos.</p>
     <div class="pcp-graf"><canvas id="pcpGSem" role="img" aria-label="Minutaje semanal"></canvas></div>
@@ -131,14 +131,13 @@ function pcpSegPintar(r){
     <tbody>${semanas.map((s,i)=>`<tr><th scope="row">S${i+1} · ${pcpDM(s.ini)} – ${pcpDM(s.fin)}${s.cerrada?"":" (en curso)"}</th><td class="num">${pcpN(s.meta)}</td><td class="num">${pcpN(s.programa)}</td><td class="num">${pcpN(s.real)}</td>
       <td class="num ${s.cerrada&&s.meta&&s.real<s.meta?"rojo":""}">${pc(s.real,s.meta)}</td><td class="num ${s.cerrada&&s.programa&&s.real<s.programa?"rojo":""}">${pc(s.real,s.programa)}</td></tr>`).join("")}</tbody></table></div></section>`;
 
-  const dia=`<section class="pcp-card"><div class="pcp-h"><h2>Minutaje y eficiencia diaria</h2></div>
-    <p class="seccion-sub">Disponible = personas MOD de la estructura del mes × jornada. Eficiencia = minutos producidos ÷ disponibles. La línea punteada es la eficiencia que exige la meta.</p>
+  const dia=`<section class="pcp-card" id="pcpSecDia"><div class="pcp-h"><h2>Minutaje y eficiencia diaria</h2></div>
+    <p class="seccion-sub">Minutos producidos = prendas de la penúltima operación × S.A.M del artículo. Disponible = personas MOD de la estructura del mes × jornada. Eficiencia = producidos ÷ disponibles. La línea punteada es la eficiencia que exige la meta.</p>
     <div class="pcp-graf"><canvas id="pcpGDia" role="img" aria-label="Minutos por día"></canvas></div>
     <div class="pcp-graf pcp-graf-b"><canvas id="pcpGEf" role="img" aria-label="Eficiencia diaria"></canvas></div></section>`;
 
-  $("pcpSeg").innerHTML=cumpl+pcpGanttHTML(r)+sem+dia+(ed?pcpApiHTML():"");
+  $("pcpSeg").innerHTML=cumpl+pcpGanttHTML(r)+sem+dia;
   pcpGraficos(r,cr);
-  if(ed) pcpClavesCargar();
 }
 
 function pcpGraficos(r,cr){
@@ -168,12 +167,17 @@ function pcpGraficos(r,cr){
 }
 
 /* ---------- Gantt por OF ---------- */
+function pcpGanttFiltrar(v){
+  const q=String(v||"").trim().toLowerCase(); let n=0;
+  document.querySelectorAll("#pcpSecGantt .gt-f[data-q]").forEach(f=>{ const ok=!q||f.dataset.q.includes(q); f.hidden=!ok; if(ok) n++; });
+  const c=$("gtCuenta"); if(c) c.textContent=n+" OF";
+}
 function pcpGanttHTML(r){
   const g=r.gantt||[];
   const cab=`<div class="pcp-h"><h2>OF que arrancan costura sin corte completo</h2></div>
     <p class="seccion-sub">Ordenadas por OF. Cada fila muestra el corte planificado (cronograma) con lo ya cortado, el corte real y la costura programada.
-    La línea roja es hoy.</p>`;
-  if(!g.length) return `<section class="pcp-card">${cab}<p class="seccion-sub">No hay OF por arrancar costura (en los próximos 10 días) con corte incompleto.</p></section>`;
+    La línea roja es hoy. Se ven 10 a la vez; baja con la barra o filtra.</p>`;
+  if(!g.length) return `<section class="pcp-card" id="pcpSecGantt">${cab}<p class="seccion-sub">No hay OF por arrancar costura (de hace 15 a dentro de 10 días) con corte incompleto.</p></section>`;
   const fs=[]; g.forEach(x=>["ini_corte","fin_corte","ini_costura","fin_costura","corte_ini_real","corte_fin_real","costura_ini_real"].forEach(k=>{ if(x[k]) fs.push(pcpDn(x[k])); }));
   const hoy=pcpDn(r.hoy);
   const a=Math.max(Math.min(...fs,hoy)-2,hoy-30), b=Math.min(Math.max(...fs,hoy)+2,hoy+50), n=b-a+1;
@@ -184,7 +188,7 @@ function pcpGanttHTML(r){
   const filas=g.map(x=>{
     const pCorte=x.cant_prog?Math.round(x.cortado/x.cant_prog*100):0, sinPlan=!x.ini_corte;
     const real=x.corte_ini_real?`<div class="gt-real" style="left:${pos(pcpDn(x.corte_ini_real))}%;width:${anc(pcpDn(x.corte_ini_real),pcpDn(x.corte_fin_real||x.corte_ini_real))}%" title="Corte real: ${pcpDM(x.corte_ini_real)} – ${pcpDM(x.corte_fin_real)}"></div>`:"";
-    return `<div class="gt-f"><div class="gt-l"><b>${esc(x.o_f)}</b> · ${esc(x.articulo)}<span>${esc((x.cliente||"").slice(0,26))} · ${esc(pcpCorto(x.area))} · cortado ${pcpN(x.cortado)}/${pcpN(x.cant_prog)}</span></div>
+    return `<div class="gt-f" data-q="${esc((x.o_f+" "+x.articulo+" "+(x.cliente||"")).toLowerCase())}"><div class="gt-l"><b>${esc(x.o_f)}</b> · ${esc(x.articulo)}<span>${esc((x.cliente||"").slice(0,26))} · ${esc(pcpCorto(x.area))} · cortado ${pcpN(x.cortado)}/${pcpN(x.cant_prog)}</span></div>
       <div class="gt-g">
         ${barra("gt-corte",x.ini_corte,x.fin_corte,`Corte planificado ${pcpDM(x.ini_corte)} – ${pcpDM(x.fin_corte)} · cortado ${pCorte} %`,pCorte+" %",pCorte)}
         ${sinPlan?`<div class="gt-sin" title="Esta OF no está en el cronograma de corte">sin cronograma de corte</div>`:""}
@@ -193,55 +197,12 @@ function pcpGanttHTML(r){
       </div></div>`;
   }).join("");
   const head=ticks.map(d=>`<span style="left:${pos(d)}%">${pcpDM(pcpIso(d))}</span>`).join("");
-  return `<section class="pcp-card">${cab}
+  return `<section class="pcp-card" id="pcpSecGantt">${cab}
     <div class="gt-leyenda" aria-label="Leyenda"><span><i class="gt-k corte"></i>Corte planificado (relleno = % cortado)</span><span><i class="gt-k real"></i>Corte real (primer a último día)</span>
       <span><i class="gt-k cos"></i>Costura programada (relleno = avance)</span><span><i class="gt-k hoy"></i>Hoy</span></div>
-    <div class="tabla-scroll"><div class="gt" style="--n:${n}"><div class="gt-f gt-h"><div class="gt-l">OF · artículo</div><div class="gt-g gt-eje">${head}</div></div>
+    <div class="gt-bar"><input type="search" class="gt-filtro" id="gtFiltro" placeholder="Filtrar por OF, artículo o cliente" oninput="pcpGanttFiltrar(this.value)" aria-label="Filtrar el Gantt"><span id="gtCuenta">${g.length} OF</span></div>
+    <div class="gt-scroll"><div class="gt" style="--n:${n}"><div class="gt-f gt-h"><div class="gt-l">OF · artículo</div><div class="gt-g gt-eje">${head}</div></div>
       <div class="gt-cuerpo">${filas}<div class="gt-hoy" style="left:${pos(hoy+.5)}%" title="Hoy ${pcpDM(r.hoy)}"></div></div></div></div></section>`;
 }
 
-/* ---------- endpoint para PCP ---------- */
-function pcpApiHTML(){
-  const url=`${SUPABASE_URL}/rest/v1/rpc/fn_pcp_api`, mes=hoyLima().slice(0,7)+"-01";
-  const curl=`curl -X POST "${url}" \\\n  -H "apikey: ${SUPABASE_ANON}" -H "Authorization: Bearer ${SUPABASE_ANON}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"p_clave":"TU_CLAVE","p_mes":"${mes}"}'`;
-  return `<section class="pcp-card"><div class="pcp-h"><h2>Endpoint para PCP</h2></div>
-    <p class="seccion-sub">PCP (u otro sistema) consulta aquí el plan contra lo real y recalcula sus tiempos cada vez que cambie el cronograma o el programa.
-    Cada respuesta trae <code>planes</code> con el archivo y la hora de cada carga, para detectar que el plan cambió. Parámetros: <code>p_clave</code> (obligatorio), <code>p_mes</code> (primer día del mes) y <code>p_of</code> (una sola OF o artículo, opcional).
-    Devuelve <code>cronograma</code> (corte y costura planificado y real por OF), <code>gantt</code>, <code>semanas</code>, <code>dias</code> (meta, disponible, real, personas) y <code>resumen</code>.</p>
-    <pre class="pcp-code" tabindex="0">${esc(curl)}</pre>
-    <div class="fer-form"><label class="campo"><span>Nombre de la clave nueva</span><input id="pcpClaveNom" maxlength="80" placeholder="Ej. Planeamiento — Excel de seguimiento"></label>
-      <button type="button" class="btn-mini" onclick="pcpClaveCrear()">Crear clave</button></div>
-    <div id="pcpClaveNueva"></div><div id="pcpClaves"></div></section>`;
-}
-async function pcpClaveCrear(){
-  const nom=$("pcpClaveNom").value.trim(); if(!nom){ toast("Ponle un nombre a la clave"); return; }
-  try{
-    const r=await rpc("fn_pcp_api_clave_crear",{p_dni:ING.dni,p_token:ING.token,p_nombre:nom});
-    if(!r || !r.ok) throw new Error((r&&r.error)||"No se creó");
-    $("pcpClaveNom").value="";
-    $("pcpClaveNueva").innerHTML=`<div class="pcp-al warn"><i aria-hidden="true"></i><div><b>Copia la clave ahora: no se vuelve a mostrar</b><span><code class="pcp-clave" id="pcpClaveTxt">${esc(r.clave)}</code>
-      <button type="button" class="btn-mini gris" onclick="navigator.clipboard.writeText($('pcpClaveTxt').textContent).then(()=>toast('Clave copiada','ok'))">Copiar</button></span></div></div>`;
-    pcpClavesCargar();
-  }catch(e){ toast(e.message); }
-}
-async function pcpClavesCargar(){
-  const box=$("pcpClaves"); if(!box) return;
-  try{
-    const r=await rpc("fn_pcp_api_claves",{p_dni:ING.dni,p_token:ING.token});
-    if(!r || !r.ok) throw new Error((r&&r.error)||"Error");
-    const c=r.claves||[];
-    box.innerHTML=c.length?`<div class="tabla-scroll"><table class="tabla pcp-tabla"><thead><tr><th>Nombre</th><th>Creada</th><th>Último uso</th><th>Estado</th><th></th></tr></thead><tbody>${c.map(k=>
-      `<tr><td>${esc(k.nombre)}</td><td>${pcpDM(String(k.creada_en).slice(0,10))}</td><td>${k.ultimo_uso?pcpDM(String(k.ultimo_uso).slice(0,10)):"nunca"}</td>
-      <td>${k.activa?`<span class="pcp-pill ok">Activa</span>`:`<span class="pcp-pill gris">Revocada</span>`}</td>
-      <td>${k.activa?`<button type="button" class="btn-mini gris" onclick="pcpClaveRevocar(${k.id})">Revocar</button>`:""}</td></tr>`).join("")}</tbody></table></div>`:"";
-  }catch(e){ box.innerHTML=""; }
-}
-async function pcpClaveRevocar(id){
-  if(!confirm("¿Revocar esta clave? Quien la use dejará de poder consultar.")) return;
-  try{
-    const r=await rpc("fn_pcp_api_clave_revocar",{p_dni:ING.dni,p_token:ING.token,p_id:id});
-    if(!r || !r.ok) throw new Error((r&&r.error)||"No se revocó");
-    toast("Clave revocada","ok"); pcpClavesCargar();
-  }catch(e){ toast(e.message); }
-}
 if(typeof module!=="undefined") module.exports={pcpParsearCronograma};
