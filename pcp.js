@@ -215,14 +215,14 @@ async function pcpPrograma(wb, nombre){
 
 /* NOTI_CORTE: FECHA, ORDEN DE FABRICACION, ARTICULO, COLOR, CLIENTE, CANTIDAD. Solo desde la fecha elegida. */
 function pcpFilasCorte(rows){
-  const cab=pcpCabeceras(rows,["FECHA","CANTIDAD"],{ORDENDEFABRICACION:"OF",ORDENFABRICACION:"OF",CANT:"CANTIDAD"});
+  const cab=pcpCabeceras(rows,["FECHA","CANTIDAD"],{ORDENDEFABRICACION:"OF",ORDENFABRICACION:"OF",CANT:"CANTIDAD",CORTEREAL:"CORTE_REAL"});
   if(!cab) throw new Error("No encontré las columnas FECHA y CANTIDAD de NOTI_CORTE");
   const c=cab.col, g=(r,k)=>c[k]===undefined?"":r[c[k]], desde=$("pcpDesde").value||"0000";
   const out=[];
   for(let i=cab.fila+1;i<rows.length;i++){
     const r=rows[i], f=pcpFecha(g(r,"FECHA")), q=pcpNum(g(r,"CANTIDAD"));
     if(!f || f<desde || !q) continue;
-    out.push({fecha:f,of:String(g(r,"OF")).replace(/\.0+$/,"").trim(),articulo:norm(g(r,"ARTICULO")),color:norm(g(r,"COLOR")),cliente:norm(g(r,"CLIENTE")),cantidad:q});
+    out.push({fecha:f,of:String(g(r,"OF")).replace(/\.0+$/,"").trim(),articulo:norm(g(r,"ARTICULO")),color:norm(g(r,"COLOR")),cliente:norm(g(r,"CLIENTE")),cantidad:q,corte_real:pcpNum(g(r,"CORTE_REAL"))||null});
   }
   return out;
 }
