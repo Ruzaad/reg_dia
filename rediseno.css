@@ -2007,3 +2007,5 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 @media(max-width:700px){.ini-mf{grid-template-columns:110px 1fr 100px;}.ini-mes-n b{font-size:34px;}}
 .ini-ac .ini-g-num{font-size:25px;} .ini-ac .ini-gauge-svg{max-width:240px;}
 .ini-ac-m{text-align:center;font-size:12.5px;color:var(--suave);margin:2px 0 4px;} .ini-ac-m b{font-family:var(--mono);color:var(--texto);}
+.opi-hoy .ini-gauge-svg{max-width:230px;margin:0 auto;} .opi-hoy .ini-g-num{font-size:34px;}
+.opi-tope{float:right;color:var(--tenue);font-size:13px;}

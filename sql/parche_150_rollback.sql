@@ -1,0 +1,1 @@
+-- Sin cambios: el parche 150 solo borra datos.
