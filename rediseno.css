@@ -2024,6 +2024,40 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .opi-gauge .ini-g-num{font-size:34px;}
 .ini-mf .ini-mf-b{background:color-mix(in srgb,var(--dorado) 18%,var(--linea-2));}
 
+/* ---------- Bases › Agregar artículo ---------- */
+.bn-grid{display:grid;grid-template-columns:minmax(280px,380px) 1fr;gap:18px;align-items:start;}
+.bn-col h3{font-size:15px;margin:14px 0 8px;color:var(--titulo);}
+.bn-col h3:first-child{margin-top:0;}
+.bn-res{max-height:300px;overflow:auto;margin-top:8px;border:1px solid var(--linea);border-radius:var(--r-s);background:var(--sup);}
+.bn-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--linea-2);}
+.bn-item.usada{background:var(--azul-t);}
+.bn-refs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.bn-chip{background:var(--azul-t);color:var(--texto);border-radius:999px;padding:4px 6px 4px 12px;font-weight:600;font-size:14px;}
+.bn-chip button{background:none;border:0;color:var(--suave);font-size:16px;cursor:pointer;min-width:28px;min-height:28px;}
+.bn-scroll{overflow:auto;max-height:55vh;}
+.bn-ref{font-family:var(--mono);white-space:nowrap;}
+.bn-pick,.bn-med{cursor:pointer;display:block;}
+.bn-med{font-size:12px;color:var(--aviso);}
+.bn-n{color:var(--suave);}
+.bn-acc{white-space:nowrap;}
+.bn-acc .btn-mini{padding:4px 9px;min-height:32px;}
+.bn-resumen{margin:12px 0;}
+.bn-cmp{display:flex;gap:14px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--linea-2);}
+.bn-cmp b{font-family:var(--mono);}
+.bn-tot{font-weight:700;border-bottom:2px solid var(--ocre);}
+.bn-warn{color:var(--aviso);font-weight:700;}
+.bn-imgs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.bn-img{position:relative;}
+.bn-img img{width:96px;height:96px;object-fit:cover;border-radius:var(--r-s);border:1px solid var(--linea);cursor:zoom-in;}
+.bn-img button{position:absolute;top:2px;right:2px;background:var(--sup);border:1px solid var(--linea);border-radius:999px;width:26px;height:26px;cursor:pointer;color:var(--texto);}
+@media (max-width:900px){.bn-grid{grid-template-columns:1fr;}}
+.bn-opt{display:block;width:100%;background:var(--sup);color:var(--texto);border:1px solid var(--linea);border-radius:var(--r-s);padding:4px 10px;margin:2px 0;font:inherit;font-family:var(--mono);cursor:pointer;min-height:32px;}
+.bn-opt:hover{border-color:var(--azul);}
+.bn-opt.on{background:var(--azul);border-color:var(--azul);color:#fff;font-weight:700;}
+.bn-opt.bn-med{font-size:13px;color:var(--aviso);}
+.bn-opt.bn-med.on{color:#fff;}
+.bn-todo{padding:2px 8px;min-height:24px;font-size:12px;margin-top:4px;}
+
 /* ===== Cronogramas (parche 152) ===== */
 .cro-subir{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;}
 .cro-subir .btn-mini{margin:4px 6px 4px 0;}

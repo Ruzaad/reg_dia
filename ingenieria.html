@@ -485,6 +485,8 @@
 
     <!-- ===================== BASES ===================== -->
     <section class="pantalla" id="pasoBases" data-area-sel="areaBase">
+      <div id="basesNuevo" hidden></div>
+      <div id="basesLista">
       <div class="fila-filtros">
         <select id="areaBase" onchange="cargarBases()"></select>
         <input type="text" id="fPrenda" placeholder="Filtrar prenda…" oninput="filtrarBases()">
@@ -495,6 +497,7 @@
         <button class="btn-mini" onclick="cargarBases()">↻ CARGAR</button>
         <button class="btn-mini verde" onclick="descargarBase()">DESCARGAR XLSX</button>
         <button data-edita class="btn-mini" id="btnEditLote" onclick="basesModoEdicion()">✎ EDITAR EN LOTE</button>
+        <button data-edita class="btn-mini azul" onclick="bnAbrir()">+ AGREGAR ARTÍCULO</button>
         <button data-edita class="btn-mini" onclick="abrirModalBaseOp(null)">+ AGREGAR OPERACIÓN</button>
         <button data-edita class="btn-mini" id="btnEditArt" onclick="abrirModalArticulo()" hidden>EDITAR ARTÍCULO</button>
         <button data-edita class="btn-mini" onclick="abrirModalUltimas()">★ ÚLTIMA / PENÚLTIMA</button>
@@ -519,6 +522,7 @@
         <table class="tabla" id="tablaBases"></table>
       </div>
       <div class="pager" id="basesPager" style="margin-top:8px;"></div>
+      </div>
     </section>
 
     <!-- ===================== PERSONAL ===================== -->
@@ -1720,6 +1724,7 @@
 <script src="prestadas.js"></script>
 <script src="pcp.js?v=c12"></script>
 <script src="pcp-seguimiento.js?v=c12"></script>
+<script src="bases-nuevo.js?v=c2"></script>
 <script src="cronogramas.js?v=c1"></script>
 <script src="dinamico.js?v=c12"></script>
 <script src="intro.js?v=c12"></script>
