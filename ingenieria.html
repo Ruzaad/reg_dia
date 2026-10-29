@@ -49,6 +49,7 @@
       <details class="nav-group" open>
         <summary class="nav-sep">Planificación</summary>
         <a class="nav-item" data-tab="pasoPcp" href="#pasoPcp">PCP · Meta y programa</a>
+        <a class="nav-item" data-tab="pasoCrono" href="#pasoCrono">Cronogramas</a>
         <a class="nav-item" data-tab="pasoCarga" href="#pasoCarga">Carga vs capacidad</a>
       </details>
       <details class="nav-group" open>
@@ -1078,6 +1079,39 @@
       <div id="pcpCuerpo"></div>
     </section>
 
+    <section class="pantalla" id="pasoCrono">
+      <div class="seccion-cab">
+        <h1>Cronogramas</h1>
+        <p class="seccion-sub">Corte, costura y acabado en un solo lugar: súbelos como archivo o mira lo que de verdad pasó en planta.</p>
+      </div>
+      <div class="barra-control pcp-barra">
+        <div class="ini-seg" role="group" aria-label="Modo">
+          <button type="button" id="croModoReal" class="activo" onclick="croModo('real')">Calcular con lo real</button>
+          <button type="button" id="croModoArch" onclick="croModo('arch')">Subir archivos</button>
+        </div>
+        <label class="campo"><span>Desde</span><input type="date" id="croDesde" onchange="croCargar()"></label>
+        <label class="campo"><span>Hasta</span><input type="date" id="croHasta" onchange="croCargar()"></label>
+      </div>
+      <div id="croArch" hidden>
+        <div class="cro-subir">
+          <section class="pcp-card"><div class="pcp-h"><h2>Corte</h2></div>
+            <p class="seccion-sub">Cronograma de corte de PCP (PDF) y la salida real de corte (NOTI_CORTE).</p>
+            <button type="button" class="btn-mini" onclick="$('croArchCrono').click()">Subir cronograma de corte (PDF)</button><input type="file" id="croArchCrono" accept=".pdf,application/pdf" hidden onchange="croSubir(pcpSubirCronograma,this)">
+            <button type="button" class="btn-mini gris" onclick="$('croArchCorte').click()">Subir NOTI_CORTE (Excel/CSV)</button><input type="file" id="croArchCorte" accept=".xlsx,.xls,.csv" hidden onchange="croSubir(pcpSubirCorte,this)">
+          </section>
+          <section class="pcp-card"><div class="pcp-h"><h2>Costura</h2></div>
+            <p class="seccion-sub">Programa de costura de PCP (Excel con hojas CAMISA, PANTALON y SACO).</p>
+            <button type="button" class="btn-mini" onclick="$('croArchProg').click()">Subir programa de costura (Excel)</button><input type="file" id="croArchProg" accept=".xlsx,.xls,.xlsm" hidden onchange="croSubir(pcpSubirPrograma,this)">
+          </section>
+          <section class="pcp-card"><div class="pcp-h"><h2>Acabado</h2></div>
+            <p class="seccion-sub">Acabado no se sube: sale de lo que costura entrega en su penúltima operación. Míralo en «Calcular con lo real».</p>
+          </section>
+        </div>
+        <div id="croEstado" class="pcp-estado" role="status" aria-live="polite"></div>
+      </div>
+      <div id="croReal"></div>
+    </section>
+
     <section class="pantalla" id="pasoFeriados">
       <div class="seccion-cab">
         <h1>Feriados y fin de semana</h1>
@@ -1686,6 +1720,7 @@
 <script src="prestadas.js"></script>
 <script src="pcp.js?v=c12"></script>
 <script src="pcp-seguimiento.js?v=c12"></script>
+<script src="cronogramas.js?v=c1"></script>
 <script src="dinamico.js?v=c12"></script>
 <script src="intro.js?v=c12"></script>
 </body>

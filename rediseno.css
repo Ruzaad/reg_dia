@@ -2023,3 +2023,11 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .opi-h-btn{display:flex;justify-content:space-between;width:100%;background:none;border:0;cursor:pointer;color:inherit;font:inherit;padding:0 2px 6px;}
 .opi-gauge .ini-g-num{font-size:34px;}
 .ini-mf .ini-mf-b{background:color-mix(in srgb,var(--dorado) 18%,var(--linea-2));}
+
+/* ===== Cronogramas (parche 152) ===== */
+.cro-subir{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;}
+.cro-subir .btn-mini{margin:4px 6px 4px 0;}
+.cro-bar{display:inline-block;vertical-align:middle;width:80px;height:7px;border-radius:99px;background:var(--linea-2);overflow:hidden;}
+.cro-bar i{display:block;height:100%;background:var(--aviso);} .cro-bar i.ok{background:var(--exito);}
+#croTabCorte tr[hidden]{display:none;}
+#croTabCorte td.nw{white-space:nowrap;}
