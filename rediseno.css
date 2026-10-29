@@ -1905,3 +1905,20 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .gt-real{position:absolute;top:23px;height:3px;background:var(--exito);border-radius:2px;z-index:1;}
 .gt-sin{position:absolute;left:6px;top:7px;font-size:11px;color:var(--tenue);font-style:italic;}
 @media (max-width:760px){.gt-f{grid-template-columns:150px 1fr;}}
+.nav-item[data-tab="pasoPcp"]{--ni:url("icon-pcp.png")!important;}
+.ing-nav .nav-item[data-tab="pasoPcp"]::before{opacity:1;flex-basis:20px;height:20px;}
+.pcp-chips{display:flex;gap:10px;overflow-x:auto;margin:0 0 16px;padding:2px 2px 6px;}
+.pcp-chip{flex:1 0 176px;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center;text-align:left;cursor:pointer;
+  padding:10px 14px;border-radius:var(--r);border:1px solid var(--linea);background:var(--sup);color:var(--texto);font:inherit;}
+.pcp-chip>i{grid-row:1/3;width:10px;height:10px;border-radius:50%;background:var(--tenue);}
+.pcp-chip b{font:700 18px var(--mono);line-height:1.2;} .pcp-chip span{font-size:12px;color:var(--suave);line-height:1.25;}
+.pcp-chip:hover,.pcp-chip:focus-visible{border-color:var(--azul);box-shadow:var(--sombra-1);outline:none;}
+.pcp-chip.crit{background:var(--alerta-t);border-color:color-mix(in srgb,var(--alerta) 45%,transparent);} .pcp-chip.crit>i{background:var(--alerta);} .pcp-chip.crit b{color:var(--alerta);}
+.pcp-chip.warn{background:var(--ocre-t);border-color:color-mix(in srgb,var(--aviso) 45%,transparent);} .pcp-chip.warn>i{background:var(--aviso);} .pcp-chip.warn b{color:var(--aviso);}
+.pcp-chip.ok{background:var(--exito-t);border-color:color-mix(in srgb,var(--exito) 45%,transparent);} .pcp-chip.ok>i{background:var(--exito);} .pcp-chip.ok b{color:var(--exito);}
+.pcp-card{scroll-margin-top:12px;transition:box-shadow .3s;}
+.pcp-card.pcp-flash{box-shadow:0 0 0 3px var(--dorado);}
+.gt-bar{display:flex;align-items:center;gap:12px;margin:0 0 8px;font-size:13px;color:var(--suave);}
+.gt-filtro{flex:1;max-width:340px;min-height:36px;padding:0 10px;border:1px solid var(--linea);border-radius:8px;background:var(--sup-2);color:var(--texto);font:inherit;}
+.gt-scroll{max-height:540px;overflow:auto;border:1px solid var(--linea-2);border-radius:8px;}
+.gt-f[hidden]{display:none;}

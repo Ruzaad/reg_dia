@@ -47,20 +47,25 @@ function pcpTotales(r){
   return {areas,prod,meta,metaAreas,proy,quedan,prog,sinProg,nec:quedan?Math.max(0,meta-prod)/quedan:0};
 }
 function pcpAvisos(r,t){
-  const A=[];
-  if(!t.meta) A.push(["warn","PCP todavía no pone la meta de este mes","Escribe la meta de cada área en la tabla de abajo. Mientras no haya meta, el celular del operario no muestra su meta del día."]);
+  const A=[];   // [clase, cifra, etiqueta, detalle, sección a la que lleva]
+  if(!t.meta) A.push(["warn","Sin meta","PCP no puso la meta del mes","Escribe la meta de cada área en la tabla Meta por área. Mientras no haya meta, el celular del operario no muestra su meta del día.","pcpSecMetas"]);
   else{
-    if(r.programa.length && t.prog+t.sinProg<t.meta) A.push(["crit","Con el programa no se llega a la meta",`Programado ${pcpN(t.prog+t.sinProg)} min (${pcpPc(t.prog+t.sinProg,t.meta)} % de ${pcpN(t.meta)}). Costura ${pcpN(t.prog)} + lo producido por las áreas sin programa ${pcpN(t.sinProg)}.`]);
-    if(t.proy && t.proy<t.meta) A.push([t.proy<t.meta*.8?"crit":"warn","Al ritmo actual el mes cierra por debajo",`Proyección ${pcpN(t.proy)} min (${pcpPc(t.proy,t.meta)} % de la meta).${t.quedan?` Harían falta ${pcpN(t.nec)} min por día en los ${t.quedan} días laborables que quedan${r.hoy_laborable?", contando hoy":""}.`:""}`]);
+    if(r.programa.length && t.prog+t.sinProg<t.meta) A.push(["crit",pcpPc(t.prog+t.sinProg,t.meta)+" %","del programa contra la meta",`Programado ${pcpN(t.prog+t.sinProg)} min de ${pcpN(t.meta)}. Costura ${pcpN(t.prog)} + lo producido por las áreas sin programa ${pcpN(t.sinProg)}.`,"pcpSecPrograma"]);
+    if(t.proy && t.proy<t.meta) A.push([t.proy<t.meta*.8?"crit":"warn",pcpPc(t.proy,t.meta)+" %","cierre proyectado del mes",`Proyección ${pcpN(t.proy)} min.${t.quedan?` Harían falta ${pcpN(t.nec)} min por día en los ${t.quedan} días laborables que quedan${r.hoy_laborable?", contando hoy":""}.`:""}`,"pcpSecDia"]);
   }
   (r.programa||[]).forEach(p=>{
     const a=t.areas.find(x=>x.area===p.area), pr=a?+a.producido:0, d=pr-p.debia;
-    if(p.debia>0 && d<0) A.push([-d>p.debia*.25?"crit":"warn",`${pcpCorto(p.area)} desfasado contra su programa`,`Debía llevar ${pcpN(p.debia)} min por las fechas de fin de costura y lleva ${pcpN(pr)}: atraso de ${pcpN(-d)} min.`]);
+    if(p.debia>0 && d<0) A.push([-d>p.debia*.25?"crit":"warn","−"+pcpN(-d),pcpCorto(p.area)+" atrasado contra su programa",`Debía llevar ${pcpN(p.debia)} min por las fechas de fin de costura y lleva ${pcpN(pr)}.`,"pcpSecPrograma"]);
   });
   const arr=(r.arranque||[]).filter(x=>x.ini<=r.hoy);
-  if(arr.length) A.push(["warn","Costura arrancó sin corte completo",`${arr.length} OF ya debían estar en costura y corte no entregó todo (${pcpN(arr.reduce((s,x)=>s+(x.cant_prog-x.cortado),0))} prendas por cortar).`]);
-  if(!A.length) A.push(["ok","Todo al día","La meta, el programa y el avance cuadran."]);
-  return `<div class="pcp-avisos" role="list">${A.map(a=>`<div class="pcp-al ${a[0]}" role="listitem"><i aria-hidden="true"></i><div><b>${esc(a[1])}</b><span>${esc(a[2])}</span></div></div>`).join("")}</div>`;
+  if(arr.length) A.push(["warn",arr.length+" OF","en costura sin corte completo",`${pcpN(arr.reduce((s,x)=>s+(x.cant_prog-x.cortado),0))} prendas por cortar en OF que ya debían estar en costura.`,"pcpSecGantt"]);
+  if(!A.length) A.push(["ok","Al día","meta, programa y avance cuadran","","pcpSecMetas"]);
+  return `<div class="pcp-chips" role="list">${A.map(a=>`<button type="button" role="listitem" class="pcp-chip ${a[0]}" title="${esc(a[3])}" onclick="pcpIr('${a[4]}')"><i aria-hidden="true"></i><b>${esc(a[1])}</b><span>${esc(a[2])}</span></button>`).join("")}</div>`;
+}
+function pcpIr(id){
+  const e=$(id); if(!e) return;
+  e.scrollIntoView({behavior:"smooth",block:"start"});
+  e.classList.add("pcp-flash"); setTimeout(()=>e.classList.remove("pcp-flash"),1600);
 }
 function pcpPintar(){
   const r=PCP.r, t=pcpTotales(r), ed=r.puede_editar;
@@ -83,7 +88,7 @@ function pcpPintar(){
       <td class="num">${pcpN(a.producido)}</td><td class="num">${r.hoy_laborable?pcpN(a.producido_hoy):"—"}</td>
       <td><span class="pcp-av" title="${av} % de la meta del mes"><i style="width:${Math.min(100,av)}%"></i></span>${a.meta_mes?av+" %":""}</td><td>${est}</td></tr>`;
   }).join("");
-  const metas=`<section class="pcp-card"><div class="pcp-h"><h2>Meta por área</h2>
+  const metas=`<section class="pcp-card" id="pcpSecMetas"><div class="pcp-h"><h2>Meta por área</h2>
       ${ed?`<span><button class="btn-mini gris" type="button" onclick="pcpSugerir()">Sugerir 85 %</button> <button class="btn-mini" type="button" onclick="pcpGuardarMetas()">Guardar metas</button></span>`:""}</div>
     <p class="seccion-sub">Disponible por día = personas MOD de la estructura del mes × jornada. Meta del día = meta del mes ÷ ${r.laborables} días laborables.
     Cada persona ve en su celular su parte: su jornada × (meta del día ÷ disponible del área).</p>
@@ -101,9 +106,9 @@ function pcpPintar(){
   const ven=(r.vencidas||[]).map(v=>`<tr><td>${esc(pcpCorto(v.area))}</td><td>${esc(v.o_f||"sin OF")}</td><td>${esc(v.articulo||"")}</td><td>${esc(v.cliente||"")}</td>
       <td class="num">${pcpN(v.minutos)}</td><td>${pcpDM(v.fin)}</td><td class="num">${v.o_f?`${pcpN(v.cortado)} / ${pcpN(v.cant_prog)}`:"—"}</td></tr>`).join("");
   const cp=(r.cargas||{}).PROGRAMA;
-  const programa=`<section class="pcp-card"><div class="pcp-h"><h2>Programa de costura contra producido</h2></div>
+  const programa=`<section class="pcp-card" id="pcpSecPrograma"><div class="pcp-h"><h2>Programa de costura contra producido</h2></div>
     <p class="seccion-sub">${cp?`Programa «${esc(cp.archivo||"")}» subido el ${pcpDM(String(cp.en).slice(0,10))} por ${esc(cp.por||"")} (${cp.filas} filas).`:"PCP todavía no sube su programa de costura."}
-    Programa = cantidad programada × STD de las filas del mes. «Debía llevar» suma las que ya pasaron su fin de costura.</p>
+    Programa = cantidad programada × STD de las filas del mes. Producido = prendas de la penúltima operación × S.A.M del artículo. «Debía llevar» suma las que ya pasaron su fin de costura.</p>
     ${prog?`<div class="tabla-scroll"><table class="tabla pcp-tabla"><thead><tr><th>Área</th><th class="num">Programa</th><th class="num">Debía llevar</th><th class="num">Producido</th>
       <th class="num">Desfase</th><th class="num">Restante</th><th class="num">Prendas</th><th>Estado</th></tr></thead><tbody>${prog}</tbody></table></div>`:""}
     ${ven?`<h3 class="pcp-sub">OF con fin de costura vencido y sin FINALIZADO</h3><div class="tabla-scroll"><table class="tabla pcp-tabla"><thead><tr><th>Área</th><th>OF</th><th>Artículo</th><th>Cliente</th>
@@ -111,7 +116,7 @@ function pcpPintar(){
 
   const c=r.corte||{}, dias=c.dias||[], cc=(r.cargas||{}).CORTE, mx=Math.max(1,...dias.map(d=>+d.c));
   const ult=dias.slice(-10), ritmo=ult.length?ult.reduce((s,d)=>s+(+d.c),0)/ult.length:0;
-  const corte=`<section class="pcp-card"><div class="pcp-h"><h2>Salida de corte</h2></div>
+  const corte=`<section class="pcp-card" id="pcpSecCorte"><div class="pcp-h"><h2>Salida de corte</h2></div>
     <p class="seccion-sub">${cc?`NOTI_CORTE leída el ${pcpDM(String(cc.en).slice(0,10))} por ${esc(cc.por||"")}: ${cc.filas} filas del ${pcpDM(cc.desde)} al ${pcpDM(cc.hasta)}.`:"Todavía no se lee la hoja NOTI_CORTE."}
     Es lo que sale de corte y queda disponible para costura.</p>
     <div class="acf-kpis">${k(pcpN(c.total),"prendas cortadas en el mes")}${k(pcpN(ritmo),"prendas por día (últimos "+ult.length+" días con corte)")}</div>
