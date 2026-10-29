@@ -1,5 +1,5 @@
 /* SAMITEX — Service Worker mínimo (PWA) */
-const CACHE = "chronos-v15";
+const CACHE = "chronos-v16";
 
 self.addEventListener("install", (e) => {
   self.skipWaiting();
