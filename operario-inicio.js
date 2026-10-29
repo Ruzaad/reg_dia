@@ -120,8 +120,7 @@ function opiPintar(){
   const rec=[...new Set((MISPAQ||[]).map(p=>norm(p.of)))].filter(of=>OF_LISTA.some(o=>normKey(o.of)===normKey(of))).slice(0,4);
   $("opRecientes").innerHTML=rec.map(of=>`<button type="button" class="opi-of" onclick="abrirOF('${esc(of)}')">${esc(of)}</button>`).join("");
   if(!hayCards){ z.innerHTML=""; return; }
-  z.innerHTML=`<div class="opi-h"><span>Sigue donde te quedaste</span><small>lo último que hiciste</small></div>`
-    + cards.map(({c,cargada,lib,sg},i)=>{
+  const tarj=({c,cargada,lib,sg},i)=>{
       const col=opiColor(c.op);
       return `<button type="button" class="opi-card" style="--opc:${col}" onclick="opiAbrir(${i})"
           aria-label="${esc(c.op)}, ${esc(c.modulo)}, OF ${esc(c.of)}${cargada?`, ${lib} libres`:""}">
@@ -129,8 +128,13 @@ function opiPintar(){
           <span>${esc(c.modulo)} · OF <b>${esc(c.of)}</b>${c.articulo?` · ${esc(c.articulo)}`:""}</span>
           ${sg&&sg.t?`<span>Sigue: <b>${esc(sg.t.num)}</b></span>`:""}</span>
         <span class="opi-lib">${cargada?`<b>${lib}</b>libres`:`<i class="opi-spin" aria-hidden="true"></i>`}<em aria-hidden="true">›</em></span>
-      </button>`;
-    }).join("");
+      </button>`; };
+  const x0=cards[0], otras=cards.length-1;
+  z.innerHTML = OPI.abierto
+    ? `<button type="button" class="opi-h opi-h-btn" onclick="OPI.abierto=false;opiPintar()"><span>Sigue donde te quedaste</span><em aria-hidden="true">⌃</em></button>`+cards.map(tarj).join("")
+    : `<div class="opi-col"><button type="button" class="opi-col-main" onclick="opiAbrir(0)"><i style="background:${opiColor(x0.c.op)}"></i>
+        <span><small>Sigue donde te quedaste</small><b>${esc(x0.c.op)}</b><span>OF ${esc(x0.c.of)} · ${esc(x0.c.modulo)}</span></span><em aria-hidden="true">›</em></button>
+        ${otras>0?`<button type="button" class="opi-col-mas" onclick="OPI.abierto=true;opiPintar()">Ver otras ${otras} ⌄</button>`:""}</div>`;
   OPI.cards=cards.map(x=>x.c);
 }
 /* Mismo color para la misma operación, para reconocerla de un vistazo. */
