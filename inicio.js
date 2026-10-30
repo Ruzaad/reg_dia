@@ -41,6 +41,11 @@ function iniCargar(){
   iniPintar();
   iniRpc("res","fn_inicio_resumen",{p_fecha:hoy});
   iniRpc("mes","fn_inicio_mes",{p_fecha:hoy}).then(()=>{ if(INI.hoy===hoy) iniRpc("plan","fn_inicio_plan",{p_fecha:hoy}); });
+  if(INI.fecha){   // la meta del mes sigue siendo la de hoy; el filtro solo mueve los medidores del día
+    const hr=hoyLima();
+    iniRpc("resHoy","fn_inicio_resumen",{p_fecha:hr});
+    iniRpc("mesHoy","fn_inicio_mes",{p_fecha:hr}).then(()=>{ if(INI.hoy===hoy) iniRpc("planMes","fn_inicio_plan",{p_fecha:hr}); });
+  }
   if(iniPuede("pasoBolSin")) iniRpc("bol","fn_boletas_sin_llenar",{p_fecha:fb,p_area:null})
     .then(r=>{ if(r && r.ok) bslNav((r.personas||[]).length, fb); });
   if(iniPuede("pasoAsis")||iniPuede("pasoDash")) iniRpc("asis","fn_asistencia_matriz",{p_area:"",p_desde:hoy,p_hasta:hoy});
@@ -165,7 +170,7 @@ function iniAreasHtml(F,fr){
 const INI_ORDEN=["CORTE","CAMISA COSTURA","PANTALON COSTURA","SACO COSTURA","ACABADO","REPROCESO"];
 const iniPct=v=>(isFinite(v)?v*100:0).toFixed(1).replace(".",",")+" %";
 function iniPlan(F){
-  const P=INI.d.plan, R=INI.d.res; if(!(P&&P.ok)) return null;
+  const P=INI.d[INI.fecha?"planMes":"plan"], R=INI.d[INI.fecha?"resHoy":"res"]; if(!(P&&P.ok)) return null;
   const sel=new Set(F.map(x=>x.area)), hoyM=a=>a==="CORTE"?+((P.corte_dia||{}).minutos||0):+(((R&&R.areas)||[]).find(y=>y.area===a)||{}).minutos||0;
   const A=(P.areas||[]).filter(x=>sel.has(x.area)).map(x=>({...x, estructura:+x.estructura, personas:+x.personas, disp_mes:+x.disp_mes, disp_fecha:+x.disp_fecha, he:+x.he_min/60, ayer:+x.minutos, minutos:+x.minutos+hoyM(x.area)}));
   const sum=k=>A.reduce((s,x)=>s+(+x[k]||0),0), todas=A.length===(P.areas||[]).length;
@@ -177,25 +182,32 @@ function iniPlan(F){
     opt:x=>x.disp_mes*efMeta, efArea:x=>x.disp_fecha?x.ayer/x.disp_fecha:0};
 }
 function iniMesHtml(F){
-  if(!("plan" in INI.d) || !("res" in INI.d)) return `<div class="ini-card-h"><b>Meta del mes</b></div><div class="ini-gauge-esp">${iniEspera()}</div>`;
+  const kP=INI.fecha?"planMes":"plan", kR=INI.fecha?"resHoy":"res";
+  if(!(kP in INI.d) || !(kR in INI.d)) return `<section class="ini-card"><div class="ini-gauge-esp">${iniEspera()}</div></section>`;
   const Q=iniPlan(F);
-  if(!Q) return `<div class="ini-card-h"><b>Meta del mes</b></div><p class="ini-tenue">sin dato</p>`;
+  if(!Q) return `<section class="ini-card"><p class="ini-tenue">sin dato</p></section>`;
   const {P,A,t,efMeta,efPrev,todas,meta,proy}=Q, mesTxt=INI_MESES[+P.mes.slice(5,7)-1];
-  const pct=meta?t.minutos/meta*100:0, llega=proy!=null&&meta&&proy>=meta;
-  const suma=A.reduce((s,x)=>s+x.disp_mes,0), descuadre=todas&&Math.round(suma)!==Math.round(Q.dispTot);
-  const k=(l,v,sub,c)=>`<div class="ini-pk${c?" "+c:""}"><span>${l}</span><b>${v}</b>${sub?`<div class="ini-pk-s">${sub}</div>`:""}</div>`;
+  const pct=meta?t.minutos/meta*100:0, disp=todas?Q.dispTot:t.disp_mes, brecha=proy==null?null:meta-proy;
+  const suma=A.reduce((s,x)=>s+x.disp_mes,0), descuadre=todas&&Math.round(suma)!==Math.round(Q.dispTot), mx=Math.max(1,...A.map(x=>x.disp_mes));
+  const w=(v,m)=>Math.max(0,Math.min(100,m?v/m*100:0)).toFixed(1);
+  const fl=(l,sub,v,pc,col)=>`<div class="ini-m-fl"><div class="ini-m-c"><div>${l}<span>${sub}</span></div><em>${v}</em></div><div class="ini-m-bar"><i style="width:${pc}%;background:${col}"></i></div></div>`;
   const filas=A.map(x=>`<tr><td><span class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(iniCorto(x.area))}</span></td>
-      <td>${iniN(x.estructura)}</td><td>${iniN(x.personas)}</td><td>${iniN(x.disp_mes)}</td></tr>`).join("");
-  const tot=`<tr class="ini-pt-tot"><td>Total</td><td>${iniN(t.estructura)}</td><td>${iniN(t.personas)}</td><td class="ini-pt-gr">${iniN(suma)}</td></tr>`;
-  return `<div class="ini-card-h"><b>Meta de ${mesTxt}</b>${iniPuede("pasoPcp")?`<button type="button" class="ini-link" onclick="activarTab('pasoPcp')">Ver PCP ›</button>`:""}</div>
-    <div class="ini-mes-n"><b>${meta?iniN(meta):"—"}</b><span>minutos de meta</span></div>
-    <div class="ini-mes-n ini-mes-a"><b>${iniN(t.minutos)}</b><span>${meta?`a la fecha · ${pct.toFixed(1).replace(".",",")} %`:"a la fecha"}</span></div>
-    ${meta?`<div class="ini-mes-bar"><i style="width:${Math.min(100,pct).toFixed(1)}%"></i></div>`:""}
-    <div class="ini-pks">${k("Disponible (100 %)",iniN(todas?Q.dispTot:t.disp_mes),"","gr")}
-      ${k("Eficiencia meta",iniPct(efMeta),`de <b>${iniN(meta)}</b> min`)}
-      ${k("Eficiencia mes anterior",`<span class="ini-pk-d">${efPrev==null?"—":iniPct(efPrev)}</span>${proy==null?"":`<span class="ini-pk-d">${iniN(proy)} <small>min proyectados</small></span>`}`,"",proy!=null&&meta?(llega?"ok":"alerta"):"")}</div>
+      <td>${iniN(x.estructura)}</td><td>${iniN(x.personas)}</td><td class="bb"><div><i style="width:${w(x.disp_mes,mx)}%"></i></div></td><td class="n">${iniN(x.disp_mes)}</td></tr>`).join("");
+  return `<div class="ini-m"><section class="ini-m-izq">
+      <div class="ini-m-rot"><span>Meta de ${mesTxt}</span>${iniPuede("pasoPcp")?`<a onclick="activarTab('pasoPcp')" role="link" tabindex="0">Ver PCP ›</a>`:""}</div>
+      <div class="ini-m-meta">${meta?iniN(meta):"—"}</div><div class="ini-m-sub">minutos de meta</div>
+      <div class="ini-m-llevo"><b>${iniN(t.minutos)}</b><span>a la fecha</span>${meta?`<i>${pct.toFixed(1).replace(".",",")} %</i>`:""}</div>
+      ${meta?`<div class="ini-m-pista"><i style="width:${Math.min(100,pct).toFixed(1)}%"></i></div>`:""}
+    </section>
+    <section class="ini-m-der"><h3>Cierre proyectado</h3>
+      ${fl("Disponible","100 %",iniN(disp),"100","var(--tomado)")}
+      ${fl("Meta",`eficiencia ${iniPct(efMeta)}`,iniN(meta),w(meta,disp),"var(--azul)")}
+      ${proy==null?"":fl("Proyección",`mes anterior ${iniPct(efPrev)}`,iniN(proy),w(proy,disp),"var(--dorado)")}
+      ${brecha==null?"":`<div class="ini-m-pie"><span><i class="${brecha>0?"mal":"bien"}"></i>${brecha>0?"Brecha proyectada":"Excedente proyectado"}</span><b class="${brecha>0?"mal":"bien"}">${iniN(Math.abs(brecha))} min</b></div>`}
+    </section></div>
     ${descuadre?`<div class="ini-pv alerta"><b>Error: los minutos disponibles por área suman ${iniN(suma)} y el 100 % es ${iniN(Q.dispTot)}</b></div>`:""}
-    <div class="ini-pt-w"><table class="ini-pt ini-pt-c"><thead><tr><th>Área</th><th>Estructura de personal</th><th>Personal disponible</th><th>Minutos disponibles del mes</th></tr></thead><tbody>${filas}${tot}</tbody></table></div>`;
+    <section class="ini-m-tab"><h3>Capacidad del mes por área</h3><div class="ini-pt-w"><table><thead><tr><th>Área</th><th>Estructura</th><th>Disponible</th><th></th><th class="n">Minutos del mes</th></tr></thead><tbody>${filas}
+      <tr class="t"><td>Total</td><td>${iniN(t.estructura)}</td><td>${iniN(t.personas)}</td><td class="bb"></td><td class="n">${iniN(suma)}</td></tr></tbody></table></div></section>`;
 }
 /* CORTE no registra en el sistema: Ingeniería pone sus prendas y minutos del día. */
 function iniCorteGuardar(){
