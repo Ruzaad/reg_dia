@@ -2113,3 +2113,4 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .ini-corte input:focus{border-color:var(--enlace);box-shadow:0 0 0 3px rgba(13,33,119,.12);outline:none;}
 .ini-prod{grid-column:1/-1;width:100%;}
 .ini-prod-t{font-family:"Cinzel",Georgia,serif;font-weight:700;}
+.ini-ac-d .ini-ap{display:block;font:500 11px var(--mono);font-style:normal;color:var(--tenue);margin-top:1px;}

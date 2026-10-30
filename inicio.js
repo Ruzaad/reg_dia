@@ -140,12 +140,12 @@ function iniAreaCard(x,fr){
   const cabeza=`<div class="ini-card-h"><b class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(n)}</b>${r&&r.tope?`<span class="ini-estado ${iniNivel(r,fr)}">${INI_ESTADO[iniNivel(r,fr)]||""}</span>`:""}</div>`;
   if(!r) return `<section class="ini-card ini-ac">${cabeza}<div class="ini-gauge-esp">${iniEspera()}</div></section>`;
   const falta=(+r.meta_min||0)-(+r.minutos||0), corte=cd?`<div class="ini-corte"><label>Prendas<input id="iniCortePr" type="number" min="0" inputmode="numeric" value="${cd.prendas??""}"></label>
-      <label>Minutos<input id="iniCorteMi" type="number" min="0" inputmode="numeric" value="${cd.minutos??""}"></label><button type="button" class="btn" onclick="iniCorteGuardar()">Guardar</button></div>`:"";
+      <label>Minutos<input id="iniCorteMi" type="number" min="0" inputmode="numeric" value="${cd.minutos??""}"></label><button type="button" class="btn-mini verde" onclick="iniCorteGuardar()">GUARDAR</button></div>`:"";
   const t=(l,v)=>`<div><span>${l}</span><b>${v}</b></div>`;
   return `<section class="ini-card ini-ac">${cabeza}
     ${r.tope?iniGaugeArea(r,fr):`<p class="ini-tenue ini-centro">sin asistentes</p>`}
     ${r.tope?`<div class="ini-ac-m"><span>Meta <b>${iniN(r.meta_min)}</b></span><span>${falta>0?`Falta <b>${iniN(falta)} min</b>`:`Excedente <b>${iniN(-falta)} min</b>`}</span></div>`:""}
-    <div class="ini-ac-d">${t("Asistentes",`${iniN(r.asistentes)} <small>de ${iniN(r.personal)}</small>`)}${t("Prendas",iniN(r.prendas))}${t("Min/prenda",r.prendas?iniN(r.minutos/r.prendas):"—")}</div>
+    <div class="ini-ac-d">${t("Asistentes",`${iniN(r.asistentes)} <small>de ${iniN(r.personal)}</small>`)}${t("Prendas",iniN(r.prendas))}${t("Apoyo",+r.apoyo_pers?`${iniN(r.apoyo_min)}<em class="ini-ap">${iniN(r.apoyo_pers)} pers.</em>`:"—")}</div>
     ${corte}</section>`;
 }
 function iniAreasHtml(F,fr){
