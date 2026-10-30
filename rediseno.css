@@ -2141,3 +2141,6 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .ini-m-tab th.n,.ini-m-tab td.n{text-align:right;padding-right:0;color:var(--texto);font-weight:500;width:110px;}
 .ini-m-tab tr.t td{border-bottom:0;color:var(--texto);font-weight:600;padding-top:12px;} .ini-m-tab tr.t td.n{color:var(--azul);font-size:15px;}
 @media(max-width:800px){.ini-m{grid-template-columns:1fr;} .ini-m-tab td.bb{display:none;}}
+.ini-hn{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0;}
+.ini-hm{font-size:12px;font-weight:500;color:var(--tenue);} .ini-hm::before{content:"· ";} .ini-hm b{font:600 12px var(--mono);color:var(--suave);}
+.ini-hn{flex-wrap:nowrap;gap:6px;} .ini-hm{white-space:nowrap;font-size:11.5px;} .ini-hn .ini-area{white-space:nowrap;}
