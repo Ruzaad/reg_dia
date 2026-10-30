@@ -2082,3 +2082,5 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .ini-corte{display:flex;gap:8px;align-items:end;margin-top:10px;flex-wrap:wrap;}
 .ini-corte label{flex:1;min-width:80px;font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--suave);}
 .ini-corte input{width:100%;margin-top:2px;}
+.ini-pk small{display:block;font-size:12px;color:var(--suave);margin-top:2px;font-variant-numeric:tabular-nums;}
+.ini-pt-tot td{font-weight:700;border-top:2px solid var(--linea-2);}
