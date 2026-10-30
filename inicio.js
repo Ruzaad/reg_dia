@@ -113,40 +113,51 @@ function iniFraccion(){
   const w=Math.max(0,Math.min(t,1100)-480)-Math.max(0,Math.min(t,825)-780);
   return {f:Math.min(1,w/575), hora:String(Math.floor(t/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0")};
 }
+/* Estado de un área frente a su meta mínima: en meta, en riesgo o crítico (según el día en curso). */
+function iniNivel(r,fr){
+  const tope=+r.tope||0, v=+r.minutos||0, meta=+r.meta_min||0, hoy=INI.hoy===hoyLima();
+  const esp=hoy?Math.max(.05,fr.f):1;
+  return !tope?"nd":v>=meta*esp?"ok":v>=meta*esp*.875?"aviso":"alerta";
+}
+const INI_ESTADO={ok:"En meta",aviso:"En riesgo",alerta:"Crítico"};
 /* Medidor de un área: el arco llega al tope (asistentes × jornada); la marca es la meta mínima (80 % del tope).
-   El día en curso se compara con lo que ya debería llevar según las horas corridas. */
+   El número grande es el % del tope producido; debajo, los minutos. */
 function iniGaugeArea(r,fr){
-  const W=200,C=100,R=78, tope=+r.tope||0, v=+r.minutos||0, meta=+r.meta_min||0, hoy=INI.hoy===hoyLima();
-  const esp=hoy?Math.max(.05,fr.f):1, pct=tope?Math.min(100,v/tope*100):0, mpct=tope?meta/tope*100:80;
-  const niv=!tope?"nd":v>=meta*esp?"ok":v>=meta*esp*.875?"aviso":"alerta";
+  const W=200,C=100,R=78, tope=+r.tope||0, v=+r.minutos||0, meta=+r.meta_min||0;
+  const niv=iniNivel(r,fr), pct=tope?Math.min(100,v/tope*100):0, mpct=tope?meta/tope*100:80;
   const ang=a=>{ const t=(180-a*1.8)*Math.PI/180; return [C+Math.cos(t)*R, C-Math.sin(t)*R]; };
   const [mx,my]=ang(mpct);
-  return `<svg class="ini-gauge-svg" viewBox="0 0 ${W} 112" role="img" aria-label="${iniN(v)} de ${iniN(tope)} minutos, meta mínima ${iniN(meta)}">
+  return `<svg class="ini-gauge-svg" viewBox="0 0 ${W} 112" role="img" aria-label="${pct.toFixed(0)} % del tope, ${iniN(v)} minutos, meta mínima ${iniN(meta)}">
       <path d="M${C-R} ${C} A${R} ${R} 0 0 1 ${C+R} ${C}" class="ini-g-pista" pathLength="100"/>
       <path d="M${C-R} ${C} A${R} ${R} 0 0 1 ${C+R} ${C}" class="ini-g-val ${niv}" pathLength="100" stroke-dasharray="${pct.toFixed(1)} 100"${pct<.8?" visibility=\"hidden\"":""}/>
       <line x1="${(C+(mx-C)*.78).toFixed(1)}" y1="${(C+(my-C)*.78).toFixed(1)}" x2="${(C+(mx-C)*1.16).toFixed(1)}" y2="${(C+(my-C)*1.16).toFixed(1)}" class="ini-g-meta"/>
-      <text x="${C}" y="${C-6}" class="ini-g-num" text-anchor="middle">${iniN(v)}</text>
-      <text x="${C}" y="${C+10}" class="ini-g-et" text-anchor="middle">MINUTOS</text>
-      <text x="${C-R}" y="${C+20}" class="ini-g-ext" text-anchor="middle">0</text><text x="${C+R}" y="${C+20}" class="ini-g-ext" text-anchor="middle">${iniN(tope)}</text></svg>`;
+      <text x="${C}" y="${C-6}" class="ini-g-num" text-anchor="middle">${pct.toFixed(0)} %</text>
+      <text x="${C}" y="${C+12}" class="ini-g-et" text-anchor="middle">${iniN(v)} min</text></svg>`;
 }
 function iniAreaCard(x,fr){
   let r=x.r; const n=iniCorto(x.area), cd=x.area==="CORTE"&&INI.d.plan&&INI.d.plan.ok?(INI.d.plan.corte_dia||{}):null;
   if(r&&cd) r={...r, prendas:+cd.prendas||0, minutos:+cd.minutos||0};
-  if(!r) return `<section class="ini-card ini-ac"><div class="ini-card-h"><b class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(n)}</b></div><div class="ini-gauge-esp">${iniEspera()}</div></section>`;
+  const cabeza=`<div class="ini-card-h"><b class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(n)}</b>${r&&r.tope?`<span class="ini-estado ${iniNivel(r,fr)}">${INI_ESTADO[iniNivel(r,fr)]||""}</span>`:""}</div>`;
+  if(!r) return `<section class="ini-card ini-ac">${cabeza}<div class="ini-gauge-esp">${iniEspera()}</div></section>`;
+  const falta=(+r.meta_min||0)-(+r.minutos||0), corte=cd?`<div class="ini-corte"><label>Prendas<input id="iniCortePr" type="number" min="0" inputmode="numeric" value="${cd.prendas??""}"></label>
+      <label>Minutos<input id="iniCorteMi" type="number" min="0" inputmode="numeric" value="${cd.minutos??""}"></label><button type="button" class="btn" onclick="iniCorteGuardar()">Guardar</button></div>`:"";
   const t=(l,v)=>`<div><span>${l}</span><b>${v}</b></div>`;
-  return `<section class="ini-card ini-ac"><div class="ini-card-h"><b class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(n)}</b>
-      </div>
+  return `<section class="ini-card ini-ac">${cabeza}
     ${r.tope?iniGaugeArea(r,fr):`<p class="ini-tenue ini-centro">sin asistentes</p>`}
-    ${r.tope?`<p class="ini-ac-m">Meta mínima <b>${iniN(r.meta_min)}</b> · Tope <b>${iniN(r.tope)}</b></p>`:""}
-    <div class="ini-ac-d">${t("Asistentes",`${iniN(r.asistentes)} <small>de ${iniN(r.personal)}</small>`)}${t("Prendas",iniN(r.prendas))}${t("Minutos",iniN(r.minutos))}</div>
-    ${cd?`<div class="ini-corte"><label>Prendas<input id="iniCortePr" type="number" min="0" inputmode="numeric" value="${cd.prendas??""}"></label>
-      <label>Minutos<input id="iniCorteMi" type="number" min="0" inputmode="numeric" value="${cd.minutos??""}"></label><button type="button" class="btn" onclick="iniCorteGuardar()">Guardar</button></div>`:""}</section>`;
+    ${r.tope?`<div class="ini-ac-m"><span>Meta <b>${iniN(r.meta_min)}</b></span><span>${falta>0?`Falta <b>${iniN(falta)} min</b>`:`Excedente <b>${iniN(-falta)} min</b>`}</span></div>`:""}
+    <div class="ini-ac-d">${t("Asistentes",`${iniN(r.asistentes)} <small>de ${iniN(r.personal)}</small>`)}${t("Prendas",iniN(r.prendas))}${t("Min/prenda",r.prendas?iniN(r.minutos/r.prendas):"—")}</div>
+    ${corte}</section>`;
 }
 function iniAreasHtml(F,fr){
-  const L=F.filter(x=>!("res" in INI.d) || (x.r && (x.r.personal||x.r.minutos||x.r.prendas)));
   if("res" in INI.d && !(INI.d.res&&INI.d.res.ok)) return `<div class="ini-vacio">No se pudo cargar el día. Intenta de nuevo en un momento.</div>`;
   const o=a=>{ const i=INI_ORDEN.indexOf(a); return i<0?99:i; };
-  return L.slice().sort((a,b)=>o(a.area)-o(b.area)).map(x=>iniAreaCard(x,fr)).join("");
+  const L=F.filter(x=>!("res" in INI.d) || (x.r && (x.r.personal||x.r.minutos||x.r.prendas))).slice().sort((a,b)=>o(a.area)-o(b.area));
+  const conDato=L.filter(x=>x.r&&x.r.tope), enMeta=conDato.filter(x=>iniNivel(x.r,fr)==="ok").length;
+  const head=`<div class="ini-prod-h"><div><h2 class="ini-prod-t">Producción del día</h2>
+      <p class="ini-prod-s">Minutos producidos frente a la meta mínima, por área</p></div>
+      <div class="ini-prod-leg"><span><i class="ini-leg-meta"></i>Meta mínima</span><span><i class="ini-leg-arc"></i>Extremo del arco = tope</span>
+      ${conDato.length?`<b class="ini-prod-cnt">${enMeta} de ${conDato.length} áreas en meta</b>`:""}</div></div>`;
+  return `<div class="ini-prod">${head}<div class="ini-prod-g">${L.map(x=>iniAreaCard(x,fr)).join("")}</div></div>`;
 }
 /* Meta del mes: disponible (MOD × jornada × días laborables, sin vacaciones ni licencias) = 100 %;
    eficiencia meta = meta ÷ disponible; óptima del área = su disponible × eficiencia meta;
