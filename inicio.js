@@ -169,34 +169,22 @@ function iniMesHtml(F){
   if(!("plan" in INI.d) || !("res" in INI.d)) return `<div class="ini-card-h"><b>Meta del mes</b></div><div class="ini-gauge-esp">${iniEspera()}</div>`;
   const Q=iniPlan(F);
   if(!Q) return `<div class="ini-card-h"><b>Meta del mes</b></div><p class="ini-tenue">sin dato</p>`;
-  const {P,A,t,efMeta,efReal,efPrev,quedan,todas,meta,proy,deberia}=Q, mesTxt=INI_MESES[+P.mes.slice(5,7)-1];
-  const pct=meta?t.minutos/meta*100:0, base=efPrev||efReal, falta=proy==null?0:meta-proy, llega=proy!=null&&falta<=0;
-  const efNec=Q.resta>0?(meta-t.ayer)/Q.resta:0, horasNec=falta>0&&base?falta/base/60:0, persNec=falta>0&&base&&quedan?falta/(base*575*quedan):0;
-  const k=(l,v,sub,c)=>`<div class="ini-pk${c?" "+c:""}"><span>${l}</span><b>${v}</b>${sub?`<small>${sub}</small>`:""}</div>`;
+  const {P,A,t,efMeta,efPrev,todas,meta,proy}=Q, mesTxt=INI_MESES[+P.mes.slice(5,7)-1];
+  const pct=meta?t.minutos/meta*100:0, llega=proy!=null&&meta&&proy>=meta;
   const suma=A.reduce((s,x)=>s+x.disp_mes,0), descuadre=todas&&Math.round(suma)!==Math.round(Q.dispTot);
-  const filas=A.map(x=>{ const ef=Q.efArea(x), niv=!x.disp_fecha?"":ef>=efMeta?"ok":ef>=efMeta*.875?"aviso":"alerta";
-    return `<tr><td><span class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(iniCorto(x.area))}</span></td>
-      <td>${iniN(x.estructura)}</td><td>${iniN(x.personas)}</td><td>${iniN(x.disp_mes)}</td><td>${iniN(Q.opt(x))}</td><td>${iniN(x.minutos)}</td>
-      <td>${iniN(x.disp_fecha*efMeta)}</td><td class="ini-pt-ef ${niv}">${iniPct(ef)}</td></tr>`; }).join("");
-  const tot=`<tr class="ini-pt-tot"><td>Total</td><td>${iniN(t.estructura)}</td><td>${iniN(t.personas)}</td><td>${iniN(suma)}</td><td>${iniN(suma*efMeta)}</td><td>${iniN(t.minutos)}</td><td>${iniN(deberia)}</td><td class="ini-pt-ef">${iniPct(efReal)}</td></tr>`;
-  const fila=(txt,nec,act)=>`<li>${txt}: se necesita <b>${nec}</b> · actualmente <b>${act}</b></li>`;
-  const que=meta&&!llega&&proy!=null?`<div class="ini-pv alerta"><b>No llega: faltan ${iniN(falta)} min</b><ul>
-      ${efNec>0&&efNec<=1?fila(`Eficiencia en los ${quedan} día${quedan===1?"":"s"} que quedan`,iniPct(efNec),iniPct(efReal)):`<li>Ya no alcanza solo con eficiencia</li>`}
-      ${horasNec>0?fila("Horas extra",iniN(horasNec)+" h",iniN(t.he)+" h en el mes"):""}
-      ${persNec>0?fila("Personas MOD más",iniN(Math.ceil(persNec)),iniN(t.personas)+" MOD"):""}
-      ${A.filter(x=>x.disp_fecha&&Q.efArea(x)<efMeta).sort((a,b)=>(b.disp_fecha*efMeta-b.ayer)-(a.disp_fecha*efMeta-a.ayer)).slice(0,3)
-        .map(x=>`<li>${esc(iniCorto(x.area))}: le faltan <b>${iniN(x.disp_fecha*efMeta-x.ayer)}</b> min para ir al día</li>`).join("")}</ul></div>`
-    :meta&&llega?`<div class="ini-pv ok"><b>Llega a la meta</b></div>`:"";
+  const k=(l,v,sub,c)=>`<div class="ini-pk${c?" "+c:""}"><span>${l}</span><b>${v}</b>${sub?`<div class="ini-pk-s">${sub}</div>`:""}</div>`;
+  const filas=A.map(x=>`<tr><td><span class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(iniCorto(x.area))}</span></td>
+      <td>${iniN(x.estructura)}</td><td>${iniN(x.personas)}</td><td>${iniN(x.disp_mes)}</td></tr>`).join("");
+  const tot=`<tr class="ini-pt-tot"><td>Total</td><td>${iniN(t.estructura)}</td><td>${iniN(t.personas)}</td><td class="ini-pt-gr">${iniN(suma)}</td></tr>`;
   return `<div class="ini-card-h"><b>Meta de ${mesTxt}</b>${iniPuede("pasoPcp")?`<button type="button" class="ini-link" onclick="activarTab('pasoPcp')">Ver PCP ›</button>`:""}</div>
     <div class="ini-mes-n"><b>${meta?iniN(meta):"—"}</b><span>minutos de meta</span></div>
     <div class="ini-mes-n ini-mes-a"><b>${iniN(t.minutos)}</b><span>${meta?`a la fecha · ${pct.toFixed(1).replace(".",",")} %`:"a la fecha"}</span></div>
     ${meta?`<div class="ini-mes-bar"><i style="width:${Math.min(100,pct).toFixed(1)}%"></i></div>`:""}
-    <div class="ini-pks">${k("Disponible (100 %)",iniN(todas?Q.dispTot:t.disp_mes))}${k("Eficiencia meta",iniPct(efMeta),`${iniN(meta)} min`)}
-      ${k("Eficiencia mes anterior",efPrev==null?"—":iniPct(efPrev),proy==null?"":`${iniN(proy)} min proyectados`,proy!=null&&meta?(llega?"ok":"alerta"):"")}
-      ${k("Eficiencia real",iniPct(efReal),"",efReal>=efMeta?"ok":"alerta")}${k("Debería llevar",iniN(deberia))}</div>
+    <div class="ini-pks">${k("Disponible (100 %)",iniN(todas?Q.dispTot:t.disp_mes),"","gr")}
+      ${k("Eficiencia meta",iniPct(efMeta),`de <b>${iniN(meta)}</b> min`)}
+      ${k("Eficiencia mes anterior",`<span class="ini-pk-d">${efPrev==null?"—":iniPct(efPrev)}</span>${proy==null?"":`<span class="ini-pk-d">${iniN(proy)} <small>min proyectados</small></span>`}`,"",proy!=null&&meta?(llega?"ok":"alerta"):"")}</div>
     ${descuadre?`<div class="ini-pv alerta"><b>Error: los minutos disponibles por área suman ${iniN(suma)} y el 100 % es ${iniN(Q.dispTot)}</b></div>`:""}
-    <div class="ini-pt-w"><table class="ini-pt"><thead><tr><th>Área</th><th>Estructura de personal</th><th>Personal disponible</th><th>Minutos disponibles del mes</th><th>Óptima</th><th>A la fecha</th><th>Debería</th><th>Ef. real</th></tr></thead><tbody>${filas}${tot}</tbody></table></div>
-    ${que}`;
+    <div class="ini-pt-w"><table class="ini-pt ini-pt-c"><thead><tr><th>Área</th><th>Estructura de personal</th><th>Personal disponible</th><th>Minutos disponibles del mes</th></tr></thead><tbody>${filas}${tot}</tbody></table></div>`;
 }
 /* CORTE no registra en el sistema: Ingeniería pone sus prendas y minutos del día. */
 function iniCorteGuardar(){
