@@ -2065,3 +2065,20 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .cro-bar i{display:block;height:100%;background:var(--aviso);} .cro-bar i.ok{background:var(--exito);}
 #croTabCorte tr[hidden]{display:none;}
 #croTabCorte td.nw{white-space:nowrap;}
+/* Inicio: plan del mes (parche 154) */
+.ini-pks{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:4px 0 12px;}
+.ini-pk{background:var(--fondo-2,var(--linea-2));border-radius:10px;padding:8px 12px;}
+.ini-pk span{display:block;font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--suave);}
+.ini-pk b{font:700 20px var(--mono);color:var(--titulo);font-variant-numeric:tabular-nums;}
+.ini-pk.ok b,.ini-pt-ef.ok{color:var(--ok,#1b7a3a);} .ini-pk.alerta b,.ini-pt-ef.alerta{color:var(--alerta,#b3001b);} .ini-pt-ef.aviso{color:var(--ocre,#BC9A48);}
+.ini-pv{border-left:4px solid var(--alerta,#b3001b);padding:6px 12px;margin-bottom:12px;font-size:14px;}
+.ini-pv.ok{border-color:var(--ok,#1b7a3a);} .ini-pv ul{margin:4px 0 0 18px;padding:0;} .ini-pv li{margin:2px 0;}
+.ini-pt-w{overflow-x:auto;}
+.ini-pt{width:100%;border-collapse:collapse;font-size:13px;}
+.ini-pt th{font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--suave);text-align:right;padding:4px 8px;border-bottom:1px solid var(--linea-2);}
+.ini-pt td{text-align:right;padding:5px 8px;font-family:var(--mono);border-bottom:1px solid var(--linea-2);}
+.ini-pt th:first-child,.ini-pt td:first-child{text-align:left;font-family:inherit;}
+.ini-pt-no td{color:var(--tenue);}
+.ini-corte{display:flex;gap:8px;align-items:end;margin-top:10px;flex-wrap:wrap;}
+.ini-corte label{flex:1;min-width:80px;font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--suave);}
+.ini-corte input{width:100%;margin-top:2px;}
