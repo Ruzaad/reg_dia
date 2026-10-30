@@ -2084,3 +2084,14 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .ini-corte input{width:100%;margin-top:2px;}
 .ini-pk small{display:block;font-size:12px;color:var(--suave);margin-top:2px;font-variant-numeric:tabular-nums;}
 .ini-pt-tot td{font-weight:700;border-top:2px solid var(--linea-2);}
+/* Inicio: recuadros del plan, centrados (parche 155) */
+.ini-pks .ini-pk{text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;}
+.ini-pk.gr b{font-size:26px;}
+.ini-pk-s{margin-top:4px;font-size:15px;color:var(--suave);} .ini-pk-s b{font:700 24px var(--mono);color:var(--titulo);}
+.ini-pk-d{display:block;font:700 26px var(--mono);font-variant-numeric:tabular-nums;} .ini-pk-d small{font:600 12px var(--mono);color:var(--suave);}
+.ini-pk.ok .ini-pk-d{color:var(--ok,#1b7a3a);} .ini-pk.alerta .ini-pk-d{color:var(--alerta,#b3001b);}
+.ini-pt-c th,.ini-pt-c td{text-align:center;} .ini-pt-c th:first-child,.ini-pt-c td:first-child{text-align:left;}
+.ini-pt-gr{font-size:17px;color:var(--titulo);}
+.ini-pks .ini-pk .ini-pk-d{font-size:26px;letter-spacing:0;text-transform:none;color:inherit;font-weight:700;}
+.ini-pks .ini-pk .ini-pk-d small{font-size:12px;letter-spacing:0;text-transform:none;display:inline;}
+.ini-pks{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));}
