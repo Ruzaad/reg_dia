@@ -617,6 +617,7 @@ const PRENDA_AREAS=[
   ["PANTALON COSTURA",/PANTALON|FALDA|VESTIDO/,"pantalones, faldas y vestidos"],
   ["SACO COSTURA",/SACO|CASACA|CHALECO|TERNO|ABRIGO|BLAZER/,"sacos, casacas, chalecos y ternos"]];
 const HN_PAQ_MAX=60;   // en lo registrado ningún paquete pasa de 53 und
+const HN_OF_CHICA=10;  // OF de menos de 10 und: casi siempre reposiciones, pero se avisa
 function areasDePrenda(pr){
   const k=normKey(pr); if(!k) return null;
   const c=PRENDA_AREAS.find(x=>x[1].test(k));
@@ -661,6 +662,10 @@ function ofsRevision(j){
       ? `Los paquetes suman ${tot} und, igual que la CANTIDAD FÍSICA de la hoja.`
       : `Los paquetes suman ${tot} und y la hoja dice CANTIDAD FÍSICA ${j.hn.fisica}.`);
   }
+  const und=j.hn.tallas.reduce((a,t)=>a+(t.cant>0?t.cant:0),0);
+  if(und>0 && und<HN_OF_CHICA) av(`Solo ${und} und en ${vivos.length} paquete(s): confirma que sea una OF chica (reposición o saldo) y no una hoja leída a medias.`);
+  if(j.hn.pdf && j.hn.cantOf!=null && j.hn.fisica==null && und!==j.hn.cantOf)
+    av(`Los paquetes suman ${und} und y la hoja dice CANTIDAD OF ${j.hn.cantOf}.`);
   if(j.hn.saltos) av(`${j.hn.saltos} paquete(s) cuya numeración (desde / hasta) no sigue la numeración corrida: revisa la hoja.`);
   const nums=OFS.map(o=>+o.of).filter(n=>n>0), of=+j.hn.of;
   if(of && nums.length && !OFS.some(o=>String(o.of)===String(j.hn.of))){
@@ -2836,17 +2841,24 @@ function ofsPaqDesglose(o){
 /* Solo las áreas que hacen esa prenda (parche 105): una camisa ya no sale
    "SACO COSTURA · sin BASE". Con prenda desconocida se muestran todas. */
 function ofsAreasVan(o){
+  if(ofsEsLote(o)) return {areas:[], sinArea:false};
   const prs=ofsPrendas(o).map(x=>x.prenda).filter(Boolean); if(!prs.length && o.prenda) prs.push(o.prenda);
   const van=prs.map(areasDePrenda);
-  if(!prs.length || van.some(v=>!v)) return {areas:o.areas||[], sinArea:true};
+  /* Sin prenda no se sabe a qué costura va: se muestran ACABADO y las áreas
+     donde el artículo tiene BASE o ya se generó, no todas. */
+  if(!prs.length || van.some(v=>!v)) return {areas:(o.areas||[]).filter(a=>a.acabado||a.base||a.generada), sinArea:true};
   const set=new Set(van.flat());
   return {areas:(o.areas||[]).filter(a=>set.has(a.area)), sinArea:false};
 }
+/* Lote de REPROCESO (parche 126): no es una OF de la HN, no va a costura ni a
+   ACABADO. `reproceso` llega desde el parche 160; antes se deduce del número. */
+function ofsEsLote(o){ return o.reproceso!=null ? !!o.reproceso : !/^\d+$/.test(String(o.of||"")); }
 const OFS_AVISOS=[
   ["sinBase","Sin BASE",o=>ofsAreasVan(o).areas.some(a=>!a.base)],
   ["sinStd","BASE sin STD",o=>ofsAreasVan(o).areas.some(a=>a.base && +a.sin_std>0)],
-  ["sinDesglose","Sin desglose (alta a mano)",o=>!+o.paquetes],
-  ["sinArea","Prenda sin área",o=>ofsAreasVan(o).sinArea]];
+  ["sinDesglose","Sin desglose (alta a mano)",o=>!ofsEsLote(o) && !+o.paquetes],
+  ["sinArea","Sin prenda o prenda sin área",o=>ofsAreasVan(o).sinArea],
+  ["lote","Lotes de REPROCESO",ofsEsLote]];
 let OFS_FILTRO="";
 function ofsFiltro(k){ OFS_FILTRO=OFS_FILTRO===k?"":k; ofsPintar(); }
 function ofsPintar(){
@@ -2869,8 +2881,9 @@ function ofsPintar(){
   /* En vez de la división (casi siempre vacía), el estado por área: donde ya
      está servida, donde falta generar y donde falta subir la BASE. */
   const areasTxt=o=>{
-    const a=ofsAreasVan(o).areas; if(!a.length) return "—";
-    return a.map(x=>{
+    if(ofsEsLote(o)) return `<span class="of-area" title="Lote creado en REPROCESO: no es una OF de hoja de numeración">REPROCESO · lote</span>`;
+    const v=ofsAreasVan(o), a=v.areas; if(!a.length) return "—";
+    return (v.sinArea?`<span class="of-area sin-base" title="La OF no tiene prenda (o no se sabe a qué costura va): revísala">sin prenda</span> `:"")+a.map(x=>{
       if(!x.base) return `<span class="of-area sin-base" title="Falta subir la BASE de ${esc(o.articulo)} en ${esc(x.area)}">${esc(x.area)} · sin BASE</span>`;
       if(+x.sin_std>0) return `<span class="of-area pendiente" title="La BASE de ${esc(o.articulo)} en ${esc(x.area)} tiene operaciones sin STD">${esc(x.area)} · ${x.sin_std} op. sin STD</span>`;
       if(x.acabado) return `<span class="of-area lista">${esc(x.area)} · activa</span>`;
@@ -2954,7 +2967,7 @@ async function ofsPrepararJobs(){
       if(Array.isArray(r)) OFS=r; }catch(e){}
   }
   await ofsCargarPrendas();
-  OFS_JOBS.forEach(j=>{ if(j.hn && j.pre==null) j.pre=(j.prendas||[]).length ? (j.sug||(j.prendas.length===1&&!j.hn.prenda?j.prendas[0]:"")) : norm(j.hn.prenda).toUpperCase(); });
+  OFS_JOBS.forEach(j=>{ if(j.hn && j.pre==null) j.pre=(j.prendas||[]).length ? (j.sug||(j.prendas.length===1?j.prendas[0]:"")) : norm(j.hn.prenda).toUpperCase(); });
   renderOfsJobs();
 }
 /* La HN dice `TERNO(PANTALÓN)` y la BASE dice `PANTALON`: lo que se guarda
@@ -3015,6 +3028,17 @@ function ofsComparar(j){
   const gen=(o.areas||[]).filter(a=>a.generada).map(a=>a.area);
   return {tipo: dif.length?"difiere":"igual", o, dif, gen};
 }
+/* Lo que impide registrar: sin esto la OF queda mal cruzada para siempre
+   (p. ej. sin prenda sale en todas las costuras). */
+function ofsBloqueos(j){
+  const b=[];
+  if(!j.hn.of) b.push("falta la OF");
+  else if(!/^\d{4,6}$/.test(j.hn.of)) b.push(`la OF ${j.hn.of} no parece un número de OF`);
+  if(!j.hn.articulo) b.push("falta el artículo");
+  if(!norm(j.pre)) b.push((j.prendas||[]).length ? "elige la prenda" : "escribe la prenda");
+  if(hnDetalle(j.hn.tallas).total<=0) b.push("la HN no trae cantidades");
+  return b;
+}
 function ofsQuitarJob(id){ OFS_JOBS=OFS_JOBS.filter(j=>j.id!==id); renderOfsJobs(); }
 function ofsCancelarHN(){ OFS_JOBS=[]; renderOfsJobs(); }
 function ofsJobCampo(id, k, v){
@@ -3024,6 +3048,7 @@ function ofsJobCampo(id, k, v){
     ofsCargarPrendas().then(renderOfsJobs); }
   else if(k==="pre") j.pre=norm(v).toUpperCase();
   else if(k==="rep") j.reemplazar=!!v;
+  else if(k==="visto") j.visto=!!v;
   renderOfsJobs();
 }
 function renderOfsJobs(){
@@ -3059,11 +3084,14 @@ function renderOfsJobs(){
       avisos.push("Ese artículo no tiene BASE cargada con prenda: se guardará lo que escribas.");
     const dupe=OFS_JOBS.some(x=>x!==j && x.hn && x.hn.of && x.hn.of===j.hn.of && normKey(x.pre)===normKey(j.pre));
     if(dupe) avisos.push("Otra hoja cargada tiene la misma OF y prenda.");
-    const rv=ofsRevision(j), nAv=rv.filter(x=>!x.ok).length;
+    const rv=ofsRevision(j), nAv=rv.filter(x=>!x.ok).length, bl=ofsBloqueos(j);
     const revBox=`<div class="hn-rev"><div class="hn-rev-tit">Revisión de datos
-        <span class="of-area ${nAv?"pendiente":"lista"}">${nAv?`${nAv} aviso(s)`:"Todo en orden"}</span></div>
+        <span class="of-area ${bl.length?"sin-base":nAv?"pendiente":"lista"}">${bl.length?"No se puede registrar":nAv?`${nAv} aviso(s)`:"Todo en orden"}</span></div>
+      ${bl.map(x=>`<div class="hn-rev-l av"><i>✕</i><span><b>Falta:</b> ${esc(x)}.</span></div>`).join("")}
       ${rv.map(x=>`<div class="hn-rev-l ${x.ok?"ok":"av"}"><i>${x.ok?"✓":"!"}</i><span>${esc(x.t)}</span></div>`).join("")}
-      ${nAv?`<div class="sub">Son avisos: puedes registrar igual.</div>`:""}</div>`;
+      ${nAv&&!bl.length?`<label class="hn-rep"><input type="checkbox" ${j.visto?"checked":""} onchange="ofsJobCampo(${j.id},'visto',this.checked)">
+        Revisé los avisos y las filas leídas: registrar igual</label>`:""}</div>`;
+    j._av=nAv; j._bl=bl.length;
     const estado = !k ? "" : k.tipo==="nueva" ? `<span class="of-area lista">Nueva</span>`
       : k.tipo==="prenda" ? `<span class="of-area lista">OF ${esc(k.o.of)} registrada · se agrega esta prenda</span>`
       : k.tipo==="igual" ? `<span class="of-area">Ya registrada igual · se omite</span>`
@@ -3096,7 +3124,7 @@ function renderOfsJobs(){
       ${avisos.length?`<div class="hn-aviso">${avisos.map(esc).join("<br>")}</div>`:""}
       ${revBox}
       ${bloqueDif}
-      <details><summary class="sub" style="cursor:pointer;">Ver las ${j.hn.tallas.length} filas leídas</summary>
+      <details${nAv||bl.length?" open":""}><summary class="sub" style="cursor:pointer;">Ver las ${j.hn.tallas.length} filas leídas</summary>
       <div class="contenedor-ancho tabla-scroll" style="max-height:28vh;">
         <table class="tabla"><thead><tr><th>#</th><th>Talla</th><th>Cant</th><th class="izq">Color</th></tr></thead>
         <tbody>${filas}</tbody></table>
@@ -3104,6 +3132,7 @@ function renderOfsJobs(){
     </div>`;
   }).join("");
 }
+const det2paq=d=>d.filter(x=>x.cant>0).length;
 async function ofsConfirmarHN(){
   const vivos=OFS_JOBS.filter(j=>j.hn);
   if(!vivos.length){ mostrarError("No hay ninguna hoja válida para registrar"); return; }
@@ -3111,19 +3140,19 @@ async function ofsConfirmarHN(){
   for(const j of vivos){
     const k=ofsComparar(j), of=j.hn.of, art=j.hn.articulo, pre=j.pre||"";
     const {det, total}=hnDetalle(j.hn.tallas);
-    if(!of){ mostrarError(`${j.name}: falta la OF`); return; }
-    if(!art){ mostrarError(`${j.name}: falta el artículo`); return; }
-    if((j.prendas||[]).length>1 && !pre){
-      mostrarError(`${j.name}: ese artículo tiene varias prendas, elige cuál es esta hoja`); return; }
-    if(total<=0){ mostrarError(`${j.name}: la HN no trae cantidades`); return; }
     if(k.tipo==="igual" || (k.tipo==="difiere" && !j.reemplazar)){ omit.push(`OF ${of}`); continue; }
-    pend.push({j, of, art, pre, det, total, rep:k.tipo==="difiere"});
+    const bl=ofsBloqueos(j);
+    if(bl.length){ mostrarError(`${j.name}: ${bl.join(", ")}`); $("ofsJob_"+j.id)?.scrollIntoView({block:"center"}); return; }
+    const nAv=ofsRevision(j).filter(x=>!x.ok).length;
+    if(nAv && !j.visto){ mostrarError(`${j.name}: tiene ${nAv} aviso(s). Revísalos y marca "Revisé los avisos" en su tarjeta.`);
+      $("ofsJob_"+j.id)?.scrollIntoView({block:"center"}); return; }
+    pend.push({j, of, art, pre, det, total, rep:k.tipo==="difiere", nAv});
   }
   if(!pend.length){ mostrarError("Nada que escribir: todas las hojas ya están registradas (o no marcaste reemplazar)"); return; }
   const dupe=pend.map(p=>p.of+"|"+normKey(p.pre)).filter((v,i,a)=>a.indexOf(v)!==i);
   if(dupe.length && !confirm(`Hay hojas con la misma OF y prenda (${[...new Set(dupe.map(d=>d.split("|")[0]))].join(", ")}).
 Se registrarán una tras otra y la segunda saldrá como "ya registrada". ¿Sigo?`)) return;
-  const resumen=pend.map(p=>`${p.rep?"REEMPLAZAR":"Registrar"} OF ${p.of} · ${p.art}${p.pre?" · "+p.pre:""} · ${Math.round(p.total)} und`).join("\n");
+  const resumen=pend.map(p=>`${p.rep?"REEMPLAZAR":"Registrar"} OF ${p.of} · ${p.art}${p.pre?" · "+p.pre:""} · ${det2paq(p.det)} paq · ${Math.round(p.total)} und${p.nAv?` · ${p.nAv} aviso(s) revisado(s)`:""}`).join("\n");
   if(!confirm(`¿Escribir ${pend.length} OF?\n\n${resumen}${omit.length?`\n\nSe omiten (ya registradas): ${omit.join(", ")}`:""}`)) return;
 
   const lineas=[];
