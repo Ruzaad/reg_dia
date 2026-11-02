@@ -7562,7 +7562,7 @@ function ccPintar(){
     if(a.tipo==="ACABADO") return ccCardAcab(a,sim.llega,pp);
     return "";
   }).join("");
-  const sinBase=areas.filter(a=>a.tipo==="SIN_BASE");
+  const sinBase=areas.filter(a=>a.tipo==="SIN_BASE" && a.area!=="UDP");   // UDP se mapea pero no es dato
   const cardSin=sinBase.length?`<div class="cc-card g"><div class="cc-t">Sin BASE · personas activas</div>
     <div class="cc-n cc-nm">No medible</div>
     <div class="cc-dat">${sinBase.map(a=>`<span>${esc(a.area)}</span><b>${a.activos}${a.prestados_aqui?` + ${a.prestados_aqui} de ACABADO`:""}</b>`).join("")}</div>
