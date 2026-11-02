@@ -25,6 +25,7 @@ async function pcpCargar(){
   try{
     const r=await rpc("fn_pcp_resumen",{p_dni:ING.dni,p_token:ING.token,p_mes:mes});
     if(!r || !r.ok){ box.innerHTML=`<div class="acf-falta">${esc((r&&r.error)||"Error")}</div>`; return; }
+    r.areas=(r.areas||[]).filter(a=>a.area!=="UDP");   // UDP se mapea pero no es dato de PCP
     PCP.r=r; PCP.mes=mes;
     { const u=$("pcpUrl"), c=(r.cargas||{}).CORTE; if(u && !u.value && c && /^https?:/.test(c.archivo||"")) u.value=c.archivo; }
     $("pcpCargas").hidden=!r.puede_editar;
