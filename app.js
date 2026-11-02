@@ -310,11 +310,22 @@ function sesionVencida(){
       sessionStorage.removeItem("stx_sesion"); sessionStorage.removeItem("stx_volver_ing");
       if(!localStorage.getItem("stx_sesion") && prev!=="1") localStorage.setItem("stx_sesion", prev);
       setTimeout(()=>location.href="ingenieria.html", 1500); return; } }catch(e){}
-  try{ _ses().removeItem("stx_sesion"); }catch(e){}
-  try{ mostrarError("Tu sesión venció. Vuelve a ingresar."); }catch(e){}
-  setTimeout(cerrarSesion, 1200);
+  /* Antes llamaba a cerrarSesion(), que veía _cerrandoSesion ya en true y no
+     hacía nada: quedaba el aviso y había que recargar a mano. */
   _cerrandoSesion = true;
+  try{ _ses().removeItem("stx_sesion"); }catch(e){}
+  try{ sessionStorage.removeItem("stx_volver_ing"); }catch(e){}
+  try{ mostrarError("Tu sesión venció. Vuelve a ingresar."); }catch(e){}
+  setTimeout(()=>location.replace("index.html"), 1200);
 }
+/* Pantalla abierta (o PWA en segundo plano) mientras vence la sesión: al volver
+   a ella va sola al ingreso, sin esperar a que falle una consulta. */
+function revisarSesionAlVolver(){
+  if(_cerrandoSesion || !["operario","supervisora","ingenieria"].includes(document.body.dataset.pagina)) return;
+  if(!sesionActual()) sesionVencida();
+}
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") revisarSesionAlVolver(); });
+window.addEventListener("pageshow",e=>{ if(e.persisted) revisarSesionAlVolver(); });
 /* Si se entró como operario o como supervisora DESDE ingeniería, botón de vuelta.
    La sesión de ingeniería sigue en localStorage; solo se suelta la prestada. */
 function botonVolverIng(){
