@@ -2556,14 +2556,51 @@ function dbEfPintar(){
   $("dbEfTabla").innerHTML=thead+tb+"</tbody>";
 }
 
-/* --- Cantidad por área --- */
+/* --- Cantidad por área (parche 162: penúltima operación, por prenda) --- */
 async function cargarDbCant(){
   dbEnsureFp(); const o=DB.cantSel; if(!o.desde||!o.hasta){ mostrarError("Elige el rango"); return; }
+  pintarCargando($("dbCantTabla"),"Calculando…");
   try{
-    const r=await rpc("fn_cantidad_areas",{p_dni:ING.dni,p_token:ING.token,p_desde:o.desde,p_hasta:o.hasta});
-    if(!r.ok){ mostrarError(r.error||"Error"); return; }
-    const a=r.areas||[]; dbBar("dbCantChart", a.map(x=>x.area), a.map(x=>x.cantidad), "Cantidad", a.map((_,i)=>DBCOL(i)), false);
-  }catch(e){ mostrarError(e.message); }
+    // Sin el parche 162 en la base, cae al reporte viejo (última operación).
+    let r=await rpc("fn_cantidad_penultima",{p_dni:ING.dni,p_token:ING.token,p_desde:o.desde,p_hasta:o.hasta})
+      .catch(e=>{ if(/Could not find|schema cache/i.test(e.message)) return {ok:false,_falta:true}; throw e; });
+    if(r && r._falta){
+      r=await rpc("fn_cantidad_areas",{p_dni:ING.dni,p_token:ING.token,p_desde:o.desde,p_hasta:o.hasta}); r.nivel="ultima";
+    }
+    if(!r.ok){ mostrarError(r.error||"Error"); $("dbCantTabla").innerHTML=""; return; }
+    DB.cant=r; DB.cantAbiertas=DB.cantAbiertas||new Set();
+    const a=r.areas||[];
+    $("dbCantTit").textContent="Cantidad producida por área · "+(r.nivel==="penultima"?"penúltima operación":"última operación");
+    dbBar("dbCantChart", a.map(x=>x.area), a.map(x=>x.cantidad), "Cantidad", a.map((_,i)=>DBCOL(i)), false);
+    dbCantPintar();
+  }catch(e){ $("dbCantTabla").innerHTML=""; mostrarError(e.message); }
+}
+function dbCantToggle(k){ const s=DB.cantAbiertas; s.has(k)?s.delete(k):s.add(k); dbCantPintar(); }
+function dbCantPintar(){
+  const r=DB.cant, z=$("dbCantTabla"); if(!r||!z) return;
+  const a=r.areas||[], ab=DB.cantAbiertas, tot=a.reduce((s,x)=>s+(+x.cantidad||0),0);
+  const dm=f=>String(f||"").split("-").reverse().join("/");
+  $("dbCantRes").textContent=`· ${dm(DB.cantSel.desde)} a ${dm(DB.cantSel.hasta)}`;
+  if(!a.length){ z.innerHTML=`<tbody><tr><td><div class="vacio-msg">Sin producción en el rango</div></td></tr></tbody>`; return; }
+  const fl=(on)=>on?"\u25BE":"\u25B8", pc=n=>tot?Math.round(n/tot*1000)/10+"%":"—";
+  // data-dyn: sin el orden automático de dinamico.js, que mezclaría prendas y artículos.
+  let h=`<thead><tr data-dyn="1"><th class="izq">Área / prenda / artículo</th><th>Cantidad</th><th>% del total</th></tr></thead><tbody>`;
+  a.forEach(x=>{
+    const ka="a|"+x.area, oa=ab.has(ka), pr=x.prendas||[];
+    h+=`<tr class="grupo-area" style="cursor:pointer" onclick="dbCantToggle('${esc(ka.replace(/'/g,""))}')">
+      <td class="izq"><b>${fl(oa)} ${esc(x.area)}</b>${pr.length?` <span class="sub">· ${pr.length} prenda(s)</span>`:""}</td>
+      <td style="text-align:center"><b>${qtyI(x.cantidad)}</b></td><td style="text-align:center">${pc(x.cantidad)}</td></tr>`;
+    if(oa && !pr.length) h+=`<tr><td class="izq" colspan="3"><span class="sub">Sin detalle por prenda (falta correr el parche 162)</span></td></tr>`;
+    if(oa) pr.forEach(p=>{
+      const kp="p|"+x.area+"|"+p.prenda, op=ab.has(kp), ar=p.articulos||[];
+      h+=`<tr style="cursor:pointer" onclick="dbCantToggle('${esc(kp.replace(/'/g,""))}')">
+        <td class="izq" style="padding-left:28px;">${fl(op)} ${esc(p.prenda)} <span class="sub">· ${ar.length} artículo(s)</span></td>
+        <td>${qtyI(p.cantidad)}</td><td>${pc(p.cantidad)}</td></tr>`;
+      if(op) h+=ar.map(t=>`<tr><td class="izq sub" style="padding-left:52px;">${esc(t.articulo)}</td><td class="sub">${qtyI(t.cantidad)}</td><td></td></tr>`).join("");
+    });
+  });
+  h+=`<tr class="grupo-area"><td class="izq"><b>TOTAL</b></td><td style="text-align:center"><b>${qtyI(tot)}</b></td><td style="text-align:center">100%</td></tr></tbody>`;
+  z.innerHTML=h;
 }
 
 /* --- Minutos por módulo --- */
@@ -5989,7 +6026,7 @@ async function cargarBases(){
   try{
     const [b] = await Promise.all([
       rpc("fn_bases_listar",{p_dni:ING.dni,p_token:ING.token,p_area:$("areaBase").value}),
-      ultimasArea($("areaBase").value)]);
+      ultimasArea($("areaBase").value), ultimasPrendaArea($("areaBase").value)]);
     BASE = b;
     BASES_CACHE[$("areaBase").value] = BASE;
     BASE_MAP={}; BASE.forEach(b=>BASE_MAP[b.id]=b);
@@ -6043,12 +6080,13 @@ function pintarBases(){
   const flecha = k => baseSort.col===k ? (baseSort.dir===1?" \u25B2":" \u25BC") : "";
   // Final = mayor N°OP del artículo (⭐ dorada); penúltima = 2º mayor (estrella plateada).
   const finalPorArt = calcularFinalesBase(BASE, ULT_CACHE[$("areaBase").value]);
+  const ultPrenda = ULTP_CACHE[$("areaBase").value]||{};   // parche 162: artículos con varias prendas
   const thead = "<thead><tr>"+BASE_COLS.map(c=>
     `<th class="ord${c.k==='operacion'?' izq':''}" onclick="ordenarBase('${c.k}')">${c.t}${flecha(c.k)}</th>`).join("")
     +"<th></th></tr></thead>";
   $("tablaBases").innerHTML = thead + "<tbody>"+
     lista.map(b=>{
-      const f=finalPorArt[normKey(b.articulo)]||{};
+      const f=ultPrenda[normKey(b.articulo)+"|"+normKey(b.prenda)]||finalPorArt[normKey(b.articulo)]||{};
       const n=Number(b.n_op);
       const fija=f.manual?" (elegida por Ingeniería)":"";
       const estrella = (f.n1!=null && n===f.n1)
@@ -6096,59 +6134,107 @@ function calcularFinalesBase(filas, ult){
   return res;
 }
 
-/* ---- Última y penúltima por artículo (parche 125) ----
+/* ---- Última y penúltima por artículo (parche 125) y por prenda (parche 162) ----
    Por defecto: mayor N°OP y el siguiente. El analista puede fijar otra
-   operación; cuenta en Tickets, Reporte de hoy, Costos y Avance del área. */
-function abrirModalUltimas(){
+   operación; cuenta en Tickets, Reporte de hoy, Costos y Avance del área.
+   Si el artículo trae dos prendas en la BASE (p. ej. TE4563 con SACO y
+   PANTALON en ACABADO) se elige una última y una penúltima por prenda. */
+let ULTP_CACHE={};
+async function ultimasPrendaArea(a){
+  try{
+    const r=await rpc("fn_ultimas_prenda_area",{p_dni:ING.dni,p_token:ING.token,p_area:a});
+    const m={}; (Array.isArray(r)?r:[]).forEach(u=>{ m[normKey(u.articulo)+"|"+normKey(u.prenda)]=u; });
+    ULTP_CACHE[a]=m;
+  }catch(e){ ULTP_CACHE[a]=null; }   // null = sin parche 162: todo va por artículo
+  return ULTP_CACHE[a];
+}
+async function abrirModalUltimas(){
   const area=$("areaBase").value;
   if(!(BASE||[]).length){ mostrarError("Carga una base primero"); return; }
   abrirModal(`<h2>Última y penúltima operación · ${esc(area)}</h2>
     <div class="sub" style="margin-bottom:12px;">Por defecto es el mayor N°OP y el siguiente. Cambia la operación cuando
-      la que cierra el balance de un artículo sea otra; cuenta en Tickets, Reporte de hoy, Costos y Avance del área.</div>
-    <div class="fila-filtros"><input type="text" id="ultBuscar" placeholder="Filtrar artículo…" oninput="pintarUltimas()"
-      value="${esc(($("fArt")||{}).value||"")}"></div>
+      la que cierra el balance sea otra; cuenta en Tickets, Reporte de hoy, Costos, Avance del área y Dashboards.
+      Si el artículo trae dos prendas, se elige por prenda. Escribe en el cuadro para buscar la operación; vacío = automática.</div>
+    <div class="fila-filtros"><input type="text" id="ultBuscar" placeholder="Filtrar artículo, prenda, cliente o módulo…" oninput="pintarUltimas()" style="width:min(420px,100%);"></div>
+    <div class="sub" id="ultResumen" style="margin:6px 0;"></div>
     <div class="tabla-scroll pv-tabla" id="ultTabla"></div>
     <div class="modal-acciones"><button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CERRAR</button></div>`,"modal-ancho");
+  if(ULTP_CACHE[area]===undefined){ pintarCargando($("ultTabla"),"Cargando…"); await ultimasPrendaArea(area); }
   pintarUltimas();
+}
+/* Filas del modal: los artículos que se ven en pantalla con los filtros de
+   Bases (y el del modal); una fila por prenda si el artículo trae varias. */
+function ultFilas(area){
+  const conPrenda=ULTP_CACHE[area]!=null;
+  const todas={}, prendas={};
+  (BASE||[]).forEach(b=>{ if(!(Number(b.n_op)>0)) return; const k=normKey(b.articulo);
+    (todas[k]=todas[k]||[]).push(b); (prendas[k]=prendas[k]||new Set()).add(normKey(b.prenda)); });
+  const fb=normKey(($("ultBuscar")||{}).value||""), filas={};
+  basesFiltradas().forEach(b=>{
+    const k=normKey(b.articulo); if(!todas[k]) return;
+    if(fb && ![b.articulo,b.prenda,b.cliente,b.modulo].some(v=>normKey(v).includes(fb))) return;
+    const multi=conPrenda && prendas[k].size>1, pk=multi?normKey(b.prenda):"";
+    const id=k+"|"+pk; if(filas[id]) return;
+    filas[id]={id,k,pk,multi,art:norm(b.articulo),prenda:multi?norm(b.prenda):[...new Set(todas[k].map(x=>norm(x.prenda)))].join(" / "),
+      ops:todas[k].filter(x=>!multi||normKey(x.prenda)===pk).sort((x,y)=>Number(y.n_op)-Number(x.n_op))};
+  });
+  return Object.values(filas).sort((a,b)=>a.art.localeCompare(b.art,"es",{numeric:true})||a.prenda.localeCompare(b.prenda));
 }
 function pintarUltimas(){
   const z=$("ultTabla"); if(!z) return;
-  const area=$("areaBase").value, ult=ULT_CACHE[area]||{}, fb=normKey(($("ultBuscar")||{}).value||"");
-  const porArt={};
-  (BASE||[]).forEach(b=>{ const k=normKey(b.articulo); if(Number(b.n_op)>0) (porArt[k]=porArt[k]||{art:norm(b.articulo),ops:[]}).ops.push(b); });
-  const arts=Object.keys(porArt).filter(k=>!fb||k.includes(fb)).sort((a,b)=>porArt[a].art.localeCompare(porArt[b].art,"es",{numeric:true}));
-  if(!arts.length){ z.innerHTML=`<div class="vacio-msg">Sin artículos</div>`; return; }
-  const nom=(ops,n)=>{ const o=ops.find(b=>Number(b.n_op)===Number(n)); return o?`N°${n} · ${norm(o.operacion)}`:(n==null?"—":`N°${n}`); };
-  const sel=(k,cual,ops,auto,actual,manual)=>`<select id="ult${cual}_${esc(k)}" onchange="guardarUltima('${esc(k)}')">
-      <option value="">Automática · ${esc(nom(ops,auto))}</option>
-      ${ops.map(b=>`<option value="${Number(b.n_op)}"${manual&&Number(b.n_op)===Number(actual)?" selected":""}>N°${Number(b.n_op)} · ${esc(norm(b.operacion))}</option>`).join("")}
-    </select>`;
-  z.innerHTML=`<table class="tabla"><thead><tr><th class="izq">Artículo</th><th class="izq">Última operación</th>
+  const area=$("areaBase").value, ult=ULT_CACHE[area]||{}, ultp=ULTP_CACHE[area]||{};
+  const filas=ultFilas(area);
+  const nArt=new Set(filas.map(f=>f.k)).size;
+  $("ultResumen").textContent=`${nArt} artículo(s) de los que se ven en Bases`+(filas.some(f=>f.multi)?` · ${filas.filter(f=>f.multi).length} fila(s) por prenda`:"");
+  if(!filas.length){ z.innerHTML=`<div class="vacio-msg">Sin artículos con esos filtros</div>`; return; }
+  const txt=b=>`N°${Number(b.n_op)} · ${norm(b.operacion)}`;
+  const nom=(ops,n)=>{ const o=ops.find(b=>Number(b.n_op)===Number(n)); return o?txt(o):(n==null?"—":`N°${n}`); };
+  const caja=(f,i,cual,auto,actual,fija)=>{
+    const o=fija?f.ops.find(b=>Number(b.n_op)===Number(actual)):null;
+    return `<input type="text" class="ult-op" id="ult${cual}_${i}" list="ultL_${i}" autocomplete="off" style="width:100%;min-width:260px;min-height:36px;padding:6px 10px;"
+      placeholder="Automática · ${esc(nom(f.ops,auto))}" value="${o?esc(txt(o)):""}" data-ini="${o?esc(txt(o)):""}"
+      onfocus="this.select()" onchange="guardarUltima(${i})">`;
+  };
+  ULT_FILAS=filas;
+  z.innerHTML=`<table class="tabla"><thead><tr><th class="izq">Artículo</th><th class="izq">Prenda</th><th class="izq">Última operación</th>
       <th class="izq">Penúltima operación</th><th></th></tr></thead><tbody>`
-    + arts.map(k=>{
-        const ops=[...porArt[k].ops].sort((a,b)=>Number(b.n_op)-Number(a.n_op));
-        const nops=[...new Set(ops.map(b=>Number(b.n_op)))];
-        const u=ult[k]||{n1:nops[0],n2:nops[1]??null,auto1:nops[0],auto2:nops[1]??null,manual:false};
+    + filas.map((f,i)=>{
+        const nops=[...new Set(f.ops.map(b=>Number(b.n_op)))];
+        const def={n1:nops[0],n2:nops[1]??null,auto1:nops[0],auto2:nops[1]??null,manual:false};
+        const u=(f.multi?ultp[f.id]:ult[f.k])||def;
         const mu=!!u.fija1, mp=!!u.fija2;   // el "Automática" de la penúltima es el N°OP bajo la última vigente
-        return `<tr><td class="izq"><b>${esc(porArt[k].art)}</b></td>
-          <td class="izq">${sel(k,"U",ops,u.auto1,u.n1,mu)}</td>
-          <td class="izq">${sel(k,"P",ops,mp?(nops.find(n=>n<u.n1)??null):u.n2,u.n2,mp)}</td>
+        return `<tr><td class="izq"><b>${esc(f.art)}</b></td><td class="izq">${esc(f.prenda)}${f.multi?` <span class="pill">por prenda</span>`:""}</td>
+          <td class="izq">${caja(f,i,"U",u.auto1,u.n1,mu)}</td>
+          <td class="izq">${caja(f,i,"P",mp?(nops.find(n=>n<u.n1)??null):u.n2,u.n2,mp)}</td>
           <td>${u.manual?`<span class="sub" title="${esc((u.por||"")+" "+(u.cuando||""))}">Elegida</span>
-            <button class="btn-mini gris" onclick="guardarUltima('${esc(k)}',true)">↺ Automática</button>`:`<span class="sub">Automática</span>`}</td></tr>`;
+            <button class="btn-mini gris" onclick="guardarUltima(${i},true)">↺ Automática</button>`:`<span class="sub">Automática</span>`}
+          <datalist id="ultL_${i}">${f.ops.map(b=>`<option value="${esc(txt(b))}">`).join("")}</datalist></td></tr>`;
       }).join("") + "</tbody></table>";
 }
-async function guardarUltima(k, auto){
-  const area=$("areaBase").value;
-  const art=(BASE||[]).find(b=>normKey(b.articulo)===k);
-  if(!art) return;
-  const v=id=>{ const e=$(id); return auto||!e||e.value===""?null:Number(e.value); };
+let ULT_FILAS=[];
+async function guardarUltima(i, auto){
+  const area=$("areaBase").value, f=ULT_FILAS[i];
+  if(!f) return;
+  let malo=false;
+  const v=id=>{ const e=$(id); if(auto||!e||!e.value.trim()) return null;
+    const m=e.value.match(/N°\s*(\d+)/), n=m?Number(m[1]):Number(e.value.trim());
+    if(!f.ops.some(b=>Number(b.n_op)===n)){ malo=true; return null; }
+    return n; };
+  const igual=id=>{ const e=$(id); return !e||e.value.trim()===(e.dataset.ini||""); };
+  if(!auto && igual("ultU_"+i) && igual("ultP_"+i)) return;
+  const nu=v("ultU_"+i), np=v("ultP_"+i);
+  if(malo){ mostrarError("Elige una operación de la lista (escribe parte del nombre o el N°)"); pintarUltimas(); return; }
+  const quien=norm(f.art)+(f.multi?` · ${f.prenda}`:"");
   try{
-    const r=await rpc("fn_ultimas_guardar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:art.articulo,
-      p_nop_ultima:v("ultU_"+k), p_nop_penultima:v("ultP_"+k)});
+    const r=f.multi
+      ? await rpc("fn_ultimas_prenda_guardar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:f.ops[0].articulo,
+          p_prenda:f.ops[0].prenda,p_nop_ultima:nu,p_nop_penultima:np})
+      : await rpc("fn_ultimas_guardar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:f.ops[0].articulo,
+          p_nop_ultima:nu,p_nop_penultima:np});
     if(!r||!r.ok){ mostrarError((r&&r.error)||"No se pudo guardar"); }
-    else mostrarOk(r.manual?`${norm(art.articulo)}: última y penúltima guardadas`:`${norm(art.articulo)}: vuelve a la regla del N°OP`);
+    else mostrarOk(r.manual?`${quien}: última y penúltima guardadas`:`${quien}: vuelve a la regla del N°OP`);
   }catch(e){ mostrarError(e.message); }
-  await ultimasArea(area);
+  await Promise.all([ultimasArea(area), ultimasPrendaArea(area)]);
   pintarUltimas(); pintarBases();
 }
 /* MAX OP. no lleva input a propósito: lo recalcula `_base_resecuenciar` en la

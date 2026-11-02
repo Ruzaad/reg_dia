@@ -362,10 +362,10 @@ body[data-pagina="login"] .pantalla{width:100%;}
 .barra-control{background:var(--sup);border:1px solid var(--linea);border-radius:var(--r);box-shadow:var(--sombra-1);padding:12px 14px;gap:12px;}
 .barra-control .campo>span{font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--suave);}
 .barra-control select,.barra-control input[type=text],.barra-control input[type=month],.barra-control input[type=url],.barra-control input[type=date],.barra-control input[type=number],
-.fila-filtros input[type=text],.fila-filtros input[type=date],.fila-filtros input[type=month],.fila-filtros select{
+.fila-filtros input[type=text],.fila-filtros input[type=date],.fila-filtros input[type=month],.fila-filtros select,input.ult-op{
   background:var(--sup);border:1px solid var(--linea);border-radius:var(--r-s);font-size:14px;font-weight:500;min-height:40px;
   padding:8px 11px;color:var(--texto);transition:border-color .15s,box-shadow .15s;}
-.barra-control select:focus,.barra-control input:not(.sw):not(.chk-lib):focus,.fila-filtros input:focus,.fila-filtros select:focus{
+.barra-control select:focus,.barra-control input:not(.sw):not(.chk-lib):focus,.fila-filtros input:focus,.fila-filtros select:focus,input.ult-op:focus{
   border-color:var(--enlace);box-shadow:0 0 0 3px rgba(13,33,119,.12);}
 .barra-control .btn-mini{min-height:40px;}
 .barra-control .campo-check{background:var(--sup);border:1px solid var(--linea);min-height:40px;}

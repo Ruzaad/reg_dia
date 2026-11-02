@@ -727,7 +727,12 @@
           <label class="campo"><span>Rango</span><input type="text" id="dbCantRango" placeholder="Selecciona fechas" readonly style="min-width:200px;cursor:pointer;"></label>
           <button class="btn-mini" onclick="cargarDbCant()">Cargar</button>
         </div>
-        <div class="kpi per-chart"><div class="tk-ops-title">Cantidad producida por área</div><div class="grafico-box"><canvas id="dbCantChart"></canvas></div></div>
+        <div class="kpi per-chart"><div class="tk-ops-title" id="dbCantTit">Cantidad producida por área · penúltima operación</div><div class="grafico-box"><canvas id="dbCantChart"></canvas></div></div>
+        <div class="kpi per-chart" style="margin-top:14px;">
+          <div class="tk-ops-title">Resumen por área y prenda <span class="sub" id="dbCantRes"></span></div>
+          <div class="sub" style="margin-bottom:6px;">Toca un área para ver sus prendas, y una prenda para ver sus artículos.</div>
+          <div class="contenedor-ancho tabla-scroll" style="max-height:60vh;"><table class="tabla" id="dbCantTabla"></table></div>
+        </div>
       </div>
 
       <!-- Minutos por módulo -->
