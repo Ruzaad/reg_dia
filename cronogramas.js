@@ -6,7 +6,7 @@
      · acabado: lo que costura entrega en su penúltima operación, por línea
        (Camisería, Saco, Pantalón), contra lo hecho y la capacidad de ACABADO.
    ===================================================================== */
-let CRO={modo:"real", r:null, sub:"", q:""};
+let CRO={modo:"real", r:null, sub:"", q:"", med:"min"};
 const CRO_SUB={CAMISERIA:"Camisería",SACO:"Saco",PANTALON:"Pantalón",OTRO:"Sin línea"};
 const CRO_EST={DISPONIBLE:["ok","Disponible"],INCOMPLETO:["warn","Incompleto"],"SIN CORTE":["gris","Sin corte"]};
 
@@ -65,13 +65,19 @@ function croPintar(){
     <tbody>${filas||`<tr><td colspan="10" class="tenue">Sin OF con corte o programa en estas fechas.</td></tr>`}</tbody></table></div></section>`;
 
   const S=r.semanas||[], subs=["CAMISERIA","SACO","PANTALON"], sum=o=>Object.values(o||{}).reduce((a,b)=>a+(+b||0),0);
-  const semFilas=S.map(s=>`<tr><th scope="row">${pcpDM(s.ini)} – ${pcpDM(s.fin)}</th>${subs.map(k=>`<td class="num">${pcpN((s.llega||{})[k])}</td>`).join("")}
-      <td class="num"><b>${pcpN(sum(s.llega))}</b></td><td class="num">${pcpN(sum(s.hecho))}</td><td class="num">${pcpN(s.capacidad)}</td>
+  const pre=CRO.med==="pre", rt=croRatio(S);
+  const L=(s,k)=>pre?((s.prendas||{})[k]):((s.llega||{})[k]);
+  const H=s=>pre?(rt?Math.round(sum(s.hecho)/rt):null):sum(s.hecho), P=s=>pre?(rt?Math.round(s.capacidad/rt):null):s.capacidad;
+  const T=s=>pre?sum(s.prendas):sum(s.llega), v=x=>x==null?"—":pcpN(x);
+  const semFilas=S.map(s=>`<tr><th scope="row">${pcpDM(s.ini)} – ${pcpDM(s.fin)}</th>${subs.map(k=>`<td class="num">${pcpN(L(s,k))}</td>`).join("")}
+      <td class="num"><b>${pcpN(T(s))}</b></td><td class="num">${v(H(s))}</td><td class="num">${v(P(s))}</td>
       <td class="num ${s.capacidad&&sum(s.llega)<s.capacidad*.8?"rojo":""}">${s.capacidad?Math.round(sum(s.llega)/s.capacidad*100)+" %":"—"}</td></tr>`).join("");
-  const acab=`<section class="pcp-card"><div class="pcp-h"><h2>Acabado: carga por semana</h2></div>
+  const med=`<div class="gt-med" role="group" aria-label="Medir en">${[["min","Minutaje"],["pre","Prendas"]].map(([k,t])=>`<button type="button" class="btn-mini ${CRO.med===k?"":"gris"}" aria-pressed="${CRO.med===k}" onclick="croMedir('${k}')">${t}</button>`).join(" ")}</div>`;
+  const acab=`<section class="pcp-card"><div class="pcp-h"><h2>Acabado: carga por semana</h2>${med}</div>
     <div class="pcp-graf"><canvas id="croGSem" role="img" aria-label="Carga semanal de acabado"></canvas></div>
-    <div class="tabla-scroll"><table class="tabla pcp-tabla"><thead><tr><th>Semana</th>${subs.map(k=>`<th class="num">Llega ${CRO_SUB[k]}</th>`).join("")}<th class="num">Llega total</th><th class="num">Hecho</th><th class="num">Capacidad</th><th class="num">Carga</th></tr></thead>
-    <tbody>${semFilas}</tbody></table></div></section>`;
+    <div class="tabla-scroll"><table class="tabla pcp-tabla"><thead><tr><th>Semana</th>${subs.map(k=>`<th class="num">Llega ${CRO_SUB[k]}</th>`).join("")}<th class="num">Llega total</th><th class="num">Hecho${pre?" (equiv.)":""}</th><th class="num">Capacidad${pre?" (equiv.)":""}</th><th class="num">Carga</th></tr></thead>
+    <tbody>${semFilas}</tbody></table></div>
+    ${pre?`<div class="sub rep-pie">Llega = prendas que salen de costura en la penúltima operación. Hecho y capacidad en prendas equivalentes (minutos ÷ minutos por prenda de lo que llega).</div>`:""}</section>`;
 
   $("croReal").innerHTML=corte+acab+`<section class="pcp-card" id="croSecGantt"></section>`;
   croGantt(); croGrafico();
@@ -80,15 +86,23 @@ function croFiltrar(v){
   const q=String(v||"").trim().toLowerCase();
   document.querySelectorAll("#croTabCorte tbody tr[data-q]").forEach(f=>{ f.hidden=!!q && !f.dataset.q.includes(q); });
 }
+/* Minutos por prenda de lo que llega (para pasar hecho y capacidad a prendas equivalentes). */
+function croRatio(S){
+  const sum=o=>Object.values(o||{}).reduce((a,b)=>a+(+b||0),0);
+  const m=S.reduce((a,s)=>a+sum(s.llega),0), p=S.reduce((a,s)=>a+sum(s.prendas),0);
+  return p>0&&m>0 ? m/p : null;
+}
+function croMedir(k){ CRO.med=k; croPintar(); }
 function croGrafico(){
-  const S=CRO.r.semanas||[], su=pcpColor("--suave");
+  const S=CRO.r.semanas||[], su=pcpColor("--suave"), pre=CRO.med==="pre", rt=croRatio(S);
   const col={CAMISERIA:pcpColor("--azul"),SACO:pcpColor("--exito"),PANTALON:pcpColor("--dorado")};
   const sum=o=>Object.values(o||{}).reduce((a,b)=>a+(+b||0),0);
+  const ll=(s,k)=>(pre?(s.prendas||{}):(s.llega||{}))[k]||0, cv=m=>pre?(rt?Math.round(m/rt):null):m;
   pcpGrafico("croGSem",{type:"bar",data:{labels:S.map(s=>`${pcpDM(s.ini)}–${pcpDM(s.fin)}`),datasets:[
-    ...["CAMISERIA","SACO","PANTALON"].map(k=>({label:"Llega "+CRO_SUB[k],data:S.map(s=>(s.llega||{})[k]||0),backgroundColor:col[k],stack:"l",order:3})),
-    {type:"line",label:"Hecho en acabado",data:S.map(s=>sum(s.hecho)),borderColor:pcpColor("--texto"),backgroundColor:pcpColor("--texto"),pointRadius:3,borderWidth:2,order:1},
-    {type:"line",label:"Capacidad",data:S.map(s=>s.capacidad),borderColor:su,backgroundColor:su,borderDash:[6,4],pointRadius:0,borderWidth:2,order:2}]},
-    options:{scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,title:{display:true,text:"minutos",color:su}}}}});
+    ...["CAMISERIA","SACO","PANTALON"].map(k=>({label:"Llega "+CRO_SUB[k],data:S.map(s=>ll(s,k)),backgroundColor:col[k],stack:"l",order:3})),
+    {type:"line",label:"Hecho en acabado",data:S.map(s=>cv(sum(s.hecho))),borderColor:pcpColor("--texto"),backgroundColor:pcpColor("--texto"),pointRadius:3,borderWidth:2,order:1},
+    {type:"line",label:"Capacidad",data:S.map(s=>cv(s.capacidad)),borderColor:su,backgroundColor:su,borderDash:[6,4],pointRadius:0,borderWidth:2,order:2}]},
+    options:{scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,title:{display:true,text:pre?"prendas":"minutos",color:su}}}}});
 }
 function croSubFiltro(s){ CRO.sub=s; croGantt(); }
 function croGantt(){
@@ -110,5 +124,5 @@ function croGantt(){
         ${barra("gt-cos",x.acab_ini,x.acab_fin,`Acabado ${pcpDM(x.acab_ini)} – ${pcpDM(x.acab_fin)} · ${pcpN(x.hecho)} min${p!=null?" ("+p+" %)":""}`,p!=null?p+" %":"",p)}</div></div>`; }).join("");
   box.innerHTML=cab+`<div class="gt-leyenda"><span><i class="gt-k corte"></i>Llega de costura</span><span><i class="gt-k cos"></i>Acabado (relleno = % hecho)</span><span><i class="gt-k hoy"></i>Hoy</span></div>
     <div class="gt-scroll"><div class="gt" style="--n:${n}"><div class="gt-f gt-h"><div class="gt-l">OF · artículo</div><div class="gt-g gt-eje">${ticks.map(d=>`<span style="left:${pos(d)}%">${pcpDM(pcpIso(d))}</span>`).join("")}</div></div>
-      <div class="gt-cuerpo">${filas}${hoy>=a&&hoy<=b?`<div class="gt-hoy" style="left:${pos(hoy+.5)}%"></div>`:""}</div></div></div>`;
+      <div class="gt-cuerpo">${filas}${hoy>=a&&hoy<=b?`<div class="gt-hoy" style="--p:${pos(hoy+.5)}" title="Hoy"></div>`:""}</div></div></div>`;
 }

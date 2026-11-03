@@ -202,7 +202,7 @@ function pcpGanttHTML(r){
       <span><i class="gt-k cos"></i>Costura programada (relleno = avance)</span><span><i class="gt-k hoy"></i>Hoy</span></div>
     <div class="gt-bar"><input type="search" class="gt-filtro" id="gtFiltro" placeholder="Filtrar por OF, artículo o cliente" oninput="pcpGanttFiltrar(this.value)" aria-label="Filtrar el Gantt"><span id="gtCuenta">${g.length} OF</span></div>
     <div class="gt-scroll"><div class="gt" style="--n:${n}"><div class="gt-f gt-h"><div class="gt-l">OF · artículo</div><div class="gt-g gt-eje">${head}</div></div>
-      <div class="gt-cuerpo">${filas}<div class="gt-hoy" style="left:${pos(hoy+.5)}%" title="Hoy ${pcpDM(r.hoy)}"></div></div></div></div></section>`;
+      <div class="gt-cuerpo">${filas}<div class="gt-hoy" style="--p:${pos(hoy+.5)}" title="Hoy ${pcpDM(r.hoy)}"></div></div></div></div></section>`;
 }
 
 if(typeof module!=="undefined") module.exports={pcpParsearCronograma};

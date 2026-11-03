@@ -1889,14 +1889,14 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .gt-leyenda span{display:inline-flex;align-items:center;gap:7px;}
 .gt-k{display:inline-block;width:22px;height:10px;border-radius:3px;}
 .gt-k.corte{background:var(--azul);} .gt-k.cos{background:var(--dorado);} .gt-k.real{background:var(--exito);height:4px;} .gt-k.hoy{background:var(--alerta);width:3px;height:14px;}
-.gt{min-width:760px;font-size:13px;}
-.gt-f{display:grid;grid-template-columns:230px 1fr;align-items:stretch;border-bottom:1px solid var(--linea-2);}
+.gt{--lw:230px;min-width:760px;font-size:13px;}
+.gt-f{display:grid;grid-template-columns:var(--lw) 1fr;align-items:stretch;border-bottom:1px solid var(--linea-2);}
 .gt-h{position:sticky;top:0;background:var(--sup);z-index:2;color:var(--tenue);font-weight:600;font-size:12px;}
 .gt-l{padding:6px 10px 6px 0;color:var(--texto);line-height:1.25;} .gt-l span{display:block;color:var(--suave);font-size:11.5px;}
 .gt-g{position:relative;min-height:44px;background-image:repeating-linear-gradient(to right,var(--linea-2) 0,var(--linea-2) 1px,transparent 1px,transparent calc(100%/var(--n)));}
 .gt-eje{min-height:26px;} .gt-eje span{position:absolute;top:6px;transform:translateX(-2px);font-size:11px;color:var(--suave);white-space:nowrap;}
 .gt-cuerpo{position:relative;}
-.gt-hoy{position:absolute;top:0;bottom:0;width:2px;background:var(--alerta);z-index:3;pointer-events:none;}
+.gt-hoy{position:absolute;top:0;bottom:0;left:calc(var(--lw) + (100% - var(--lw)) * var(--p) / 100);margin-left:-1px;width:2px;background:var(--alerta);z-index:3;pointer-events:none;}
 .gt-b{position:absolute;height:16px;border-radius:4px;overflow:hidden;font-size:10.5px;font-weight:700;line-height:16px;color:var(--texto);}
 .gt-b i{position:absolute;left:0;top:0;bottom:0;}
 .gt-b span{position:relative;padding:0 5px;}
@@ -1904,7 +1904,8 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .gt-cos{top:26px;background:color-mix(in srgb,var(--dorado) 22%,transparent);border:1px solid var(--dorado);} .gt-cos i{background:color-mix(in srgb,var(--dorado) 60%,transparent);}
 .gt-real{position:absolute;top:23px;height:3px;background:var(--exito);border-radius:2px;z-index:1;}
 .gt-sin{position:absolute;left:6px;top:7px;font-size:11px;color:var(--tenue);font-style:italic;}
-@media (max-width:760px){.gt-f{grid-template-columns:150px 1fr;}}
+@media (max-width:760px){.gt{--lw:150px;}}
+.gt-med{display:inline-flex;gap:6px;}
 .nav-item[data-tab="pasoPcp"]{--ni:url("icon-pcp.png")!important;}
 .ing-nav .nav-item[data-tab="pasoPcp"]::before{opacity:1;flex-basis:20px;height:20px;}
 .pcp-chips{display:flex;gap:10px;overflow-x:auto;margin:0 0 16px;padding:2px 2px 6px;}
