@@ -6293,7 +6293,7 @@ async function guardarBasesLote(){
   if(faltan.length){ mostrarError("Artículo y operación son obligatorios: revisa las filas marcadas"); return; }
   const arts=[...new Set(cambios.map(c=>String(c.articulo).trim().toUpperCase()))];
   if(!confirm(`Se guardarán ${baseNCambios()} cambio(s) en ${cambios.length} fila(s) `
-    +`de ${arts.length} artículo(s).\nSe reescribirán sus tickets en ALMACÉN y Supabase. ¿Continuar?`)) return;
+    +`de ${arts.length} artículo(s).\nSe actualizarán sus tickets y reclamos. ¿Continuar?`)) return;
 
   const btn=$("btnGuardarLote"), inf=$("basesEditInfo");
   if(btn) btn.disabled=true;
@@ -6304,11 +6304,6 @@ async function guardarBasesLote(){
     if(r.reclamos_actualizados>0)
       mostrarOk(`${r.filas} fila(s) guardadas · ${r.reclamos_actualizados} reclamo(s) sincronizados`);
     else mostrarOk(`${r.filas} fila(s) guardadas`);
-    const sync=Array.isArray(r.articulos)&&r.articulos.length?r.articulos:arts;
-    for(let i=0;i<sync.length;i++){
-      if(inf) inf.textContent=`Sincronizando ALMACÉN ${i+1}/${sync.length}…`;
-      await sincronizarAlmacen(area, sync[i]);
-    }
     baseEdit=false; BASE_DIRTY={};
     delete BASES_CACHE[area]; delete BASE_VALORES[area];
     await cargarBases();
@@ -6549,21 +6544,16 @@ function autoMaxOp(){
   Object.keys(mapa).forEach(k=>{ if(normKey(k)===art) mx=mapa[k]; });
   if(mx!=null && $("boMaxOp")) $("boMaxOp").value = mx;
 }
-/* Reescribe el ALMACÉN (Sheet) de un artículo según la BASE, conservando los
-   códigos. Sincroniza también reclamos (fn_base_sync). Silencioso si el área
-   no tiene Sheet configurado. */
+/* Pone los reclamos de un artículo al día con la BASE (fn_base_sync). Solo hace
+   falta tras subir un Excel: editar, crear y eliminar ya sincronizan dentro de su
+   RPC. El ALMACÉN del Sheet ya no se reescribe (los tickets viven en Supabase);
+   sus datos se conservan. */
 async function sincronizarAlmacen(area, articulo){
   if(!articulo) return;
-  const cfg=AREAS[area];
   try{
     const p=await rpc("fn_base_sync",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:articulo});
-    if(!p||!p.ok) { if(p&&p.error) mostrarError("Sync BASE: "+p.error); return; }
-    if(!cfg||!cfg.sheetId) return;                 // sin Sheet: solo se sincronizó Supabase
-    if(!Array.isArray(p.mapa)||!p.mapa.length) return;
-    const r=await edgeFn(FN_GENERAR_TICKETS,{p_dni:ING.dni,p_token:ING.token,area,accion:"actualizar",articulo,mapa:p.mapa});
-    if(r&&r.ok){ if(r.actualizadas) mostrarOk(`ALMACÉN sincronizado (${r.actualizadas} fila(s)).`); }
-    else mostrarError("ALMACÉN no sincronizado: "+((r&&r.error)||"error"));
-  }catch(e){ mostrarError("Sync ALMACÉN: "+e.message); }
+    if(!p||!p.ok) { if(p&&p.error) mostrarError("Sync BASE: "+p.error); }
+  }catch(e){ mostrarError("Sync BASE: "+e.message); }
 }
 async function guardarBaseOp(id){
   const area=$("areaBase").value;
@@ -6591,7 +6581,6 @@ async function guardarBaseOp(id){
     delete BASES_CACHE[area]; delete BASE_VALORES[area];
     if(typeof r.reclamos_actualizados==="number" && r.reclamos_actualizados>0)
       mostrarOk(`Guardado · ${r.reclamos_actualizados} reclamo(s) sincronizados`);
-    await sincronizarAlmacen(area, datos.p_articulo);
     await cargarBases();
   }catch(e){ $("boMsg").textContent=e.message; }
 }
@@ -6599,7 +6588,7 @@ async function eliminarBaseOp(id, nombre, articulo){
   const area=$("areaBase").value;
   let tot=0;
   try{ const pv=await rpc("fn_base_almacen_map",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_articulo:articulo}); if(pv&&pv.ok) tot=pv.reclamos_total||0; }catch(e){}
-  if(!confirm(`¿Eliminar la operación "${nombre}"?`+(tot>0?`\nReescribirá ${tot} ticket(s) del artículo ${articulo} en ALMACÉN y Supabase.`:""))) return;
+  if(!confirm(`¿Eliminar la operación "${nombre}"?`+(tot>0?`\nActualizará ${tot} ticket(s) del artículo ${articulo}.`:""))) return;
   try{
     let r=await rpc("fn_base_op_eliminar",{p_dni:ING.dni,p_token:ING.token,p_id:id,p_confirmar:false});
     // Parche 35: si la operación tiene trabajo reclamado, se confirma aparte.
@@ -6610,7 +6599,6 @@ async function eliminarBaseOp(id, nombre, articulo){
     if(!r.ok){ mostrarError(r.error||"No se pudo eliminar"); return; }
     if(r.reclamos_sueltos>0) mostrarOk(`Eliminada · ${r.reclamos_sueltos} reclamo(s) quedaron fuera de la ruta`);
     delete BASES_CACHE[area];
-    await sincronizarAlmacen(area, articulo);
     await cargarBases();
   }catch(e){ mostrarError(e.message); }
 }
@@ -6716,7 +6704,7 @@ async function confirmarSubida(){
       p_area:area,p_filas:PENDIENTE});
     if(!r.ok){ mostrarError(r.error); return; }
     cancelarSubida();
-    // Sincroniza ALMACÉN (Sheet) + reclamos por cada artículo subido; los códigos NO cambian.
+    // Pone al día los reclamos de cada artículo subido; los códigos NO cambian.
     for(const a of arts){ await sincronizarAlmacen(area, a); }
     await cargarBases();
   }catch(e){ mostrarError(e.message); }
