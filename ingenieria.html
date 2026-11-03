@@ -1211,13 +1211,10 @@
     <section class="pantalla" id="pasoCostosHoy">
       <div class="seccion-cab">
         <h1>Reporte de hoy <span class="etq-lectura">SOLO LECTURA</span></h1>
-        <p class="seccion-sub">Todo lo que pasó por producción en el día: dónde trabajó cada persona, qué OF y artículos se hicieron
-        con su S.A.M, y las incidencias. El minutaje y la jornada van al área donde se registró el ticket.</p>
       </div>
       <div class="tabs sup-subtabs" id="chOpTabs">
-        <button class="tab activo" data-op="a" onclick="chOpcion('a')">SEGÚN EL ÁREA</button>
-        <button class="tab" data-op="u" onclick="chOpcion('u')">ÚLTIMA OPERACIÓN</button>
-        <button class="tab" data-op="p" onclick="chOpcion('p')">PENÚLTIMA OPERACIÓN</button>
+        <button class="tab activo" data-op="p" onclick="chOpcion('p')">PENÚLTIMA OPERACIÓN</button>
+        <button class="tab" data-op="c" onclick="chOpcion('c')">TRABAJO EN CURSO</button>
       </div>
       <div class="barra-control">
         <label class="campo"><span>Fecha</span><input type="date" id="chFecha" onchange="cargarCostosHoy()"></label>
@@ -1229,6 +1226,12 @@
       </div>
       <div class="kpis" id="chKpis" style="margin-bottom:14px;"></div>
 
+      <div id="chVistaCurso" hidden>
+        <div class="tk-ops-title ch-tit">Trabajo en curso</div>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:70vh;"><table class="tabla ch-t" id="chTablaCurso"></table></div>
+        <div class="sub rep-pie" id="chPieCurso"></div>
+      </div>
+      <div id="chVistaPen">
       <div class="tk-ops-title ch-tit">Por área <span class="sub" id="chSubArea"></span></div>
       <div class="contenedor-ancho tabla-scroll"><table class="tabla ch-t" id="chTablaArea"></table></div>
       <div class="sub rep-pie">«En estructura» cuenta a todos los de la estructura del mes. La jornada sigue la misma regla de la eficiencia.</div>
@@ -1249,6 +1252,7 @@
         </span></div>
       <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;"><table class="tabla ch-t" id="chTablaInc"></table></div>
       <div class="sub rep-pie" id="chPieInc"></div>
+      </div>
     </section>
 
     <section class="pantalla" id="pasoCostosInc">

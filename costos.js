@@ -398,11 +398,9 @@ async function cbDescargarXlsx(){
 /* ================= REPORTE DE HOY (parche 138) =================
    Todo lo que pasó por producción en el día. La jornada de cada persona viene
    de _disp_reparto (la regla de la eficiencia): si solo tiene tickets en otra
-   área, va completa a esa área. "Según el área" toma la penúltima operación en
-   CAMISA COSTURA y la última en el resto; cambiar la operación no vuelve a
-   pedir datos. La OF de Costos es de 10 dígitos: 4 + ceros + la OF de planta. */
-let CH={fecha:"", area:null, tk:[], ult:{}, sam:{}, per:[], est:{}, inc:[], op:"a", fInc:"sin", abiertas:new Set()};
-const CH_PENULTIMA=new Set(["CAMISA COSTURA"]);
+   área, va completa a esa área. Todas las áreas cuentan con la penúltima
+   operación; "Trabajo en curso" (parche 164) lista área › prenda › OF › módulo. La OF de Costos es de 10 dígitos: 4 + ceros + la OF de planta. */
+let CH={fecha:"", area:null, tk:[], ult:{}, sam:{}, per:[], est:{}, inc:[], op:"p", curso:[], fInc:"sin", abiertas:new Set()};
 const ofCostos = o => /^\d{1,9}$/.test(String(o||"").trim()) ? "4"+String(o).trim().padStart(9,"0") : "";
 const areaCorta = a => String(a||"").replace(" COSTURA","");
 const n0 = v => v==null||v==="" ? "" : qtyI(v);
@@ -414,7 +412,8 @@ function chInit(){
 function chOpcion(m){
   CH.op=m;
   document.querySelectorAll("#chOpTabs .tab").forEach(b=>b.classList.toggle("activo", b.dataset.op===m));
-  pintarCostosHoy();
+  $("chVistaPen").hidden=m==="c"; $("chVistaCurso").hidden=m!=="c";
+  if(m==="c") cargarCurso(); else pintarCostosHoy();
 }
 function chIncFiltro(f){
   CH.fInc=f;
@@ -434,16 +433,44 @@ async function cargarCostosHoy(){
     (r.ultimas||[]).forEach(u=>{ CH.ult[u.area+"|"+u.articulo]=u; });
     (r.sam||[]).forEach(s=>{ CH.sam[s.area+"|"+s.articulo]=Number(s.sam)||0; });
     (r.estructura||[]).forEach(e=>{ CH.est[e.area]=Number(e.personas)||0; });
-    pintarCostosHoy();
+    if(CH.op==="c") cargarCurso(); else pintarCostosHoy();
   }catch(e){
     limpiar();
     mostrarError(/Could not find the function/i.test(e.message) ? "Falta correr el parche 138 en Supabase" : e.message);
   }
 }
-function chModo(area){
-  if(CH.op==="a") return CH_PENULTIMA.has(area)?"p":"u";
-  return CH.op;
+/* Trabajo en curso: área › prenda › OF (formato Costos) › módulo › operaciones en el orden de la base. */
+async function cargarCurso(){
+  const f=$("chFecha").value, area=$("chArea").value;
+  pintarCargando($("chTablaCurso"),"Cargando…");
+  try{
+    const r=await rpc("fn_costos_en_curso",{p_dni:ING.dni,p_token:ING.token,p_fecha:f,p_area:area});
+    if(!r||!r.ok){ $("chTablaCurso").innerHTML=""; mostrarError((r&&r.error)||"No se pudo cargar"); return; }
+    CH.curso=r.items||[]; pintarCurso();
+  }catch(e){
+    $("chTablaCurso").innerHTML="";
+    mostrarError(/Could not find the function/i.test(e.message) ? "Falta correr el parche 164 en Supabase" : e.message);
+  }
 }
+function pintarCurso(){
+  if(CH.op!=="c") return;
+  const toks=String($("chBuscar").value||"").split(/\s+/).map(normKey).filter(Boolean);
+  const it=CH.curso.filter(x=>!toks.length || toks.every(k=>normKey([x.of,ofCostos(x.of),x.articulo,x.prenda,x.area,x.modulo].join(" ")).includes(k)));
+  const todas=!CH.area; let h="", ant={a:"",p:"",o:"",m:""}, nOf=0;
+  it.forEach(x=>{
+    const a=x.area||"", p=x.prenda||"", o=x.of||"", m=x.modulo||"";
+    if(todas && a!==ant.a){ h+=`<tr class="cb-sub"><td colspan="6" class="izq"><b>${esc(areaCorta(a))}</b></td></tr>`; ant={a,p:"",o:"",m:""}; }
+    if(p!==ant.p){ h+=`<tr><td colspan="6" class="izq"><span class="sub">${esc(p||"Sin prenda")}</span></td></tr>`; ant.p=p; ant.o=""; ant.m=""; }
+    if(o!==ant.o){ nOf++; h+=`<tr class="ch-fila abierta"><td class="izq" colspan="6"><div class="ch-of">${esc(ofCostos(o)||o||"(sin OF)")}<small>${esc(x.articulo||"")}${o?" · OF "+esc(o):""}</small></div></td></tr>`; ant.o=o; ant.m=""; }
+    if(m!==ant.m){ h+=`<tr><td class="izq" colspan="6"><b>Módulo ${esc(m||"—")}</b></td></tr>`; ant.m=m; }
+    h+=`<tr class="ch-op"><td class="izq">${x.nop!=null?`<span class="sub">N°${esc(x.nop)}</span>`:""}</td><td class="izq">${esc(norm(x.op)||"(sin operación)")}</td>
+      <td class="n"><b>${qtyI(Number(x.cant)||0)}</b></td><td class="n">${qty(Number(x.minutos)||0)}</td><td class="n">${x.personas}</td><td class="n">${x.tks}</td></tr>`;
+  });
+  $("chTablaCurso").innerHTML=`<thead><tr><th class="izq">N°</th><th class="izq">Operación</th><th class="n">Cantidad</th><th class="n">Min.</th><th class="n">Personas</th><th class="n">Tickets</th></tr></thead><tbody>`
+    +(h||`<tr><td colspan="6"><div class="vacio-msg">Sin tickets ese día</div></td></tr>`)+"</tbody>";
+  $("chPieCurso").textContent=it.length?`${nOf} OF`:"";
+}
+function chModo(){ return "p"; }
 /* Una fila por área + OF + artículo, con sus operaciones dentro. */
 function chOfs(){
   const grp={}; let sinNop=0, sinBase=0;
@@ -472,6 +499,7 @@ function chPersonas(){
   return Object.values(p);
 }
 function pintarCostosHoy(){
+  if(CH.op==="c"){ pintarCurso(); return; }
   const {filas, sinNop, sinBase}=chOfs();
   const pers=chPersonas(), todas=!CH.area;
   const fuera=pers.filter(p=>p.areas.some(a=>a.area!==p.est));
@@ -524,10 +552,7 @@ function pintarCostosHoy(){
       : `<tr><td colspan="8"><div class="vacio-msg">Nadie trabajó fuera de su área ese día</div></td></tr>`) + "</tbody>";
 
   // Producción por OF, con sus operaciones dentro
-  const m=CH.op;
-  const etiqueta = m==="u"?"última operación":m==="p"?"penúltima operación"
-    : (CH.area ? (CH_PENULTIMA.has(CH.area)?"penúltima operación":"última operación") : "penúltima en CAMISA, última en el resto");
-  $("chTitTk").innerHTML = `Producción por OF <span class="sub">prendas en la ${esc(etiqueta)} · toca una OF para ver sus operaciones</span>`;
+  $("chTitTk").innerHTML = `Producción por OF <span class="sub">prendas en la penúltima operación · toca una OF para ver sus operaciones</span>`;
   const cols=(todas?[{k:"area",t:"Área",cls:"izq"}]:[]).concat([{k:"of",t:"OF",cls:"izq"},{k:"articulo",t:"Artículo",cls:"izq"},{k:"prenda",t:"Prenda",cls:"izq"},
     {k:"sam",t:"S.A.M",cls:"n"},{k:"cant_of",t:"Cant. OF",cls:"n"},{k:"cant",t:"Cantidad producida",cls:"n"},{k:"min",t:"Min. producidos",cls:"n"},{k:"eq",t:"Prendas equivalentes",cls:"n"},
     {k:"per",t:"Personas",cls:"n"},{k:"tks",t:"Tickets",cls:"n"}]);
