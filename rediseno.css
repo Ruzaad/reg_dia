@@ -982,7 +982,7 @@ body[data-pagina="supervisora"] .grid-personal{max-width:1100px;width:100%;margi
 /* ===================== INICIO de Ingeniería (propuesta) ===================== */
 .nav-item[data-tab="pasoInicio"]{--ni:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 11l9-7 9 7'/%3E%3Cpath d='M5 10v10h14V10'/%3E%3Cpath d='M10 20v-6h4v6'/%3E%3C/svg%3E")!important;}
 .ing-nav > .nav-inicio{margin:4px 0 6px;}
-#pasoInicio{max-width:1180px;}
+#pasoInicio{max-width:none;}
 .ini-cab{display:flex;align-items:flex-end;gap:16px;margin-bottom:22px;}
 .ini-cab h1{font-size:30px;letter-spacing:-.5px;}
 .ini-alcance{margin-top:4px;color:var(--suave);font-size:14.5px;}
@@ -2186,7 +2186,7 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 :root{--ini-gl:rgba(255,255,255,.52);--ini-gl-bd:rgba(255,255,255,.75);--ini-gl-hi:rgba(255,255,255,.95);--ini-gl-sh:0 10px 40px rgba(13,33,119,.14);--ini-gl-or:#BC9A48;--ini-bl1:#7d93ff;--ini-bl2:#E3CB86;--ini-bl3:#a7d4ff}
 :root[data-theme="dark"]{--ini-gl:rgba(20,34,100,.42);--ini-gl-bd:rgba(160,180,255,.22);--ini-gl-hi:rgba(255,255,255,.18);--ini-gl-sh:0 14px 50px rgba(0,0,20,.5);--ini-gl-or:#E3CB86;--ini-bl1:#2f46c9;--ini-bl2:#8a6d1f;--ini-bl3:#1c5a9a}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--ini-gl:rgba(20,34,100,.42);--ini-gl-bd:rgba(160,180,255,.22);--ini-gl-hi:rgba(255,255,255,.18);--ini-gl-sh:0 14px 50px rgba(0,0,20,.5);--ini-gl-or:#E3CB86;--ini-bl1:#2f46c9;--ini-bl2:#8a6d1f;--ini-bl3:#1c5a9a}}
-#pasoInicio{position:relative;overflow:hidden;padding:0}
+#pasoInicio{position:relative;overflow:hidden;padding:0;max-width:none!important}
 .ini-blobs{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
 .ini-blobs i{position:absolute;border-radius:50%;filter:blur(90px);opacity:.65}
 .ini-blobs i:nth-child(1){width:46vw;height:46vw;left:-8vw;top:-12vw;background:var(--ini-bl1)}
@@ -2195,7 +2195,10 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .ini-bento{position:relative;z-index:1;display:grid;gap:16px;padding:20px 18px;min-height:calc(100vh - 120px);
   grid-template-columns:1fr;
   grid-template-areas:"cab" "meta" "aten" "areas";}
-@media(min-width:1000px){.ini-bento{grid-template-columns:1.6fr 1fr;grid-template-areas:"cab cab" "meta aten" "areas areas";}}
+@media(min-width:1000px){.ini-bento{grid-template-columns:1fr 1fr;grid-template-areas:"cab aten" "meta aten" "areas areas";}}
+@media(min-width:1400px){.ini-bento{grid-template-columns:1.4fr 1fr;}}
+#pasoInicio .ini-card[style*="aten"]{align-self:stretch;display:flex;flex-direction:column}
+#pasoInicio .ini-card[style*="aten"] .ini-avisos{flex:1}
 #pasoInicio .glass{background:var(--ini-gl);backdrop-filter:blur(26px) saturate(170%);-webkit-backdrop-filter:blur(26px) saturate(170%);border:1px solid var(--ini-gl-bd);border-radius:22px;box-shadow:var(--ini-gl-sh),inset 0 1px 0 var(--ini-gl-hi)}
 #pasoInicio .ini-cab{border-radius:22px;padding:18px 22px;margin-bottom:0}
 #pasoInicio .ini-mes{border-radius:22px;padding:18px 22px;margin-bottom:0}
