@@ -6,7 +6,7 @@
      · acabado: lo que costura entrega en su penúltima operación, por línea
        (Camisería, Saco, Pantalón), contra lo hecho y la capacidad de ACABADO.
    ===================================================================== */
-let CRO={modo:"real", r:null, sub:"", q:"", med:"min"};
+let CRO={modo:"real", r:null, p:null, pFalta:false, sub:"", q:"", med:"min"};
 const CRO_SUB={CAMISERIA:"Camisería",SACO:"Saco",PANTALON:"Pantalón",OTRO:"Sin línea"};
 const CRO_EST={DISPONIBLE:["ok","Disponible"],INCOMPLETO:["warn","Incompleto"],"SIN CORTE":["gris","Sin corte"]};
 
@@ -41,7 +41,10 @@ async function croCargar(){
   try{
     const r=await rpc("fn_pcp_cronos",{p_dni:ING.dni,p_token:ING.token,p_desde:d,p_hasta:h});
     if(!r || !r.ok){ box.innerHTML=`<div class="acf-falta">${esc((r&&r.error)||"Error")}</div>`; return; }
-    CRO.r=r; croPintar();
+    CRO.r=r; CRO.p=null; CRO.pFalta=false;
+    try{ const p=await rpc("fn_pcp_cronos_prendas",{p_dni:ING.dni,p_token:ING.token,p_desde:d,p_hasta:h}); if(p&&p.ok) CRO.p=p; }
+    catch(e2){ CRO.pFalta=/fn_pcp_cronos_prendas|404|PGRST202|Could not find/i.test(e2.message); }
+    croPintar();
   }catch(e){
     box.innerHTML=/fn_pcp_cronos|404|PGRST202|Could not find/i.test(e.message)
       ? `<div class="acf-falta"><b>Falta correr el parche 152 en la base.</b></div>`
@@ -107,10 +110,32 @@ function croGrafico(){
 function croSubFiltro(s){ CRO.sub=s; croGantt(); }
 function croGantt(){
   const r=CRO.r, box=$("croSecGantt"); if(!box) return;
+  if(!CRO.p) return croGanttMin(r,box);
+  const G=(CRO.p.ofs||[]).filter(x=>!CRO.sub||x.sub===CRO.sub);
+  const chips=["","CAMISERIA","SACO","PANTALON"].map(k=>`<button type="button" class="btn-mini ${CRO.sub===k?"":"gris"}" onclick="croSubFiltro('${k}')">${k?CRO_SUB[k]:"Todas"}</button>`).join(" ");
+  const cab=`<div class="pcp-h"><h2>Acabado por OF · en prendas</h2><div>${chips}</div></div>
+    <p class="seccion-sub">Prendas acumuladas de la OF hasta ${esc(pcpDM(CRO.p.hasta))}: lo que costura entregó y lo que Acabado terminó, ambos en su penúltima operación. El % es contra la cantidad de la OF. Saco y pantalón van por separado.</p>`;
+  if(!G.length){ box.innerHTML=cab+`<p class="seccion-sub">No hubo movimiento de costura ni de Acabado en estas fechas.</p>`; return; }
+  const a=pcpDn(r.desde), b=pcpDn(r.hasta), n=b-a+1, hoy=pcpDn(r.hoy);
+  const pos=d=>Math.max(0,Math.min(100,(d-a)/n*100)), anc=(d1,d2)=>Math.max(1.2,pos(d2+1)-pos(d1));
+  const ticks=[]; for(let d=a;d<=b;d++){ if(new Date(d*864e5).getUTCDay()===1 || d===a) ticks.push(d); }
+  const barra=(cls,i,f,tit,txt,pct)=>{ if(!i) return ""; const d1=pcpDn(i), d2=pcpDn(f||i);
+    return `<div class="gt-b ${cls}" style="left:${pos(d1)}%;width:${anc(d1,d2)}%" title="${esc(tit)}">${pct!=null?`<i style="width:${Math.min(100,pct)}%"></i>`:""}<span>${esc(txt||"")}</span></div>`; };
+  const filas=G.map(x=>{ const base=x.meta||x.costura||0, p=base?Math.round(x.acabado/base*100):null;
+    const ex=x.meta&&x.costura>x.meta?` · costura registra más que la OF`:"";
+    return `<div class="gt-f"><div class="gt-l"><b>${esc(x.o_f)}</b> · ${esc(x.articulo||"")}<span>${CRO_SUB[x.sub]||x.sub} · Acabado ${pcpN(x.acabado)} de ${pcpN(base)} · costura ${pcpN(x.costura)}</span></div>
+      <div class="gt-g">${barra("gt-corte",x.llega_ini,x.llega_fin,`Costura entregó ${pcpDM(x.llega_ini)} – ${pcpDM(x.llega_fin)} · acumulado ${pcpN(x.costura)} prendas${ex}`,"")}
+        ${barra("gt-cos",x.acab_ini,x.acab_fin,`Acabado ${pcpDM(x.acab_ini)} – ${pcpDM(x.acab_fin)} · acumulado ${pcpN(x.acabado)} de ${pcpN(base)} prendas${p!=null?" ("+p+" %)":""}`,p!=null?p+" %":"",p)}</div></div>`; }).join("");
+  box.innerHTML=cab+`<div class="gt-leyenda"><span><i class="gt-k corte"></i>Costura entrega</span><span><i class="gt-k cos"></i>Acabado (relleno = % de la OF terminado)</span><span><i class="gt-k hoy"></i>Hoy</span></div>
+    <div class="gt-scroll"><div class="gt" style="--n:${n}"><div class="gt-f gt-h"><div class="gt-l">OF · artículo</div><div class="gt-g gt-eje">${ticks.map(d=>`<span style="left:${pos(d)}%">${pcpDM(pcpIso(d))}</span>`).join("")}</div></div>
+      <div class="gt-cuerpo">${filas}${hoy>=a&&hoy<=b?`<div class="gt-hoy" style="--p:${pos(hoy+.5)}" title="Hoy"></div>`:""}</div></div></div>`;
+}
+function croGanttMin(r,box){
   const G=(r.ofs||[]).filter(x=>!CRO.sub||x.sub===CRO.sub);
   const sinBase=(r.ofs||[]).filter(x=>x.sin_base).length;
   const chips=["","CAMISERIA","SACO","PANTALON"].map(k=>`<button type="button" class="btn-mini ${CRO.sub===k?"":"gris"}" onclick="croSubFiltro('${k}')">${k?CRO_SUB[k]:"Todas"}</button>`).join(" ");
   const cab=`<div class="pcp-h"><h2>Acabado por OF</h2><div>${chips}</div></div>
+    ${CRO.pFalta?`<p class="seccion-sub"><b class="rojo">Falta correr el parche 165: mientras tanto se ve en minutaje.</b></p>`:""}
     ${sinBase?`<p class="seccion-sub"><b class="rojo">${sinBase} OF sin base de ACABADO</b></p>`:""}`;
   if(!G.length){ box.innerHTML=cab+`<p class="seccion-sub">No llegó nada de costura en estas fechas.</p>`; return; }
   const a=pcpDn(r.desde), b=pcpDn(r.hasta), n=b-a+1, hoy=pcpDn(r.hoy);
