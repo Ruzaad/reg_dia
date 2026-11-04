@@ -1,4 +1,5 @@
 -- PARCHE 166 — Optimización (hilo maestro, 4-nov-2026): Inicio de Ingeniería más liviano
+-- No crea tablas: el deshacer trae escritas las versiones anteriores.
 -- Ninguna RPC cambia de nombre, parámetros ni respuesta. Detalle en parches/PARCHE_166.md.
 --   A. _boleta_estados (Boletas sin llenar): un solo recorrido de reclamos del rango
 --      en vez de dos, y "desde cuándo existe" en asistencia por índice.
@@ -7,15 +8,6 @@
 --      _nk() sobre las ~25 mil filas de bases en cada llamada.
 
 begin;
-
-create table if not exists parche_166_respaldo (firma text primary key, def text not null);
-alter table parche_166_respaldo enable row level security;
-insert into parche_166_respaldo (firma, def)
-select p.oid::regprocedure::text, pg_get_functiondef(p.oid)
-  from pg_proc p
- where p.oid in ('public._boleta_estados(text[],date,date)'::regprocedure,
-                 'public._pcp_prod(date,date)'::regprocedure)
-on conflict (firma) do nothing;
 
 -- ===================== A. _boleta_estados =====================
 create or replace function public._boleta_estados(p_dnis text[], p_desde date, p_hasta date)

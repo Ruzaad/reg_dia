@@ -20,7 +20,7 @@ Hilo maestro "Optimización" (4-nov-2026). Todo se midió en producción en modo
 
 - `_pcp_prod`: 0 diferencias en un día (3-nov), octubre completo y 1-jul → 4-nov (312 filas). Un día pasa de 333 ms a 52 ms; octubre completo de 1,03 s a 0,60 s.
 - `_boleta_estados`: 0 diferencias en tres ventanas de 21 días (15-oct → 4-nov, 20-sep → 10-oct y agosto), 3 360 filas cada una. Pasa de ~390 ms a ~230 ms con todo el personal.
-- En Postgres 16 local: el parche corre, el deshacer vuelve las dos funciones a su versión anterior y el parche se puede volver a correr.
+- En Postgres 16 local: el parche corre sin crear ninguna tabla y el deshacer vuelve las dos funciones a su versión anterior.
 
 ## Cómo correrlo
 
@@ -29,10 +29,9 @@ Se pega `sql/parche_166.sql` entero en el SQL Editor. No bloquea nada, se puede 
 ## Cómo verificar
 
 ```sql
-select count(*) from parche_166_respaldo;                       -- 2
 select prosrc like '%_nk(b.articulo) = v.k%' from pg_proc where proname = '_pcp_prod';   -- true
 ```
 
 ## Deshacer
 
-`sql/parche_166_rollback.sql` vuelve a ejecutar las definiciones guardadas en `parche_166_respaldo` y borra esa tabla.
+`sql/parche_166_rollback.sql` trae escritas las dos funciones como estaban el 4-nov. **El parche no crea tablas, columnas ni índices**: no suma peso a la base.
