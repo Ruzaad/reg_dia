@@ -171,11 +171,11 @@ const iniPct=v=>(isFinite(v)?v*100:0).toFixed(1).replace(".",",")+" %";
 function iniPlan(F){
   const P=INI.d[INI.fecha?"planMes":"plan"], R=INI.d[INI.fecha?"resHoy":"res"]; if(!(P&&P.ok)) return null;
   const sel=new Set(F.map(x=>x.area)), hoyM=a=>a==="CORTE"?+((P.corte_dia||{}).minutos||0):+(((R&&R.areas)||[]).find(y=>y.area===a)||{}).minutos||0;
-  const A=(P.areas||[]).filter(x=>sel.has(x.area)).map(x=>({...x, estructura:+x.estructura, personas:+x.personas, disp_mes:+x.disp_mes, disp_fecha:+x.disp_fecha, he:+x.he_min/60, ayer:+x.minutos, minutos:+x.minutos+hoyM(x.area)}));
+  const A=(P.areas||[]).filter(x=>sel.has(x.area)).map(x=>({...x, ef_prev:INI_EF_PREV_MAN!=null?INI_EF_PREV_MAN/100:x.ef_prev, estructura:+x.estructura, personas:+x.personas, disp_mes:+x.disp_mes, disp_fecha:+x.disp_fecha, he:+x.he_min/60, ayer:+x.minutos, minutos:+x.minutos+hoyM(x.area)}));
   const sum=k=>A.reduce((s,x)=>s+(+x[k]||0),0), todas=A.length===(P.areas||[]).length;
   const dispTot=+P.disp_total, meta=+P.meta||0, efMeta=dispTot&&meta?meta/dispTot:0;
   const t={estructura:sum("estructura"), personas:sum("personas"), disp_mes:sum("disp_mes"), disp_fecha:sum("disp_fecha"), ayer:sum("ayer"), minutos:sum("minutos"), he:sum("he")};
-  const efReal=t.disp_fecha?t.ayer/t.disp_fecha:0, efPrev=P.ef_prev==null?null:+P.ef_prev, quedan=(+P.dias||0)-(+P.dias_pasados||0);
+  const efReal=t.disp_fecha?t.ayer/t.disp_fecha:0, efPrev=INI_EF_PREV_MAN!=null?INI_EF_PREV_MAN/100:(P.ef_prev==null?null:+P.ef_prev), quedan=(+P.dias||0)-(+P.dias_pasados||0);
   return {P, A, t, efMeta, efReal, efPrev, quedan, todas, dispTot, meta:todas?meta:t.disp_mes*efMeta,
     proy:efPrev==null?null:efPrev*t.disp_mes, deberia:t.disp_fecha*efMeta, resta:t.disp_mes-t.disp_fecha,
     opt:x=>x.disp_mes*efMeta, efArea:x=>x.disp_fecha?x.ayer/x.disp_fecha:0};
@@ -184,7 +184,7 @@ let INI_EF_PREV_MAN=null;
 function iniPersonasHtml(Q){
   if(!Q) return "";
   const meta=Q.meta, dias=+Q.P.dias||1, jornada=575;
-  const efPrev=INI_EF_PREV_MAN!=null?INI_EF_PREV_MAN/100:(Q.efPrev!=null?Q.efPrev:null);
+  const efPrev=Q.efPrev;
   const personas=Q.t.estructura;
   if(!meta) return "";
   const minNec=efPrev?Math.round(meta/efPrev):null;
@@ -200,11 +200,11 @@ function iniPersonasHtml(Q){
       ${campo("Eficiencia mes anterior",efVal,"% promedio del mes anterior",true)}
       ${campo("Personas actuales",personas,"Estructura del mes",false)}
       ${campo("Días hábiles",dias,"Sin feriados",false)}</div>
-    ${efPrev?`<div class="ini-pn-res"><div class="ini-pn-kpi"><span>Minutos necesarios</span><b>${iniN(minNec)}</b></div>
+    <div id="iniPnRes">${efPrev?`<div class="ini-pn-res"><div class="ini-pn-kpi"><span>Minutos necesarios</span><b>${iniN(minNec)}</b></div>
       <div class="ini-pn-kpi"><span>Disponible actual</span><b>${iniN(dispAct)}</b></div>
       <div class="ini-pn-kpi dest"><span>Personas necesarias</span><b>${perNec}</b></div>
       <div class="ini-pn-kpi ${dif>0?"falta":"sobra"}"><span>${dif>0?"Faltan":"Sobran"}</span><b>${Math.abs(dif)}</b></div></div>`
-      :`<p class="ini-tenue ini-centro">Ingresa la eficiencia del mes anterior para calcular</p>`}</section>`;
+      :`<p class="ini-tenue ini-centro">Ingresa la eficiencia del mes anterior para calcular</p>`}</div></section>`;
 }
 function iniEfPrevCambio(v){ INI_EF_PREV_MAN=v===""?null:Math.min(100,Math.max(1,+v||0)); iniPintar(); }
 function iniMesHtml(F){
@@ -253,7 +253,7 @@ function iniDesgHtml(F){
       <td class="n">${persHoy}</td><td class="n">${perNec!=null?perNec:"—"}</td>
       <td class="n ${dif>0?"ini-falta":dif<0?"ini-sobra":""}">${dif!=null?(dif>0?`Faltan ${dif}`:dif<0?`Sobran ${Math.abs(dif)}`:"Exacto"):"—"}</td></tr>`;
   }).join("");
-  return `${iniPersonasHtml(Q)}<section class="ini-desg glass"><h3>Por área</h3>
+  return `${iniPersonasHtml(Q)}<section class="ini-desg glass" id="iniDgTab"><h3>Por área</h3>
     ${descuadre?`<div class="ini-pv alerta"><b>Error: disponibles suman ${iniN(suma)} y el 100 % es ${iniN(Q.dispTot)}</b></div>`:""}
     <div class="ini-pt-w"><table class="ini-dg-t"><thead><tr><th>Área</th><th class="n">Meta (min)</th><th class="n">Ef. mes ant.</th>
       <th class="n">Min. necesarios</th><th class="n">Min. disponibles hoy</th><th class="n">Personas hoy</th><th class="n">Necesarias</th><th class="n">Diferencia</th>
@@ -293,7 +293,13 @@ function iniPintar(){
   if(puedeAlt){ $("iniSegMias").classList.toggle("activo",!INI.todas); $("iniSegTodas").classList.toggle("activo",INI.todas); }
   const fi=$("iniFechaSel"); if(fi && document.activeElement!==fi){ fi.max=hoyLima(); fi.value=INI.hoy||""; }
   $("iniMes").innerHTML=iniMesHtml(F);
-  if($("iniDesg") && !/^iniEfPrev$/.test((document.activeElement||{}).id||"")) $("iniDesg").innerHTML=iniDesgHtml(F);
+  if($("iniDesg")){
+    const h=iniDesgHtml(F);
+    if((document.activeElement||{}).id==="iniEfPrev"){
+      const t=document.createElement("div"); t.innerHTML=h;
+      for(const id of ["iniPnRes","iniDgTab"]){ const n=t.querySelector("#"+id), o=$(id); if(n&&o) o.replaceWith(n); }
+    } else $("iniDesg").innerHTML=h;
+  }
   if(!/^iniCorte/.test((document.activeElement||{}).id||"")) $("iniAreas").innerHTML=iniAreasHtml(F,fr);
 
   const av=iniAvisos(F).filter(a=>!["pasoBolSin","pasoAsis","pasoDash","pasoIncid"].includes(a.tab)), C=iniConfirmar(F), L=[];
