@@ -136,7 +136,7 @@ function pcpSegPintar(r){
     <div class="pcp-graf"><canvas id="pcpGDia" role="img" aria-label="Minutos por día"></canvas></div>
     <div class="pcp-graf pcp-graf-b"><canvas id="pcpGEf" role="img" aria-label="Eficiencia diaria"></canvas></div></section>`;
 
-  $("pcpSeg").innerHTML=cumpl+pcpGanttHTML(r)+sem+dia;
+  $("pcpSeg").innerHTML=cumpl+pcpGanttHTML(r)+sem+dia; pcpGanttReact(r);
   pcpGraficos(r,cr);
 }
 
@@ -174,9 +174,7 @@ function pcpGanttFiltrar(v){
 }
 function pcpGanttHTML(r){
   const g=r.gantt||[];
-  const cab=`<div class="pcp-h"><h2>OF que arrancan costura sin corte completo</h2></div>
-    <p class="seccion-sub">Ordenadas por OF. Cada fila muestra el corte planificado (cronograma) con lo ya cortado, el corte real y la costura programada.
-    La línea roja es hoy. Se ven 10 a la vez; baja con la barra o filtra.</p>`;
+  const cab=`<div class="pcp-h"><h2>OF que arrancan costura sin corte completo</h2></div>`;
   if(!g.length) return `<section class="pcp-card" id="pcpSecGantt">${cab}<p class="seccion-sub">No hay OF por arrancar costura (de hace 15 a dentro de 10 días) con corte incompleto.</p></section>`;
   const fs=[]; g.forEach(x=>["ini_corte","fin_corte","ini_costura","fin_costura","corte_ini_real","corte_fin_real","costura_ini_real"].forEach(k=>{ if(x[k]) fs.push(pcpDn(x[k])); }));
   const hoy=pcpDn(r.hoy);
@@ -198,11 +196,27 @@ function pcpGanttHTML(r){
   }).join("");
   const head=ticks.map(d=>`<span style="left:${pos(d)}%">${pcpDM(pcpIso(d))}</span>`).join("");
   return `<section class="pcp-card" id="pcpSecGantt">${cab}
-    <div class="gt-leyenda" aria-label="Leyenda"><span><i class="gt-k corte"></i>Corte planificado (relleno = % cortado)</span><span><i class="gt-k real"></i>Corte real (primer a último día)</span>
+    <div class="rg-host"><div class="gt-leyenda" aria-label="Leyenda"><span><i class="gt-k corte"></i>Corte planificado (relleno = % cortado)</span><span><i class="gt-k real"></i>Corte real (primer a último día)</span>
       <span><i class="gt-k cos"></i>Costura programada (relleno = avance)</span><span><i class="gt-k hoy"></i>Hoy</span></div>
     <div class="gt-bar"><input type="search" class="gt-filtro" id="gtFiltro" placeholder="Filtrar por OF, artículo o cliente" oninput="pcpGanttFiltrar(this.value)" aria-label="Filtrar el Gantt"><span id="gtCuenta">${g.length} OF</span></div>
     <div class="gt-scroll"><div class="gt" style="--n:${n}"><div class="gt-f gt-h"><div class="gt-l">OF · artículo</div><div class="gt-g gt-eje">${head}</div></div>
-      <div class="gt-cuerpo">${filas}<div class="gt-hoy" style="--p:${pos(hoy+.5)}" title="Hoy ${pcpDM(r.hoy)}"></div></div></div></div></section>`;
+      <div class="gt-cuerpo">${filas}<div class="gt-hoy" style="--p:${pos(hoy+.5)}" title="Hoy ${pcpDM(r.hoy)}"></div></div></div></div></div></section>`;
+}
+function pcpGanttReact(r){
+  const g=r.gantt||[], host=document.querySelector("#pcpSecGantt .rg-host"); if(!g.length||!host||typeof ganttMejorar!=="function") return;
+  const fs=[]; g.forEach(x=>["ini_corte","fin_corte","ini_costura","fin_costura","corte_ini_real","corte_fin_real","costura_ini_real"].forEach(k=>{ if(x[k]) fs.push(pcpDn(x[k])); }));
+  const hoy=pcpDn(r.hoy), a=Math.max(Math.min(...fs,hoy)-2,hoy-30), b=Math.min(Math.max(...fs,hoy)+2,hoy+50);
+  ganttMejorar(host,{desde:pcpIso(a),hasta:pcpIso(b),hoy:r.hoy,
+    leyenda:[["corte","Corte planificado (relleno = % cortado)"],["real","Corte real"],["cos","Costura programada (relleno = avance)"]],
+    filas:g.map(x=>{ const pc=x.cant_prog?Math.round(x.cortado/x.cant_prog*100):0;
+      return {id:x.o_f+"|"+x.articulo,t:`${x.o_f} · ${x.articulo}`,sub:`${(x.cliente||"").slice(0,26)} · ${pcpCorto(x.area)} · cortado ${pcpN(x.cortado)}/${pcpN(x.cant_prog)}`,
+        q:(x.o_f+" "+x.articulo+" "+(x.cliente||"")).toLowerCase(), sin:x.ini_corte?"":"sin cronograma de corte",
+        barras:[{lane:0,cls:"gt-corte",i:x.ini_corte,f:x.fin_corte,pct:pc,txt:pc+" %",tit:`Corte planificado ${pcpDM(x.ini_corte)} – ${pcpDM(x.fin_corte)}`},
+          x.corte_ini_real?{thin:true,cls:"gt-real",i:x.corte_ini_real,f:x.corte_fin_real||x.corte_ini_real,tit:`Corte real ${pcpDM(x.corte_ini_real)} – ${pcpDM(x.corte_fin_real)}`}:{},
+          {lane:1,cls:"gt-cos",i:x.ini_costura,f:x.fin_costura,pct:x.costura_avance||0,txt:x.costura_avance?x.costura_avance+" %":"",tit:`Costura programada ${pcpDM(x.ini_costura)} – ${pcpDM(x.fin_costura)}`}],
+        det:[["OF · artículo",`${x.o_f} · ${x.articulo}`],["Cliente",x.cliente||"—"],["Cantidad programada",pcpN(x.cant_prog)],["Cortado",`${pcpN(x.cortado)} (${pc} %)`],
+          ["Corte planificado",x.ini_corte?`${pcpDM(x.ini_corte)} – ${pcpDM(x.fin_corte)}`:"—"],["Costura programada",x.ini_costura?`${pcpDM(x.ini_costura)} – ${pcpDM(x.fin_costura)}`:"—"],
+          ["Avance de costura",x.costura_avance!=null?x.costura_avance+" %":"—"]]}; })});
 }
 
 if(typeof module!=="undefined") module.exports={pcpParsearCronograma};

@@ -3,9 +3,10 @@
 Responde siempre en **español**. Ruzaad (dueño del repo) no navega carpetas: dale el SQL listo para copiar y pegar, no rutas.
 
 ## Qué es
-PWA estática (HTML/CSS/JS vanilla, **sin framework y sin build**) para registrar la producción de una planta de confección. Toda la lógica y los permisos viven en Supabase (RPC de Postgres). El front solo llama `rpc("fn_x", {...})`.
+PWA estática (HTML/CSS/JS vanilla, **sin build**; React solo en Ingeniería de escritorio, ver abajo) para registrar la producción de una planta de confección. Toda la lógica y los permisos viven en Supabase (RPC de Postgres). El front solo llama `rpc("fn_x", {...})`.
 
 - **Operario**: PWA en el celular (`operario.html`). Supervisora: también celular (`supervisora.html`). **Ingeniería y oficina**: web de escritorio (`ingenieria.html`).
+- **React**: permitido solo en pantallas de Ingeniería de escritorio, cargado bajo demanda desde `vendor/` (React 18.3.1 + htm, sin build, sin CDN). Nada de React en operario ni supervisora: la PWA del celular debe seguir liviana e instalable. Primer uso: `gantt-react.js` (Gantt de PCP y Cronogramas); si no carga, queda el Gantt simple.
 - Toda mejora cuida accesibilidad y velocidad: nada que agregue demora al celular del operario.
 
 ## Mapa del código
@@ -18,6 +19,7 @@ PWA estática (HTML/CSS/JS vanilla, **sin framework y sin build**) para registra
 | `lotes.js` | Vista de lotes de REPROCESO (abrir, cerrar, avance, crear). El trabajo por tiempo de CORTE y DESPACHO quedó sin uso. |
 | `supervisora-hoy.js`, `operario-inicio.js`, `sinsenal.js`, `pedidos.js` | Pantallas de supervisora, inicio del operario, modo sin señal, pedidos de tiempo. |
 | `buscar.js`, `calidad.js`, `asistencia.js`, `feriados.js`, `incidencias.js`, `sueltos.js`, `prestadas.js`, `costos.js`, `inicio.js`, `pcp.js` | Módulos de Ingeniería (y algunos de supervisora). `pcp.js` = PCP: metas, programa de costura y salida de corte (parche 144); `pcp-seguimiento.js` = cronograma PDF, Gantt y gráficos (parches 146-147); `cronogramas.js` = Cronogramas con lo real y subida de archivos (parche 152); `inicio.js` = Inicio de Ingeniería con la meta del mes por área (parches 148-158); `bases-nuevo.js` = Bases › Agregar artículo (sin SQL nuevo). |
+| `gantt-react.js` + `vendor/` | Gantt en React (zoom, detalle al tocar, filtros) para PCP y Cronogramas; carga React solo al abrir el Gantt y solo en pantallas ≥ 760 px. |
 | `intro.js` | Intro animada del logo CHRONOS al cargar cada página (se salta con un toque, Esc o Enter). |
 | `sql/parche_N.sql` + `sql/parche_N_rollback.sql` + `parches/PARCHE_N.md` | Cambios de base, en orden. |
 | `supabase/functions/ef-gemini/` | Edge function (Gemini para Auditoría). |

@@ -1,0 +1,17 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/rediseno.css"></head>
+<body><main style="padding:16px;max-width:1150px"><div id="croSecGantt" class="pcp-card"></div><section id="pcpWrap" class="pcp-card"></section></main>
+<script>
+const $=id=>document.getElementById(id), esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const cargandoHTML=()=>"";
+</script>
+<script src="/pcp.js"></script><script src="/gantt-react.js"></script><script src="/pcp-seguimiento.js"></script><script src="/cronogramas.js"></script>
+<script>
+CRO.r={desde:"2026-10-01",hasta:"2026-11-04",hoy:"2026-11-04"};
+CRO.p={hasta:"2026-11-04",ofs:[
+{o_f:"10188",articulo:"TE4563",sub:"SACO",meta:1003,costura:540,acabado:806,llega_ini:"2026-10-01",llega_fin:"2026-11-03",acab_ini:"2026-10-05",acab_fin:"2026-11-03"},
+{o_f:"10201",articulo:"CA1020",sub:"CAMISERIA",meta:600,costura:420,acabado:150,llega_ini:"2026-10-10",llega_fin:"2026-11-01",acab_ini:"2026-10-28",acab_fin:"2026-11-03"}]};
+croGantt();
+const g=[{o_f:"10300",articulo:"AB1",cliente:"CLIENTE X",area:"SACOS",cant_prog:500,cortado:300,ini_corte:"2026-10-20",fin_corte:"2026-10-30",ini_costura:"2026-11-02",fin_costura:"2026-11-12",costura_avance:10,corte_ini_real:"2026-10-21",corte_fin_real:"2026-10-31"}];
+$("pcpWrap").innerHTML=pcpGanttHTML({gantt:g,hoy:"2026-11-04"}); pcpGanttReact({gantt:g,hoy:"2026-11-04"});
+</script></body></html>
