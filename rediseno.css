@@ -2194,9 +2194,14 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .ini-blobs i:nth-child(3){width:42vw;height:42vw;left:30vw;bottom:-22vw;background:var(--ini-bl3)}
 .ini-bento{position:relative;z-index:1;display:grid;gap:16px;padding:20px 18px;min-height:calc(100vh - 120px);
   grid-template-columns:1fr;
-  grid-template-areas:"cab" "meta" "desg" "areas" "aten";}
-@media(min-width:1000px){.ini-bento{grid-template-columns:1fr 1.5fr;grid-template-areas:"cab cab" "meta desg" "meta areas" "aten aten";}}
-@media(min-width:1400px){.ini-bento{grid-template-columns:1fr 1.8fr;}}
+  grid-template-areas:"cab" "meta" "desg" "areas" "aten";max-width:1180px;margin:0 auto;}
+.ini-prodw{position:relative}
+.ini-prodw>.ini-fecha{position:absolute;top:2px;right:0;z-index:2;flex-direction:row;align-items:center;gap:8px}
+.ini-prodw .ini-prod-leg{padding-right:150px}
+@media(max-width:700px){.ini-prodw>.ini-fecha{position:static;margin-bottom:8px}.ini-prodw .ini-prod-leg{padding-right:0}}
+#iniDesg{display:flex;flex-direction:column;gap:14px}
+#iniDesg .ini-pn{margin-top:0}
+@media(min-width:1000px){.ini-bento{grid-template-columns:1fr 1.5fr;}}
 #pasoInicio .ini-card[style*="aten"]{align-self:stretch;display:flex;flex-direction:column}
 #pasoInicio .ini-card[style*="aten"] .ini-avisos{flex:1}
 #pasoInicio .glass{background:var(--ini-gl);backdrop-filter:blur(26px) saturate(170%);-webkit-backdrop-filter:blur(26px) saturate(170%);border:1px solid var(--ini-gl-bd);border-radius:22px;box-shadow:var(--ini-gl-sh),inset 0 1px 0 var(--ini-gl-hi)}

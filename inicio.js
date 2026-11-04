@@ -253,12 +253,12 @@ function iniDesgHtml(F){
       <td class="n">${persHoy}</td><td class="n">${perNec!=null?perNec:"—"}</td>
       <td class="n ${dif>0?"ini-falta":dif<0?"ini-sobra":""}">${dif!=null?(dif>0?`Faltan ${dif}`:dif<0?`Sobran ${Math.abs(dif)}`:"Exacto"):"—"}</td></tr>`;
   }).join("");
-  return `<section class="ini-desg glass"><h3>Por área</h3>
+  return `${iniPersonasHtml(Q)}<section class="ini-desg glass"><h3>Por área</h3>
     ${descuadre?`<div class="ini-pv alerta"><b>Error: disponibles suman ${iniN(suma)} y el 100 % es ${iniN(Q.dispTot)}</b></div>`:""}
     <div class="ini-pt-w"><table class="ini-dg-t"><thead><tr><th>Área</th><th class="n">Meta (min)</th><th class="n">Ef. mes ant.</th>
       <th class="n">Min. necesarios</th><th class="n">Min. disponibles hoy</th><th class="n">Personas hoy</th><th class="n">Necesarias</th><th class="n">Diferencia</th>
     </tr></thead><tbody>${filas}</tbody></table></div></section>
-    ${iniPersonasHtml(Q)}`;
+    `;
 }
 /* CORTE no registra en el sistema: Ingeniería pone sus prendas y minutos del día. */
 function iniCorteGuardar(){
