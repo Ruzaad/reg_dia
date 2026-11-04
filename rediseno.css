@@ -2181,3 +2181,47 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
 .rg-det{position:relative;margin-top:10px;padding:12px 40px 12px 14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;background:var(--sup);border:1px solid var(--linea);border-radius:var(--r);}
 .rg-det span{display:block;font-size:12px;color:var(--suave);} .rg-det b{font:700 16px var(--sans,inherit);color:var(--texto);}
 .rg-x{position:absolute;top:6px;right:8px;border:0;background:none;color:var(--suave);font-size:22px;line-height:1;cursor:pointer;}
+
+/* ========== Inicio: Bento liquid glass ========== */
+:root{--ini-gl:rgba(255,255,255,.52);--ini-gl-bd:rgba(255,255,255,.75);--ini-gl-hi:rgba(255,255,255,.95);--ini-gl-sh:0 10px 40px rgba(13,33,119,.14);--ini-gl-or:#BC9A48;--ini-bl1:#7d93ff;--ini-bl2:#E3CB86;--ini-bl3:#a7d4ff}
+:root[data-theme="dark"]{--ini-gl:rgba(20,34,100,.42);--ini-gl-bd:rgba(160,180,255,.22);--ini-gl-hi:rgba(255,255,255,.18);--ini-gl-sh:0 14px 50px rgba(0,0,20,.5);--ini-gl-or:#E3CB86;--ini-bl1:#2f46c9;--ini-bl2:#8a6d1f;--ini-bl3:#1c5a9a}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--ini-gl:rgba(20,34,100,.42);--ini-gl-bd:rgba(160,180,255,.22);--ini-gl-hi:rgba(255,255,255,.18);--ini-gl-sh:0 14px 50px rgba(0,0,20,.5);--ini-gl-or:#E3CB86;--ini-bl1:#2f46c9;--ini-bl2:#8a6d1f;--ini-bl3:#1c5a9a}}
+#pasoInicio{position:relative;overflow:hidden;padding:0}
+.ini-blobs{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.ini-blobs i{position:absolute;border-radius:50%;filter:blur(90px);opacity:.65}
+.ini-blobs i:nth-child(1){width:46vw;height:46vw;left:-8vw;top:-12vw;background:var(--ini-bl1)}
+.ini-blobs i:nth-child(2){width:38vw;height:38vw;right:-6vw;top:12vh;background:var(--ini-bl2)}
+.ini-blobs i:nth-child(3){width:42vw;height:42vw;left:30vw;bottom:-22vw;background:var(--ini-bl3)}
+.ini-bento{position:relative;z-index:1;display:grid;gap:16px;padding:20px 18px;min-height:calc(100vh - 120px);
+  grid-template-columns:1fr;
+  grid-template-areas:"cab" "meta" "aten" "areas";}
+@media(min-width:1000px){.ini-bento{grid-template-columns:1.6fr 1fr;grid-template-areas:"cab cab" "meta aten" "areas areas";}}
+#pasoInicio .glass{background:var(--ini-gl);backdrop-filter:blur(26px) saturate(170%);-webkit-backdrop-filter:blur(26px) saturate(170%);border:1px solid var(--ini-gl-bd);border-radius:22px;box-shadow:var(--ini-gl-sh),inset 0 1px 0 var(--ini-gl-hi)}
+#pasoInicio .ini-cab{border-radius:22px;padding:18px 22px;margin-bottom:0}
+#pasoInicio .ini-mes{border-radius:22px;padding:18px 22px;margin-bottom:0}
+#pasoInicio .ini-card{border-radius:22px;margin-bottom:0;border:1px solid var(--ini-gl-bd);box-shadow:var(--ini-gl-sh),inset 0 1px 0 var(--ini-gl-hi)}
+.ini-bento-logo{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:0;pointer-events:none;opacity:.18;filter:drop-shadow(0 0 30px var(--ini-gl-or))}
+.ini-bento-logo svg{width:260px;height:260px}
+@media(min-width:1000px){.ini-bento-logo svg{width:380px;height:380px}}
+.ini-m-tab,.ini-m-der{background:var(--ini-gl);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);border:1px solid var(--ini-gl-bd);border-radius:18px;box-shadow:var(--ini-gl-sh),inset 0 1px 0 var(--ini-gl-hi)}
+.ini-prod-g .ini-card{background:var(--ini-gl);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);border:1px solid var(--ini-gl-bd);border-radius:18px;box-shadow:var(--ini-gl-sh),inset 0 1px 0 var(--ini-gl-hi)}
+
+/* Personas necesarias */
+.ini-pn{padding:18px 22px;margin-top:14px;border-radius:18px}
+.ini-pn h3{margin:0 0 14px;font:600 10.5px var(--sans);letter-spacing:1.6px;text-transform:uppercase;color:var(--tenue)}
+.ini-pn-campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:16px}
+.ini-pn-campo{display:flex;flex-direction:column;gap:4px}
+.ini-pn-campo span{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--suave)}
+.ini-pn-campo b{font:700 22px var(--mono);color:var(--texto)}
+.ini-pn-campo small{font-size:11.5px;color:var(--tenue)}
+.ini-pn-input{font:600 22px var(--mono);color:var(--texto);background:var(--ini-gl);border:1.5px solid var(--ini-gl-bd);border-radius:12px;padding:6px 12px;width:100%;max-width:120px;text-align:center}
+.ini-pn-input:focus{outline:2px solid var(--azul);outline-offset:1px}
+label.ini-pn-campo{cursor:text}
+.ini-pn-res{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;border-top:1px solid var(--ini-gl-bd);padding-top:14px}
+.ini-pn-kpi{text-align:center;padding:10px 8px;border-radius:14px;background:var(--ini-gl)}
+.ini-pn-kpi span{display:block;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--suave);margin-bottom:4px}
+.ini-pn-kpi b{font:700 24px var(--mono);color:var(--texto)}
+.ini-pn-kpi.dest{background:var(--azul-t)}.ini-pn-kpi.dest b{color:var(--azul)}
+.ini-pn-kpi.falta{background:var(--alerta-t)}.ini-pn-kpi.falta b{color:var(--alerta)}
+.ini-pn-kpi.sobra{background:var(--exito-t)}.ini-pn-kpi.sobra b{color:var(--exito)}
+@media(max-width:560px){.ini-pn-campos{grid-template-columns:1fr 1fr}.ini-pn-res{grid-template-columns:1fr 1fr}}
