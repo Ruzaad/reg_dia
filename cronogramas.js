@@ -113,8 +113,7 @@ function croGantt(){
   if(!CRO.p) return croGanttMin(r,box);
   const G=(CRO.p.ofs||[]).filter(x=>!CRO.sub||x.sub===CRO.sub);
   const chips=["","CAMISERIA","SACO","PANTALON"].map(k=>`<button type="button" class="btn-mini ${CRO.sub===k?"":"gris"}" onclick="croSubFiltro('${k}')">${k?CRO_SUB[k]:"Todas"}</button>`).join(" ");
-  const cab=`<div class="pcp-h"><h2>Acabado por OF · en prendas</h2><div>${chips}</div></div>
-    <p class="seccion-sub">Prendas acumuladas de la OF hasta ${esc(pcpDM(CRO.p.hasta))}: lo que costura entregó y lo que Acabado terminó, ambos en su penúltima operación. El % es contra la cantidad de la OF. Saco y pantalón van por separado.</p>`;
+  const cab=`<div class="pcp-h"><h2>Acabado por OF · en prendas</h2></div>`;
   if(!G.length){ box.innerHTML=cab+`<p class="seccion-sub">No hubo movimiento de costura ni de Acabado en estas fechas.</p>`; return; }
   const a=pcpDn(r.desde), b=pcpDn(r.hasta), n=b-a+1, hoy=pcpDn(r.hoy);
   const pos=d=>Math.max(0,Math.min(100,(d-a)/n*100)), anc=(d1,d2)=>Math.max(1.2,pos(d2+1)-pos(d1));
@@ -126,9 +125,21 @@ function croGantt(){
     return `<div class="gt-f"><div class="gt-l"><b>${esc(x.o_f)}</b> · ${esc(x.articulo||"")}<span>${CRO_SUB[x.sub]||x.sub} · Acabado ${pcpN(x.acabado)} de ${pcpN(base)} · costura ${pcpN(x.costura)}</span></div>
       <div class="gt-g">${barra("gt-corte",x.llega_ini,x.llega_fin,`Costura entregó ${pcpDM(x.llega_ini)} – ${pcpDM(x.llega_fin)} · acumulado ${pcpN(x.costura)} prendas${ex}`,"")}
         ${barra("gt-cos",x.acab_ini,x.acab_fin,`Acabado ${pcpDM(x.acab_ini)} – ${pcpDM(x.acab_fin)} · acumulado ${pcpN(x.acabado)} de ${pcpN(base)} prendas${p!=null?" ("+p+" %)":""}`,p!=null?p+" %":"",p)}</div></div>`; }).join("");
-  box.innerHTML=cab+`<div class="gt-leyenda"><span><i class="gt-k corte"></i>Costura entrega</span><span><i class="gt-k cos"></i>Acabado (relleno = % de la OF terminado)</span><span><i class="gt-k hoy"></i>Hoy</span></div>
+  box.innerHTML=cab+`<div class="rg-host"><div class="gt-bar">${chips}</div><div class="gt-leyenda"><span><i class="gt-k corte"></i>Costura entrega</span><span><i class="gt-k cos"></i>Acabado (relleno = % de la OF terminado)</span><span><i class="gt-k hoy"></i>Hoy</span></div>
     <div class="gt-scroll"><div class="gt" style="--n:${n}"><div class="gt-f gt-h"><div class="gt-l">OF · artículo</div><div class="gt-g gt-eje">${ticks.map(d=>`<span style="left:${pos(d)}%">${pcpDM(pcpIso(d))}</span>`).join("")}</div></div>
-      <div class="gt-cuerpo">${filas}${hoy>=a&&hoy<=b?`<div class="gt-hoy" style="--p:${pos(hoy+.5)}" title="Hoy"></div>`:""}</div></div></div>`;
+      <div class="gt-cuerpo">${filas}${hoy>=a&&hoy<=b?`<div class="gt-hoy" style="--p:${pos(hoy+.5)}" title="Hoy"></div>`:""}</div></div></div></div>`;
+  croGanttReact(box.querySelector(".rg-host"));
+}
+function croGanttReact(host){
+  const r=CRO.r, G=(CRO.p.ofs||[]).filter(x=>!CRO.sub||x.sub===CRO.sub); if(!host||typeof ganttMejorar!=="function") return;
+  ganttMejorar(host,{desde:r.desde,hasta:r.hasta,hoy:r.hoy,leyenda:[["corte","Costura entrega"],["cos","Acabado (relleno = % de la OF terminado)"]],
+    filas:(CRO.p.ofs||[]).map(x=>{ const base=x.meta||x.costura||0, p=base?Math.round(x.acabado/base*100):null, ln=CRO_SUB[x.sub]||x.sub;
+      return {id:x.o_f+"|"+x.sub,g:x.sub,t:`${x.o_f} · ${x.articulo||""}`,sub:`${ln} · Acabado ${pcpN(x.acabado)} de ${pcpN(base)} · costura ${pcpN(x.costura)}`,q:(x.o_f+" "+(x.articulo||"")+" "+ln).toLowerCase(),
+        barras:[{lane:0,cls:"gt-corte",i:x.llega_ini,f:x.llega_fin,tit:`Costura entregó ${pcpDM(x.llega_ini)} – ${pcpDM(x.llega_fin)}`},
+          {lane:1,cls:"gt-cos",i:x.acab_ini,f:x.acab_fin,pct:p,txt:p!=null?p+" %":"",tit:`Acabado ${pcpDM(x.acab_ini)} – ${pcpDM(x.acab_fin)}`}],
+        det:[["OF · prenda",`${x.o_f} · ${ln}`],["Cantidad de la OF",pcpN(base)],["Costura entregó",pcpN(x.costura)],["Acabado terminó",`${pcpN(x.acabado)}${p!=null?" ("+p+" %)":""}`],
+          ["Falta terminar",pcpN(Math.max(0,base-x.acabado))],["Acabado",x.acab_ini?`${pcpDM(x.acab_ini)} – ${pcpDM(x.acab_fin)}`:"—"]]}; }),
+    chips:["","CAMISERIA","SACO","PANTALON"].map(k=>({k,t:k?CRO_SUB[k]:"Todas"})),vacio:"No hubo movimiento de costura ni de Acabado en estas fechas."});
 }
 function croGanttMin(r,box){
   const G=(r.ofs||[]).filter(x=>!CRO.sub||x.sub===CRO.sub);
