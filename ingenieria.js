@@ -5245,6 +5245,7 @@ function incPintar(){
     const celdas = dias.map(d=>{
       const c=(p.dias||{})[d.fecha]||{};
       if(c.etiqueta){
+        if(c.etiqueta==="FUERA") return `<td class="inc-etq inc-finde" title="Fuera de la estructura del mes">—</td>`;
         const finde = ["SABADO","DOMINGO","FERIADO"].includes(c.etiqueta);
         return `<td class="inc-etq${finde?" inc-finde":""}" title="${esc(c.etiqueta)}">${esc(c.etiqueta.slice(0,3))}</td>`;
       }
