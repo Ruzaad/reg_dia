@@ -12,6 +12,8 @@ const IR_JORNADA=575;
 const irFalta = e => /Could not find the function|PGRST202|does not exist/i.test(String(e&&e.message||e||""));
 const irMin = n => Number(n||0).toLocaleString("es-PE");
 const irDM = f => { const p=String(f||"").slice(0,10).split("-"); return p.length===3?`${p[2]}/${p[1]}`:""; };
+const irAreaDe = it => it.area_est||it.area;
+const irPide = (it,m) => Number(it.pide)+Math.min(0,Number(it.minutos))-Math.min(0,Number(m));
 const irHora = f => String(f||"").slice(11,16);
 
 /* Lo que el texto deja ver aunque haya llegado como OTROS. */
@@ -25,15 +27,15 @@ function irSugerencia(it){
   if(tp==="OTROS" && /MUESTRA/.test(m)) return {t:"", c:"", o:"Parece MUESTRAS"};
   return null;
 }
-function irAlertas(it){
+function irAlertas(it,m=it.minutos){
   const r=[], o=[];
   if(it.rep) r.push(it.rep.estado==="APROBADO"
     ? `Ya tiene ${it.minutos} aprobado ese día con el mismo motivo`
     : `Repetido: igual al pedido de las ${it.rep.hora}`);
   if(it.igual) r.push(`Ya existe una incidencia igual ese día (${soloApellidos(it.igual.por||"")})`);
   if(it.reg!=null){
-    const tot=Number(it.reg)+Number(it.inc)+Number(it.pide), disp=IR_JORNADA+Number(it.he||0);
-    if(tot>disp) r.push(`Con ${Number(it.pide)>Math.abs(it.minutos)?"sus pedidos":"este"} el día pasa el turno por ${Math.round(tot-disp)} min`);
+    const pide=irPide(it,m), tot=Number(it.reg)+Number(it.inc)+pide, disp=IR_JORNADA+Number(it.he||0);
+    if(tot>disp) r.push(`Con ${pide>Math.abs(m)?"sus pedidos":"este"} el día pasa el turno por ${Math.round(tot-disp)} min`);
   }
   const sg=irSugerencia(it); if(sg && sg.o) o.push(sg.o);
   return {r,o};
@@ -55,7 +57,7 @@ async function cargarPendientesInci(){
     const sel=$("areaInciPend");
     if(sel){
       const prev=sel.value;
-      const areas=[...new Set(IR.items.map(x=>x.area).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+      const areas=[...new Set(IR.items.map(irAreaDe).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
       if(prev && !areas.includes(prev)) areas.push(prev);
       sel.innerHTML=`<option value="">Todas mis áreas</option>`+areas.map(a=>`<option>${esc(a)}</option>`).join("");
       // El filtro de área de arriba (dinamico.js) manda cuando el select está escondido.
@@ -67,9 +69,9 @@ async function cargarPendientesInci(){
   }catch(e){ z.innerHTML=""; mostrarError(e.message); }
 }
 
-function irBarraDia(it){
+function irBarraDia(it,m=it.minutos){
   if(it.reg==null) return "";
-  const reg=Number(it.reg), otras=Number(it.inc)+Number(it.pide), disp=IR_JORNADA+Number(it.he||0);
+  const reg=Number(it.reg), otras=Number(it.inc)+irPide(it,m), disp=IR_JORNADA+Number(it.he||0);
   const tot=reg+otras, base=Math.max(disp,tot), ex=Math.max(0,tot-disp);
   const pc=v=>(v/base*100).toFixed(1)+"%";
   return `<div class="ir-dia" role="img" aria-label="Registró ${reg} min, incidencias ${otras} min, de ${disp}">
@@ -95,16 +97,17 @@ function pintarPendientesInci(){
   const ar=(($("areaInciPend")||{}).value||""), ver=(($("verInciPend")||{}).value||"");
   const q=normKey((($("filtroInciPend")||{}).value||""));
   const items=IR.items.filter(it=>
-    (!ar || it.area===ar) &&
+    (!ar || irAreaDe(it)===ar) &&
     (!ver || (ver==="vb" ? it.visto_bueno : ver==="sin" ? !it.visto_bueno && !it.solo_ing : irAlertas(it).r.length>0)) &&
     (!q || normKey([it.nombre,it.tipo,it.motivo,it.solicitante,it.o_f,it.area_causa,it.area_trabajo].join(" ")).includes(q)));
   { const rp=$("resumenInciPend"); if(rp) rp.textContent=`${items.length} de ${IR.items.length} pendiente(s)`; }
   if(!IR.items.length){ z.innerHTML=`<div class="vacio-msg">Sin incidencias pendientes en tus áreas</div>`; return; }
 
-  const areas=[...new Set(items.map(x=>x.area))].sort((a,b)=>a.localeCompare(b,"es"));
-  const lee=a=>items.some(x=>x.area===a) && items.filter(x=>x.area===a).every(x=>x.aprueba===false);
+  items.sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha))||String(a.nombre).localeCompare(String(b.nombre),"es")||a.id-b.id);
+  const areas=[...new Set(items.map(irAreaDe))].sort((a,b)=>a.localeCompare(b,"es"));
+  const lee=a=>items.some(x=>irAreaDe(x)===a) && items.filter(x=>irAreaDe(x)===a).every(x=>x.aprueba===false);
   const tarjetas=`<div class="ir-areas">${areas.map(a=>{
-    const xs=items.filter(x=>x.area===a), vb=xs.filter(x=>x.visto_bueno).length;
+    const xs=items.filter(x=>irAreaDe(x)===a), vb=xs.filter(x=>x.visto_bueno).length;
     const viejo=xs.map(x=>x.pidio||"").sort()[0]||"", al=xs.filter(x=>irAlertas(x).r.length).length;
     return `<button type="button" class="ir-ar${lee(a)?" ro":""}" onclick="irArea('${esc(a)}')">
       <span class="t">${esc(a)}${lee(a)?" · solo lectura":""}</span>
@@ -122,16 +125,16 @@ function pintarPendientesInci(){
       <td class="izq ir-per"><b>${esc(it.nombre)}</b><small>${it.cat?`Cat. ${esc(it.cat)} · `:""}pidió ${esc(irDM(it.pidio))} ${esc(irHora(it.pidio))}</small></td>
       <td>${esc(irDM(it.fecha))}</td>
       <td class="izq ir-mot">${irQue(it)}</td>
-      ${IR.nuevo?`<td>${irBarraDia(it)}</td>`:""}
-      <td class="izq"><div class="ir-av">${irSupTag(it)}${al.r.map(t=>`<span class="tag r">${esc(t)}</span>`).join("")}${al.o.map(t=>`<span class="tag o">${esc(t)}</span>`).join("")}</div></td>
-      <td class="nw">${ro?`<b class="ir-num">${it.minutos}</b>`:`<input class="ir-min" id="inci_${it.id}" type="number" value="${it.minutos}" aria-label="Minutos">`}</td>
+      ${IR.nuevo?`<td id="irDia${it.id}">${irBarraDia(it)}</td>`:""}
+      <td class="izq"><div class="ir-av" id="irAv${it.id}">${irSupTag(it)}${al.r.map(t=>`<span class="tag r">${esc(t)}</span>`).join("")}${al.o.map(t=>`<span class="tag o">${esc(t)}</span>`).join("")}</div></td>
+      <td class="nw">${ro?`<b class="ir-num">${it.minutos}</b>`:`<input class="ir-min" id="inci_${it.id}" type="number" value="${it.minutos}" aria-label="Minutos" oninput="irVivo(${it.id})">`}</td>
       <td class="nw">${ro?`<span class="tag g">Solo lectura</span>`:`<div class="ir-acc">
         <button class="btn-mini verde" onclick="resolverIncidI(${it.id},true)">Aprobar</button>
         <button class="btn-mini rojo" onclick="resolverIncidI(${it.id},false)">Rechazar</button></div>`}</td></tr>`;
   };
   const cols=IR.nuevo?8:7;
   const cuerpo=items.length ? areas.map(a=>{
-    const ys=items.filter(x=>x.area===a);
+    const ys=items.filter(x=>irAreaDe(x)===a);
     return `<tr class="ir-grupo"><td colspan="${cols}">${esc(a)}<span>${ys.length} pendientes · ${irMin(ys.reduce((s,x)=>s-Number(x.minutos||0),0))} min${lee(a)?" · tú solo lees esta área":""}</span></td></tr>`
       + ys.map(fila).join("");
   }).join("") : `<tr><td colspan="${cols}"><div class="vacio-msg">Nada con ese filtro</div></td></tr>`;
@@ -141,6 +144,13 @@ function pintarPendientesInci(){
       <th class="izq">${IR.nuevo?"Supervisora y alertas":"Alertas"}</th><th>Min</th><th></th></tr></thead><tbody>${cuerpo}</tbody></table></div>
     <div class="ir-pie"><button class="btn-mini verde" id="irLote" onclick="irAprobarLote()"${marcadas.length?"":" disabled"}>Aprobar ${marcadas.length===1?"la marcada":`las ${marcadas.length} marcadas`}</button>
       <span class="sub">${IR.nuevo?"Solo se pueden marcar las que tienen visto bueno y ninguna alerta roja. ":""}Rechazar siempre pide el motivo, y el operario lo ve en su celular.</span></div>`;
+}
+function irVivo(id){
+  const it=IR.items.find(x=>x.id===id), i=$("inci_"+id); if(!it||!i) return;
+  const m=parseInt(i.value,10); if(isNaN(m)) return;
+  const d=$("irDia"+id); if(d) d.innerHTML=irBarraDia(it,m);
+  const al=irAlertas(it,m), a=$("irAv"+id);
+  if(a) a.innerHTML=irSupTag(it)+al.r.map(t=>`<span class="tag r">${esc(t)}</span>`).join("")+al.o.map(t=>`<span class="tag o">${esc(t)}</span>`).join("");
 }
 function irArea(a){ const s=$("areaInciPend"); if(!s) return; s.value = s.value===a ? "" : a; pintarPendientesInci(); }
 function irMarcar(id, on){ on?IR.marcadas.add(id):IR.marcadas.delete(id); pintarPendientesInci(); }
