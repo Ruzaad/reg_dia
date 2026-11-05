@@ -52,11 +52,15 @@ begin
                             and coalesce(pct_lista, pct_mod) - ef_tk <= 0) into v_sobra from _bc;
 
   insert into eficiencia_manual (dni, fecha, pct, registrado_por)
-  select dni, f, round(coalesce(pct_lista, pct_mod) - ef_tk, 1), p_usuario
-    from _bc
-   where not ausente and coalesce(pct_lista, pct_mod) is not null and coalesce(pct_lista, pct_mod) - ef_tk > 0
+  select dni, f, round(pct_lista - ef_tk, 1), p_usuario
+    from _bc where not ausente and pct_lista is not null and pct_lista - ef_tk > 0
   on conflict (dni, fecha) do update
     set pct = excluded.pct, registrado_por = excluded.registrado_por, creado = now();
+  -- El modular nunca pisa una eficiencia manual ya cargada (por tabla o a mano).
+  insert into eficiencia_manual (dni, fecha, pct, registrado_por)
+  select dni, f, round(pct_mod - ef_tk, 1), p_usuario
+    from _bc where not ausente and pct_lista is null and pct_mod is not null and pct_mod - ef_tk > 0
+  on conflict (dni, fecha) do nothing;
 
   select count(*) filter (where not ausente and pct_lista is not null and pct_lista - ef_tk > 0),
          count(*) filter (where not ausente and pct_lista is null and pct_mod is not null and pct_mod - ef_tk > 0)
