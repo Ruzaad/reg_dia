@@ -2,7 +2,7 @@
    SAMITEX — Vista de Ingeniería (requiere app.js cargado antes)
    ============================================================ */
 let ING=null;
-let AREAS_LISTA = Object.keys(AREAS);       // se reemplaza con fn_areas_listar al iniciar
+let AREAS_LISTA = Object.keys(AREAS), AREAS_ESTR = [];   // AREAS_ESTR = con UDP, solo para Estructura y Personal       // se reemplaza con fn_areas_listar al iniciar
 const CARGOS_LISTA = ["OPERARIO","SUPERVISORA"];
 const ESTADOS_OPERARIO = ["ACTIVO","INACTIVO"];
 const CATEGORIAS_LISTA = ["","A","B","C","D"];   // "" = sin asignar (parche 34)
@@ -208,8 +208,8 @@ const puedeLeer  = a => PERM_LIBRE() || !!PERM.areas["*"] || !!PERM.areas[a];
 const leeTodas   = () => PERM_LIBRE() || !!PERM.areas["*"];
 /* Filtro de área de las pantallas que eran solo del administrador (parche 101):
    "Todas las áreas" solo sale a quien lee todas; los demás eligen una suya. */
-const opcionesAreaVista = () => (leeTodas() ? '<option value="">Todas las áreas</option>' : "")
-  + (AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+const opcionesAreaVista = (L=AREAS_LISTA) => (leeTodas() ? '<option value="">Todas las áreas</option>' : "")
+  + (L||[]).map(a=>`<option>${esc(a)}</option>`).join("");
 const areasEdita = () => Object.keys(PERM.areas).filter(a=>a!=="*" && PERM.areas[a]==="EDITAR");
 function puedeEditar(a){
   if(PERM_LIBRE() || PERM.areas["*"]==="EDITAR") return true;
@@ -354,6 +354,8 @@ function cerrarSidebarMovil(){ if(window.innerWidth<=900) document.body.classLis
 
 function poblarSelectsArea(){
   AREAS_LISTA = AREAS_LISTA.filter(puedeLeer);   // parche 95: solo las áreas que puede ver
+  AREAS_ESTR = [...new Set([...AREAS_ESTR, ...AREAS_LISTA])].filter(puedeLeer);
+  AREAS_LISTA = AREAS_LISTA.filter(a=>a!=="UDP");   // UDP solo sirve en Estructura
   const op = a=>`<option>${esc(a)}</option>`;
   const elige = `<option value="">— Elige área —</option>`;
   const todas = leeTodas() ? `<option value="">Todas las áreas</option>` : "";
@@ -1617,7 +1619,7 @@ async function cargarEfRango(){
     const res = await rpc("fn_eficiencia_rango",{p_dni:ING.dni,p_token:ING.token,
       p_desde:efRangoSel.desde, p_hasta:efRangoSel.hasta, p_area:$("filtroAreaEfR").value});
     if(!res.ok){ mostrarError(res.error||"Error"); $("tablaEfR").innerHTML=""; return; }
-    EFR = {dias:res.dias, personal:res.personal};
+    EFR = {dias:res.dias, personal:(res.personal||[]).filter(x=>![x.area,x.area_origen,x.area_base].includes("UDP"))};
     $("resumenEfR").textContent = `${EFR.personal.length} persona(s) · ${EFR.dias.length} día(s) · ${efRangoSel.desde} a ${efRangoSel.hasta}`;
     pintarEfRango();
   }catch(e){ $("tablaEfR").innerHTML=""; mostrarError(e.message); }
@@ -1767,7 +1769,7 @@ function cerrarModal(){
 
 /* ---- Modal: crear / editar personal ---- */
 async function abrirModalPersonal(dni){
-  let datos = {dni:"", nombres_apellidos:"", area_origen:AREAS_LISTA[0]||"", area_actual:AREAS_LISTA[0]||"",
+  let datos = {dni:"", nombres_apellidos:"", area_origen:AREAS_ESTR[0]||"", area_actual:AREAS_ESTR[0]||"",
     estado:"ACTIVO", cargo:"OPERARIO", categoria:""};
   const esEdicion = !!dni;
   if(esEdicion){
@@ -1787,7 +1789,7 @@ async function abrirModalPersonal(dni){
   const catsSel = [...new Set([...CATEGORIAS_LISTA, datos.categoria||""])];
   // Incluye siempre el área real del registro aunque no esté en AREAS_LISTA,
   // para que el select no caiga en la primera opción por defecto al editar.
-  const areasSel = [...new Set([datos.area_origen, datos.area_actual, ...AREAS_LISTA.filter(a=>puedeEditar(a))])].filter(Boolean);
+  const areasSel = [...new Set([datos.area_origen, datos.area_actual, ...AREAS_ESTR.filter(a=>puedeEditar(a))])].filter(Boolean);
   const html = `
     <h2>${esEdicion? "Editar personal":"Agregar personal"}</h2>
     <div class="modal-campo">
@@ -1932,7 +1934,7 @@ let EST={mes:"",filas:[],sin:[],hayAnt:false};
 function estMesActual(){ return ($("estMes")&&$("estMes").value||hoyISO().slice(0,7))+"-01"; }
 function estInit(){
   const m=$("estMes"); if(m && !m.value) m.value=hoyISO().slice(0,7);
-  const s=$("estArea"); if(s && !s.options.length) s.innerHTML=opcionesAreaVista();
+  const s=$("estArea"); if(s && !s.options.length) s.innerHTML=opcionesAreaVista(AREAS_ESTR);
   perCargarEst();
 }
 async function perCargarEst(){
@@ -1979,8 +1981,8 @@ function perPintarEst(){
 }
 function abrirModalEst(dni){
   const f=dni?EST.filas.find(x=>x.dni===dni):null;
-  const d=f||{dni:"",nombre:"",area:($("estArea")||{}).value||(AREAS_LISTA[0]||""),subarea:"",tipo:"MOD",cargo:"",desde:"",hasta:"",nota:""};
-  const areas=[...new Set([d.area,...AREAS_LISTA.filter(a=>puedeEditar(a)),"LIQUIDACION"])].filter(Boolean);
+  const d=f||{dni:"",nombre:"",area:($("estArea")||{}).value||(AREAS_ESTR[0]||""),subarea:"",tipo:"MOD",cargo:"",desde:"",hasta:"",nota:""};
+  const areas=[...new Set([d.area,...AREAS_ESTR.filter(a=>puedeEditar(a)),"LIQUIDACION"])].filter(Boolean);
   const cargos=[...new Set(EST.filas.map(x=>x.cargo).filter(Boolean))].sort();
   abrirModal(`<h2>${f?"Editar en la estructura":"Agregar a la estructura"}</h2>
     <div class="sub" style="margin-bottom:10px;">Mes: <b>${esc(EST.mes.slice(0,7))}</b>. El área de aquí es la <b>oficial</b>; si alguien solo apoya en otra área, no se cambia aquí.</div>
@@ -4802,7 +4804,7 @@ async function cargarInc(){
     const r=await rpc("fn_incentivos_quincena",{p_dni:ING.dni,p_token:ING.token,
       p_desde:d, p_hasta:h, p_area:leeTodas()?"":(($("incArea")||{}).value||"")});
     if(!r.ok){ mostrarError(r.error||"Error"); $("tablaInc").innerHTML=""; return; }
-    INC=r; incPintar();
+    r.personas=(r.personas||[]).filter(x=>x.area!=="UDP"); INC=r; incPintar();
   }catch(e){ $("tablaInc").innerHTML=""; mostrarError(e.message); }
 }
 /* Cargar Bon. Corte (parche 167): eficiencia manual de CORTE pegada desde Excel
@@ -5500,7 +5502,7 @@ async function armarSustento(){
   $("susDoc").innerHTML=`<div class="vacio-msg">Armando el sustento…</div>`;
   try{
     const pedir = (x,y)=>rpc("fn_incentivos_quincena",{p_dni:ING.dni,p_token:ING.token,
-      p_desde:x, p_hasta:y, p_area:area});
+      p_desde:x, p_hasta:y, p_area:area}).then(r=>{ if(r&&r.personas) r.personas=r.personas.filter(x=>x.area!=="UDP"); return r; });
     const [act, ant] = await Promise.all([pedir(d,h), cd&&ch ? pedir(cd,ch) : Promise.resolve(null)]);
     if(!act.ok){ mostrarError(act.error||"Error"); $("susDoc").innerHTML=""; return; }
     if(ant && !ant.ok) mostrarError("La quincena anterior no se pudo leer: el sustento sale sin comparación");
