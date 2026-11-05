@@ -4805,6 +4805,53 @@ async function cargarInc(){
     INC=r; incPintar();
   }catch(e){ $("tablaInc").innerHTML=""; mostrarError(e.message); }
 }
+/* Cargar Bon. Corte (parche 167): eficiencia manual de CORTE pegada desde Excel
+   (DNI · nombre · categoría · fecha · eficiencia). Sin tabla, el % del modular de CORTE. */
+function bonCorteLeer(txt){
+  const out=[];
+  String(txt||"").split(/\r?\n/).forEach(l=>{
+    const c=l.split("\t").map(x=>x.trim()); const dni=(c.find(x=>/^\d{7,8}$/.test(x))||"");
+    const f=(c.find(x=>/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(x))||"").split("/");
+    const p=[...c].reverse().find(x=>/^\d+([.,]\d+)?\s*%?$/.test(x)&&x!==dni);
+    if(!dni||f.length!==3||p==null) return;
+    let v=parseFloat(p.replace(",",".").replace("%","")); if(!/%/.test(p)&&v<=1.5) v*=100;
+    out.push({dni:dni.padStart(8,"0"), fecha:`${f[2]}-${f[1].padStart(2,"0")}-${f[0].padStart(2,"0")}`, pct:Math.round(v*10)/10});
+  });
+  return out;
+}
+function bonCorteAbrir(){
+  const d=$("incDesde").value, h=$("incHasta").value;
+  if(!d||!h){ mostrarError("Elige el rango de la quincena"); return; }
+  abrirModal(`<h2>Cargar Bon. Corte</h2>
+    <div class="sub" style="margin-bottom:10px;">${esc(d.split("-").reverse().join("/"))} al ${esc(h.split("-").reverse().join("/"))} · solo CORTE</div>
+    <div class="modal-campo"><label for="bcTxt">Tabla de eficiencias (pega desde Excel)</label>
+      <textarea id="bcTxt" rows="9" style="width:100%;font:13px var(--mono);" placeholder="DNI&#9;APELLIDO Y NOMBRES&#9;CAT.&#9;16/10/2026&#9;92%" oninput="bonCorteVista()"></textarea></div>
+    <label class="campo-check"><input type="checkbox" class="sw" id="bcMod" checked> Al resto de CORTE: eficiencia del bono modular</label>
+    <div class="modal-msg" id="bcMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" id="bcBtn" onclick="bonCorteGuardar()">CARGAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`, "modal-ancho");
+}
+function bonCorteVista(){
+  const f=bonCorteLeer($("bcTxt").value);
+  $("bcMsg").textContent=f.length?`${new Set(f.map(x=>x.dni)).size} personas · ${f.length} filas leídas`:"";
+}
+async function bonCorteGuardar(){
+  const filas=bonCorteLeer($("bcTxt").value), mod=$("bcMod").checked;
+  if(!filas.length && !mod){ $("bcMsg").textContent="Pega la tabla o marca el bono modular"; return; }
+  $("bcBtn").disabled=true; $("bcMsg").textContent="Cargando…";
+  try{
+    const r=await rpc("fn_bon_corte_cargar",{p_dni:ING.dni,p_token:ING.token,p_desde:$("incDesde").value,p_hasta:$("incHasta").value,p_filas:filas,p_modular:mod});
+    if(!r||!r.ok){ $("bcMsg").textContent=(r&&r.error)||"No se pudo cargar"; $("bcBtn").disabled=false; return; }
+    cerrarModal();
+    mostrarOk(`Bon. Corte: ${r.por_tabla} días por tabla · ${r.por_modular} por modular · ${r.ausentes} con ausencia sin cargar`);
+    cargarInc();
+  }catch(e){
+    $("bcBtn").disabled=false;
+    $("bcMsg").textContent=/Could not find the function/i.test(e.message)?"Falta correr el parche 167 en Supabase":e.message;
+  }
+}
 /* Quien lee todas trae la quincena entera y filtra aquí; quien solo ve sus
    áreas pide una a la vez, porque la base no le da "todas". */
 function incCambiaArea(){ leeTodas() ? incPintar() : cargarInc(); }
