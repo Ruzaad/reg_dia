@@ -400,7 +400,7 @@ async function cbDescargarXlsx(){
    de _disp_reparto (la regla de la eficiencia): si solo tiene tickets en otra
    área, va completa a esa área. Todas las áreas cuentan con la penúltima
    operación; "Trabajo en curso" (parche 164) lista área › prenda › OF › módulo. La OF de Costos es de 10 dígitos: 4 + ceros + la OF de planta. */
-let CH={fecha:"", area:null, tk:[], ult:{}, sam:{}, per:[], est:{}, inc:[], op:"p", curso:[], fInc:"sin", abiertas:new Set()};
+let CH={fecha:"", area:null, tk:[], ult:{}, sam:{}, per:[], est:{}, inc:[], op:"p", curso:[], cAb:new Set(), fInc:"sin", abiertas:new Set()};
 const ofCostos = o => /^\d{1,9}$/.test(String(o||"").trim()) ? "4"+String(o).trim().padStart(9,"0") : "";
 const areaCorta = a => String(a||"").replace(" COSTURA","");
 const n0 = v => v==null||v==="" ? "" : qtyI(v);
@@ -456,19 +456,24 @@ function pintarCurso(){
   if(CH.op!=="c") return;
   const toks=String($("chBuscar").value||"").split(/\s+/).map(normKey).filter(Boolean);
   const it=CH.curso.filter(x=>!toks.length || toks.every(k=>normKey([x.of,ofCostos(x.of),x.articulo,x.prenda,x.area,x.modulo].join(" ")).includes(k)));
-  const todas=!CH.area; let h="", ant={a:"",p:"",o:"",m:""}, nOf=0;
+  const todas=!CH.area; let h="", ant={a:"",p:"",o:"",m:"",k:""}, nOf=0, ab=false;
   it.forEach(x=>{
     const a=x.area||"", p=x.prenda||"", o=x.of||"", m=x.modulo||"";
     if(todas && a!==ant.a){ h+=`<tr class="cb-sub"><td colspan="6" class="izq"><b>${esc(areaCorta(a))}</b></td></tr>`; ant={a,p:"",o:"",m:""}; }
     if(p!==ant.p){ h+=`<tr><td colspan="6" class="izq"><span class="sub">${esc(p||"Sin prenda")}</span></td></tr>`; ant.p=p; ant.o=""; ant.m=""; }
-    if(o!==ant.o){ nOf++; h+=`<tr class="ch-fila abierta"><td class="izq" colspan="6"><div class="ch-of">${esc(ofCostos(o)||o||"(sin OF)")}<small>${esc(x.articulo||"")}${o?" · OF "+esc(o):""}</small></div></td></tr>`; ant.o=o; ant.m=""; }
-    if(m!==ant.m){ h+=`<tr><td class="izq" colspan="6"><b>Módulo ${esc(m||"—")}</b></td></tr>`; ant.m=m; }
-    h+=`<tr class="ch-op"><td class="izq">${x.nop!=null?`<span class="sub">N°${esc(x.nop)}</span>`:""}</td><td class="izq">${esc(norm(x.op)||"(sin operación)")}</td>
+    if(o!==ant.o){ nOf++; ant.k=p+"|"+o; ab=CH.cAb.has(ant.k); h+=`<tr class="ch-fila${ab?" abierta":""}" data-k="${esc(ant.k)}" onclick="chCursoTog(this)"><td class="izq" colspan="6"><div class="ch-of">${esc(ofCostos(o)||o||"(sin OF)")}<small>${esc(x.articulo||"")}${o?" · OF "+esc(o):""}</small></div></td></tr>`; ant.o=o; ant.m=""; }
+    if(m!==ant.m){ h+=`<tr data-ck="${esc(ant.k)}"${ab?"":" hidden"}><td class="izq" colspan="6"><b>Módulo ${esc(m||"—")}</b></td></tr>`; ant.m=m; }
+    h+=`<tr class="ch-op" data-ck="${esc(ant.k)}"${ab?"":" hidden"}><td class="izq">${x.nop!=null?`<span class="sub">N°${esc(x.nop)}</span>`:""}</td><td class="izq">${esc(norm(x.op)||"(sin operación)")}</td>
       <td class="n"><b>${qtyI(Number(x.cant)||0)}</b></td><td class="n">${qty(Number(x.minutos)||0)}</td><td class="n">${x.personas}</td><td class="n">${x.tks}</td></tr>`;
   });
   $("chTablaCurso").innerHTML=`<thead><tr><th class="izq">N°</th><th class="izq">Operación</th><th class="n">Cantidad</th><th class="n">Min.</th><th class="n">Personas</th><th class="n">Tickets</th></tr></thead><tbody>`
     +(h||`<tr><td colspan="6"><div class="vacio-msg">Sin tickets ese día</div></td></tr>`)+"</tbody>";
   $("chPieCurso").textContent=it.length?`${nOf} OF`:"";
+}
+function chCursoTog(tr){
+  const k=tr.dataset.k, ab=!CH.cAb.has(k); ab?CH.cAb.add(k):CH.cAb.delete(k);
+  tr.classList.toggle("abierta",ab);
+  $("chTablaCurso").querySelectorAll("tr[data-ck]").forEach(x=>{ if(x.dataset.ck===k) x.hidden=!ab; });
 }
 function chModo(){ return "p"; }
 /* Una fila por área + OF + artículo, con sus operaciones dentro. */
