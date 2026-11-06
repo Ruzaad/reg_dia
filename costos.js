@@ -488,7 +488,7 @@ function chOfs(){
   });
   const toks=String($("chBuscar").value||"").split(/\s+/).map(normKey).filter(Boolean);
   const filas=Object.values(grp).filter(g=>!toks.length || toks.every(x=>normKey([g.of,g.of10,g.articulo,g.prenda,g.area].join(" ")).includes(x)));
-  filas.forEach(g=>{ g.eq=g.sam&&g.cant!=null?g.cant*g.sam:null; g.ops.sort((a,b)=>(Number(a.nop)||0)-(Number(b.nop)||0)); });
+  filas.forEach(g=>{ g.eq=g.sam?g.min/g.sam:null; if(g.sam&&g.cant!=null) g.min=g.cant*g.sam; g.ops.sort((a,b)=>(Number(a.nop)||0)-(Number(b.nop)||0)); });
   return {filas, sinNop, sinBase};
 }
 /* Personal: por persona, sus áreas del día. */
@@ -574,7 +574,7 @@ function pintarCostosHoy(){
     + "</tbody>"
     + (filas.length?`<tfoot><tr class="ch-total"><td class="izq" colspan="${cols.length-5}"><b>Total</b></td><td class="n"><b>${qtyI(totCant)}</b></td><td class="n"><b>${qtyI(totMin)}</b></td><td class="n"><b>${qtyI(totEq)}</b></td><td colspan="2"></td></tr></tfoot>`:"");
   const out=[]; if(sinNop) out.push(`${sinNop} sin N°OP`); if(sinBase) out.push(`${sinBase} sin BASE del artículo`);
-  $("chPieTk").textContent=(filas.length?`${filas.length} OF · ${qtyI(prod)} min producidos · prendas equivalentes = cantidad × S.A.M`:"")
+  $("chPieTk").textContent=(filas.length?`${filas.length} OF · ${qtyI(prod)} min producidos · min. producidos = cantidad × S.A.M · prendas equivalentes = lo registrado ÷ S.A.M`:"")
     + (out.length?` · no cuentan para la cantidad: ${out.join(", ")} ticket(s)`:"");
 
   // Incidencias
