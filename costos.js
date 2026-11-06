@@ -488,7 +488,7 @@ function chOfs(){
   });
   const toks=String($("chBuscar").value||"").split(/\s+/).map(normKey).filter(Boolean);
   const filas=Object.values(grp).filter(g=>!toks.length || toks.every(x=>normKey([g.of,g.of10,g.articulo,g.prenda,g.area].join(" ")).includes(x)));
-  filas.forEach(g=>{ g.eq=g.sam?g.min/g.sam:null; g.ops.sort((a,b)=>(Number(a.nop)||0)-(Number(b.nop)||0)); });
+  filas.forEach(g=>{ g.eq=g.sam&&g.cant!=null?g.cant*g.sam:null; g.ops.sort((a,b)=>(Number(a.nop)||0)-(Number(b.nop)||0)); });
   return {filas, sinNop, sinBase};
 }
 /* Personal: por persona, sus áreas del día. */
@@ -557,6 +557,7 @@ function pintarCostosHoy(){
     {k:"sam",t:"S.A.M",cls:"n"},{k:"cant_of",t:"Cant. OF",cls:"n"},{k:"cant",t:"Cantidad producida",cls:"n"},{k:"min",t:"Min. producidos",cls:"n"},{k:"eq",t:"Prendas equivalentes",cls:"n"},
     {k:"per",t:"Personas",cls:"n"},{k:"tks",t:"Tickets",cls:"n"}]);
   const porDef=(a,b)=>a.area.localeCompare(b.area,"es") || b.min-a.min;
+  const totCant=filas.reduce((t,g)=>t+(g.cant||0),0), totEq=filas.reduce((t,g)=>t+(g.eq||0),0), totMin=filas.reduce((t,g)=>t+g.min,0);
   $("chTablaTk").innerHTML = ordThead("chTablaTk", cols, pintarCostosHoy) + "<tbody>"
     + (filas.length ? ordAplicar("chTablaTk", filas, porDef).map(g=>{ const ab=CH.abiertas.has(g.k);
         return `<tr class="ch-fila${ab?" abierta":""}" data-k="${esc(g.k)}" onclick="chOfAbrir(this.dataset.k)">
@@ -570,9 +571,10 @@ function pintarCostosHoy(){
             <td class="n">${o.std?num2(o.std):""}</td><td></td><td class="n">${qtyI(o.cant)}</td><td class="n">${qty(o.min)}</td><td></td>
             <td class="n">${o.per}</td><td class="n">${o.tks}</td></tr>`).join(""); }).join("")
       : `<tr><td colspan="${cols.length}"><div class="vacio-msg">Sin tickets ese día</div></td></tr>`)
-    + "</tbody>";
+    + "</tbody>"
+    + (filas.length?`<tfoot><tr class="ch-total"><td class="izq" colspan="${cols.length-5}"><b>Total</b></td><td class="n"><b>${qtyI(totCant)}</b></td><td class="n"><b>${qtyI(totMin)}</b></td><td class="n"><b>${qtyI(totEq)}</b></td><td colspan="2"></td></tr></tfoot>`:"");
   const out=[]; if(sinNop) out.push(`${sinNop} sin N°OP`); if(sinBase) out.push(`${sinBase} sin BASE del artículo`);
-  $("chPieTk").textContent=(filas.length?`${filas.length} OF · ${qtyI(prod)} min producidos · prendas equivalentes = minutos ÷ S.A.M`:"")
+  $("chPieTk").textContent=(filas.length?`${filas.length} OF · ${qtyI(prod)} min producidos · prendas equivalentes = cantidad × S.A.M`:"")
     + (out.length?` · no cuentan para la cantidad: ${out.join(", ")} ticket(s)`:"");
 
   // Incidencias
