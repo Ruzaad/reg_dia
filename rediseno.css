@@ -2248,3 +2248,5 @@ label.ini-pn-campo{cursor:text}
 .ini-dg-bar i{display:block;height:100%;border-radius:99px;background:var(--dorado);opacity:.7}
 @media(min-width:1000px){.ini-dg-t{font-size:14px} .ini-dg-t th{font-size:11px}}
 .ch-total td{background:var(--azul-t);border-top:2px solid var(--linea);padding-top:10px;padding-bottom:10px}
+.ch-t tr[hidden]{display:none}
+#chKpis{max-width:none;margin-left:0;margin-right:0}
