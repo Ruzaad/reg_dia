@@ -2250,3 +2250,4 @@ label.ini-pn-campo{cursor:text}
 .ch-total td{background:var(--azul-t);border-top:2px solid var(--linea);padding-top:10px;padding-bottom:10px}
 .ch-t tr[hidden]{display:none}
 #chKpis{max-width:none;margin-left:0;margin-right:0}
+#caKpis{max-width:none;margin-left:0;margin-right:0;grid-template-columns:repeat(auto-fit,minmax(104px,1fr))}
