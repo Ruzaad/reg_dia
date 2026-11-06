@@ -433,7 +433,7 @@ async function cargarCostosHoy(){
     (r.ultimas||[]).forEach(u=>{ CH.ult[u.area+"|"+u.articulo]=u; });
     (r.sam||[]).forEach(s=>{ CH.sam[s.area+"|"+s.articulo]=Number(s.sam)||0; });
     (r.estructura||[]).forEach(e=>{ CH.est[e.area]=Number(e.personas)||0; });
-    if(CH.op==="c") cargarCurso(); else pintarCostosHoy();
+    pintarCostosHoy(); if(CH.op==="c") cargarCurso();
   }catch(e){
     limpiar();
     mostrarError(/Could not find the function/i.test(e.message) ? "Falta correr el parche 138 en Supabase" : e.message);
@@ -478,23 +478,23 @@ function chCursoTog(tr){
 function chModo(){ return "p"; }
 /* Una fila por área + OF + artículo, con sus operaciones dentro. */
 function chOfs(){
-  const grp={}; let sinNop=0, sinBase=0;
+  const grp={};
   CH.tk.forEach(t=>{
     const k=t.area+"|"+(t.of||"")+"|"+t.articulo;
     const g=grp[k]=grp[k]||{k, area:t.area, of:norm(t.of)||"(sin OF)", of10:ofCostos(t.of), articulo:t.articulo||"",
       prenda:t.prenda||"", cant_of:Number(t.cant_of)||null, sam:CH.sam[t.area+"|"+t.articulo]||0, modo:chModo(t.area), min:0, tks:0, per:0, cant:null, ops:[]};
     const u=CH.ult[t.area+"|"+t.articulo], obj=u ? (g.modo==="u"?u.n1:u.n2) : null;
     const cuenta = obj!=null && t.nop!=null && Number(t.nop)===Number(obj);
-    if(!u) sinBase+=Number(t.tks)||0; else if(t.nop==null) sinNop+=Number(t.tks)||0;
     g.min+=Number(t.minutos)||0; g.tks+=Number(t.tks)||0; g.per=Math.max(g.per, Number(t.personas)||0);
     if(cuenta) g.cant=(g.cant||0)+(Number(t.cant)||0);
     g.ops.push({nop:t.nop, op:norm(t.op)||"(sin operación)", std:Number(t.std)||0, cant:Number(t.cant)||0,
       min:Number(t.minutos)||0, tks:Number(t.tks)||0, per:Number(t.personas)||0, cuenta});
   });
   const toks=String($("chBuscar").value||"").split(/\s+/).map(normKey).filter(Boolean);
-  const filas=Object.values(grp).filter(g=>!toks.length || toks.every(x=>normKey([g.of,g.of10,g.articulo,g.prenda,g.area].join(" ")).includes(x)));
-  filas.forEach(g=>{ g.eq=g.sam?g.min/g.sam:null; if(g.sam&&g.cant!=null) g.min=g.cant*g.sam; g.ops.sort((a,b)=>(Number(a.nop)||0)-(Number(b.nop)||0)); });
-  return {filas, sinNop, sinBase};
+  const todas=Object.values(grp).filter(g=>g.cant!=null);
+  const filas=todas.filter(g=>!toks.length || toks.every(x=>normKey([g.of,g.of10,g.articulo,g.prenda,g.area].join(" ")).includes(x)));
+  todas.forEach(g=>{ g.eq=g.sam?g.min/g.sam:null; if(g.sam) g.min=g.cant*g.sam; g.ops.sort((a,b)=>(Number(a.nop)||0)-(Number(b.nop)||0)); });
+  return {filas, todas};
 }
 /* Personal: por persona, sus áreas del día. */
 function chPersonas(){
@@ -504,14 +504,13 @@ function chPersonas(){
   return Object.values(p);
 }
 function pintarCostosHoy(){
-  if(CH.op==="c"){ pintarCurso(); return; }
-  const {filas, sinNop, sinBase}=chOfs();
+  const {filas, todas:ofs}=chOfs();
   const pers=chPersonas(), todas=!CH.area;
   const fuera=pers.filter(p=>p.areas.some(a=>a.area!==p.est));
   const he=CH.inc.filter(o=>o.tipo==="HORA_EXTRA"), noHe=CH.inc.filter(o=>o.tipo!=="HORA_EXTRA");
   const minHe=he.reduce((a,o)=>a+(Number(o.minutos)||0),0), minInc=noHe.reduce((a,o)=>a+(Number(o.minutos)||0),0);
   const jor=CH.per.filter(x=>todas||x.area===CH.area).reduce((a,x)=>a+(Number(x.jornada)||0),0);
-  const prod=CH.tk.reduce((a,t)=>a+(Number(t.minutos)||0),0);
+  const prod=ofs.reduce((a,g)=>a+g.min,0);
   const dia=fuera.filter(p=>p.areas.every(a=>a.area!==p.est)).length;
   $("chKpis").innerHTML = kpi("Personas que trabajaron", pers.filter(p=>todas||p.areas.some(a=>a.area===CH.area)).length)
     + kpi("Trabajaron fuera de su área", `${fuera.length}`, "var(--violeta)")
@@ -526,7 +525,7 @@ function pintarCostosHoy(){
     if(p.est){ const e=A(p.est); if(!enOtra) e.propia++; else if(soloOtra) e.dia++; else e.dos++; }
     p.areas.forEach(a=>{ const x=A(a.area); x.jor+=Number(a.jornada)||0; if(a.area!==p.est) x.rec++; });
   });
-  CH.tk.forEach(t=>{ A(t.area).prod+=Number(t.minutos)||0; });
+  ofs.forEach(g=>{ A(g.area).prod+=g.min; });
   CH.inc.forEach(o=>{ const x=A(o.area), m=Number(o.minutos)||0; if(o.tipo==="HORA_EXTRA") x.he+=m; else x.inc+=-m; });
   Object.keys(CH.est).forEach(A);
   const areas=Object.values(ar).filter(x=>todas||x.area===CH.area).filter(x=>x.prod||x.jor||x.inc||x.he).sort((a,b)=>a.area.localeCompare(b.area,"es"));
@@ -578,9 +577,7 @@ function pintarCostosHoy(){
       : `<tr><td colspan="${cols.length}"><div class="vacio-msg">Sin tickets ese día</div></td></tr>`)
     + "</tbody>"
     + (filas.length?`<tfoot><tr class="ch-total"><td class="izq" colspan="${cols.length-5}"><b>Total</b></td><td class="n"><b>${qtyI(totCant)}</b></td><td class="n"><b>${qtyI(totMin)}</b></td><td class="n"><b>${qtyI(totEq)}</b></td><td colspan="2"></td></tr></tfoot>`:"");
-  const out=[]; if(sinNop) out.push(`${sinNop} sin N°OP`); if(sinBase) out.push(`${sinBase} sin BASE del artículo`);
-  $("chPieTk").textContent=(filas.length?`${filas.length} OF · ${qtyI(prod)} min producidos · min. producidos = cantidad × S.A.M · prendas equivalentes = lo registrado ÷ S.A.M`:"")
-    + (out.length?` · no cuentan para la cantidad: ${out.join(", ")} ticket(s)`:"");
+  $("chPieTk").textContent=filas.length?`${filas.length} OF · ${qtyI(filas.reduce((a,g)=>a+g.min,0))} min producidos`:"";
 
   // Incidencias
   const lista = CH.fInc==="sin"?noHe : CH.fInc==="he"?he : CH.inc;
@@ -594,6 +591,7 @@ function pintarCostosHoy(){
       : `<tr><td colspan="${icol.length}"><div class="vacio-msg">Sin incidencias con ese filtro</div></td></tr>`)
     + "</tbody>";
   $("chPieInc").textContent = lista.length ? `${lista.length} incidencia(s) · ${sum>0?"+":""}${Math.round(sum)} min` : "";
+  if(CH.op==="c") pintarCurso();
 }
 function chDescargar(){
   if(!CH.fecha){ mostrarError("Carga el reporte primero"); return; }
