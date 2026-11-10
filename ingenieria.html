@@ -1070,8 +1070,7 @@
     <section class="pantalla" id="pasoPcp">
       <div class="seccion-cab">
         <h1>PCP · Meta y programa</h1>
-        <p class="seccion-sub">PCP pone la meta del mes de cada área y sube su programa de costura; la salida de corte se lee de la hoja NOTI_CORTE.
-        Con eso se ve si el programa alcanza la meta, quién va atrasado y qué OF arrancan costura sin corte completo.</p>
+        
       </div>
       <div class="barra-control pcp-barra">
         <label class="campo"><span>Mes</span><input type="month" id="pcpMes" onchange="pcpCargar()"></label>
@@ -1084,10 +1083,9 @@
           <button type="button" class="btn-mini gris" onclick="$('pcpArchCorte').click()">Subir corte (Excel/CSV)</button><input type="file" id="pcpArchCorte" accept=".xlsx,.xls,.csv" hidden onchange="pcpSubirCorte(this)">
         </div>
       </div>
-      <div id="pcpCal"></div>
       <div id="pcpEstado" class="pcp-estado" role="status" aria-live="polite"></div>
       <div class="acf-kpis" id="pcpKpis"></div>
-      <div id="pcpCuerpo"></div>
+      <div id="pcpCal"></div>
     </section>
 
     <section class="pantalla" id="pasoCrono">
@@ -1738,10 +1736,10 @@
 <script src="sueltos.js"></script>
 <script src="lotes.js"></script>
 <script src="prestadas.js"></script>
-<script src="pcp.js?v=c15"></script>
-<script src="pcp-calendario.js?v=c2"></script>
+<script src="pcp.js?v=c16"></script>
+<script src="pcp-calendario.js?v=c3"></script>
 <script src="gantt-react.js?v=1"></script>
-<script src="pcp-seguimiento.js?v=c13"></script>
+<script src="pcp-seguimiento.js?v=c14"></script>
 <script src="bases-nuevo.js?v=c2"></script>
 <script src="cronogramas.js?v=c3"></script>
 <script src="dinamico.js?v=c12"></script>

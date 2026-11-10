@@ -12,7 +12,7 @@ async function pccCargar(){
   try{
     const r=await rpc("fn_pcp_calendario_areas",{p_dni:ING.dni,p_token:ING.token,p_mes:mes});
     if(!r || !r.ok){ box.innerHTML=`<div class="acf-falta">${esc((r&&r.error)||"Error")}</div>`; return; }
-    PCC.r=r; pccPintar();
+    PCC.r=r; { const c=$("pcpCargas"); if(c) c.hidden=!r.puede_editar; } pccKpis(); pccPintar();
   }catch(e){
     box.innerHTML=/fn_pcp_calendario_areas|404|PGRST202|Could not find/i.test(e.message)
       ? `<div class="acf-falta"><b>Falta correr el parche 173 en la base.</b></div>` : `<div class="acf-falta">${esc(e.message)}</div>`;
@@ -85,6 +85,18 @@ function pccPintar(){
     <div class="tabla-scroll">${resumen}</div>
     <div class="tabla-scroll"><table class="pcc-tabla"><thead><tr><th>Sem.</th>${pccDias.map(x=>`<th>${x}</th>`).join("")}<th>Meta sem.</th></tr></thead><tbody>${filas}</tbody></table></div></section>`;
 }
+function pccKpis(){
+  const r=PCC.r, P=(r.areas||{}).PLANTA; if(!P||!$("pcpKpis")) return;
+  const hoy=r.hoy, hb=P.dias.filter(d=>d.habil), lab=hb.length, tr=hb.filter(d=>d.f<hoy).length, quedan=lab-tr;
+  const meta=+P.meta_min||0, prod=P.dias.reduce((s,d)=>s+(+d.real_min||0),0), hoyR=+((P.dias.find(d=>d.f===hoy)||{}).real_min)||0;
+  const proy=tr>0?(prod-hoyR)/tr*lab:0, nec=quedan?Math.max(0,meta-prod)/quedan:0, pc=(a,b)=>b>0?Math.round(a/b*100):0;
+  const hoyH=hb.some(d=>d.f===hoy), k=(v,t,c)=>`<div class="acf-k"><b${c?` class="${c}"`:""}>${v}</b><span>${t}</span></div>`;
+  $("pcpKpis").innerHTML=k(meta?pccN(meta):"—","meta del mes")
+    +k(pccN(prod),`minutos producidos${meta?` · ${pc(prod,meta)} % de la meta`:""}`)
+    +k(meta?pccN(Math.max(0,meta-prod)):"—",quedan?`restan · ${pccN(nec)} min por día en ${quedan} día${quedan===1?"":"s"}${hoyH?" (con hoy)":""}`:"restan para la meta")
+    +k(proy?pccN(proy):"—",`proyección de cierre${meta&&proy?` · ${pc(proy,meta)} %`:""}`,meta&&proy?(proy<meta?"rojo":"verde"):"")
+    +k(`${tr}/${lab}`,"días laborables transcurridos");
+}
 function pccMetrica(m){ PCC.m=m; pccPintar(); }
 function pccArea(a){ PCC.a=a; pccPintar(); }
 async function pccDia(f,habil){
@@ -102,6 +114,6 @@ async function pccGuardarMeta(){
       ? await rpc("fn_pcp_meta_mes_guardar",{p_dni:ING.dni,p_token:ING.token,p_mes:PCC.mes,p_minutos:v,p_prendas:0})
       : await rpc("fn_pcp_meta_guardar",{p_dni:ING.dni,p_token:ING.token,p_mes:PCC.mes,p_metas:[{alcance:"AREA",area:PCC.a,meta_minutos:v}]});
     if(!r||!r.ok) throw new Error((r&&r.error)||"No se guardó");
-    toast("Meta guardada","ok"); pccCargar(); pcpCargar();
+    toast("Meta guardada","ok"); pccCargar();
   }catch(e){ toast(e.message); }
 }
