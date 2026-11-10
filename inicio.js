@@ -143,7 +143,8 @@ function iniGaugeArea(r,fr){
 function iniAreaCard(x,fr){
   let r=x.r; const n=iniCorto(x.area), P=INI.d.plan&&INI.d.plan.ok?INI.d.plan:null, man=x.area==="CORTE"||x.area==="REPROCESO";
   const cd=man&&P?((P.manual_dia||{})[x.area]||(x.area==="CORTE"?P.corte_dia:null)||{}):null, hay=cd&&(cd.prendas!=null||cd.minutos!=null);
-  if(r&&cd&&(x.area==="CORTE"||hay)) r={...r, prendas:+cd.prendas||0, minutos:+cd.minutos||0};
+  if(r&&cd&&x.area==="CORTE") r={...r, prendas:+cd.prendas||0, minutos:+cd.minutos||0};
+  else if(r&&hay) r={...r, prendas:(+r.prendas||0)+(+cd.prendas||0), minutos:(+r.minutos||0)+(+cd.minutos||0)};
   const cabeza=`<div class="ini-card-h"><span class="ini-hn"><b class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(n)}</b>${r&&r.tope?`<span class="ini-hm">Meta <b>${iniN(r.meta_min)}</b></span>`:""}</span>${r&&r.tope?`<span class="ini-estado ${iniNivel(r,fr)}">${INI_ESTADO[iniNivel(r,fr)]||""}</span>`:""}</div>`;
   if(!r) return `<section class="ini-card ini-ac">${cabeza}<div class="ini-gauge-esp">${iniEspera()}</div></section>`;
   const corte=cd?`<div class="ini-corte"><label>Prendas<input id="iniCortePr_${esc(x.area)}" type="number" min="0" inputmode="numeric" value="${cd.prendas??""}"></label>
@@ -172,7 +173,7 @@ const INI_ORDEN=["CORTE","CAMISA COSTURA","PANTALON COSTURA","SACO COSTURA","ACA
 const iniPct=v=>(isFinite(v)?v*100:0).toFixed(1).replace(".",",")+" %";
 function iniPlan(F){
   const P=INI.d.plan, R=INI.d.res; if(!(P&&P.ok)) return null;
-  const sel=new Set(F.map(x=>x.area)), hoyM=a=>{ const m=(P.manual_dia||{})[a]||(a==="CORTE"?P.corte_dia:null); return m?+m.minutos||0:+(((R&&R.areas)||[]).find(y=>y.area===a)||{}).minutos||0; };
+  const sel=new Set(F.map(x=>x.area)), hoyM=a=>{ const m=(P.manual_dia||{})[a]||(a==="CORTE"?P.corte_dia:null), t=+(((R&&R.areas)||[]).find(y=>y.area===a)||{}).minutos||0; return !m?t:a==="CORTE"?+m.minutos||0:t+(+m.minutos||0); };
   const A=(P.areas||[]).filter(x=>sel.has(x.area)).map(x=>({...x, ef_prev:INI_EF_PREV_MAN!=null?INI_EF_PREV_MAN/100:x.ef_prev, estructura:+x.estructura, personas:+x.personas, disp_mes:+x.disp_mes, disp_fecha:+x.disp_fecha, he:+x.he_min/60, ayer:+x.minutos, minutos:+x.minutos+hoyM(x.area)}));
   const sum=k=>A.reduce((s,x)=>s+(+x[k]||0),0), todas=A.length===(P.areas||[]).length;
   const dispTot=+P.disp_total, meta=+P.meta||0, efMeta=dispTot&&meta?meta/dispTot:0;
