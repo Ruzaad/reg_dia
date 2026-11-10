@@ -2252,3 +2252,22 @@ label.ini-pn-campo{cursor:text}
 .ch-t tr[hidden]{display:none}
 #chKpis{max-width:none;margin-left:0;margin-right:0}
 #caKpis{max-width:none;margin-left:0;margin-right:0;grid-template-columns:repeat(auto-fit,minmax(104px,1fr))}
+
+/* PCP · calendario mensual */
+.pcc-seg{display:inline-flex;} .pcc-seg button{padding:8px 16px;}
+.pcc-leyenda{font-size:13px;color:var(--suave);margin:8px 0 12px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;}
+.pcc-edit{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:12px;}
+.pcc-res{width:100%;margin-bottom:14px;}
+.pcc-p{display:inline-flex;justify-content:center;min-width:54px;padding:2px 10px;border-radius:99px;font-size:12.5px;font-weight:700;color:var(--suave);background:var(--linea-2);}
+.pcc-p.ok{color:var(--exito);background:var(--exito-t);} .pcc-p.am{color:var(--aviso);background:var(--ocre-t);} .pcc-p.ro{color:var(--alerta);background:var(--alerta-t);}
+.pcc-tabla{width:100%;border-collapse:separate;border-spacing:6px;table-layout:fixed;min-width:980px;}
+.pcc-tabla th{font-size:12px;letter-spacing:.06em;color:var(--suave);text-align:left;padding:4px 8px;}
+.pcc-tabla th.pcc-sem{font-size:12px;color:var(--tenue);vertical-align:middle;width:64px;}
+.pcc-c{vertical-align:top;background:var(--sup);border:1px solid var(--linea);border-radius:12px;padding:8px 10px;height:132px;}
+.pcc-c.vac{background:transparent;border:1px dashed var(--linea);}
+.pcc-c.off{opacity:.6;background:var(--linea-2);} .pcc-hoy{outline:2px solid var(--ocre);}
+.pcc-n{font-weight:800;color:var(--titulo,var(--azul));background:none;border:0;padding:0;font-size:14px;cursor:default;} button.pcc-n{cursor:pointer;text-decoration:underline dotted;}
+.pcc-c small{display:block;color:var(--suave);font-size:11px;margin-top:4px;}
+.pcc-l{display:flex;justify-content:space-between;font-size:12.5px;line-height:1.5;} .pcc-l i{font-style:normal;font-weight:700;color:var(--tenue);} .pcc-l.r b{color:var(--azul);}
+.pcc-c .pcc-p{display:flex;margin-top:6px;} .pcc-ex{font-size:11.5px;color:var(--aviso);font-weight:700;margin-top:4px;text-align:right;}
+.pcc-meta{vertical-align:middle;text-align:center;background:var(--ocre-t);border:1px solid var(--linea);border-radius:12px;padding:8px;} .pcc-meta b{display:block;font-size:14px;margin-bottom:6px;}

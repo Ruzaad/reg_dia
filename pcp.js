@@ -20,6 +20,7 @@ function pcpInit(){
   pcpCargar();
 }
 async function pcpCargar(){
+  if(typeof pccCargar==="function") pccCargar();
   const box=$("pcpCuerpo"), mes=($("pcpMes").value||hoyLima().slice(0,7))+"-01";
   box.innerHTML=cargandoHTML("Leyendo metas, programa y corte…"); $("pcpKpis").innerHTML="";
   try{
