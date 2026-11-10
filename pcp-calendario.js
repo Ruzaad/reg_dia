@@ -1,5 +1,6 @@
 /* PCP · Calendario mensual de metas con redistribución (parche 172). Minutos y prendas. */
-const PCC={mes:"",m:"min",r:null};
+const PCC={mes:"",m:"min",a:"PLANTA",r:null};
+const PCC_AREAS=[["PLANTA","Planta"],["CAMISA COSTURA","Camisa"],["PANTALON COSTURA","Pantalón"],["SACO COSTURA","Saco"],["CORTE","Corte"],["ACABADO","Acabado"],["REPROCESO","Reproceso"]];
 const pccN=n=>Math.round(+n||0).toLocaleString("es-PE");
 const pccDias=["LUN","MAR","MIÉ","JUE","VIE","SÁB","DOM"];
 const pccMeses=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -9,19 +10,20 @@ async function pccCargar(){
   const mes=($("pcpMes").value||hoyLima().slice(0,7))+"-01"; PCC.mes=mes;
   box.innerHTML=cargandoHTML("Armando el calendario…");
   try{
-    const r=await rpc("fn_pcp_calendario",{p_dni:ING.dni,p_token:ING.token,p_mes:mes});
+    const r=await rpc("fn_pcp_calendario_areas",{p_dni:ING.dni,p_token:ING.token,p_mes:mes});
     if(!r || !r.ok){ box.innerHTML=`<div class="acf-falta">${esc((r&&r.error)||"Error")}</div>`; return; }
     PCC.r=r; pccPintar();
   }catch(e){
-    box.innerHTML=/fn_pcp_calendario|404|PGRST202|Could not find/i.test(e.message)
-      ? `<div class="acf-falta"><b>Falta correr el parche 172 en la base.</b></div>` : `<div class="acf-falta">${esc(e.message)}</div>`;
+    box.innerHTML=/fn_pcp_calendario_areas|404|PGRST202|Could not find/i.test(e.message)
+      ? `<div class="acf-falta"><b>Falta correr el parche 173 en la base.</b></div>` : `<div class="acf-falta">${esc(e.message)}</div>`;
   }
 }
 
 /* Meta diaria con redistribución: cada día hábil = lo que falta ÷ días hábiles que quedan.
    Un día ya pasado resta lo real; un día de hoy o futuro resta su propia meta. */
+function pccAr(){ const r=PCC.r, A=(r.areas||{})[PCC.a]||{dias:[]}; return {...A, hoy:r.hoy, puede_editar:r.puede_editar}; }
 function pccCalcular(){
-  const r=PCC.r, u=PCC.m==="un", hoy=r.hoy, sam=+r.sam||0;
+  const r=pccAr(), u=PCC.m==="un", hoy=r.hoy, sam=+r.sam||0;
   const meta=+(u?r.meta_un:r.meta_min)||0;
   let rest=meta, utiles=r.dias.filter(d=>d.habil).length;
   return r.dias.map(d=>{
@@ -38,7 +40,7 @@ const pccClase=p=>p==null?"":p>=95?"ok":p>=70?"am":"ro";
 const pccPct=p=>p==null?"":`<span class="pcc-p ${pccClase(p)}">${Math.round(p)} %</span>`;
 
 function pccPintar(){
-  const r=PCC.r, u=PCC.m==="un", ed=r.puede_editar, ds=pccCalcular(), hoy=r.hoy;
+  const r=pccAr(), u=PCC.m==="un", ed=r.puede_editar, ds=pccCalcular(), hoy=r.hoy;
   const meta=+(u?r.meta_un:r.meta_min)||0, cast=meta*0.85;
   const sum=a=>a.reduce((s,x)=>s+x,0);
   const realMes=sum(ds.map(d=>d.real)), antes=ds.filter(d=>d.pasado);
@@ -46,7 +48,7 @@ function pccPintar(){
   const vs=(a,b)=>b>0?a/b*100:null;
   const chip=p=>p==null?`<span class="pcc-p">—</span>`:`<span class="pcc-p ${pccClase(p)}">${p.toFixed(1)} %</span>`;
   const unidad=u?"prendas":"minutos";
-  const [y,m]=r.mes.split("-").map(Number);
+  const [y,m]=PCC.r.mes.split("-").map(Number), esP=PCC.a==="PLANTA", nom=(PCC_AREAS.find(x=>x[0]===PCC.a)||[0,PCC.a])[1];
 
   const resumen=`<table class="tabla pcc-res"><thead><tr><th>Ventana</th><th class="num">Real</th><th class="num">Meta</th><th class="num">vs meta</th><th class="num">Meta × 0,85</th><th class="num">vs castigada</th></tr></thead><tbody>
     <tr><th scope="row">Mensual</th><td class="num"><b>${pccN(realMes)}</b></td><td class="num">${meta?pccN(meta):"—"}</td><td class="num">${chip(vs(realMes,meta))}</td><td class="num">${meta?pccN(cast):"—"}</td><td class="num">${chip(vs(realMes,cast))}</td></tr>
@@ -73,17 +75,18 @@ function pccPintar(){
       <td class="pcc-meta"><b>${pccN(realS)} / ${pccN(metaS)}</b>${metaS>0&&cerrada?pccPct(realS/metaS*100):""}</td></tr>`;
   }).join("");
 
-  $("pcpCal").innerHTML=`<section class="pcp-card pcc"><div class="pcp-h"><h2>Calendario de producción · ${pccMeses[m-1]} ${y}</h2>
+  $("pcpCal").innerHTML=`<section class="pcp-card pcc"><div class="pcp-h"><h2>Calendario de producción · ${nom} · ${pccMeses[m-1]} ${y}</h2>
     <div class="seg pcc-seg" role="tablist"><button type="button" class="${u?"":"activo"}" onclick="pccMetrica('min')">Minutos</button><button type="button" class="${u?"activo":""}" onclick="pccMetrica('un')">Prendas</button></div></div>
     <div class="pcc-leyenda"><b>M</b> Meta del día · <b>D</b> Disponible · <b>P</b> Programado · <b>R</b> Real · <span class="pcc-p ok">≥ 95 %</span> <span class="pcc-p am">≥ 70 %</span> <span class="pcc-p ro">&lt; 70 %</span> · ★ feriado · ● fin de semana · ◆ día habilitado</div>
-    ${ed?`<div class="pcc-edit"><label class="campo"><span>Meta del mes · minutos</span><input class="pcp-in" id="pccMeta_min" inputmode="numeric" value="${r.meta_min?pccN(r.meta_min):""}"></label>
-      <label class="campo"><span>Meta del mes · prendas</span><input class="pcp-in" id="pccMeta_un" inputmode="numeric" value="${r.meta_un?pccN(r.meta_un):""}"></label>
+    <div class="seg pcc-tabs" role="tablist">${PCC_AREAS.map(x=>`<button type="button" class="${x[0]===PCC.a?"activo":""}" onclick="pccArea('${x[0]}')">${x[1]}</button>`).join("")}</div>
+    ${ed&&!u?`<div class="pcc-edit"><label class="campo"><span>Meta del mes · minutos${r.meta_min_derivada&&r.meta_min?" (repartida por disponible)":""}</span><input class="pcp-in" id="pccMeta_min" inputmode="numeric" value="${r.meta_min?pccN(r.meta_min):""}"></label>
       <button class="btn-mini" type="button" onclick="pccGuardarMeta()">Guardar meta</button></div>`:""}
-    ${meta?"":`<div class="acf-falta">Sin meta de ${unidad} para este mes${ed?": ponla arriba":""}.</div>`}
+    ${meta?"":`<div class="acf-falta">${u?"Esta área no tiene programa de PCP este mes.":"Sin meta de minutos para este mes."}</div>`}
     <div class="tabla-scroll">${resumen}</div>
     <div class="tabla-scroll"><table class="pcc-tabla"><thead><tr><th>Sem.</th>${pccDias.map(x=>`<th>${x}</th>`).join("")}<th>Meta sem.</th></tr></thead><tbody>${filas}</tbody></table></div></section>`;
 }
 function pccMetrica(m){ PCC.m=m; pccPintar(); }
+function pccArea(a){ PCC.a=a; pccPintar(); }
 async function pccDia(f,habil){
   let motivo=""; if(!habil || true){ motivo=window.prompt(habil?"Motivo para trabajar ese día (opcional):":"Motivo (opcional):","")||""; }
   try{
@@ -94,7 +97,10 @@ async function pccDia(f,habil){
 }
 async function pccGuardarMeta(){
   try{
-    const r=await rpc("fn_pcp_meta_mes_guardar",{p_dni:ING.dni,p_token:ING.token,p_mes:PCC.mes,p_minutos:pcpNum($("pccMeta_min").value)||0,p_prendas:pcpNum($("pccMeta_un").value)||0});
+    const v=pcpNum($("pccMeta_min").value)||0;
+    const r=PCC.a==="PLANTA"
+      ? await rpc("fn_pcp_meta_mes_guardar",{p_dni:ING.dni,p_token:ING.token,p_mes:PCC.mes,p_minutos:v,p_prendas:0})
+      : await rpc("fn_pcp_meta_guardar",{p_dni:ING.dni,p_token:ING.token,p_mes:PCC.mes,p_metas:[{alcance:"AREA",area:PCC.a,meta_minutos:v}]});
     if(!r||!r.ok) throw new Error((r&&r.error)||"No se guardó");
     toast("Meta guardada","ok"); pccCargar(); pcpCargar();
   }catch(e){ toast(e.message); }
