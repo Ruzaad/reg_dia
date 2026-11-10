@@ -41,11 +41,6 @@ function iniCargar(){
   iniPintar();
   iniRpc("res","fn_inicio_resumen",{p_fecha:hoy});
   iniRpc("mes","fn_inicio_mes",{p_fecha:hoy}).then(()=>{ if(INI.hoy===hoy) iniRpc("plan","fn_inicio_plan",{p_fecha:hoy}); });
-  if(INI.fecha){   // la meta del mes sigue siendo la de hoy; el filtro solo mueve los medidores del día
-    const hr=hoyLima();
-    iniRpc("resHoy","fn_inicio_resumen",{p_fecha:hr});
-    iniRpc("mesHoy","fn_inicio_mes",{p_fecha:hr}).then(()=>{ if(INI.hoy===hoy) iniRpc("planMes","fn_inicio_plan",{p_fecha:hr}); });
-  }
   if(iniPuede("pasoBolSin")) iniRpc("bol","fn_boletas_sin_llenar",{p_fecha:fb,p_area:null})
     .then(r=>{ if(r && r.ok) bslNav((r.personas||[]).length, fb); });
   if(iniPuede("pasoAsis")||iniPuede("pasoDash")) iniRpc("asis","fn_asistencia_matriz",{p_area:"",p_desde:hoy,p_hasta:hoy});
@@ -57,6 +52,10 @@ function iniCargar(){
   INI.timer=setInterval(()=>{ const p=$("pasoInicio"); if(p && p.classList.contains("activa") && !document.hidden) iniCargar(); },600000);
 }
 function iniCambiarFecha(v){ INI.fecha = v && v<hoyLima() ? v : null; iniCargar(); }
+function iniCambiarMes(v){
+  if(!v || v>=hoyLima().slice(0,7)){ INI.fecha=null; return iniCargar(); }
+  const [y,m]=v.split("-").map(Number); INI.fecha=v+"-"+String(new Date(y,m,0).getDate()).padStart(2,"0"); iniCargar();
+}
 
 /* ---------- cálculo por área (solo con lo que devuelven las RPC) ---------- */
 function iniPorArea(areas){
@@ -140,12 +139,13 @@ function iniGaugeArea(r,fr){
       <text x="${C}" y="${C+12}" class="ini-g-et" text-anchor="middle">${iniN(v)} min</text></svg>`;
 }
 function iniAreaCard(x,fr){
-  let r=x.r; const n=iniCorto(x.area), cd=x.area==="CORTE"&&INI.d.plan&&INI.d.plan.ok?(INI.d.plan.corte_dia||{}):null;
-  if(r&&cd) r={...r, prendas:+cd.prendas||0, minutos:+cd.minutos||0};
+  let r=x.r; const n=iniCorto(x.area), P=INI.d.plan&&INI.d.plan.ok?INI.d.plan:null, man=x.area==="CORTE"||x.area==="REPROCESO";
+  const cd=man&&P?((P.manual_dia||{})[x.area]||(x.area==="CORTE"?P.corte_dia:null)||{}):null, hay=cd&&(cd.prendas!=null||cd.minutos!=null);
+  if(r&&cd&&(x.area==="CORTE"||hay)) r={...r, prendas:+cd.prendas||0, minutos:+cd.minutos||0};
   const cabeza=`<div class="ini-card-h"><span class="ini-hn"><b class="ini-area"><i data-a="${esc(x.area)}"></i>${esc(n)}</b>${r&&r.tope?`<span class="ini-hm">Meta <b>${iniN(r.meta_min)}</b></span>`:""}</span>${r&&r.tope?`<span class="ini-estado ${iniNivel(r,fr)}">${INI_ESTADO[iniNivel(r,fr)]||""}</span>`:""}</div>`;
   if(!r) return `<section class="ini-card ini-ac">${cabeza}<div class="ini-gauge-esp">${iniEspera()}</div></section>`;
-  const corte=cd?`<div class="ini-corte"><label>Prendas<input id="iniCortePr" type="number" min="0" inputmode="numeric" value="${cd.prendas??""}"></label>
-      <label>Minutos<input id="iniCorteMi" type="number" min="0" inputmode="numeric" value="${cd.minutos??""}"></label><button type="button" class="btn-mini verde" onclick="iniCorteGuardar()">GUARDAR</button></div>`:"";
+  const corte=cd?`<div class="ini-corte"><label>Prendas<input id="iniCortePr_${esc(x.area)}" type="number" min="0" inputmode="numeric" value="${cd.prendas??""}"></label>
+      <label>Minutos<input id="iniCorteMi_${esc(x.area)}" type="number" min="0" inputmode="numeric" value="${cd.minutos??""}"></label><button type="button" class="btn-mini verde" onclick="iniCorteGuardar('${esc(x.area)}')">GUARDAR</button></div>`:"";
   const t=(l,v)=>`<div><span>${l}</span><b>${v}</b></div>`;
   return `<section class="ini-card ini-ac">${cabeza}
     ${r.tope?iniGaugeArea(r,fr):`<p class="ini-tenue ini-centro">sin asistentes</p>`}
@@ -169,8 +169,8 @@ function iniAreasHtml(F,fr){
 const INI_ORDEN=["CORTE","CAMISA COSTURA","PANTALON COSTURA","SACO COSTURA","ACABADO","REPROCESO"];
 const iniPct=v=>(isFinite(v)?v*100:0).toFixed(1).replace(".",",")+" %";
 function iniPlan(F){
-  const P=INI.d[INI.fecha?"planMes":"plan"], R=INI.d[INI.fecha?"resHoy":"res"]; if(!(P&&P.ok)) return null;
-  const sel=new Set(F.map(x=>x.area)), hoyM=a=>a==="CORTE"?+((P.corte_dia||{}).minutos||0):+(((R&&R.areas)||[]).find(y=>y.area===a)||{}).minutos||0;
+  const P=INI.d.plan, R=INI.d.res; if(!(P&&P.ok)) return null;
+  const sel=new Set(F.map(x=>x.area)), hoyM=a=>{ const m=(P.manual_dia||{})[a]||(a==="CORTE"?P.corte_dia:null); return m?+m.minutos||0:+(((R&&R.areas)||[]).find(y=>y.area===a)||{}).minutos||0; };
   const A=(P.areas||[]).filter(x=>sel.has(x.area)).map(x=>({...x, ef_prev:INI_EF_PREV_MAN!=null?INI_EF_PREV_MAN/100:x.ef_prev, estructura:+x.estructura, personas:+x.personas, disp_mes:+x.disp_mes, disp_fecha:+x.disp_fecha, he:+x.he_min/60, ayer:+x.minutos, minutos:+x.minutos+hoyM(x.area)}));
   const sum=k=>A.reduce((s,x)=>s+(+x[k]||0),0), todas=A.length===(P.areas||[]).length;
   const dispTot=+P.disp_total, meta=+P.meta||0, efMeta=dispTot&&meta?meta/dispTot:0;
@@ -208,7 +208,7 @@ function iniPersonasHtml(Q){
 }
 function iniEfPrevCambio(v){ INI_EF_PREV_MAN=v===""?null:Math.min(100,Math.max(1,+v||0)); iniPintar(); }
 function iniMesHtml(F){
-  const kP=INI.fecha?"planMes":"plan", kR=INI.fecha?"resHoy":"res";
+  const kP="plan", kR="res";
   if(!(kP in INI.d) || !(kR in INI.d)) return `<section class="ini-card"><div class="ini-gauge-esp">${iniEspera()}</div></section>`;
   const Q=iniPlan(F);
   if(!Q) return `<section class="ini-card"><p class="ini-tenue">sin dato</p></section>`;
@@ -231,7 +231,7 @@ function iniMesHtml(F){
 `;
 }
 function iniDesgHtml(F){
-  const kP=INI.fecha?"planMes":"plan", kR=INI.fecha?"resHoy":"res";
+  const kP="plan", kR="res";
   if(!(kP in INI.d) || !(kR in INI.d)) return `<div class="ini-gauge-esp">${iniEspera()}</div>`;
   const Q=iniPlan(F);
   if(!Q) return `<p class="ini-tenue ini-centro">sin dato</p>`;
@@ -261,9 +261,9 @@ function iniDesgHtml(F){
     `;
 }
 /* CORTE no registra en el sistema: Ingeniería pone sus prendas y minutos del día. */
-function iniCorteGuardar(){
-  const pr=$("iniCortePr").value, mi=$("iniCorteMi").value;
-  rpc("fn_corte_manual_guardar",{p_dni:ING.dni,p_token:ING.token,p_fecha:INI.hoy,p_prendas:pr===""?null:+pr,p_minutos:mi===""?null:+mi})
+function iniCorteGuardar(area){
+  const pr=$("iniCortePr_"+area).value, mi=$("iniCorteMi_"+area).value;
+  rpc("fn_corte_manual_guardar",Object.assign({p_dni:ING.dni,p_token:ING.token,p_fecha:INI.hoy,p_prendas:pr===""?null:+pr,p_minutos:mi===""?null:+mi}, area==="CORTE"?{}:{p_area:area}))
     .then(r=>{ if(!r||!r.ok) return toast((r&&r.error)||"No se pudo guardar","error"); toast("Guardado","ok"); iniRpc("plan","fn_inicio_plan",{p_fecha:INI.hoy}); })
     .catch(e=>toast(e.message,"error"));
 }
@@ -292,6 +292,7 @@ function iniPintar(){
   $("iniSeg").hidden=!puedeAlt;
   if(puedeAlt){ $("iniSegMias").classList.toggle("activo",!INI.todas); $("iniSegTodas").classList.toggle("activo",INI.todas); }
   const fi=$("iniFechaSel"); if(fi && document.activeElement!==fi){ fi.max=hoyLima(); fi.value=INI.hoy||""; }
+  const fm=$("iniMesSel"); if(fm && document.activeElement!==fm){ fm.max=hoyLima().slice(0,7); fm.value=(INI.hoy||"").slice(0,7); }
   $("iniMes").innerHTML=iniMesHtml(F);
   if($("iniDesg")){
     const h=iniDesgHtml(F);

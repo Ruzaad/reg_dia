@@ -2196,9 +2196,10 @@ body[data-pagina="operario"]{overscroll-behavior-y:contain;}
   grid-template-columns:1fr;
   grid-template-areas:"cab" "meta" "desg" "areas" "aten";max-width:1180px;margin:0 auto;}
 .ini-prodw{position:relative}
-.ini-prodw>.ini-fecha{position:absolute;top:2px;right:0;z-index:2;flex-direction:row;align-items:center;gap:8px}
-.ini-prodw .ini-prod-leg{padding-right:150px}
-@media(max-width:700px){.ini-prodw>.ini-fecha{position:static;margin-bottom:8px}.ini-prodw .ini-prod-leg{padding-right:0}}
+.ini-filtros{position:absolute;top:2px;right:0;z-index:2;display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end}
+.ini-filtros .ini-fecha{flex-direction:row;align-items:center;gap:8px}
+.ini-prodw .ini-prod-leg{padding-right:330px}
+@media(max-width:700px){.ini-filtros{position:static;margin-bottom:8px;justify-content:flex-start}.ini-prodw .ini-prod-leg{padding-right:0}}
 #iniDesg{display:flex;flex-direction:column;gap:14px}
 #iniDesg .ini-pn{margin-top:0}
 @media(min-width:1000px){.ini-bento{grid-template-columns:1fr 1.5fr;}}
