@@ -1160,7 +1160,6 @@
         <div class="ini-bento-logo" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none" stroke-linecap="round"><path d="M79.1 25.6 A38 38 0 1 0 79.1 74.4" stroke="var(--ini-gl-or)" stroke-width="9"/><path d="M50 50V20" stroke="var(--ini-gl-hi)" stroke-width="8"/><path d="M50 50H74" stroke="var(--ini-gl-or)" stroke-width="8"/></svg></div>
         <div class="ini-cab glass" style="grid-area:cab">
           <div><h1 id="iniFecha"></h1><p class="ini-alcance" id="iniAlcance"></p></div>
-          <label class="ini-fecha"><span>Ver día</span><input type="date" id="iniFechaSel" onchange="iniCambiarFecha(this.value)"></label>
           <div class="ini-seg" id="iniSeg" role="group" aria-label="Alcance" hidden>
             <button type="button" id="iniSegMias" class="activo" onclick="INI.todas=false;iniPintar()">Mis áreas</button>
             <button type="button" id="iniSegTodas" onclick="INI.todas=true;iniPintar()">Todas</button>
@@ -1169,7 +1168,8 @@
         <section class="ini-mes glass" id="iniMes" style="grid-area:meta" aria-live="polite"></section>
         <div id="iniDesg" style="grid-area:desg" aria-live="polite"></div>
         <div class="ini-prodw" style="grid-area:areas">
-      <label class="ini-fecha"><span>Ver día</span><input type="date" id="iniFechaSel"></label>
+      <div class="ini-filtros"><label class="ini-fecha"><span>Ver mes</span><input type="month" id="iniMesSel" onchange="iniCambiarMes(this.value)"></label>
+      <label class="ini-fecha"><span>Ver día</span><input type="date" id="iniFechaSel" onchange="iniCambiarFecha(this.value)"></label></div>
       <div class="ini-areas" id="iniAreas" aria-live="polite"></div>
     </div>
         <section class="ini-card glass" id="iniAtencion" style="grid-area:aten">
