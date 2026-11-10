@@ -2271,3 +2271,5 @@ label.ini-pn-campo{cursor:text}
 .pcc-l{display:flex;justify-content:space-between;font-size:12.5px;line-height:1.5;} .pcc-l i{font-style:normal;font-weight:700;color:var(--tenue);} .pcc-l.r b{color:var(--azul);}
 .pcc-c .pcc-p{display:flex;margin-top:6px;} .pcc-ex{font-size:11.5px;color:var(--aviso);font-weight:700;margin-top:4px;text-align:right;}
 .pcc-meta{vertical-align:middle;text-align:center;background:var(--ocre-t);border:1px solid var(--linea);border-radius:12px;padding:8px;} .pcc-meta b{display:block;font-size:14px;margin-bottom:6px;}
+.pcc-tabs{display:flex;flex-wrap:wrap;margin:6px 0 12px;} .pcc-tabs button{padding:8px 14px;}
+.pcc-tabs{display:flex !important;width:max-content;max-width:100%;grid-template-columns:none;overflow-x:auto;} .pcc-tabs button{flex:0 0 auto;}
