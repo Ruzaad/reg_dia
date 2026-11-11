@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="rediseno.css?v=c23">
+<link rel="stylesheet" href="rediseno.css?v=c24">
 </head>
 <body data-pagina="supervisora">
 <header>
@@ -51,7 +51,6 @@
     <div class="sub" id="shMasSub"></div>
     <div class="sh-h">Consultar</div>
     <button type="button" class="sh-card" onclick="shIrAsis('hoy')"><span class="sh-ic cal" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M9 15l2 2 4-4"/></svg></span><span class="sh-tx"><b>Asistencia</b><span>Ayer y hoy, persona por persona</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
-    <button type="button" class="sh-card" onclick="shAbrir('tabIncidencias')"><span class="sh-ic mano" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V11M11 11V5a1.5 1.5 0 0 1 3 0v6M14 11V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-.5A5.5 5.5 0 0 1 6 17l-2-3.5a1.5 1.5 0 0 1 2.6-1.5L8 14"/></svg></span><span class="sh-tx"><b>Pedidos del personal</b><span>Ajustes de tiempo y regresos</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" onclick="shIrHE('hoy')"><span class="sh-ic reloj" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><span class="sh-tx"><b>Horas extra</b><span>Elige el día: extras o fin de semana</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" onclick="shAbrir('tabSupBases')"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/></svg></span><span class="sh-tx"><b>Bases del área</b><span>Artículos y tiempos STD</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
     <button type="button" class="sh-card" onclick="shAbrir('tabEfPersonal')"><span class="sh-ic lin" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 16l5-5 4 3 7-7M15 7h5v5"/></svg></span><span class="sh-tx"><b>Eficiencias</b><span>Por persona y por día</span></span><span class="sh-fl" aria-hidden="true">›</span></button>
@@ -365,6 +364,7 @@
   <button type="button" data-ir="hoy" onclick="shIr('hoy')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Hoy<b class="sh-n" id="shNavHoyN" hidden></b></button>
   <button type="button" data-ir="personal" onclick="shIr('personal')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a5 5 0 0 1 3 6"/></svg>Personal</button>
   <button type="button" data-ir="avance" onclick="shIr('avance')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M7 20V11M12 20V5M17 20v-6"/></svg>Avance</button>
+  <button type="button" data-ir="pedidos" onclick="shIr('pedidos')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V11M11 11V5a1.5 1.5 0 0 1 3 0v6M14 11V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-.5A5.5 5.5 0 0 1 6 17l-2-3.5a1.5 1.5 0 0 1 2.6-1.5L8 14"/></svg>Pedidos</button>
   <button type="button" data-ir="mas" onclick="shIr('mas')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</button>
 </nav>
 

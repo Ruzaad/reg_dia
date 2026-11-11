@@ -6765,6 +6765,11 @@ async function confirmarSubida(){
    (parche 52): antes llegaban como OTROS con el motivo en el detalle. */
 const TIPOS_OC = ["MAQUINA","HORA_EXTRA","PAGO_HORA","TARDANZA","SEGURO","PERMISO",
                   "ARREGLOS","MUESTRAS","REPROCESOS","DESCOSER","OTROS"];
+/* Lo que ve Ingeniería al crear una incidencia: primero lo mismo que pide el operario (app.js, SA_MOTIVOS), en su orden y con sus
+   nombres, y después lo de la supervisora. OTRA no es un tipo de la base: se guarda como OTROS (o REPROCESOS si fue a reproceso),
+   igual que cuando lo pide el operario. */
+const TIPOS_OC_ING = ["MAQUINA","ARREGLOS","MUESTRAS","REPROCESOS","DESCOSER","OTRA","OTROS","HORA_EXTRA","PAGO_HORA","TARDANZA","SEGURO","PERMISO"];
+const TIPO_ING_LBL = t => t==="OTRA" ? "TRABAJÉ EN OTRA ÁREA" : TIPO_LBL(t);
 /* Nombre visible del tipo: el operario ve "MÁQUINA PARADA", no "MAQUINA". */
 /* `MAQUINA` es lo que pide el operario y lo que hay en el histórico;
    `PAGO_HORA` es lo que registra la supervisora desde el parche 59. Son dos
@@ -7287,7 +7292,7 @@ function pintarOcurrencias(){
     const m=+o.minutos, col=m<0?"var(--alerta)":"var(--exito)";
     return `<tr>
       <td>${esc(o.fecha)}</td><td class="izq">${esc(soloApellidos(o.nombre))}</td>
-      <td>${esc(o.area)}</td><td>${esc(TIPO_LBL(o.tipo))}</td>
+      <td>${esc(o.area_est||o.area)}</td><td>${esc(TIPO_LBL(o.tipo))}</td>
       <td style="color:${col};font-weight:800;">${m>0?"+":""}${m}</td>
       <td class="izq">${esc(o.detalle||"")}</td><td>${esc(soloApellidos(o.registrado_por||""))}</td>
       <td><div class="acc-base">
@@ -7304,30 +7309,50 @@ function nuevaIncidencia(){ abrirModalInci(null); }
 function editarIncidencia(id){ abrirModalInci(OCURR.find(o=>o.id===id)||null); }
 async function abrirModalInci(oc){
   const editar=!!oc;
-  const areaSel=(oc&&oc.area)|| ($("areaInci")&&$("areaInci").value)||AREAS_LISTA[0]||"";
-  const opTipo=t=>`<option value="${t}"${oc&&oc.tipo===t?" selected":""}>${esc(TIPO_LBL(t))}</option>`;
+  const areaSel=(oc&&(oc.area_est||oc.area))|| ($("areaInci")&&$("areaInci").value)||AREAS_LISTA[0]||"";
+  const opTipo=t=>`<option value="${t}"${oc&&oc.tipo===t?" selected":""}>${esc(TIPO_ING_LBL(t))}</option>`;
+  const jor=typeof IR_JORNADA!=="undefined"?IR_JORNADA:575;
+  const chips=SA_CUANTO.filter(x=>x[0]).map(x=>`<button type="button" class="btn-mini gris" onclick="miCuanto(${x[0]===575?jor:x[0]})">${esc(x[1])}</button>`).join("");
+  const mia=areaSel;
   abrirModal(`
     <h2>${editar?"Editar":"Nueva"} incidencia</h2>
-    <div class="modal-campo"><label>Área</label>
+    <div class="modal-campo"><label>Área (de la estructura)</label>
       <select id="mi_area">${AREAS_LISTA.map(a=>`<option${a===areaSel?" selected":""}>${esc(a)}</option>`).join("")}</select></div>
     <div class="modal-campo"><label>Persona</label>
       <select id="mi_dni"><option value="">Cargando…</option></select></div>
     <div class="modal-campo"><label>Tipo</label>
-      <select id="mi_tipo">${TIPOS_OC.map(opTipo).join("")}</select></div>
-    <div class="modal-campo"><label>Minutos (negativo = descuenta)</label>
-      <input id="mi_min" type="number" value="${oc?oc.minutos:""}" placeholder="Ej: -30 o 60"></div>
+      <select id="mi_tipo" onchange="miTipo()">${TIPOS_OC_ING.map(opTipo).join("")}</select></div>
+    <div class="modal-campo" id="mi_causaW" hidden><label>¿De qué área vino?</label>
+      <select id="mi_causa"><option value="">NO SÉ</option>${SA_CAUSA.filter(x=>x[0]&&x[0]!==mia).map(x=>`<option value="${esc(x[0])}">${esc(x[1])}</option>`).join("")}</select></div>
+    <div class="modal-campo" id="mi_ofW" hidden><label>OF (opcional)</label><input id="mi_of" maxlength="20" placeholder="Ej: 9880"></div>
+    <div class="modal-campo" id="mi_dondeW" hidden><label>¿Dónde trabajó?</label>
+      <select id="mi_donde">${SA_DONDE.filter(x=>x[0]!==mia).map(x=>`<option value="${esc(x[0])}">${esc(x[1])}</option>`).join("")}</select></div>
+    <div class="modal-campo"><label>Cuánto</label><div class="ir-rap">${chips}</div>
+      <input id="mi_min" type="number" value="${oc?oc.minutos:""}" placeholder="Minutos (negativo = descuenta)"></div>
     <div class="modal-campo"><label>Fecha en que aplica</label>
       <input id="mi_fecha" type="date" value="${oc?oc.fecha:hoyLima()}"></div>
-    <div class="modal-campo"><label>Motivo</label>
-      <input id="mi_detalle" maxlength="140" value="${oc?esc(oc.detalle||""):""}" placeholder="Motivo del ajuste"></div>
+    <div class="modal-campo"><label id="mi_detLbl">Detalle</label>
+      <input id="mi_detalle" maxlength="140" value="${oc?esc(oc.detalle||""):""}" placeholder="Detalle"></div>
     <div class="modal-msg" id="mi_msg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" onclick="guardarIncidencia(${editar?oc.id:"null"})">GUARDAR</button>
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
     </div>`);
-  $("mi_area").onchange=()=>cargarPersonalInci(oc?oc.dni:null, oc&&oc.nombre);
+  $("mi_area").onchange=()=>{ cargarPersonalInci(oc?oc.dni:null, oc&&oc.nombre); miTipo(); };
+  miTipo();
   await cargarPersonalInci(oc?oc.dni:null, oc&&oc.nombre);
 }
+function miTipo(){
+  const t=($("mi_tipo")||{}).value, area=($("mi_area")||{}).value;
+  const ver=(id,on)=>{ const e=$(id); if(e) e.hidden=!on; };
+  ver("mi_causaW",t==="REPROCESOS"); ver("mi_ofW",t==="REPROCESOS"); ver("mi_dondeW",t==="OTRA");
+  const l=$("mi_detLbl"); if(l) l.textContent = t==="OTROS" ? "¿Cuál fue el motivo?" : "Detalle (opcional)";
+  const d=$("mi_detalle"); if(d) d.placeholder = t==="OTROS" ? "Escribe el motivo" : t==="OTRA" ? "Ej: despacho Scotiabank" : "Ej: OF 9880, máquina 12";
+  const c=$("mi_causa"); if(c){ [...c.options].forEach(o=>{ o.hidden=o.value===area; }); if(c.value===area) c.value=""; }
+  const w=$("mi_donde"); if(w){ [...w.options].forEach(o=>{ o.hidden=o.value===area; }); if(w.value===area) w.value=([...w.options].find(o=>!o.hidden)||{}).value||""; }
+}
+/* Atajos de tiempo del operario: suman si es hora extra y descuentan en lo demás. */
+function miCuanto(m){ const t=($("mi_tipo")||{}).value; $("mi_min").value = t==="HORA_EXTRA" ? m : -m; }
 /* Al editar, la persona de la incidencia va siempre en la lista y elegida, aunque
    hoy esté en otra área: si no, quedaba elegida la primera del área y al guardar
    la incidencia pasaba a otra persona. */
@@ -7344,13 +7369,23 @@ async function cargarPersonalInci(dniSel, nombreSel){
   }catch(e){ sel.innerHTML=`<option value="">Error al cargar</option>`; }
 }
 async function guardarIncidencia(id){
-  const dni=$("mi_dni").value, area=$("mi_area").value, tipo=$("mi_tipo").value;
-  const min=parseInt($("mi_min").value,10), fecha=$("mi_fecha").value, detalle=$("mi_detalle").value.trim();
+  const dni=$("mi_dni").value, area=$("mi_area").value, sel=$("mi_tipo").value;
+  const min=parseInt($("mi_min").value,10), fecha=$("mi_fecha").value, libre=$("mi_detalle").value.trim();
   const msg=$("mi_msg");
   if(!dni){ msg.textContent="Elige la persona"; return; }
   if(!min){ msg.textContent="Minutos no puede ser 0"; return; }
   if(!fecha){ msg.textContent="Indica la fecha"; return; }
-  if(!detalle){ msg.textContent="Indica el motivo"; return; }
+  if(sel==="OTROS" && !libre){ msg.textContent="Escribe cuál fue el motivo"; return; }
+  let tipo=sel, detalle=libre;
+  if(sel==="OTRA"){
+    const w=$("mi_donde").value, e=SA_DONDE.find(x=>x[0]===w);
+    tipo = w==="REPROCESO" ? "REPROCESOS" : "OTROS";
+    detalle = ("TRABAJÉ EN "+(e?e[1]:w)+(libre?": "+libre:"")).toUpperCase();
+  }else if(sel==="REPROCESOS"){
+    const c=$("mi_causa").value, of=($("mi_of").value||"").trim().toUpperCase(), ec=SA_CAUSA.find(x=>x[0]===c);
+    detalle=[c?"DE "+(ec?ec[1]:c):"", of?"OF "+of:"", libre].filter(Boolean).join(" · ");
+  }
+  if(!detalle) detalle=TIPO_ING_LBL(tipo);
   try{
     const r=id
       ? await rpc("fn_ocurrencia_editar",{p_dni:ING.dni,p_token:ING.token,p_id:id,p_dni_op:dni,p_tipo:tipo,p_minutos:min,p_fecha:fecha,p_detalle:detalle})

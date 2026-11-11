@@ -1271,7 +1271,7 @@ body.sh-on footer.pie-app{padding-bottom:calc(84px + env(safe-area-inset-bottom)
 .sh-fl{font:400 26px/1 var(--sans);color:var(--tenue);padding:0 2px;}
 .sh-vacio{display:flex;align-items:center;gap:10px;padding:16px;border-radius:var(--r);background:var(--exito-t);color:var(--exito);font:600 16px var(--sans);}
 .sh-vacio svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.4;}
-.sh-nav{position:fixed;left:0;right:0;bottom:0;z-index:40;display:none;grid-template-columns:repeat(4,1fr);
+.sh-nav{position:fixed;left:0;right:0;bottom:0;z-index:40;display:none;grid-template-columns:repeat(5,1fr);
   background:var(--sup);border-top:1px solid var(--linea);padding:4px 4px calc(4px + env(safe-area-inset-bottom));}
 body.sh-on .sh-nav{display:grid;}
 .sh-nav button{position:relative;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:3px;
@@ -2273,3 +2273,4 @@ label.ini-pn-campo{cursor:text}
 .pcc-meta{vertical-align:middle;text-align:center;background:var(--ocre-t);border:1px solid var(--linea);border-radius:12px;padding:8px;} .pcc-meta b{display:block;font-size:14px;margin-bottom:6px;}
 .pcc-tabs{display:flex;flex-wrap:wrap;margin:6px 0 12px;} .pcc-tabs button{padding:8px 14px;}
 .pcc-tabs{display:flex !important;width:max-content;max-width:100%;grid-template-columns:none;overflow-x:auto;} .pcc-tabs button{flex:0 0 auto;}
+.modal-campo[hidden]{display:none !important;}

@@ -130,7 +130,8 @@ function pintarPendientesInci(){
       <td class="nw">${ro?`<b class="ir-num">${it.minutos}</b>`:`<input class="ir-min" id="inci_${it.id}" type="number" value="${it.minutos}" aria-label="Minutos" oninput="irVivo(${it.id})">`}</td>
       <td class="nw">${ro?`<span class="tag g">Solo lectura</span>`:`<div class="ir-acc">
         <button class="btn-mini verde" onclick="resolverIncidI(${it.id},true)">Aprobar</button>
-        <button class="btn-mini rojo" onclick="resolverIncidI(${it.id},false)">Rechazar</button></div>`}</td></tr>`;
+        <button class="btn-mini rojo" onclick="resolverIncidI(${it.id},false)">Rechazar</button>
+        <button class="btn-mini gris" onclick="irBorrarPedir(${it.id})" title="Quitar el pedido sin avisar a la persona">Borrar</button></div>`}</td></tr>`;
   };
   const cols=IR.nuevo?8:7;
   const cuerpo=items.length ? areas.map(a=>{
@@ -143,7 +144,7 @@ function pintarPendientesInci(){
       <th class="izq">Persona</th><th>Día</th><th class="izq">Qué pide</th>${IR.nuevo?"<th>Cómo queda su día</th>":""}
       <th class="izq">${IR.nuevo?"Supervisora y alertas":"Alertas"}</th><th>Min</th><th></th></tr></thead><tbody>${cuerpo}</tbody></table></div>
     <div class="ir-pie"><button class="btn-mini verde" id="irLote" onclick="irAprobarLote()"${marcadas.length?"":" disabled"}>Aprobar ${marcadas.length===1?"la marcada":`las ${marcadas.length} marcadas`}</button>
-      <span class="sub">${IR.nuevo?"Solo se pueden marcar las que tienen visto bueno y ninguna alerta roja. ":""}Rechazar siempre pide el motivo, y el operario lo ve en su celular.</span></div>`;
+      <span class="sub">${IR.nuevo?"Solo se pueden marcar las que tienen visto bueno y ninguna alerta roja. ":""}Rechazar pide el motivo y el operario lo ve; Borrar quita el pedido sin avisar.</span></div>`;
 }
 function irVivo(id){
   const it=IR.items.find(x=>x.id===id), i=$("inci_"+id); if(!it||!i) return;
@@ -187,6 +188,24 @@ function irPedirMotivo(id){
       <button class="btn-principal btn-modal-guardar" id="irRechazar" onclick="irRechazar(${id})">RECHAZAR</button>
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
   setTimeout(()=>{ const i=$("irMotivo"); if(i) i.focus(); },60);
+}
+function irBorrarPedir(id){
+  const it=IR.items.find(x=>x.id===id); if(!it) return;
+  abrirModal(`<h2>Borrar el pedido</h2>
+    <div class="sub" style="margin-bottom:12px;">${esc(it.nombre)} · ${it.minutos} min · ${esc(TIPO_LBL(it.tipo))}. ${esc(it.motivo||"")}<br>Se quita sin avisar: no le llega ningún motivo.</div>
+    <div class="modal-msg" id="irMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" style="background:var(--alerta)" id="irBorrar" onclick="irBorrar(${id})">BORRAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button></div>`);
+}
+async function irBorrar(id){
+  return unaVez("sol"+id, [$("irBorrar")], async ()=>{
+    try{
+      const r=await rpc("fn_solicitud_borrar",{p_dni:ING.dni,p_token:ING.token,p_id:id});
+      if(!r.ok){ $("irMsg").textContent=r.error||"No se pudo borrar"; return; }
+      cerrarModal(); IR.marcadas.delete(id); await cargarPendientesInci();
+    }catch(e){ $("irMsg").textContent=irFalta(e)?"Falta correr el parche 175 en la base":e.message; }
+  });
 }
 async function irRechazar(id){
   const m=(($("irMotivo")||{}).value||"").trim();
