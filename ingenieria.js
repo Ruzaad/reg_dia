@@ -6771,8 +6771,8 @@ const TIPOS_OC = ["MAQUINA","HORA_EXTRA","PAGO_HORA","TARDANZA","SEGURO","PERMIS
 const TIPOS_OC_ING = ["MAQUINA","ARREGLOS","MUESTRAS","REPROCESOS","DESCOSER","OTRA","OTROS","HORA_EXTRA","PAGO_HORA","TARDANZA","SEGURO","PERMISO"];
 const TIPO_ING_LBL = t => t==="OTRA" ? "TRABAJÉ EN OTRA ÁREA" : TIPO_LBL(t);
 /* «Trabajé en otra área» se guarda como OTROS (o REPROCESOS) con el detalle «TRABAJÉ EN X»: en pantalla se ve como lo pidió el operario. */
-const esOtraArea = o => ["OTROS","REPROCESOS"].includes(o.tipo) && /^TRABAJ[ÉE] EN /i.test(String(o.detalle||""));
-const tipoVista = o => esOtraArea(o) ? "TRABAJÉ EN OTRA ÁREA" : TIPO_LBL(o.tipo);
+const esTrabOtraArea = o => ["OTROS","REPROCESOS"].includes(o.tipo) && /^TRABAJ[ÉE] EN /i.test(String(o.detalle||""));
+const tipoVista = o => esTrabOtraArea(o) ? "TRABAJÉ EN OTRA ÁREA" : TIPO_LBL(o.tipo);
 /* Nombre visible del tipo: el operario ve "MÁQUINA PARADA", no "MAQUINA". */
 /* `MAQUINA` es lo que pide el operario y lo que hay en el histórico;
    `PAGO_HORA` es lo que registra la supervisora desde el parche 59. Son dos
@@ -7313,7 +7313,7 @@ function editarIncidencia(id){ abrirModalInci(OCURR.find(o=>o.id===id)||null); }
 async function abrirModalInci(oc){
   const editar=!!oc;
   const areaSel=(oc&&(oc.area_est||oc.area))|| ($("areaInci")&&$("areaInci").value)||AREAS_LISTA[0]||"";
-  const otra=!!oc && esOtraArea(oc);
+  const otra=!!oc && esTrabOtraArea(oc);
   const dondeOc=otra ? (SA_DONDE.find(x=>normKey(oc.detalle).includes(normKey("EN "+x[1])))||[""])[0] : "";
   const libreOc=otra ? String(oc.detalle||"").replace(/^[^:]*:?\s*/,"").replace(/^TRABAJ[ÉE] EN [^:]*$/i,"") : (oc?oc.detalle||"":"");
   const opTipo=t=>`<option value="${t}"${oc&&(otra?t==="OTRA":oc.tipo===t)?" selected":""}>${esc(TIPO_ING_LBL(t))}</option>`;
