@@ -6770,6 +6770,9 @@ const TIPOS_OC = ["MAQUINA","HORA_EXTRA","PAGO_HORA","TARDANZA","SEGURO","PERMIS
    igual que cuando lo pide el operario. */
 const TIPOS_OC_ING = ["MAQUINA","ARREGLOS","MUESTRAS","REPROCESOS","DESCOSER","OTRA","OTROS","HORA_EXTRA","PAGO_HORA","TARDANZA","SEGURO","PERMISO"];
 const TIPO_ING_LBL = t => t==="OTRA" ? "TRABAJÉ EN OTRA ÁREA" : TIPO_LBL(t);
+/* «Trabajé en otra área» se guarda como OTROS (o REPROCESOS) con el detalle «TRABAJÉ EN X»: en pantalla se ve como lo pidió el operario. */
+const esOtraArea = o => ["OTROS","REPROCESOS"].includes(o.tipo) && /^TRABAJ[ÉE] EN /i.test(String(o.detalle||""));
+const tipoVista = o => esOtraArea(o) ? "TRABAJÉ EN OTRA ÁREA" : TIPO_LBL(o.tipo);
 /* Nombre visible del tipo: el operario ve "MÁQUINA PARADA", no "MAQUINA". */
 /* `MAQUINA` es lo que pide el operario y lo que hay en el histórico;
    `PAGO_HORA` es lo que registra la supervisora desde el parche 59. Son dos
@@ -7292,7 +7295,7 @@ function pintarOcurrencias(){
     const m=+o.minutos, col=m<0?"var(--alerta)":"var(--exito)";
     return `<tr>
       <td>${esc(o.fecha)}</td><td class="izq">${esc(soloApellidos(o.nombre))}</td>
-      <td>${esc(o.area_est||o.area)}</td><td>${esc(TIPO_LBL(o.tipo))}</td>
+      <td>${esc(o.area_est||o.area)}</td><td>${esc(tipoVista(o))}</td>
       <td style="color:${col};font-weight:800;">${m>0?"+":""}${m}</td>
       <td class="izq">${esc(o.detalle||"")}</td><td>${esc(soloApellidos(o.registrado_por||""))}</td>
       <td><div class="acc-base">
@@ -7310,7 +7313,10 @@ function editarIncidencia(id){ abrirModalInci(OCURR.find(o=>o.id===id)||null); }
 async function abrirModalInci(oc){
   const editar=!!oc;
   const areaSel=(oc&&(oc.area_est||oc.area))|| ($("areaInci")&&$("areaInci").value)||AREAS_LISTA[0]||"";
-  const opTipo=t=>`<option value="${t}"${oc&&oc.tipo===t?" selected":""}>${esc(TIPO_ING_LBL(t))}</option>`;
+  const otra=!!oc && esOtraArea(oc);
+  const dondeOc=otra ? (SA_DONDE.find(x=>normKey(oc.detalle).includes(normKey("EN "+x[1])))||[""])[0] : "";
+  const libreOc=otra ? String(oc.detalle||"").replace(/^[^:]*:?\s*/,"").replace(/^TRABAJ[ÉE] EN [^:]*$/i,"") : (oc?oc.detalle||"":"");
+  const opTipo=t=>`<option value="${t}"${oc&&(otra?t==="OTRA":oc.tipo===t)?" selected":""}>${esc(TIPO_ING_LBL(t))}</option>`;
   const jor=typeof IR_JORNADA!=="undefined"?IR_JORNADA:575;
   const chips=SA_CUANTO.filter(x=>x[0]).map(x=>`<button type="button" class="btn-mini gris" onclick="miCuanto(${x[0]===575?jor:x[0]})">${esc(x[1])}</button>`).join("");
   const mia=areaSel;
@@ -7326,13 +7332,13 @@ async function abrirModalInci(oc){
       <select id="mi_causa"><option value="">NO SÉ</option>${SA_CAUSA.filter(x=>x[0]).map(x=>`<option value="${esc(x[0])}">${esc(x[1])}</option>`).join("")}</select></div>
     <div class="modal-campo" id="mi_ofW" hidden><label>OF (opcional)</label><input id="mi_of" maxlength="20" placeholder="Ej: 9880"></div>
     <div class="modal-campo" id="mi_dondeW" hidden><label>¿Dónde trabajó?</label>
-      <select id="mi_donde">${SA_DONDE.filter(x=>x[0]!==mia).map(x=>`<option value="${esc(x[0])}">${esc(x[1])}</option>`).join("")}</select></div>
+      <select id="mi_donde">${SA_DONDE.filter(x=>x[0]!==mia).map(x=>`<option value="${esc(x[0])}"${x[0]===dondeOc?" selected":""}>${esc(x[1])}</option>`).join("")}</select></div>
     <div class="modal-campo"><label>Cuánto</label><div class="ir-rap">${chips}</div>
       <input id="mi_min" type="number" value="${oc?oc.minutos:""}" placeholder="Minutos (negativo = descuenta)"></div>
     <div class="modal-campo"><label>Fecha en que aplica</label>
       <input id="mi_fecha" type="date" value="${oc?oc.fecha:hoyLima()}"></div>
     <div class="modal-campo"><label id="mi_detLbl">Detalle</label>
-      <input id="mi_detalle" maxlength="140" value="${oc?esc(oc.detalle||""):""}" placeholder="Detalle"></div>
+      <input id="mi_detalle" maxlength="140" value="${esc(libreOc)}" placeholder="Detalle"></div>
     <div class="modal-msg" id="mi_msg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" onclick="guardarIncidencia(${editar?oc.id:"null"})">GUARDAR</button>
