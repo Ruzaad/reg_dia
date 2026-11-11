@@ -690,7 +690,7 @@ let sa={signo:-1};
    hoy, se le avisa con lo que ya pidió (fn_solicitudes_mias), sin esperar. */
 const SA_MOTIVOS=[["MAQUINA","MÁQUINA PARADA"],["ARREGLOS","ARREGLOS"],["MUESTRAS","MUESTRAS"],
                   ["REPROCESOS","REPROCESOS"],["DESCOSER","DESCOSER"],["OTRA","TRABAJÉ EN OTRA ÁREA"],["OTROS","OTROS"]];
-const SA_CAUSA=[["CAMISA COSTURA","CAMISA"],["PANTALON COSTURA","PANTALÓN"],["SACO COSTURA","SACO"],["ACABADO","ACABADO"],["CORTE","CORTE"],["CLIENTE","CLIENTE"],["","NO SÉ"]];
+const SA_CAUSA=[["CAMISA COSTURA","CAMISA"],["PANTALON COSTURA","PANTALÓN"],["SACO COSTURA","SACO"],["ACABADO","ACABADO"],["CORTE","CORTE"],["UDP","UDP"],["","NO SÉ"]];
 const SA_DONDE=[["DESPACHO","DESPACHO"],["REPROCESO","REPROCESO"],["ALMACEN","ALMACÉN"],["CORTE","CORTE"],["ACABADO","ACABADO"],["COSTURA","OTRA COSTURA"]];
 const SA_CUANTO=[[60,"1 h"],[120,"2 h"],[180,"3 h"],[288,"Medio día"],[575,"Todo el día"],[0,"Otro"]];
 let SA_V2=null, SA_MIAS=null;   // SA_V2: la base tiene el parche 114 (null = aún no se sabe)
@@ -707,7 +707,7 @@ function abrirSolicitudAjuste(){
       ${SA_MOTIVOS.map((m,i)=>`<button type="button" class="sa-mot" id="saMot${i}" onclick="saElegir(${i})"${m[0]==="OTROS"?' style="grid-column:1/-1"':""}>${esc(m[1])}</button>`).join("")}
     </div>
     <div class="op-campo" id="saCausaCampo" hidden><span class="op-lbl">¿De qué área vino el reproceso?</span>
-      ${saChips("saCausa",SA_CAUSA.filter(x=>x[0]!==mia),"saCausa")}</div>
+      ${saChips("saCausa",SA_CAUSA,"saCausa")}</div>
     <div class="modal-campo" id="saOfCampo" hidden><label for="saOf">OF (si la sabes)</label>
       <input id="saOf" inputmode="numeric" maxlength="12" placeholder="Ej: 10443"></div>
     <div class="op-campo" id="saDondeCampo" hidden><span class="op-lbl">¿Dónde trabajaste?</span>
@@ -761,8 +761,7 @@ function saElegir(i){
   setTimeout(()=>{ const el=otros?$("saMotivo"):otra||rep?null:$("saMin"); if(el) el.focus(); },80);
 }
 function saCausa(i){
-  const mia=AREA_ESTAJERO||((sesionActual()||{}).area)||"";
-  const l=SA_CAUSA.filter(x=>x[0]!==mia); sa.causa=l[i][0]||null; saPulsar("saCausa",i);
+  sa.causa=SA_CAUSA[i][0]||null; saPulsar("saCausa",i);
 }
 function saDonde(i){
   const mia=AREA_ESTAJERO||((sesionActual()||{}).area)||"";
