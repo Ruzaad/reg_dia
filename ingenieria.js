@@ -7323,7 +7323,7 @@ async function abrirModalInci(oc){
     <div class="modal-campo"><label>Tipo</label>
       <select id="mi_tipo" onchange="miTipo()">${TIPOS_OC_ING.map(opTipo).join("")}</select></div>
     <div class="modal-campo" id="mi_causaW" hidden><label>¿De qué área vino?</label>
-      <select id="mi_causa"><option value="">NO SÉ</option>${SA_CAUSA.filter(x=>x[0]&&x[0]!==mia).map(x=>`<option value="${esc(x[0])}">${esc(x[1])}</option>`).join("")}</select></div>
+      <select id="mi_causa"><option value="">NO SÉ</option>${SA_CAUSA.filter(x=>x[0]).map(x=>`<option value="${esc(x[0])}">${esc(x[1])}</option>`).join("")}</select></div>
     <div class="modal-campo" id="mi_ofW" hidden><label>OF (opcional)</label><input id="mi_of" maxlength="20" placeholder="Ej: 9880"></div>
     <div class="modal-campo" id="mi_dondeW" hidden><label>¿Dónde trabajó?</label>
       <select id="mi_donde">${SA_DONDE.filter(x=>x[0]!==mia).map(x=>`<option value="${esc(x[0])}">${esc(x[1])}</option>`).join("")}</select></div>
@@ -7348,7 +7348,6 @@ function miTipo(){
   ver("mi_causaW",t==="REPROCESOS"); ver("mi_ofW",t==="REPROCESOS"); ver("mi_dondeW",t==="OTRA");
   const l=$("mi_detLbl"); if(l) l.textContent = t==="OTROS" ? "¿Cuál fue el motivo?" : "Detalle (opcional)";
   const d=$("mi_detalle"); if(d) d.placeholder = t==="OTROS" ? "Escribe el motivo" : t==="OTRA" ? "Ej: despacho Scotiabank" : "Ej: OF 9880, máquina 12";
-  const c=$("mi_causa"); if(c){ [...c.options].forEach(o=>{ o.hidden=o.value===area; }); if(c.value===area) c.value=""; }
   const w=$("mi_donde"); if(w){ [...w.options].forEach(o=>{ o.hidden=o.value===area; }); if(w.value===area) w.value=([...w.options].find(o=>!o.hidden)||{}).value||""; }
 }
 /* Atajos de tiempo del operario: suman si es hora extra y descuentan en lo demás. */
