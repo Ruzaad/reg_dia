@@ -54,9 +54,8 @@ function iniCargar(){
 function iniCambiarFecha(v){ INI.fecha = v && v<hoyLima() ? v : null; iniCargar(); }
 function iniCambiarMes(v){
   if(!v || v>=hoyLima().slice(0,7)){ INI.fecha=null; return iniCargar(); }
-  const [y,m]=v.split("-").map(Number); let d=new Date(Date.UTC(y,m,0));
-  while(d.getUTCDay()===0||d.getUTCDay()===6) d=new Date(d.getTime()-864e5);
-  INI.fecha=d.toISOString().slice(0,10); iniCargar();
+  const [y,m]=v.split("-").map(Number);
+  INI.fecha=new Date(Date.UTC(y,m,0)).toISOString().slice(0,10); iniCargar();
 }
 
 /* ---------- cálculo por área (solo con lo que devuelven las RPC) ---------- */
