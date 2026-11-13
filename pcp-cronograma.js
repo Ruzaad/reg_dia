@@ -155,7 +155,8 @@ async function pcsOf(of){
 }
 function pcsOfHTML(r){
   const et=[];
-  if(r.corte&&(r.corte.meta||r.corte.hecho)) et.push({t:"Corte",m:+r.corte.meta||+r.corte.hecho||0,h:+r.corte.hecho||0,a:r.corte.ini,b:r.corte.fin});
+  const progr=(r.costura||[]).reduce((t,z)=>t+(+z.cant||0),0);
+  if(r.corte&&(r.corte.meta||r.corte.hecho)) et.push({t:"Corte",m:+r.corte.meta||progr||+r.corte.hecho||0,h:+r.corte.hecho||0,a:r.corte.ini,b:r.corte.fin});
   (r.costura||[]).forEach(z=>et.push({t:pcsCorto(z.area)+" · costura",m:+z.cant||0,h:+z.hecho||0,a:z.desde||z.ini,b:z.ult||z.fin}));
   if(r.acabado&&+r.acabado.meta) et.push({t:"Acabado",m:+r.acabado.meta,h:+r.acabado.hecho||0,a:r.acabado.desde,b:r.acabado.ult});
   const pc=e=>e.m>0?Math.min(100,Math.round(e.h/e.m*100)):0, tot=et.length?Math.round(et.reduce((s,e)=>s+pc(e),0)/et.length):0;
