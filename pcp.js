@@ -4,7 +4,7 @@
    los días laborables, y cada persona ve en su celular su parte (fn_mi_meta).
    Se alimenta a mano: el Excel del programa de costura y la hoja NOTI_CORTE
    (lo que sale de corte), leída del Google Sheets o subida como archivo.
-   El calendario (pcp-calendario.js) lee con fn_pcp_calendario_areas; aquí solo quedan las cargas.
+   El cronograma (pcp-cronograma.js) lee con fn_pcp_costura; aquí solo quedan las cargas.
    ===================================================================== */
 let PCP={r:null, mes:null};
 const pcpN=n=>Math.round(+n||0).toLocaleString("es-PE");
@@ -19,7 +19,7 @@ function pcpInit(){
   const d=$("pcpDesde"); if(d && !d.value){ const [y,mm]=hoyLima().split("-").map(Number); d.value=new Date(y,mm-2,1).toLocaleDateString("sv-SE"); }
   pcpCargar();
 }
-function pcpCargar(){ pccCargar(); }
+function pcpCargar(){ pcsCargar(); }
 
 const pcpNum=v=>{ if(typeof v==="number") return v; const s=String(v==null?"":v).replace(/[^\d.,\-]/g,""); return s?Number(s.replace(/,/g,"")):NaN; };
 /* ---------- lectura de archivos ---------- */
@@ -74,7 +74,7 @@ async function pcpPrograma(wb, nombre){
       const of=String(g(r,"OF")).replace(/\.0+$/,"").trim();
       filas.push({area:m[1],planta:norm(g(r,"PLANTA")),linea:norm(g(r,"LINEA")),prenda:norm(g(r,"PRENDA")),cliente:norm(g(r,"CLIENTE")),
         pedido:norm(g(r,"PEDIDO")),articulo:art,modelo:norm(g(r,"MODELO")),color:norm(g(r,"COLOR")),of:/^\d+$/.test(of)?of:"",
-        cant:pcpNum(g(r,"CANT"))||null,cant_prog:cp,std,ini:pcpFecha(g(r,"INICOSTURA")),fin:pcpFecha(g(r,"FINCOSTURA")),
+        cant:pcpNum(g(r,"CANT"))||null,cant_prog:cp,std,ini:pcpFecha(g(r,"INICOSTURA")),fin:pcpFecha(g(r,"FINCOSTURA")),target:pcpFecha(g(r,"TARGET")),operarios:pcpNum(g(r,"OPERARIOS"))||null,
         mes:pcpNum(g(r,"MES"))||null,anio:pcpNum(g(r,"ANIO"))||null,estatus:norm(g(r,"ESTATUS")),obs:norm(g(r,"OBSERVACION"))});
       n++;
     }
