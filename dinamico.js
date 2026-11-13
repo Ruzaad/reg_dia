@@ -487,6 +487,7 @@ function ordenar(t,col,dir){
 function marcarCab(t,col,dir){const fc=filaCab(t);if(!fc)return;[...fc.cells].forEach(th=>{th.classList.remove("dyn-asc","dyn-desc");if(colDe(th)===col)th.classList.add(dir>0?"dyn-asc":"dyn-desc");th.setAttribute("aria-sort",colDe(th)===col?(dir>0?"ascending":"descending"):"none");});}
 function prepararTabla(t){
   const fc=filaCab(t);if(!fc||fc.dataset.dyn)return;fc.dataset.dyn="1";
+  if(t.classList.contains("sin-orden"))return;
   if(fc.querySelector("th.ord,th[onclick]"))return;             // la app ya la ordena
   if(!t.tBodies[0]||t.tBodies[0].querySelector("td[rowspan]:not([rowspan='1'])"))return;
   const k=claveTabla(t);

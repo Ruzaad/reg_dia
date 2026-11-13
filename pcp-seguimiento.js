@@ -15,7 +15,9 @@ const pcpIso=n=>new Date(n*864e5).toISOString().slice(0,10);
    registro se ancla en su fecha de inicio de corte; lo que sobra en otra línea (cliente o material partidos) se
    suma al registro más cercano en vertical. */
 function pcpParsearCronograma(paginas){
-  const COLS=["pedido","cliente","of","cantidad","articulo","material","ini_corte","fin_corte","ini_costura","obs"];
+  const COLS_V1=["pedido","cliente","of","cantidad","articulo","material","ini_corte","fin_corte","ini_costura","obs"];
+  /* formato nov-2026: se agregan «Estatus de Corte» e «Inicio de corte» real */
+  const COLS_V2=["pedido","cliente","of","cantidad","articulo","material","estatus","ini_corte","fin_corte","ini_real","ini_costura","obs"];
   const fechaIso=s=>{ const m=String(s).match(/^(\d{2})-(\d{2})-(\d{4})$/); return m?`${m[3]}-${m[2]}-${m[1]}`:null; };
   const out=[];
   paginas.forEach(items=>{
@@ -24,9 +26,10 @@ function pcpParsearCronograma(paginas){
     const hy=hp.y, fo=it.find(i=>/^Generado/.test(i.s)), fy=fo?fo.y+3:-1e9;
     const cab=it.filter(i=>Math.abs(i.y-hy)<=10).sort((a,b)=>a.c-b.c), grupos=[];
     cab.forEach(i=>{ const g=grupos[grupos.length-1]; if(g && i.c-g.c<=14){ g.c=(g.c*g.n+i.c)/(g.n+1); g.n++; } else grupos.push({c:i.c,n:1}); });
+    const COLS=grupos.length>=COLS_V2.length-1?COLS_V2:COLS_V1, ci=k=>COLS.indexOf(k);
     if(grupos.length<COLS.length-1) return;   // Observaciones puede venir vacía pero su cabecera siempre está
     const cuerpo=it.filter(i=>i.y<hy-12 && i.y>fy);
-    const anclas=cuerpo.filter(i=>/^\d{2}-\d{2}-\d{4}$/.test(i.s) && Math.abs(i.c-grupos[6].c)<=18).sort((a,b)=>b.y-a.y);
+    const anclas=cuerpo.filter(i=>/^\d{2}-\d{2}-\d{4}$/.test(i.s) && Math.abs(i.c-grupos[ci("ini_corte")].c)<=18).sort((a,b)=>b.y-a.y);
     if(!anclas.length) return;
     const reg=anclas.map(a=>({y:a.y,cel:COLS.map(()=>[])}));
     cuerpo.forEach(i=>{
@@ -38,7 +41,7 @@ function pcpParsearCronograma(paginas){
       const t=k=>r.cel[k].sort((a,b)=>b.y-a.y||a.x-b.x).map(i=>i.s).join(" ").trim();
       const of=t(2), cant=Number(t(3).replace(/[^\d.]/g,""));
       out.push({pedido:t(0),cliente:t(1),of:/^\d+$/.test(of)?of:"",cantidad:cant||0,articulo:t(4),material:t(5),
-        ini_corte:fechaIso(t(6)),fin_corte:fechaIso(t(7)),ini_costura:fechaIso(t(8)),obs:COLS.length>9?t(9):""});
+        ini_corte:fechaIso(t(ci("ini_corte"))),fin_corte:fechaIso(t(ci("fin_corte"))),ini_costura:fechaIso(t(ci("ini_costura"))),obs:t(ci("obs"))});
     });
   });
   return out.filter(f=>f.articulo && f.ini_corte);

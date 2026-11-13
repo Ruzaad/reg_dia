@@ -37,7 +37,7 @@ function pcsOpts(k,v,txt){ const s=[...new Set((PCS.r.filas||[]).map(x=>x[k]).fi
   return `<option value="">${txt}</option>`+s.map(a=>`<option${a===v?" selected":""}>${esc(a)}</option>`).join(""); }
 function pcsFiltro(k,v){ PCS.f[k]=v; pcsPintar(); }
 function pcsFila(x){
-  const s=pcsSem(x.status), ob=(x.obs||[]).map(t=>`<span class="pcs-ob${x.bloquea&&/BASE|REGISTRADO/.test(t)?" bl":""}">${esc(t)}</span>`).join("");
+  const s=pcsSem(x.status), ob=[...new Set((x.obs||[]).map(t=>t==="ARTÍCULO NO REGISTRADO EN CHRONOS"?"SIN BASE DE OPERACIONES":t))].map(t=>`<span class="pcs-ob${x.bloquea&&/BASE|REGISTRADO/.test(t)?" bl":""}">${esc(t)}</span>`).join("");
   const tip=x.est?`${x.est} personas × 9,57 h × 60 = ${pcsN(x.min_dia)} min por día`:"";
   return `<tr><td>${esc(x.planta)}</td><td>${esc(x.linea)}</td><td>${esc(x.prenda)}</td><td>${esc(x.cliente)}</td><td><b>${esc(x.articulo)}</b></td><td>${esc(x.modelo)}</td><td>${esc(x.color)}</td>
     <td class="num">${esc(x.o_f||"—")}</td><td class="num">${pcsDM(x.target)}</td><td class="num">${pcsN(x.cant_prog)}</td><td class="num">${x.std!=null?(+x.std).toFixed(1).replace(".",","):"—"}</td>
@@ -62,7 +62,7 @@ function pcsPintar(){
       ${sel("","planta","Planta")}${sel("","linea","Línea")}${sel("","cliente","Cliente")}
       <select class="pcp-in" onchange="pcsFiltro('est',this.value)" aria-label="Estado de avance"><option value="">Avance</option>${[["v","Verde"],["a","Amarillo"],["r","Rojo"],["s","Sin avance"],["obs","Con observación"]].map(o=>`<option value="${o[0]}"${F.est===o[0]?" selected":""}>${o[1]}</option>`).join("")}</select>
       <input class="pcp-in" type="search" placeholder="Artículo, OF o modelo" value="${esc(F.q)}" onchange="PCS.f.q=this.value;pcsPintar()" aria-label="Buscar"></div>
-    <div class="tabla-scroll"><table class="tabla pcs-t"><thead><tr><th>Planta</th><th>Línea</th><th>Prenda</th><th>Cliente</th><th>Artículo</th><th>Modelo</th><th>Color</th><th class="num">OF</th><th class="num">Target</th><th class="num">Cant prog</th><th class="num">STD</th><th class="num">Días háb.</th><th class="num">Ini costura</th><th class="num">Fin costura</th><th class="num">Status</th><th>Observación</th></tr></thead>${cuerpo||`<tbody><tr><td colspan="16" class="acf-falta">Sin OF para este filtro.</td></tr></tbody>`}</table></div></section>${ed}`;
+    <div class="tabla-scroll"><table class="tabla pcs-t sin-orden"><thead><tr><th>Planta</th><th>Línea</th><th>Prenda</th><th>Cliente</th><th>Artículo</th><th>Modelo</th><th>Color</th><th class="num">OF</th><th class="num">Target</th><th class="num">Cant prog</th><th class="num">STD</th><th class="num">Días háb.</th><th class="num">Ini costura</th><th class="num">Fin costura</th><th class="num">Status</th><th>Observación</th></tr></thead>${cuerpo||`<tbody><tr><td colspan="16" class="acf-falta">Sin OF para este filtro.</td></tr></tbody>`}</table></div></section>${ed}`;
 }
 async function pcsGuardarMeta(){
   try{
