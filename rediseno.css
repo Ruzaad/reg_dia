@@ -2255,9 +2255,10 @@ label.ini-pn-campo{cursor:text}
 
 .modal-campo[hidden]{display:none !important;}
 /* PCP · cronograma de costura (parche 178) */
-.pcs-filtros{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;} .pcs-filtros .pcp-in{min-width:130px;width:auto;}
-.pcs-t{width:100%;font-variant-numeric:tabular-nums;} .pcs-t{font-size:12.5px;} .pcs-t td,.pcs-t th{padding:6px 7px;vertical-align:top;text-align:left;} .pcs-t th{white-space:nowrap;} .pcs-t td.num{white-space:nowrap;} .pcs-t td.num,.pcs-t th.num{text-align:right;}
+.pcs-filtros{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;} .pcs-filtros .pcp-in{flex:0 1 auto;width:auto;min-width:130px;max-width:220px;text-align:left;text-align-last:left;}
+.pcs-t{width:100%;font-variant-numeric:tabular-nums;} .pcs-t{font-size:12.5px;} .pcs-t td,.pcs-t th{padding:10px 8px;vertical-align:middle;text-align:left;} .pcs-t th{white-space:nowrap;} .pcs-t td.num{white-space:nowrap;} .pcs-t td.num,.pcs-t th.num{text-align:right;}
 .pcs-t td.pcs-obs{min-width:200px;}
+.pcs-t tbody+tbody tr.pcs-sem th{border-top:14px solid var(--sup);} .pcs-t tbody tr:not(.pcs-sem) td{border-bottom:1px solid var(--linea);}
 .pcs-sem th{background:var(--ocre-t);color:var(--titulo,var(--azul));text-align:left;font-size:13px;letter-spacing:.04em;padding:8px 10px;} .pcs-sem i{font-style:normal;font-weight:600;color:var(--suave);margin-left:8px;}
 .pcs-st{display:inline-block;min-width:56px;text-align:center;padding:2px 10px;border-radius:999px;color:#fff;font-weight:800;}
 .pcs-st.v{background:#16834A;} .pcs-st.a{background:#D69A16;} .pcs-st.r{background:#CB3939;}
