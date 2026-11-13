@@ -65,7 +65,7 @@ function pcsFila(x){
   const tip=x.est?`${x.est} personas × 9,57 h × 60 = ${pcsN(x.min_dia)} min por día`:"";
   const of=x.o_f?`<button type="button" class="pcs-of" onclick="pcsOf('${esc(x.o_f)}')" aria-label="Ver avance de la OF ${esc(x.o_f)}">${esc(x.o_f)}</button>`:"—";
   return `<tr><td>${esc(x.planta)}</td><td>${esc(pcsCorto(x.area))}</td><td>${esc(x.prenda)}</td><td>${esc(x.cliente)}</td><td><b>${esc(x.articulo)}</b></td><td>${esc(x.modelo)}</td><td>${esc(x.color)}</td>
-    <td class="num">${of}</td><td class="num">${pcsDM(x.target)}</td><td class="num">${pcsN(x.cant_prog)}</td><td class="num">${x.std!=null?(+x.std).toFixed(1).replace(".",","):"—"}</td>
+    <td class="num">${of}</td><td class="num">${pcsDM(x.target)}</td><td class="num"${x.cant_plan!=null&&+x.cant_plan!==+x.cant_prog?` title="Programado ${pcsN(x.cant_plan)} · cortado ${pcsN(x.cortado)}"`:""}>${pcsN(x.cant_prog)}${x.cant_plan!=null&&+x.cant_plan!==+x.cant_prog?`<sup class="pcs-cor">●</sup>`:""}</td><td class="num">${x.std!=null?(+x.std).toFixed(1).replace(".",","):"—"}</td>
     <td class="num" title="${esc(tip)}">${x.dias!=null?String(x.dias).replace(".",","):"—"}</td><td class="num">${pcsDM(x.ini)}</td><td class="num">${pcsDM(x.fin)}</td>
     <td class="num">${x.status!=null?`<span class="pcs-st ${s}">${x.status} %</span>`:"—"}</td><td class="pcs-obs">${ob}</td></tr>`;
 }

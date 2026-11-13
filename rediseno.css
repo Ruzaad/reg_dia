@@ -2307,3 +2307,4 @@ label.ini-pn-campo{cursor:text}
 :root[data-theme="dark"] #crg{background:#07123F;border:1px solid #22337C}
 @media (prefers-reduced-motion:reduce){#crg .s{animation:none}}
 .pcs-barra .pcp-in,.pcs-pop .pcp-in{text-align:left;font-family:inherit;font-size:13px;} .pcs-pop-f .btn-mini{padding:7px 12px;} .pcs-of-h{padding-right:44px;} .pcs-of-c .cargando{margin-top:40px;}
+.pcs-cor{color:var(--ocre);font-size:8px;margin-left:3px;vertical-align:super;}
