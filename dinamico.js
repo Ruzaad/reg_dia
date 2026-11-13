@@ -496,6 +496,41 @@ function prepararTabla(t){
     th.addEventListener("click",go);th.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});});
   const s=ORD[k];if(s){ordenar(t,s.col,s.dir);marcarCab(t,s.col,s.dir);}
 }
+/* ---------- filtro tipo Excel en todas las tablas (regla: toda tabla se ordena y se filtra) ---------- */
+const FIL={};             // clave de tabla -> {col: Set de valores permitidos}
+function textoCelda(tr,col){const td=celda(tr,col);if(!td)return "";const inp=td.querySelector("input:not([type=checkbox]),select");return ((inp?inp.value:td.textContent)||"").trim().replace(/\s+/g," ")||"(Vacío)";}
+function filasDatos(t){const tb=t.tBodies[0];const n=filaCab(t)?filaCab(t).cells.length:0;return tb?[...tb.rows].filter(tr=>tr.cells.length===n&&!tr.classList.contains("grupo-area")&&!esTotal(tr)):[];}
+function aplicarFiltros(t){const f=FIL[claveTabla(t)]||{},tb=t.tBodies[0];if(!tb)return;ordenando=true;let oculta=false;
+  [...tb.rows].forEach(tr=>{const dato=filasDatos(t).includes(tr);if(dato){oculta=Object.keys(f).some(c=>!f[c].has(textoCelda(tr,+c)));tr.hidden=oculta;}
+    else if(tr.cells.length===1&&tr.cells[0].colSpan>1&&!tr.classList.contains("grupo-area"))tr.hidden=oculta;});
+  const fc=filaCab(t);if(fc)[...fc.cells].forEach(th=>{const b=th.querySelector(".dyn-fb");if(b)b.classList.toggle("on",!!f[colDe(th)]);});
+  obs.takeRecords();ordenando=false;}
+let popF=null;
+function cerrarPopF(){if(popF){popF.el.remove();document.removeEventListener("mousedown",popF.fuera,true);document.removeEventListener("keydown",popF.esc,true);popF=null;}}
+function abrirPopF(t,col,btn){
+  if(popF&&popF.col===col&&popF.t===t){cerrarPopF();return;}cerrarPopF();
+  const k=claveTabla(t),el=document.createElement("div");el.className="pcs-pop";el.setAttribute("role","dialog");document.body.appendChild(el);
+  const st={t,col,el,q:""};popF=st;
+  const todos=()=>{const m=new Map();filasDatos(t).forEach(tr=>{const o=FIL[k]||{};if(Object.keys(o).every(c=>+c===col||o[c].has(textoCelda(tr,+c)))){const v=textoCelda(tr,col);m.set(v,(m.get(v)||0)+1);}});return [...m].sort((a,b)=>String(a[0]).localeCompare(String(b[0]),"es",{numeric:true}));};
+  const pint=()=>{const ops=todos(),f=(FIL[k]||{})[col],q=st.q.trim().toLowerCase(),vis=ops.filter(o=>!q||o[0].toLowerCase().includes(q)),marc=o=>!f||f.has(o[0]);
+    el.innerHTML=`<div class="pcs-pop-o"><button type="button" data-a="asc">A → Z</button><button type="button" data-a="desc">Z → A</button></div><input type="search" class="pcp-in" placeholder="Buscar" aria-label="Buscar valor"><div class="pcs-lista"><label><input type="checkbox" data-t="1" ${vis.length&&vis.every(marc)?"checked":""}><span>(Seleccionar todo)</span></label>${vis.map((o,i)=>`<label><input type="checkbox" data-i="${i}" ${marc(o)?"checked":""}><span title="${o[0].replace(/"/g,"&quot;")}"></span><i>${o[1]}</i></label>`).join("")||'<div class="pcs-vacio">Sin valores</div>'}</div><div class="pcs-pop-f"><button type="button" class="btn-mini" data-a="borrar">Borrar filtro</button><button type="button" class="btn-mini" data-a="ok">Listo</button></div>`;
+    el.querySelector("input[type=search]").value=st.q;el.querySelectorAll(".pcs-lista span").forEach((sp,i)=>{if(i>0)sp.textContent=vis[i-1][0];});
+    const set=(on,lista)=>{const o=FIL[k]=FIL[k]||{};const s=o[col]||new Set(ops.map(x=>x[0]));lista.forEach(v=>on?s.add(v):s.delete(v));if(ops.every(x=>s.has(x[0])))delete o[col];else o[col]=s;if(!Object.keys(o).length)delete FIL[k];aplicarFiltros(t);pint();};
+    el.querySelector("input[type=search]").oninput=e=>{st.q=e.target.value;const l=el.querySelector(".pcs-lista").scrollTop;pint();const i=el.querySelector("input[type=search]");i.focus();i.setSelectionRange(i.value.length,i.value.length);};
+    el.querySelectorAll(".pcs-lista input").forEach(c=>c.onchange=()=>c.dataset.t?set(c.checked,vis.map(x=>x[0])):set(c.checked,[vis[+c.dataset.i][0]]));
+    el.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{const a=b.dataset.a;if(a==="asc"||a==="desc"){ORD[k]={col,dir:a==="asc"?1:-1};ordenar(t,col,ORD[k].dir);marcarCab(t,col,ORD[k].dir);}else if(a==="borrar"){if(FIL[k]){delete FIL[k][col];if(!Object.keys(FIL[k]).length)delete FIL[k];}aplicarFiltros(t);cerrarPopF();}else cerrarPopF();});};
+  pint();
+  const b=btn.getBoundingClientRect(),w=el.offsetWidth,h=el.offsetHeight;el.style.left=Math.max(8,Math.min(b.right-w,innerWidth-w-8))+"px";el.style.top=Math.max(8,Math.min(b.bottom+4,innerHeight-h-8))+"px";
+  st.fuera=e=>{if(!el.contains(e.target)&&!(e.target.closest&&e.target.closest(".dyn-fb")))cerrarPopF();};st.esc=e=>{if(e.key==="Escape")cerrarPopF();};
+  document.addEventListener("mousedown",st.fuera,true);document.addEventListener("keydown",st.esc,true);}
+function prepararFiltro(t){
+  const fc=filaCab(t);if(!fc||fc.dataset.fil||t.classList.contains("sin-filtro"))return;
+  if(!t.tBodies[0]||t.tBodies[0].querySelector("td[rowspan]:not([rowspan='1'])")||fc.querySelector("th[colspan]:not([colspan='1'])"))return;
+  if(filasDatos(t).length<2)return;fc.dataset.fil="1";
+  [...fc.cells].forEach(th=>{if(!th.textContent.trim()||th.querySelector("input,.dyn-fb"))return;
+    const b=document.createElement("button");b.type="button";b.className="dyn-fb";b.textContent="▾";b.setAttribute("aria-label","Filtrar "+th.textContent.trim());b.setAttribute("aria-haspopup","true");
+    b.addEventListener("click",e=>{e.stopPropagation();e.preventDefault();abrirPopF(t,colDe(th),b);});b.addEventListener("keydown",e=>e.stopPropagation());th.appendChild(b);});
+  obs.takeRecords();aplicarFiltros(t);}
 /* Matrices: columnas de referencia fijas al desplazar a la derecha. Incentivos
    fija Personal, DNI, Área y Cat.; el resto, su primera columna. El `left` de
    cada una es la suma de los anchos de las anteriores; el ResizeObserver lo
@@ -512,9 +547,9 @@ function fijarColumnas(t){
 function vigilarFijas(t){if(!nFijas(t))return;if(roFijas&&!t.dataset.fijas){t.dataset.fijas="1";roFijas.observe(t);}fijarColumnas(t);}
 let tObs=null;
 const obs=new MutationObserver(()=>{if(ordenando)return;cancelAnimationFrame(tObs);tObs=requestAnimationFrame(()=>{
-  document.querySelectorAll(".pantalla table").forEach(t=>{const fc=filaCab(t);vigilarFijas(t);
+  document.querySelectorAll(".pantalla table").forEach(t=>{const fc=filaCab(t);vigilarFijas(t);prepararFiltro(t);
     if(fc&&!fc.dataset.dyn)prepararTabla(t);
-    else if(fc&&t.tBodies[0]&&!t.tBodies[0].dataset.dyn){t.tBodies[0].dataset.dyn="1";const s=ORD[claveTabla(t)];if(s&&fc.querySelector(".dyn-ord")){ordenar(t,s.col,s.dir);marcarCab(t,s.col,s.dir);}}});
+    else if(fc&&t.tBodies[0]&&!t.tBodies[0].dataset.dyn){t.tBodies[0].dataset.dyn="1";aplicarFiltros(t);const s=ORD[claveTabla(t)];if(s&&fc.querySelector(".dyn-ord")){ordenar(t,s.col,s.dir);marcarCab(t,s.col,s.dir);}}});
   const v=vistaActual();if(v)ocultarCampos(v);});});
 
 /* =====================================================================
