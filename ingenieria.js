@@ -4866,6 +4866,11 @@ async function cargarIncTabla(){
     INC_TABLA=r.items||[]; incPintarTabla();
   }catch(e){ $("tablaIncCat").innerHTML=""; mostrarError(e.message); }
 }
+/* Abreviatura del área de apoyo: lo que va entre paréntesis (UDP) o las 3 primeras letras. */
+/* «DESPACHO 3 · CORTE 2»: los días de apoyo de la persona en la quincena. */
+function incApoyoResumen(p){ const n={}; Object.values(p.dias||{}).forEach(d=>{ if(d.apoyo) n[d.apoyo]=(n[d.apoyo]||0)+1; });
+  return Object.keys(n).map(k=>k+" "+n[k]).join(" · "); }
+function incApoyoAb(a){ const m=String(a).match(/\(([^)]+)\)/); return m?m[1]:String(a).slice(0,3); }
 function incPintarTabla(){
   const cats=[...new Set(INC_TABLA.map(x=>x.categoria))].sort();
   const pcts=[...new Set(INC_TABLA.map(x=>x.pct))].sort((a,b)=>a-b);
@@ -5307,6 +5312,7 @@ function incPintar(){
       const ar=c.areas&&Object.keys(c.areas).length>1
         ? " · "+Object.keys(c.areas).map(a=>a+" "+Math.round(c.areas[a])+"m").join(" · ") : "";
       const multi=c.areas&&Object.keys(c.areas).length>1;
+      if(c.apoyo) return `<td class="inc-apoyo${pct>=80?" inc-gana":""}" title="Apoyo en ${esc(c.apoyo)} · ${pct}% (promedio de sus días con ticket)">${pct}<sup>${esc(incApoyoAb(c.apoyo))}</sup></td>`;
       return `<td class="${pct>=80?"inc-gana":""}${multi?" inc-multi-dia":""}" `
         + `title="${pct}% · ${c.prod}/${c.disp} min${esc(ar)}">${pct}</td>`;
     }).join("");
@@ -5358,7 +5364,7 @@ async function descargarInc(){
   const cab=["ID","AREA","USUARIO","DNI","CATEGORIA"]
     .concat(dias.map(d=>d.fecha))
     .concat(bonos.map(b=>"BONO "+LETRA_BONO(b.n)))
-    .concat(["BONO TOTAL","FALTA","TARDANZA","BOLETA","BONIFICACION FINAL","ESTADO"]);
+    .concat(["BONO TOTAL","FALTA","TARDANZA","BOLETA","BONIFICACION FINAL","ESTADO","APOYO"]);
   const fila=(p,i)=>[i+1,p.area||"",p.nombre,p.dni,p.categoria||""]
     .concat(dias.map(d=>{
       const c=(p.dias||{})[d.fecha]||{};
@@ -5368,7 +5374,7 @@ async function descargarInc(){
     }))
     .concat(bonos.map(b=>+((p.bonos||{})[b.n]||0)))
     .concat([+(p.bono_total||0), (+p.faltas||0)||"", (+p.tardanzas||0)||"",
-             (+p.boleta||0)||"", +(p.final||0), p.cesado?"CESADO":""]);
+             (+p.boleta||0)||"", +(p.final||0), p.cesado?"CESADO":"", incApoyoResumen(p)]);
   /* Las eficiencias van como fracción (0.84): con formato % se leen 84%. */
   const hoja=aoa=>{ const ws=XLSX.utils.aoa_to_sheet(aoa);
     for(let r=1;r<aoa.length;r++) for(let c=5;c<5+dias.length;c++){
