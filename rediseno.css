@@ -2308,3 +2308,4 @@ label.ini-pn-campo{cursor:text}
 @media (prefers-reduced-motion:reduce){#crg .s{animation:none}}
 .pcs-barra .pcp-in,.pcs-pop .pcp-in{text-align:left;font-family:inherit;font-size:13px;} .pcs-pop-f .btn-mini{padding:7px 12px;} .pcs-of-h{padding-right:44px;} .pcs-of-c .cargando{margin-top:40px;}
 .pcs-cor{color:var(--ocre);font-size:8px;margin-left:3px;vertical-align:super;}
+.inc-apoyo{background:var(--azul-t);} .inc-apoyo sup{font-size:8px;margin-left:2px;color:var(--ocre);font-weight:700;}
