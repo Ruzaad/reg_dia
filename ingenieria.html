@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="rediseno.css?v=c31">
+<link rel="stylesheet" href="rediseno.css?v=c32">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
 </head>
 <body data-pagina="ingenieria">
@@ -32,6 +32,7 @@
   <aside class="ing-sidebar">
     <nav class="ing-nav" aria-label="Secciones de ingeniería">
       <a class="nav-item nav-inicio" data-tab="pasoInicio" href="#pasoInicio">Inicio</a>
+      <a class="nav-item nav-inicio" data-tab="pasoTablero" href="#pasoTablero">Tablero de gestión</a>
       <details class="nav-group" open>
         <summary class="nav-sep">Tickets</summary>
         <a class="nav-item" data-tab="pasoBuscar" href="#pasoBuscar">Buscar y seguir</a>
@@ -1152,6 +1153,16 @@
     </section>
 
     <!-- ===================== INICIO: el día de mis áreas (solo lectura) ===================== -->
+    <section class="pantalla" id="pasoTablero">
+      <div class="seccion-cab"><h1>Tablero de gestión</h1><p class="ini-alcance" id="tbFecha"></p></div>
+      <div class="tb-areas" id="tbAreas" role="group" aria-label="Área"></div>
+      <div class="tb-kpis" id="tbKpis" aria-live="polite"></div>
+      <div class="tb-g2">
+        <section class="ini-card"><div class="ini-card-h"><b>Cumplimiento de meta por línea</b></div><div class="tabla-scroll" id="tbTabla"></div></section>
+        <section class="ini-card"><div class="ini-card-h"><b>Eficiencia diaria contra la meta</b></div><div id="tbLinea"></div></section>
+      </div>
+    </section>
+
     <section class="pantalla" id="pasoInicio">
       <div class="ini-blobs"><i></i><i></i><i></i></div>
       <div class="ini-bento">
@@ -1727,6 +1738,7 @@
 <script src="ingenieria.js?v=c19"></script>
 <script src="costos.js"></script>
 <script src="inicio.js?v=c23"></script>
+<script src="tablero.js?v=c1"></script>
 <script src="calidad.js"></script>
 <script src="asistencia.js"></script>
 <script src="feriados.js"></script>

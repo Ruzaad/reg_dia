@@ -2309,3 +2309,26 @@ label.ini-pn-campo{cursor:text}
 .pcs-barra .pcp-in,.pcs-pop .pcp-in{text-align:left;font-family:inherit;font-size:13px;} .pcs-pop-f .btn-mini{padding:7px 12px;} .pcs-of-h{padding-right:44px;} .pcs-of-c .cargando{margin-top:40px;}
 .pcs-cor{color:var(--ocre);font-size:8px;margin-left:3px;vertical-align:super;}
 .inc-apoyo{background:var(--azul-t);} .inc-apoyo sup{font-size:8px;margin-left:2px;color:var(--ocre);font-weight:700;}
+
+/* Tablero de gestión */
+.tb-areas{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;}
+.tb-areas button{border:1px solid var(--linea);background:var(--sup);color:var(--texto);padding:7px 16px;border-radius:999px;font:inherit;cursor:pointer;}
+.tb-areas button.on{background:var(--azul);border-color:var(--azul);color:#fff;font-weight:600;}
+.tb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:0 0 16px;}
+.tb-k{background:var(--sup);border-radius:var(--r);box-shadow:var(--sombra-1);padding:14px 16px;border-top:4px solid var(--c);display:flex;flex-direction:column;gap:2px;min-width:0;}
+.tb-k small{color:var(--tenue);font-size:11px;text-transform:uppercase;letter-spacing:.08em;min-height:28px;}
+.tb-k b{font-size:28px;font-weight:600;line-height:1.15;}
+.tb-s{color:var(--tenue);font-size:12px;}
+.tb-bar{height:6px;border-radius:9px;background:var(--linea);overflow:hidden;margin:8px 0 6px;}
+.tb-bar i{display:block;height:100%;background:var(--c);}
+.tb-k em{font-style:normal;font-size:12px;font-weight:600;color:var(--c);}
+.tb-g2{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start;}
+.tb-tag{padding:2px 10px;border-radius:99px;font-size:11px;font-weight:600;color:#fff;white-space:nowrap;}
+.tb-tag.v{background:var(--exito);}.tb-tag.a{background:var(--ocre);}.tb-tag.r{background:var(--alerta);}.tb-tag.g{background:var(--tenue);}
+#tbTabla th{cursor:pointer;white-space:nowrap;}
+.tb-f{display:block;width:100%;min-width:56px;margin-top:4px;padding:3px 6px;border:1px solid var(--linea);border-radius:6px;background:var(--gris-fondo);color:var(--texto);font:12px var(--sans);}
+.tb-lg{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--tenue);margin:4px 0 6px;}
+.tb-lg i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;}.tb-lg i.m{border-radius:0;height:0;width:14px;border-top:2px dashed var(--dorado);background:none;vertical-align:middle;}
+#tbLinea svg text{fill:var(--tenue);font:11px var(--sans);}#tbLinea svg .g{stroke:var(--linea);}#tbLinea svg .m{stroke:var(--dorado);stroke-dasharray:5 4;}
+@media(max-width:900px){.tb-kpis{grid-template-columns:1fr 1fr;}.tb-g2{grid-template-columns:1fr;}}
+.nav-item[data-tab="pasoTablero"]{--ni:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='9'/%3E%3Crect x='14' y='3' width='7' height='5'/%3E%3Crect x='14' y='12' width='7' height='9'/%3E%3Crect x='3' y='16' width='7' height='5'/%3E%3C/svg%3E")!important;}
