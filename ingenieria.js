@@ -4810,14 +4810,29 @@ async function cargarInc(){
 /* Cargar Bon. Corte (parche 167): eficiencia manual de CORTE pegada desde Excel
    (DNI · nombre · categoría · fecha · eficiencia). Sin tabla, el % del modular de CORTE. */
 function bonCorteLeer(txt){
-  const out=[];
+  const out=[], MES={ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,set:9,sep:9,oct:10,nov:11,dic:12};
+  const anio=parseInt((($("incDesde")||{}).value||"").slice(0,4))||new Date().getFullYear();
+  const z=n=>String(n).padStart(2,"0");
+  const fecha=x=>{ x=String(x||"").trim().toLowerCase(); let m;
+    if(m=x.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)) return `${m[3]}-${z(m[2])}-${z(m[1])}`;
+    if(m=x.match(/^(\d{1,2})[-\/ ]([a-záéñ]{3,})\.?(?:[-\/ ](\d{2,4}))?$/)){
+      const mes=MES[m[2].slice(0,3)]; if(!mes) return "";
+      const y=m[3]?(m[3].length===2?2000+ +m[3]:+m[3]):anio; return `${y}-${z(mes)}-${z(m[1])}`; }
+    return ""; };
+  const pct=p=>{ p=String(p||"").trim(); if(!/^\d+([.,]\d+)?\s*%?$/.test(p)) return null;
+    let v=parseFloat(p.replace(",",".").replace("%","")); if(!/%/.test(p)&&v<=1.5) v*=100; return Math.round(v*10)/10; };
+  let cab=null;
   String(txt||"").split(/\r?\n/).forEach(l=>{
-    const c=l.split("\t").map(x=>x.trim()); const dni=(c.find(x=>/^\d{7,8}$/.test(x))||"");
-    const f=(c.find(x=>/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(x))||"").split("/");
-    const p=[...c].reverse().find(x=>/^\d+([.,]\d+)?\s*%?$/.test(x)&&x!==dni);
-    if(!dni||f.length!==3||p==null) return;
-    let v=parseFloat(p.replace(",",".").replace("%","")); if(!/%/.test(p)&&v<=1.5) v*=100;
-    out.push({dni:dni.padStart(8,"0"), fecha:`${f[2]}-${f[1].padStart(2,"0")}-${f[0].padStart(2,"0")}`, pct:Math.round(v*10)/10});
+    const c=l.split("\t").map(x=>x.trim());
+    const fs=c.map(fecha);
+    const dni=(c.find(x=>/^\d{7,8}$/.test(x))||"");
+    if(!dni){ if(fs.filter(Boolean).length>=1) cab=fs; return; }       // encabezado con fechas (formato ancho)
+    const dd=dni.padStart(8,"0"), iD=c.indexOf(dni);
+    if(cab){                                                              // una columna por día
+      cab.forEach((f,i)=>{ if(!f||i<=iD) return; const v=pct(c[i]); if(v!=null) out.push({dni:dd,fecha:f,pct:v}); });
+      return; }
+    const f=fs.find(Boolean); const p=[...c].reverse().find(x=>pct(x)!=null&&x!==dni);   // una fila por día
+    if(f&&p!=null) out.push({dni:dd,fecha:f,pct:pct(p)});
   });
   return out;
 }
