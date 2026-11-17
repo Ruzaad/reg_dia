@@ -2345,3 +2345,4 @@ label.ini-pn-campo{cursor:text}
 #tbTabla2,#tbTabla{max-height:420px;overflow:auto;}
 .tb-g2{margin-bottom:16px;}
 .tb-g2{grid-template-columns:1fr!important;}
+#tbLinea svg{max-height:250px;}
