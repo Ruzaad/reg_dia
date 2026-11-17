@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="rediseno.css?v=c32">
+<link rel="stylesheet" href="rediseno.css?v=c36">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
 </head>
 <body data-pagina="ingenieria">
@@ -1154,13 +1154,15 @@
 
     <!-- ===================== INICIO: el día de mis áreas (solo lectura) ===================== -->
     <section class="pantalla" id="pasoTablero">
-      <div class="seccion-cab"><h1>Tablero de gestión</h1><p class="ini-alcance" id="tbFecha"></p></div>
+      <div class="seccion-cab"><h1>Tablero de gestión</h1></div>
+      <div class="tb-periodo" id="tbPeriodo"></div>
       <div class="tb-areas" id="tbAreas" role="group" aria-label="Área"></div>
       <div class="tb-kpis" id="tbKpis" aria-live="polite"></div>
       <div class="tb-g2">
-        <section class="ini-card"><div class="ini-card-h"><b>Cumplimiento de meta por línea</b></div><div class="tabla-scroll" id="tbTabla"></div></section>
+        <section class="ini-card"><div class="ini-card-h"><b>Cumplimiento por línea</b></div><div class="tabla-scroll" id="tbTabla"></div></section>
         <section class="ini-card"><div class="ini-card-h"><b>Eficiencia diaria contra la meta</b></div><div id="tbLinea"></div></section>
       </div>
+      <section class="ini-card"><div class="ini-card-h"><b>OF del cronograma de costura (PCP, estado de hoy)</b></div><div class="tabla-scroll" id="tbTabla2"></div></section>
     </section>
 
     <section class="pantalla" id="pasoInicio">
@@ -1738,7 +1740,7 @@
 <script src="ingenieria.js?v=c19"></script>
 <script src="costos.js"></script>
 <script src="inicio.js?v=c23"></script>
-<script src="tablero.js?v=c1"></script>
+<script src="tablero.js?v=c3"></script>
 <script src="calidad.js"></script>
 <script src="asistencia.js"></script>
 <script src="feriados.js"></script>
