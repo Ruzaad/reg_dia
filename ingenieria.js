@@ -102,7 +102,7 @@ function cmpVal(va, vb){
 }
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoInicio","pasoTablero","pasoTk","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
+const NAV_TABS=["pasoInicio","pasoTablero","pasoRecon","pasoTk","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
   "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoFeriados","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoPcp","pasoCrono","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
@@ -125,6 +125,7 @@ function activarTab(tab){
   if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
   if(tab==='pasoInicio'){ irA(tab); if(INI.t0 && performance.now()-INI.t0<15000) iniPintar(); else iniCargar(); return; }
   if(tab==='pasoTablero'){ irA(tab); tbInit(); return; }
+  if(tab==='pasoRecon'){ irA(tab); rcInit(); return; }
   if(tab==='pasoEf' || tab==='pasoDia'){ efVista(tab==='pasoDia'?'dia':'area'); TABS_VISTAS.add(tab); return; }
   irA(tab);
   if(TABS_VISTAS.has(tab)) return;      // reentrada: conserva filtros y datos
@@ -218,7 +219,7 @@ function puedeEditar(a){
   return PERM.areas[a]==="EDITAR";
 }
 /* Subpestañas que no están en el menú: siguen el permiso de su pestaña madre. */
-const TAB_MADRE={pasoCrono:"pasoPcp",pasoAsisConf:"pasoBolSin",pasoFeriados:"pasoBolSin",pasoDia:"pasoEf",pasoOpsOF:"pasoGen",pasoExtra:"pasoGen",pasoOpAd:"pasoGen",pasoCausas:"pasoGen"};
+const TAB_MADRE={pasoRecon:"pasoInc",pasoCrono:"pasoPcp",pasoAsisConf:"pasoBolSin",pasoFeriados:"pasoBolSin",pasoDia:"pasoEf",pasoOpsOF:"pasoGen",pasoExtra:"pasoGen",pasoOpAd:"pasoGen",pasoCausas:"pasoGen"};
 function tabPermitida(tab){
   if(tab==='pasoTablero') return tabPermitida('pasoInicio');
   if(tab==='pasoInicio') return typeof iniHayAlgo==="function" && iniHayAlgo();
