@@ -34,7 +34,25 @@ function opiSigue(of, modulo, op){
   return {ult:ult.num, t:sig||null};
 }
 
+/* Reconocimiento por quincena (parche 184): una tarjeta si el operario salió en el top 5 de su área.
+   Se pide una vez al día y se guarda en el celular; sin el parche o sin reconocimiento no se muestra nada. */
+async function opiReco(){
+  const s=sesionActual(); if(!s) return;
+  const k="opi-reco-"+s.dni, hoy=hoyLimaApp(); let it;
+  try{ const c=JSON.parse(localStorage.getItem(k)||"null"); if(c && c.f===hoy) it=c.i; }catch(e){}
+  if(it===undefined){
+    try{
+      const r=await rpc("fn_mi_reconocimiento",{p_dni:s.dni,p_token:s.token});
+      it=(r && r.ok && (r.items||[])[0]) || null;
+      try{ localStorage.setItem(k, JSON.stringify({f:hoy,i:it})); }catch(e){}
+    }catch(e){ return; }
+  }
+  const lim=new Date(Date.parse(hoy+"T00:00:00Z")-40*86400000).toISOString().slice(0,10);
+  const html = it && it.hasta>=lim ? `<div class="opi-reco"><b>★ ¡Reconocido!</b><span>Puesto ${it.puesto} en ${esc(String(it.area).replace(" COSTURA",""))} · del ${it.desde.slice(8)}/${it.desde.slice(5,7)} al ${it.hasta.slice(8)}/${it.hasta.slice(5,7)}<br>Entregaste tus boletas y rendiste ${String(it.ef).replace(".",",")} %</span></div>` : "";
+  ["opReco","opRecoA"].forEach(id=>{ const z=$(id); if(z){ z.innerHTML=html; z.hidden=!html; } });
+}
 function opInicio(){
+  opiReco();
   if(ES_ACABADO) return;
   opPintarHoy(); opiPintar(); opiBoleta(); opiMeta();
   opiCargarOFs();

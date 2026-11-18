@@ -2346,3 +2346,20 @@ label.ini-pn-campo{cursor:text}
 .tb-g2{margin-bottom:16px;}
 .tb-g2{grid-template-columns:1fr!important;}
 #tbLinea svg{max-height:250px;}
+
+/* Reconocimientos */
+.rc-areas{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin:0 0 16px;}
+.rc-area{margin-bottom:0;}
+.rc-fila{display:grid;grid-template-columns:28px minmax(0,1fr) 90px 56px;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--linea);}
+.rc-fila:last-child{border:0;}
+.rc-n{display:flex;flex-direction:column;min-width:0;font-weight:600;}.rc-n small{font-weight:400;color:var(--tenue);font-size:11px;}
+.rc-bar{height:8px;border-radius:9px;background:var(--linea);overflow:hidden;}.rc-bar i{display:block;height:100%;background:var(--dorado);}
+.rc-pu{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--dorado);color:#07123F;font-weight:700;font-size:12px;}
+.rc-est{padding:3px 12px;border-radius:99px;font-size:12px;font-weight:600;color:#fff;}.rc-est.a{background:var(--ocre);}.rc-est.c{background:var(--tenue);}
+.rc-pub{margin-top:8px;align-self:flex-start;}
+/* Tarjeta del operario */
+.opi-reco{background:linear-gradient(160deg,var(--ini-gl-or,#E3CB86),var(--dorado,#BC9A48));color:#07123F;border-radius:var(--r);padding:14px 16px;margin:4px 0 8px;text-align:left;box-shadow:var(--sombra-1);}
+.opi-reco b{display:block;font-size:17px;}.opi-reco span{font-size:13px;}
+.rc-pub{background:var(--azul);color:#fff;border:0;border-radius:999px;padding:7px 18px;font:600 13px var(--sans);cursor:pointer;}
+:root[data-theme="dark"] .rc-pub{color:#07123F;}
+.nav-item[data-tab="pasoRecon"]{--ni:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z'/%3E%3C/svg%3E")!important;}

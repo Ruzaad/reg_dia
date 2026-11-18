@@ -1097,7 +1097,7 @@ async function cargarTodo(s){
       await ltEntrar(s, true); return;
     }
     if(typeof ltAvisoHoy==="function") ltAvisoHoy(s);   // EN DESPACHO/REPROCESO/CORTE hoy: aviso arriba, sin esperar
-    if(ES_ACABADO){ await cargarAcabado(s, area); return; }
+    if(ES_ACABADO){ await cargarAcabado(s, area); if(typeof opiReco==="function") opiReco(); return; }
     // Las OF generadas en el sistema (parche 29) se derivan de of_detalle × bases:
     // no están en el Sheet. Las anteriores siguen saliendo del almacén, así que
     // ambas conviven y el Sheet se vacía solo conforme entren OF nuevas.

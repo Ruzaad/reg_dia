@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="rediseno.css?v=c36">
+<link rel="stylesheet" href="rediseno.css?v=c38">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
 </head>
 <body data-pagina="ingenieria">
@@ -58,6 +58,7 @@
         <a class="nav-item" data-tab="pasoEf" href="#pasoEf">Eficiencia</a>
         <a class="nav-item" data-tab="pasoAudit" href="#pasoAudit">Auditoría</a>
         <a class="nav-item" data-tab="pasoInc" href="#pasoInc">Incentivos</a>
+        <a class="nav-item" data-tab="pasoRecon" href="#pasoRecon">Reconocimientos</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Dashboards</summary>
@@ -1153,6 +1154,14 @@
     </section>
 
     <!-- ===================== INICIO: el día de mis áreas (solo lectura) ===================== -->
+    <section class="pantalla" id="pasoRecon">
+      <div class="seccion-cab"><h1>Reconocimientos</h1></div>
+      <div class="tb-periodo" id="rcCab"></div>
+      <div class="tb-kpis" id="rcKpis" aria-live="polite"></div>
+      <div class="rc-areas" id="rcAreas"></div>
+      <section class="ini-card"><div class="ini-card-h"><b>Todos los reconocidos</b></div><div class="tabla-scroll" id="rcTabla"></div></section>
+    </section>
+
     <section class="pantalla" id="pasoTablero">
       <div class="seccion-cab"><h1>Tablero de gestión</h1></div>
       <div class="tb-periodo" id="tbPeriodo"></div>
@@ -1736,11 +1745,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="app.js?v=c16"></script>
+<script src="app.js?v=c17"></script>
 <script src="ingenieria.js?v=c19"></script>
 <script src="costos.js"></script>
 <script src="inicio.js?v=c23"></script>
 <script src="tablero.js?v=c3"></script>
+<script src="recon.js?v=c1"></script>
 <script src="calidad.js"></script>
 <script src="asistencia.js"></script>
 <script src="feriados.js"></script>
