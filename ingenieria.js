@@ -4115,7 +4115,7 @@ async function audRecargar(){
 }
 
 /* ================= TICKETS DEL DÍA ================= */
-let TK=[], TK_VISTA=[], BASES_CACHE={}, ULT_CACHE={};
+let TK=[], TK_VISTA=[], BASES_CACHE={}, ULT_CACHE={}, ULTPT_CACHE={};
 let tkSort={col:null,dir:1};
 let tkArea="";                 // filtro de área activo (select); "" = todas
 let modoLibTk=false, libSel={}; // modo liberar en lote + ids de reclamo marcados
@@ -4650,6 +4650,10 @@ async function infoUltimas(areas){
       catch(e){ BASES_CACHE[a]=[]; }
     }
     if(!ULT_CACHE[a]) await ultimasArea(a);
+    if(!ULTPT_CACHE[a]){
+      try{ const r=await rpc("fn_ultimas_prenda_area",{p_dni:ING.dni,p_token:ING.token,p_area:a}); ULTPT_CACHE[a]=Array.isArray(r)?r:[]; }
+      catch(e){ ULTPT_CACHE[a]=[]; }
+    }
   }
   const info={};   // "AREA|ARTICULO" -> {n1,n2,op1:Set,op2:Set}
   areas.forEach(a=>{
@@ -4669,8 +4673,28 @@ async function infoUltimas(areas){
         op2:n2!=null?new Set(porArt[k].filter(b=>Number(b.n_op)===n2).map(b=>norm(b.operacion)).filter(Boolean)):new Set()
       };
     });
+    // Artículos con varias prendas en la misma base (terno): cada prenda con su última y penúltima.
+    (ULTPT_CACHE[a]||[]).forEach(u=>{
+      const i=info[a+"|"+normKey(u.articulo)]; if(!i) return;
+      const fs=(BASES_CACHE[a]||[]).filter(b=>normKey(b.articulo)===normKey(u.articulo)&&normKey(b.prenda)===normKey(u.prenda));
+      const ops=n=>new Set(fs.filter(b=>Number(b.n_op)===n).map(b=>norm(b.operacion)).filter(Boolean));
+      (i.pr=i.pr||[]).push({n1:u.n1,n2:u.n2,op1:ops(u.n1),op2:u.n2!=null?ops(u.n2):new Set()});
+    });
   });
   return info;
+}
+/* 1 = última, 2 = penúltima, 0 = ninguna. Con varias prendas se mira N°OP + nombre de la operación. */
+function tkNivel(t,i){
+  const n=Number(t.nop);
+  if(i.pr&&i.pr.length){
+    const on=norm(t.op);
+    for(const p of i.pr){
+      if(n===p.n1&&p.op1.has(on)) return 1;
+      if(p.n2!=null&&n===p.n2&&p.op2.has(on)) return 2;
+    }
+    return 0;
+  }
+  return n===i.n1?1:(i.n2!=null&&n===i.n2?2:0);
 }
 /* Parche 125: última y penúltima por artículo, con la elección manual del
    analista. Sin el parche en la base queda {} y manda el N°OP como antes. */
@@ -4695,9 +4719,9 @@ async function cargarResumenUltimas(){
     const i=info[t.area+"|"+normKey(t.articulo)];
     if(!i) return;
     if(t.nop==null || t.nop===""){ sinNop++; return; }
-    const n=Number(t.nop);
-    if(n===i.n1){ c1+=Number(t.cant)||0; i.op1.forEach(x=>o1.add(x)); }
-    else if(i.n2!=null && n===i.n2){ c2+=Number(t.cant)||0; i.op2.forEach(x=>o2.add(x)); }
+    const nv=tkNivel(t,i), on=norm(t.op);
+    if(nv===1){ c1+=Number(t.cant)||0; o1.add(on); }
+    else if(nv===2){ c2+=Number(t.cant)||0; o2.add(on); }
   });
   const nom=s=>{ const l=[...s]; return l.length? l.slice(0,3).join(" / ")+(l.length>3?"…":"") : "—"; };
   z.innerHTML = `
@@ -5870,8 +5894,7 @@ function pintarRep(){
     // se cuenta aparte en vez de desaparecer del reporte.
     if(!i){ sinBase++; return; }
     if(t.nop==null || t.nop==="") { sinNop++; return; }
-    const n=Number(t.nop), obj=ult?i.n1:i.n2;
-    if(obj==null || n!==obj) return;
+    if(tkNivel(t,i)!==(ult?1:2)) return;
     const op=norm(t.op)||"(sin operación)", of=norm(t.of)||"(sin OF)";
     const k=op+""+of;
     (grp[k]=grp[k]||{op,of,cant:0,tks:0});
