@@ -49,6 +49,9 @@ function tbCargar(){
   tbRpc("pcp","fn_pcp_costura",{p_mes:R.mes},clave);
   tbRpc("inc","fn_reprocesos_apoyo",{p_area:"",p_desde:R.desde,p_hasta:R.hasta},clave);
   tbRpc("cal","fn_bases_calidad",{},clave);
+  const [y,m,d]=R.hasta.split("-").map(Number), p=d<=15, qa=tbF(y,m-1,p?1:16), qf=p?tbF(y,m-1,15):tbF(y,m,0);
+  TB.Q={desde:qa,hasta:qf>hoyLima()?hoyLima():qf};
+  tbRpc("opq","fn_incentivos_quincena",{p_desde:TB.Q.desde,p_hasta:TB.Q.hasta,p_area:""},clave);
 }
 function tbElegir(a){ TB.area=a; tbBarra(); tbPintar(); }
 function tbBarra(){
@@ -160,5 +163,57 @@ function tbPintar(){
   const k=$("tbKpis"); if(!k) return;
   k.innerHTML=tbIndicadores().map(x=>`<div class="tb-k" style="--c:${x.c}"><small>${esc(x.t)}</small><b>${x.v}</b><span class="tb-s">${esc(x.sub)}</span>
     ${x.pct==null?"":`<div class="tb-bar"><i style="width:${Math.max(0,Math.min(100,x.pct)).toFixed(0)}%"></i></div>`}<em>${esc(x.src)}</em></div>`).join("");
-  tbTabla1(); tbTabla2(); tbLinea();
+  tbOcho(); tbTabla1(); tbTabla2();
+}
+
+/* ---- Las 8 tarjetas. Asignado = Meta del mes de Inicio; real = minutos a la fecha. ---- */
+const tbCol=p=>p>=80?TB_V:p>=51?TB_A:TB_R;
+function tbBarras(F,max){ return F.map(x=>`<div class="tb8-r"><span>${esc(x[0])}</span><div class="tb-bar"><i style="width:${Math.max(0,Math.min(100,x[1]/(max||100)*100)).toFixed(0)}%;background:${x[2]||TB_AZ}"></i></div><b>${tbP(x[1])}</b></div>`).join(""); }
+function tbOps(){
+  const r=TB.d.opq; if(!r||!r.ok) return null; const a=TB.area||"ACABADO";
+  return {a,P:(r.personas||[]).filter(p=>p.area===a&&!p.supervisora&&!p.cesado&&p.prom_ef!=null).sort((x,y)=>y.prom_ef-x.prom_ef)};
+}
+function tbDona(p,c){ const R=52,L=2*Math.PI*R,v=Math.max(0,Math.min(100,p)); return `<svg viewBox="0 0 140 140" width="150" role="img" aria-label="${tbP(p)}"><circle cx="70" cy="70" r="${R}" fill="none" stroke="var(--linea)" stroke-width="16"/><circle cx="70" cy="70" r="${R}" fill="none" stroke="${c}" stroke-width="16" stroke-linecap="round" stroke-dasharray="${(L*v/100).toFixed(1)} ${L.toFixed(1)}" transform="rotate(-90 70 70)"/><text x="70" y="78" text-anchor="middle" class="tb8-d">${tbP(p)}</text></svg>`; }
+function tbTend(){
+  const r=TB.d.efm||TB.d.efp; if(!r) return `<div class="vacio-msg">Cargando…</div>`; if(!r.ok||!(r.por_fecha||[]).length) return `<div class="vacio-msg">Sin datos</div>`;
+  const ar=(r.areas||[]).map(a=>a.area).filter(a=>a!=="UDP"&&a!=="CORTE"&&tbSel(a));
+  const F=r.por_fecha, W=520, H=210, L=34, B=22, X=i=>L+(F.length>1?i*(W-L-10)/(F.length-1):(W-L)/2);
+  const mx=100, Y=v=>H-B-(Math.min(v,mx)/mx)*(H-B-8), COL=["var(--azul)","var(--dorado)","var(--exito)","var(--cian)","var(--ocre)"];
+  let h=""; for(let v=0;v<=100;v+=20) h+=`<line x1="${L}" x2="${W}" y1="${Y(v)}" y2="${Y(v)}" class="g"/><text x="4" y="${Y(v)+4}">${v}</text>`;
+  h+=`<line x1="${L}" x2="${W}" y1="${Y(80)}" y2="${Y(80)}" class="m"/>`;
+  const paso=Math.ceil(F.length/8); F.forEach((f,i)=>{ if(i%paso===0) h+=`<text x="${X(i)-12}" y="${H-6}">${tbDM(f.fecha)}</text>`; });
+  ar.forEach((a,k)=>{ const pts=F.map((f,i)=>{ const v=f.valores&&f.valores[a]; return v&&v.ef?`${X(i)},${Y(+v.ef)}`:null; }).filter(Boolean).join(" "); if(pts) h+=`<polyline points="${pts}" fill="none" stroke="${COL[k%5]}" stroke-width="2.4" stroke-linejoin="round"/>`; });
+  return `<div class="tb-lg">${ar.map((a,k)=>`<span><i style="background:${COL[k%5]}"></i>${esc(tbCorto(a))}</span>`).join("")}<span><i class="m"></i>80 %</span></div><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Eficiencia diaria">${h}</svg>`;
+}
+function tbOcho(){
+  const z=$("tb8"); if(!z) return; const Q=tbPlan(), cd=(n,t,b,c)=>`<section class="tb8-c ${c||""}"><div class="tb8-h"><i>${n}</i><b>${t}</b></div>${b}</section>`;
+  const cargando=`<div class="vacio-msg">Cargando…</div>`, sin=`<div class="vacio-msg">Sin dato</div>`;
+  let h="";
+  if(!Q){ const m=TB.d.plan?sin:cargando; h=[1,2,3,6,8].map(n=>cd(n,["","Cumplimiento total de cuotas","Cumplimiento por línea de producto","Cumplimiento por área","","","Real frente a asignado","","Brechas que requieren atención"][n],m)).join(""); }
+  else {
+    const A=Q.A, pc=x=>x.opt?x.min/x.opt*100:0, T=(L)=>({o:tbSuma(L,"opt"),m:tbSuma(L,"min")}), t=T(A), pt=t.o?t.m/t.o*100:0;
+    h+=cd(1,"Cumplimiento total de cuotas",`<div class="tb8-do">${tbDona(pt,tbCol(pt))}<div><b>${tbN(t.m)}</b><small>de ${tbN(t.o)} min</small></div></div>`);
+    const linea=A.filter(x=>/CAMISA|PANTALON|SACO/.test(x.area)).map(x=>[tbCorto(x.area),pc(x),tbCol(pc(x))]);
+    h+=cd(2,"Cumplimiento por línea de producto",tbBarras(linea,100));
+    const cos=T(A.filter(x=>/COSTURA/.test(x.area))), g=(n,L)=>{ const q=T(L); return [n,q.o?q.m/q.o*100:0]; };
+    const ar3=[g("Corte",A.filter(x=>x.area==="CORTE")),["Costura",cos.o?cos.m/cos.o*100:0],g("Acabado",A.filter(x=>x.area==="ACABADO")),g("Reproceso",A.filter(x=>x.area==="REPROCESO"))].map(x=>[x[0],x[1],tbCol(x[1])]);
+    h+=cd(3,"Cumplimiento por área",tbBarras(ar3,100));
+  }
+  const O=tbOps(), ref=80;
+  if(!O) h+=cd(4,"Cumplimiento por operario",TB.d.opq?sin:cargando)+cd(5,"Operarios que cumplen y no cumplen",TB.d.opq?sin:cargando);
+  else {
+    const P=O.P, ok=P.filter(p=>+p.prom_ef>=ref).length, no=P.length-ok, et=tbCorto(O.a);
+    h+=cd(4,`Cumplimiento por operario`,`<small class="tb8-s">${esc(et)} · del ${tbDM(TB.Q.desde)} al ${tbDM(TB.Q.hasta)}</small><div class="tb8-sc">${P.map(p=>`<div class="tb8-r"><span title="${esc(p.nombre)}">${esc(String(p.nombre).split(",")[0])}</span><div class="tb-bar"><i style="width:${Math.min(100,+p.prom_ef).toFixed(0)}%;background:${+p.prom_ef>=ref?TB_V:TB_R}"></i><u style="left:${ref}%"></u></div><b>${tbP(+p.prom_ef)}</b></div>`).join("")||sin}</div>`);
+    h+=cd(5,"Operarios que cumplen y no cumplen",`<small class="tb8-s">${esc(et)} · referencia ${ref} %</small><div class="tb8-cn"><div style="--c:${TB_V}"><b>${ok}</b><span>Cumplen</span></div><div style="--c:${TB_R}"><b>${no}</b><span>No cumplen</span></div></div><div class="tb-bar" style="height:10px"><i style="width:${P.length?ok/P.length*100:0}%;background:${TB_V}"></i></div>`);
+  }
+  if(Q){
+    const A=Q.A, o=tbSuma(A,"opt"), m=tbSuma(A,"min"), pt=o?m/o*100:0;
+    h+=cd(6,"Real frente a asignado",`<div class="tb-bar" style="height:14px"><i style="width:${Math.min(100,pt).toFixed(0)}%;background:${TB_AZ}"></i></div><div class="tb8-rf"><div><small>Real</small><b>${tbN(m)}</b></div><div><small>Asignado</small><b>${tbN(o)}</b></div><div><small>Falta</small><b>${tbN(Math.max(0,o-m))}</b></div></div>`);
+  }
+  h+=cd(7,"Tendencia del cumplimiento",`<div id="tbLinea">${tbTend()}</div>`,"tb8-w");
+  if(Q){
+    const L=Q.A.map(x=>({a:x.area,f:x.opt-x.min,p:x.opt?x.min/x.opt*100:0,al:x.proy!=null&&x.proy<x.opt})).sort((a,b)=>b.f-a.f);
+    h+=cd(8,"Brechas que requieren atención",L.map(x=>`<div class="tb8-b"><span>${esc(tbCorto(x.a))}</span><b>${x.f>0?"−":""}${tbN(Math.abs(x.f))}</b><em>${tbP(x.p)}</em>${x.al?`<i class="tb-tag r">ATENCIÓN</i>`:`<i class="tb-tag v">AL DÍA</i>`}</div>`).join("")||sin);
+  }
+  z.innerHTML=h;
 }

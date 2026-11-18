@@ -2363,3 +2363,35 @@ label.ini-pn-campo{cursor:text}
 .rc-pub{background:var(--azul);color:#fff;border:0;border-radius:999px;padding:7px 18px;font:600 13px var(--sans);cursor:pointer;}
 :root[data-theme="dark"] .rc-pub{color:#07123F;}
 .nav-item[data-tab="pasoRecon"]{--ni:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z'/%3E%3C/svg%3E")!important;}
+/* Tablero: 8 tarjetas */
+.tb8{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 16px;}
+.tb8-c{background:var(--sup);border:1px solid var(--linea);border-radius:var(--r);box-shadow:var(--sombra-1);padding:14px 16px;min-width:0;}
+.tb8-w{grid-column:span 2;}
+.tb8-h{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.tb8-h i{font-style:normal;display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--azul);color:#fff;font-size:12px;font-weight:700;flex:none;}
+.tb8-h b{font-size:14px;}
+.tb8-s{display:block;color:var(--tenue);font-size:12px;margin:-4px 0 6px;}
+.tb8-do{display:flex;align-items:center;gap:14px;}.tb8-do b{display:block;font-size:24px;}.tb8-do small{color:var(--tenue);}
+.tb8-d{font-size:26px;font-weight:700;fill:var(--texto);}
+.tb8-r{display:grid;grid-template-columns:112px minmax(0,1fr) 54px;align-items:center;gap:8px;font-size:13px;margin:5px 0;}
+.tb8-r span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.tb8-r b{text-align:right;}
+.tb8-r .tb-bar{margin:0;position:relative;overflow:visible;}.tb8-r .tb-bar i{border-radius:9px;}
+.tb8-r .tb-bar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--dorado);}
+.tb8-sc{max-height:210px;overflow:auto;padding-right:4px;}
+.tb8-cn{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 12px;}
+.tb8-cn div{border-radius:12px;padding:10px;text-align:center;border:1px solid var(--c);}
+.tb8-cn b{display:block;font-size:30px;color:var(--c);}.tb8-cn span{font-size:12px;color:var(--tenue);}
+.tb8-rf{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
+.tb8-rf small{display:block;color:var(--tenue);font-size:11px;text-transform:uppercase;}.tb8-rf b{font-size:18px;}
+.tb8-b{display:grid;grid-template-columns:minmax(0,1fr) auto 52px auto;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--linea);font-size:13px;}
+.tb8-b:last-child{border:0;}.tb8-b b{color:var(--alerta);}.tb8-b em{font-style:normal;color:var(--tenue);text-align:right;}.tb8-b i{font-style:normal;}
+.tb8 svg .g{stroke:var(--linea);}.tb8 svg .m{stroke:var(--dorado);stroke-dasharray:5 4;}.tb8 svg text{fill:var(--tenue);font-size:10px;}
+@media(max-width:1100px){.tb8{grid-template-columns:1fr 1fr;}.tb8-w{grid-column:span 2;}}
+@media(max-width:700px){.tb8{grid-template-columns:1fr;}.tb8-w{grid-column:auto;}}
+
+/* Reconocimientos: hover dorado resplandeciente */
+.ing-nav .nav-item[data-tab="pasoRecon"]{transition:background .25s,color .25s,box-shadow .25s,text-shadow .25s;}
+.ing-nav .nav-item[data-tab="pasoRecon"]:hover,.ing-nav .nav-item[data-tab="pasoRecon"]:focus-visible{background:linear-gradient(135deg,#E3CB86,#BC9A48);color:#07123F;text-shadow:0 0 8px rgba(255,236,170,.9);box-shadow:0 0 0 1px #E3CB86,0 0 14px 2px rgba(227,203,134,.75),0 0 28px 6px rgba(188,154,72,.45);animation:rcBrillo 1.6s ease-in-out infinite;}
+.ing-nav .nav-item[data-tab="pasoRecon"]:hover::before{opacity:1;}
+@keyframes rcBrillo{50%{box-shadow:0 0 0 1px #E3CB86,0 0 20px 4px rgba(255,236,170,.95),0 0 38px 10px rgba(188,154,72,.55);}}
+@media(prefers-reduced-motion:reduce){.ing-nav .nav-item[data-tab="pasoRecon"]:hover{animation:none;}}
