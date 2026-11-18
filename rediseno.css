@@ -2395,3 +2395,9 @@ label.ini-pn-campo{cursor:text}
 .ing-nav .nav-item[data-tab="pasoRecon"]:hover::before{opacity:1;}
 @keyframes rcBrillo{50%{box-shadow:0 0 0 1px #E3CB86,0 0 20px 4px rgba(255,236,170,.95),0 0 38px 10px rgba(188,154,72,.55);}}
 @media(prefers-reduced-motion:reduce){.ing-nav .nav-item[data-tab="pasoRecon"]:hover{animation:none;}}
+
+/* Pestaña Reconocimiento dentro de Actual */
+.tab.tab-reco{color:#8a6a1c;font-weight:700;transition:background .25s,color .25s,box-shadow .25s,text-shadow .25s;border-radius:8px;}
+:root[data-theme="dark"] .tab.tab-reco{color:#E3CB86;}
+.tab.tab-reco:hover,.tab.tab-reco:focus-visible{background:linear-gradient(135deg,#E3CB86,#BC9A48);color:#07123F;text-shadow:0 0 8px rgba(255,236,170,.9);box-shadow:0 0 0 1px #E3CB86,0 0 14px 2px rgba(227,203,134,.75),0 0 28px 6px rgba(188,154,72,.45);animation:rcBrillo 1.6s ease-in-out infinite;}
+@media(prefers-reduced-motion:reduce){.tab.tab-reco:hover{animation:none;}}
