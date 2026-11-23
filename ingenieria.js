@@ -4783,9 +4783,9 @@ const soles = v => (Math.round((+v||0)*100)/100).toFixed(2);
    cuatro son lo que la alimenta (modular, tabla de tramos, eficiencia escrita a
    mano y minutos de consideración). */
 const INC_VISTAS={mod:"incModView", q:"incQView", tabla:"incTablaView",
-                  efm:"incEfmView", cons:"incConsView", sus:"incSusView"};
+                  efm:"incEfmView", cons:"incConsView", sus:"incSusView", cmp:"incCmpView"};
 const INC_TABS  ={mod:"incTabMod",  q:"incTabQ",  tabla:"incTabTab",
-                  efm:"incTabEfm",  cons:"incTabCons", sus:"incTabSus"};
+                  efm:"incTabEfm",  cons:"incTabCons", sus:"incTabSus", cmp:"incTabCmp"};
 function incVista(v){
   if(!INC_VISTAS[v]) v="q";
   Object.keys(INC_VISTAS).forEach(k=>{
@@ -4797,6 +4797,7 @@ function incVista(v){
   if(v==="efm")   incAreaSel("efmArea",  cargarEfManual);
   if(v==="cons")  incAreaSel("consArea", cargarCons);
   if(v==="sus")   susInit();
+  if(v==="cmp")   incCmpInit();
 }
 /* Los tres selectores de área comparten relleno: el primero que se abre carga. */
 function incAreaSel(id, cargar){
