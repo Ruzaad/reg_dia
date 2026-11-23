@@ -181,6 +181,7 @@
         <button id="incTabEfm" class="tab" onclick="incVista('efm')">EFICIENCIA MANUAL</button>
         <button id="incTabCons" class="tab" onclick="incVista('cons')">MIN. CONSIDERACIÓN</button>
         <button id="incTabSus" class="tab" onclick="incVista('sus')">SUSTENTO</button>
+        <button id="incTabCmp" class="tab" onclick="incVista('cmp')">COMPARAR TABLA</button>
       </div>
 
       <!-- BONO MODULAR: del ÁREA y del DÍA, sin categorías. Se escribe el % que
@@ -262,6 +263,18 @@
           <button class="btn-mini verde" onclick="susPdf()">DESCARGAR PDF</button>
         </div>
         <div class="sus-hoja" id="susDoc"><div class="vacio-msg">Elige la quincena y pulsa ARMAR SUSTENTO.</div></div>
+      </div>
+
+      <div id="incCmpView" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Desde</span><input type="date" id="icnDesde" onchange="incCmpCargar()"></label>
+          <label class="campo"><span>Hasta</span><input type="date" id="icnHasta" onchange="incCmpCargar()"></label>
+          <label class="chk-inline"><input type="checkbox" class="sw" checked onchange="incCmpBoleta(this.checked)"> Solo quienes llenan boleta</label>
+          <button class="btn-mini" onclick="incCmpCargar()">↻ Cargar</button>
+        </div>
+        <div class="tb-kpis" id="icnKpis"></div>
+        <section class="ini-card"><div class="ini-card-h"><b>Por área</b></div><div class="tabla-scroll" id="icnAreas"></div></section>
+        <section class="ini-card"><div class="ini-card-h"><b>Por operario</b></div><div class="tabla-scroll" id="icnTabla" style="max-height:60vh;overflow:auto;"></div></section>
       </div>
 
       <div id="incQView">
@@ -1752,6 +1765,7 @@
 <script src="inicio.js?v=c23"></script>
 <script src="tablero.js?v=c4"></script>
 <script src="recon.js?v=c1"></script>
+<script src="inc-nueva.js?v=c1"></script>
 <script src="calidad.js"></script>
 <script src="asistencia.js"></script>
 <script src="feriados.js"></script>
