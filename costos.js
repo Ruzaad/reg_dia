@@ -400,7 +400,7 @@ async function cbDescargarXlsx(){
    de _disp_reparto (la regla de la eficiencia): si solo tiene tickets en otra
    área, va completa a esa área. Todas las áreas cuentan con la penúltima
    operación; "Trabajo en curso" (parche 164) lista área › prenda › OF › módulo. La OF de Costos es de 10 dígitos: 4 + ceros + la OF de planta. */
-let CH={fecha:"", area:null, tk:[], ult:{}, sam:{}, per:[], est:{}, inc:[], op:"p", curso:[], fInc:"sin", abiertas:new Set()};
+let CH={fecha:"", area:null, tk:[], ult:{}, sam:{}, per:[], est:{}, inc:[], op:"p", curso:[], cAb:new Set(), fInc:"sin", abiertas:new Set()};
 const ofCostos = o => /^\d{1,9}$/.test(String(o||"").trim()) ? "4"+String(o).trim().padStart(9,"0") : "";
 const areaCorta = a => String(a||"").replace(" COSTURA","");
 const n0 = v => v==null||v==="" ? "" : qtyI(v);
@@ -433,7 +433,7 @@ async function cargarCostosHoy(){
     (r.ultimas||[]).forEach(u=>{ CH.ult[u.area+"|"+u.articulo]=u; });
     (r.sam||[]).forEach(s=>{ CH.sam[s.area+"|"+s.articulo]=Number(s.sam)||0; });
     (r.estructura||[]).forEach(e=>{ CH.est[e.area]=Number(e.personas)||0; });
-    if(CH.op==="c") cargarCurso(); else pintarCostosHoy();
+    pintarCostosHoy(); if(CH.op==="c") cargarCurso();
   }catch(e){
     limpiar();
     mostrarError(/Could not find the function/i.test(e.message) ? "Falta correr el parche 138 en Supabase" : e.message);
@@ -456,40 +456,45 @@ function pintarCurso(){
   if(CH.op!=="c") return;
   const toks=String($("chBuscar").value||"").split(/\s+/).map(normKey).filter(Boolean);
   const it=CH.curso.filter(x=>!toks.length || toks.every(k=>normKey([x.of,ofCostos(x.of),x.articulo,x.prenda,x.area,x.modulo].join(" ")).includes(k)));
-  const todas=!CH.area; let h="", ant={a:"",p:"",o:"",m:""}, nOf=0;
+  const todas=!CH.area; let h="", ant={a:"",p:"",o:"",m:"",k:""}, nOf=0, ab=false;
   it.forEach(x=>{
     const a=x.area||"", p=x.prenda||"", o=x.of||"", m=x.modulo||"";
     if(todas && a!==ant.a){ h+=`<tr class="cb-sub"><td colspan="6" class="izq"><b>${esc(areaCorta(a))}</b></td></tr>`; ant={a,p:"",o:"",m:""}; }
     if(p!==ant.p){ h+=`<tr><td colspan="6" class="izq"><span class="sub">${esc(p||"Sin prenda")}</span></td></tr>`; ant.p=p; ant.o=""; ant.m=""; }
-    if(o!==ant.o){ nOf++; h+=`<tr class="ch-fila abierta"><td class="izq" colspan="6"><div class="ch-of">${esc(ofCostos(o)||o||"(sin OF)")}<small>${esc(x.articulo||"")}${o?" · OF "+esc(o):""}</small></div></td></tr>`; ant.o=o; ant.m=""; }
-    if(m!==ant.m){ h+=`<tr><td class="izq" colspan="6"><b>Módulo ${esc(m||"—")}</b></td></tr>`; ant.m=m; }
-    h+=`<tr class="ch-op"><td class="izq">${x.nop!=null?`<span class="sub">N°${esc(x.nop)}</span>`:""}</td><td class="izq">${esc(norm(x.op)||"(sin operación)")}</td>
+    if(o!==ant.o){ nOf++; ant.k=p+"|"+o; ab=CH.cAb.has(ant.k); h+=`<tr class="ch-fila${ab?" abierta":""}" data-k="${esc(ant.k)}" onclick="chCursoTog(this)"><td class="izq" colspan="6"><div class="ch-of">${esc(ofCostos(o)||o||"(sin OF)")}<small>${esc(x.articulo||"")}${o?" · OF "+esc(o):""}</small></div></td></tr>`; ant.o=o; ant.m=""; }
+    if(m!==ant.m){ h+=`<tr data-ck="${esc(ant.k)}"${ab?"":" hidden"}><td class="izq" colspan="6"><b>Módulo ${esc(m||"—")}</b></td></tr>`; ant.m=m; }
+    h+=`<tr class="ch-op" data-ck="${esc(ant.k)}"${ab?"":" hidden"}><td class="izq">${x.nop!=null?`<span class="sub">N°${esc(x.nop)}</span>`:""}</td><td class="izq">${esc(norm(x.op)||"(sin operación)")}</td>
       <td class="n"><b>${qtyI(Number(x.cant)||0)}</b></td><td class="n">${qty(Number(x.minutos)||0)}</td><td class="n">${x.personas}</td><td class="n">${x.tks}</td></tr>`;
   });
   $("chTablaCurso").innerHTML=`<thead><tr><th class="izq">N°</th><th class="izq">Operación</th><th class="n">Cantidad</th><th class="n">Min.</th><th class="n">Personas</th><th class="n">Tickets</th></tr></thead><tbody>`
     +(h||`<tr><td colspan="6"><div class="vacio-msg">Sin tickets ese día</div></td></tr>`)+"</tbody>";
   $("chPieCurso").textContent=it.length?`${nOf} OF`:"";
 }
+function chCursoTog(tr){
+  const k=tr.dataset.k, ab=!CH.cAb.has(k); ab?CH.cAb.add(k):CH.cAb.delete(k);
+  tr.classList.toggle("abierta",ab);
+  $("chTablaCurso").querySelectorAll("tr[data-ck]").forEach(x=>{ if(x.dataset.ck===k) x.hidden=!ab; });
+}
 function chModo(){ return "p"; }
 /* Una fila por área + OF + artículo, con sus operaciones dentro. */
 function chOfs(){
-  const grp={}; let sinNop=0, sinBase=0;
+  const grp={};
   CH.tk.forEach(t=>{
     const k=t.area+"|"+(t.of||"")+"|"+t.articulo;
     const g=grp[k]=grp[k]||{k, area:t.area, of:norm(t.of)||"(sin OF)", of10:ofCostos(t.of), articulo:t.articulo||"",
       prenda:t.prenda||"", cant_of:Number(t.cant_of)||null, sam:CH.sam[t.area+"|"+t.articulo]||0, modo:chModo(t.area), min:0, tks:0, per:0, cant:null, ops:[]};
     const u=CH.ult[t.area+"|"+t.articulo], obj=u ? (g.modo==="u"?u.n1:u.n2) : null;
     const cuenta = obj!=null && t.nop!=null && Number(t.nop)===Number(obj);
-    if(!u) sinBase+=Number(t.tks)||0; else if(t.nop==null) sinNop+=Number(t.tks)||0;
     g.min+=Number(t.minutos)||0; g.tks+=Number(t.tks)||0; g.per=Math.max(g.per, Number(t.personas)||0);
     if(cuenta) g.cant=(g.cant||0)+(Number(t.cant)||0);
     g.ops.push({nop:t.nop, op:norm(t.op)||"(sin operación)", std:Number(t.std)||0, cant:Number(t.cant)||0,
       min:Number(t.minutos)||0, tks:Number(t.tks)||0, per:Number(t.personas)||0, cuenta});
   });
   const toks=String($("chBuscar").value||"").split(/\s+/).map(normKey).filter(Boolean);
-  const filas=Object.values(grp).filter(g=>!toks.length || toks.every(x=>normKey([g.of,g.of10,g.articulo,g.prenda,g.area].join(" ")).includes(x)));
-  filas.forEach(g=>{ g.eq=g.sam?g.min/g.sam:null; g.ops.sort((a,b)=>(Number(a.nop)||0)-(Number(b.nop)||0)); });
-  return {filas, sinNop, sinBase};
+  const todas=Object.values(grp).filter(g=>g.cant!=null);
+  const filas=todas.filter(g=>!toks.length || toks.every(x=>normKey([g.of,g.of10,g.articulo,g.prenda,g.area].join(" ")).includes(x)));
+  todas.forEach(g=>{ g.eq=g.sam?g.min/g.sam:null; if(g.sam) g.min=g.cant*g.sam; g.ops.sort((a,b)=>(Number(a.nop)||0)-(Number(b.nop)||0)); });
+  return {filas, todas};
 }
 /* Personal: por persona, sus áreas del día. */
 function chPersonas(){
@@ -499,14 +504,13 @@ function chPersonas(){
   return Object.values(p);
 }
 function pintarCostosHoy(){
-  if(CH.op==="c"){ pintarCurso(); return; }
-  const {filas, sinNop, sinBase}=chOfs();
+  const {filas, todas:ofs}=chOfs();
   const pers=chPersonas(), todas=!CH.area;
   const fuera=pers.filter(p=>p.areas.some(a=>a.area!==p.est));
   const he=CH.inc.filter(o=>o.tipo==="HORA_EXTRA"), noHe=CH.inc.filter(o=>o.tipo!=="HORA_EXTRA");
   const minHe=he.reduce((a,o)=>a+(Number(o.minutos)||0),0), minInc=noHe.reduce((a,o)=>a+(Number(o.minutos)||0),0);
   const jor=CH.per.filter(x=>todas||x.area===CH.area).reduce((a,x)=>a+(Number(x.jornada)||0),0);
-  const prod=CH.tk.reduce((a,t)=>a+(Number(t.minutos)||0),0);
+  const prod=ofs.reduce((a,g)=>a+g.min,0);
   const dia=fuera.filter(p=>p.areas.every(a=>a.area!==p.est)).length;
   $("chKpis").innerHTML = kpi("Personas que trabajaron", pers.filter(p=>todas||p.areas.some(a=>a.area===CH.area)).length)
     + kpi("Trabajaron fuera de su área", `${fuera.length}`, "var(--violeta)")
@@ -521,7 +525,7 @@ function pintarCostosHoy(){
     if(p.est){ const e=A(p.est); if(!enOtra) e.propia++; else if(soloOtra) e.dia++; else e.dos++; }
     p.areas.forEach(a=>{ const x=A(a.area); x.jor+=Number(a.jornada)||0; if(a.area!==p.est) x.rec++; });
   });
-  CH.tk.forEach(t=>{ A(t.area).prod+=Number(t.minutos)||0; });
+  ofs.forEach(g=>{ A(g.area).prod+=g.min; });
   CH.inc.forEach(o=>{ const x=A(o.area), m=Number(o.minutos)||0; if(o.tipo==="HORA_EXTRA") x.he+=m; else x.inc+=-m; });
   Object.keys(CH.est).forEach(A);
   const areas=Object.values(ar).filter(x=>todas||x.area===CH.area).filter(x=>x.prod||x.jor||x.inc||x.he).sort((a,b)=>a.area.localeCompare(b.area,"es"));
@@ -557,6 +561,7 @@ function pintarCostosHoy(){
     {k:"sam",t:"S.A.M",cls:"n"},{k:"cant_of",t:"Cant. OF",cls:"n"},{k:"cant",t:"Cantidad producida",cls:"n"},{k:"min",t:"Min. producidos",cls:"n"},{k:"eq",t:"Prendas equivalentes",cls:"n"},
     {k:"per",t:"Personas",cls:"n"},{k:"tks",t:"Tickets",cls:"n"}]);
   const porDef=(a,b)=>a.area.localeCompare(b.area,"es") || b.min-a.min;
+  const totCant=filas.reduce((t,g)=>t+(g.cant||0),0), totEq=filas.reduce((t,g)=>t+(g.eq||0),0), totMin=filas.reduce((t,g)=>t+g.min,0);
   $("chTablaTk").innerHTML = ordThead("chTablaTk", cols, pintarCostosHoy) + "<tbody>"
     + (filas.length ? ordAplicar("chTablaTk", filas, porDef).map(g=>{ const ab=CH.abiertas.has(g.k);
         return `<tr class="ch-fila${ab?" abierta":""}" data-k="${esc(g.k)}" onclick="chOfAbrir(this.dataset.k)">
@@ -570,10 +575,9 @@ function pintarCostosHoy(){
             <td class="n">${o.std?num2(o.std):""}</td><td></td><td class="n">${qtyI(o.cant)}</td><td class="n">${qty(o.min)}</td><td></td>
             <td class="n">${o.per}</td><td class="n">${o.tks}</td></tr>`).join(""); }).join("")
       : `<tr><td colspan="${cols.length}"><div class="vacio-msg">Sin tickets ese día</div></td></tr>`)
-    + "</tbody>";
-  const out=[]; if(sinNop) out.push(`${sinNop} sin N°OP`); if(sinBase) out.push(`${sinBase} sin BASE del artículo`);
-  $("chPieTk").textContent=(filas.length?`${filas.length} OF · ${qtyI(prod)} min producidos · prendas equivalentes = minutos ÷ S.A.M`:"")
-    + (out.length?` · no cuentan para la cantidad: ${out.join(", ")} ticket(s)`:"");
+    + "</tbody>"
+    + (filas.length?`<tfoot><tr class="ch-total"><td class="izq" colspan="${cols.length-5}"><b>Total</b></td><td class="n"><b>${qtyI(totCant)}</b></td><td class="n"><b>${qtyI(totMin)}</b></td><td class="n"><b>${qtyI(totEq)}</b></td><td colspan="2"></td></tr></tfoot>`:"");
+  $("chPieTk").textContent=filas.length?`${filas.length} OF · ${qtyI(filas.reduce((a,g)=>a+g.min,0))} min producidos`:"";
 
   // Incidencias
   const lista = CH.fInc==="sin"?noHe : CH.fInc==="he"?he : CH.inc;
@@ -587,6 +591,7 @@ function pintarCostosHoy(){
       : `<tr><td colspan="${icol.length}"><div class="vacio-msg">Sin incidencias con ese filtro</div></td></tr>`)
     + "</tbody>";
   $("chPieInc").textContent = lista.length ? `${lista.length} incidencia(s) · ${sum>0?"+":""}${Math.round(sum)} min` : "";
+  if(CH.op==="c") pintarCurso();
 }
 function chDescargar(){
   if(!CH.fecha){ mostrarError("Carga el reporte primero"); return; }
@@ -706,6 +711,7 @@ function pintarCostosAsis(){
   const pres=todo.filter(p=>caPresente(caEstado(p))).length;
   const color=e=>e==="ACTIVO"?"var(--exito)":/^EN\s/.test(e)?"var(--violeta)":e===SIN_MARCAR?"var(--tenue)":"var(--alerta)";
   $("caKpis").innerHTML = kpi("Personal", todo.length) + kpi("Presentes", `${pres}/${todo.length}`, "var(--exito)")
+    + kpi("En su área", c.ACTIVO||0, "var(--exito)")
     + est.filter(e=>e!=="ACTIVO").map(e=>kpi(e===SIN_MARCAR?"Sin marcar":e, c[e], color(e))).join("");
   // Resumen por área: solo con "Todas las áreas".
   const wrap=$("caAreasWrap"); wrap.hidden=!!CA.area || !todo.length;

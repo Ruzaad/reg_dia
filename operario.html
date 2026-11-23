@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="rediseno.css?v=c23">
+<link rel="stylesheet" href="rediseno.css?v=c38">
 </head>
 <body data-pagina="operario">
 <header>
@@ -39,6 +39,7 @@
     <!-- Inicio (operario-inicio.js): cómo va el día y "Sigue donde te quedaste" -->
     <div id="ltAviso" hidden></div>
     <div id="ssAviso" hidden aria-live="polite"></div>
+    <div id="opReco" hidden></div>
     <div class="opi-hoy" id="opHoy"></div>
     <div id="opSigue" aria-live="polite"></div>
     <h1 id="opOtraH">¿En qué OF trabajas?</h1>
@@ -102,6 +103,7 @@
   <!-- ACABADO: OF (artículo · color) → operación → cantidad -->
   <section class="pantalla" id="pasoAcabOF">
     <div id="ltAvisoAcab" hidden></div>
+    <div id="opRecoA" hidden></div>
     <h1>¿En qué OF trabajas?</h1>
     <div class="sub">Escribe la OF o el artículo para filtrar, o toca directamente</div>
     <button type="button" class="btn-secundario btn-area-chip js-cambiar-area" style="display:none;">CAMBIAR ÁREA</button>
@@ -243,12 +245,12 @@
   <div class="ex-avance" id="exAvance"></div>
   <div class="ex-timer" id="exTimer"></div>
 </div>
-<script src="app.js?v=c13"></script>
-<script src="operario-inicio.js?v=c12"></script>
+<script src="app.js?v=c17"></script>
+<script src="operario-inicio.js?v=c13"></script>
 <script src="pedidos.js"></script>
 <script src="lotes.js"></script>
 <script src="sinsenal.js"></script>
 <script src="dinamico.js?v=c12"></script>
-<script src="intro.js?v=c12"></script>
+<script src="intro.js?v=c13"></script>
 </body>
 </html>

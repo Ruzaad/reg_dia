@@ -31,7 +31,7 @@ function shNombres(lista){
 }
 
 /* ---------- Navegación de abajo ---------- */
-const SH_NAV_DE={pasoHoy:"hoy",pasoAsistencia:"hoy",pasoHE:"hoy",pasoIncidencias:"hoy",
+const SH_NAV_DE={pasoHoy:"hoy",pasoAsistencia:"hoy",pasoHE:"hoy",pasoIncidencias:"pedidos",
   pasoPersonal:"personal",pasoAlcance:"personal",pasoSeleccion:"personal",pasoTipo:"personal",pasoMinutos:"personal",pasoMoverSel:"personal",pasoMoverArea:"personal",
   pasoAvance:"avance"};
 function shMarcarNav(paso){
@@ -46,6 +46,7 @@ function shIr(sec){
   if(sec==="hoy"){ irA("pasoHoy"); shCargar(); }
   else if(sec==="personal") $("tabPersonal").click();
   else if(sec==="avance") $("tabAvance").click();
+  else if(sec==="pedidos") $("tabIncidencias").click();
   else irA("pasoMas");
   window.scrollTo(0,0);
 }

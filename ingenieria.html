@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="rediseno.css?v=c23">
+<link rel="stylesheet" href="rediseno.css?v=c42">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
 </head>
 <body data-pagina="ingenieria">
@@ -32,6 +32,7 @@
   <aside class="ing-sidebar">
     <nav class="ing-nav" aria-label="Secciones de ingeniería">
       <a class="nav-item nav-inicio" data-tab="pasoInicio" href="#pasoInicio">Inicio</a>
+      <a class="nav-item nav-inicio" data-tab="pasoTablero" href="#pasoTablero">Tablero de gestión</a>
       <details class="nav-group" open>
         <summary class="nav-sep">Tickets</summary>
         <a class="nav-item" data-tab="pasoBuscar" href="#pasoBuscar">Buscar y seguir</a>
@@ -57,6 +58,7 @@
         <a class="nav-item" data-tab="pasoEf" href="#pasoEf">Eficiencia</a>
         <a class="nav-item" data-tab="pasoAudit" href="#pasoAudit">Auditoría</a>
         <a class="nav-item" data-tab="pasoInc" href="#pasoInc">Incentivos</a>
+        <a class="nav-item" data-tab="pasoRecon" href="#pasoRecon">Reconocimientos</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Dashboards</summary>
@@ -179,6 +181,7 @@
         <button id="incTabEfm" class="tab" onclick="incVista('efm')">EFICIENCIA MANUAL</button>
         <button id="incTabCons" class="tab" onclick="incVista('cons')">MIN. CONSIDERACIÓN</button>
         <button id="incTabSus" class="tab" onclick="incVista('sus')">SUSTENTO</button>
+        <button id="incTabCmp" class="tab" onclick="incVista('cmp')">COMPARAR TABLA</button>
       </div>
 
       <!-- BONO MODULAR: del ÁREA y del DÍA, sin categorías. Se escribe el % que
@@ -262,6 +265,18 @@
         <div class="sus-hoja" id="susDoc"><div class="vacio-msg">Elige la quincena y pulsa ARMAR SUSTENTO.</div></div>
       </div>
 
+      <div id="incCmpView" hidden>
+        <div class="barra-control">
+          <label class="campo"><span>Desde</span><input type="date" id="icnDesde" onchange="incCmpCargar()"></label>
+          <label class="campo"><span>Hasta</span><input type="date" id="icnHasta" onchange="incCmpCargar()"></label>
+          <label class="chk-inline"><input type="checkbox" class="sw" checked onchange="incCmpBoleta(this.checked)"> Solo quienes llenan boleta</label>
+          <button class="btn-mini" onclick="incCmpCargar()">↻ Cargar</button>
+        </div>
+        <div class="tb-kpis" id="icnKpis"></div>
+        <section class="ini-card"><div class="ini-card-h"><b>Por área</b></div><div class="tabla-scroll" id="icnAreas"></div></section>
+        <section class="ini-card"><div class="ini-card-h"><b>Por operario</b></div><div class="tabla-scroll" id="icnTabla" style="max-height:60vh;overflow:auto;"></div></section>
+      </div>
+
       <div id="incQView">
         <div class="barra-control">
           <label class="campo"><span>Desde</span><input type="date" id="incDesde"></label>
@@ -272,6 +287,7 @@
           <label class="campo-check"><input type="checkbox" class="sw" id="incSoloGanan" onchange="incPintar()"> Solo quienes ganan</label>
           <button class="btn-mini" onclick="cargarInc()">Cargar</button>
           <button class="btn-mini verde" onclick="descargarInc()">Descargar XLSX</button>
+          <button class="btn-mini" onclick="bonCorteAbrir()">Cargar Bon. Corte</button>
         </div>
         <div class="kpis" id="incResumen" style="margin-bottom:14px;"></div>
         <div class="sub rep-pie" id="incAviso"></div>
@@ -354,6 +370,7 @@
         <button id="tkTabRep" class="tab" onclick="tkVista('rep')">REPORTE DE HOY</button>
         <button id="tkTabOpe" class="tab" onclick="tkVista('ope')">RESUMEN X OPERARIO</button>
         <button id="tkTabHis" class="tab" onclick="tkVista('his')">HISTORIAL DE CAMBIOS</button>
+        <button id="tkTabRec" class="tab tab-reco" onclick="activarTab('pasoRecon')">★ RECONOCIMIENTO</button>
       </div>
 
       <div id="tkActualView">
@@ -1069,8 +1086,7 @@
     <section class="pantalla" id="pasoPcp">
       <div class="seccion-cab">
         <h1>PCP · Meta y programa</h1>
-        <p class="seccion-sub">PCP pone la meta del mes de cada área y sube su programa de costura; la salida de corte se lee de la hoja NOTI_CORTE.
-        Con eso se ve si el programa alcanza la meta, quién va atrasado y qué OF arrancan costura sin corte completo.</p>
+        
       </div>
       <div class="barra-control pcp-barra">
         <label class="campo"><span>Mes</span><input type="month" id="pcpMes" onchange="pcpCargar()"></label>
@@ -1084,8 +1100,7 @@
         </div>
       </div>
       <div id="pcpEstado" class="pcp-estado" role="status" aria-live="polite"></div>
-      <div class="acf-kpis" id="pcpKpis"></div>
-      <div id="pcpCuerpo"></div>
+      <div id="pcpCron"></div>
     </section>
 
     <section class="pantalla" id="pasoCrono">
@@ -1153,21 +1168,49 @@
     </section>
 
     <!-- ===================== INICIO: el día de mis áreas (solo lectura) ===================== -->
-    <section class="pantalla" id="pasoInicio">
-      <div class="ini-cab">
-        <div><h1 id="iniFecha"></h1><p class="ini-alcance" id="iniAlcance"></p></div>
-        <label class="ini-fecha"><span>Ver día</span><input type="date" id="iniFechaSel" onchange="iniCambiarFecha(this.value)"></label>
-        <div class="ini-seg" id="iniSeg" role="group" aria-label="Alcance" hidden>
-          <button type="button" id="iniSegMias" class="activo" onclick="INI.todas=false;iniPintar()">Mis áreas</button>
-          <button type="button" id="iniSegTodas" onclick="INI.todas=true;iniPintar()">Todas</button>
-        </div>
+    <section class="pantalla" id="pasoRecon">
+      <div class="seccion-cab"><h1>Reconocimientos</h1></div>
+      <div class="tb-periodo" id="rcCab"></div>
+      <div class="tb-kpis" id="rcKpis" aria-live="polite"></div>
+      <div class="rc-areas" id="rcAreas"></div>
+      <section class="ini-card"><div class="ini-card-h"><b>Todos los reconocidos</b></div><div class="tabla-scroll" id="rcTabla"></div></section>
+    </section>
+
+    <section class="pantalla" id="pasoTablero">
+      <div class="seccion-cab"><h1>Tablero de gestión</h1></div>
+      <div class="tb-periodo" id="tbPeriodo"></div>
+      <div class="tb-areas" id="tbAreas" role="group" aria-label="Área"></div>
+      <div class="tb8" id="tb8"></div>
+      <div class="tb-kpis" id="tbKpis" aria-live="polite"></div>
+      <div class="tb-g2">
+        <section class="ini-card"><div class="ini-card-h"><b>Cumplimiento por línea</b></div><div class="tabla-scroll" id="tbTabla"></div></section>
       </div>
-      <section class="ini-mes" id="iniMes" aria-live="polite"></section>
+      <section class="ini-card"><div class="ini-card-h"><b>OF del cronograma de costura (PCP, estado de hoy)</b></div><div class="tabla-scroll" id="tbTabla2"></div></section>
+    </section>
+
+    <section class="pantalla" id="pasoInicio">
+      <div class="ini-blobs"><i></i><i></i><i></i></div>
+      <div class="ini-bento">
+        <div class="ini-bento-logo" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none" stroke-linecap="round"><path d="M79.1 25.6 A38 38 0 1 0 79.1 74.4" stroke="var(--ini-gl-or)" stroke-width="9"/><path d="M50 50V20" stroke="var(--ini-gl-hi)" stroke-width="8"/><path d="M50 50H74" stroke="var(--ini-gl-or)" stroke-width="8"/></svg></div>
+        <div class="ini-cab glass" style="grid-area:cab">
+          <div><h1 id="iniFecha"></h1><p class="ini-alcance" id="iniAlcance"></p></div>
+          <div class="ini-seg" id="iniSeg" role="group" aria-label="Alcance" hidden>
+            <button type="button" id="iniSegMias" class="activo" onclick="INI.todas=false;iniPintar()">Mis áreas</button>
+            <button type="button" id="iniSegTodas" onclick="INI.todas=true;iniPintar()">Todas</button>
+          </div>
+        </div>
+        <section class="ini-mes glass" id="iniMes" style="grid-area:meta" aria-live="polite"></section>
+        <div id="iniDesg" style="grid-area:desg" aria-live="polite"></div>
+        <div class="ini-prodw" style="grid-area:areas">
+      <div class="ini-filtros"><label class="ini-fecha"><span>Ver mes</span><input type="month" id="iniMesSel" onchange="iniCambiarMes(this.value)"></label>
+      <label class="ini-fecha"><span>Ver día</span><input type="date" id="iniFechaSel" onchange="iniCambiarFecha(this.value)"></label></div>
       <div class="ini-areas" id="iniAreas" aria-live="polite"></div>
-      <section class="ini-card" id="iniAtencion">
-        <div class="ini-card-h"><b>Necesita tu atención</b></div>
-        <div class="ini-avisos" id="iniAvisos" aria-live="polite"></div>
-      </section>
+    </div>
+        <section class="ini-card glass" id="iniAtencion" style="grid-area:aten">
+          <div class="ini-card-h"><b>Necesita tu atención</b></div>
+          <div class="ini-avisos" id="iniAvisos" aria-live="polite"></div>
+        </section>
+      </div>
     </section>
 
     <!-- ===================== COSTOS (parche 96): todo de solo lectura ===================== -->
@@ -1716,10 +1759,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="app.js?v=c13"></script>
-<script src="ingenieria.js?v=c14"></script>
+<script src="app.js?v=c17"></script>
+<script src="ingenieria.js?v=c19"></script>
 <script src="costos.js"></script>
-<script src="inicio.js?v=c22"></script>
+<script src="inicio.js?v=c23"></script>
+<script src="tablero.js?v=c4"></script>
+<script src="recon.js?v=c1"></script>
+<script src="inc-nueva.js?v=c1"></script>
 <script src="calidad.js"></script>
 <script src="asistencia.js"></script>
 <script src="feriados.js"></script>
@@ -1728,11 +1774,13 @@
 <script src="sueltos.js"></script>
 <script src="lotes.js"></script>
 <script src="prestadas.js"></script>
-<script src="pcp.js?v=c14"></script>
-<script src="pcp-seguimiento.js?v=c12"></script>
+<script src="pcp.js?v=c17"></script>
+<script src="pcp-cronograma.js?v=c5"></script>
+<script src="gantt-react.js?v=1"></script>
+<script src="pcp-seguimiento.js?v=c15"></script>
 <script src="bases-nuevo.js?v=c2"></script>
-<script src="cronogramas.js?v=c2"></script>
-<script src="dinamico.js?v=c12"></script>
-<script src="intro.js?v=c12"></script>
+<script src="cronogramas.js?v=c3"></script>
+<script src="dinamico.js?v=c14"></script>
+<script src="intro.js?v=c13"></script>
 </body>
 </html>

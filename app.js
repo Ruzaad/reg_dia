@@ -370,7 +370,30 @@ const MSG_SIN_RESPUESTA = "No hubo respuesta en 30 segundos. Si estabas registra
 const MSG_BASE_OCUPADA = "El sistema está ocupado en este momento. Vuelve a intentar en unos segundos.";
 const RPC_LIMITE_MS = 30000;
 const traducirError = m => /statement timeout|canceling statement/i.test(m||"") ? MSG_BASE_OCUPADA : m;
+/* Logo de carga CHRONOS: si las consultas tardan, aparece el reloj con el segundero girando desde el minuto 15
+   (minutero fijo en las 12) y al terminar muestra cuántos segundos duró la consulta (< 1 s en pantalla). */
+const CRG={n:0,t0:0,tm:0,el:null,fin:0};
+const CRG_SVG='<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M79.1 25.6A38 38 0 1 0 79.1 74.4" class="c"/><line x1="50" y1="50" x2="50" y2="20" class="m"/><g class="s"><line x1="50" y1="50" x2="74" y2="50"/></g><circle cx="50" cy="50" r="5" class="h"/></svg>';
+const CRG_ON=/ingenieria/i.test(location.pathname);   // operario y supervisora: velocidad, sin indicador
+function crgIni(){
+  if(!CRG_ON) return;
+  if(CRG.n++>0) return;
+  CRG.t0=performance.now(); clearTimeout(CRG.fin); clearTimeout(CRG.tm);
+  CRG.tm=setTimeout(()=>{ if(!document.body) return; if(!CRG.el){ CRG.el=document.createElement("div"); CRG.el.id="crg"; CRG.el.setAttribute("role","status"); CRG.el.setAttribute("aria-live","polite"); document.body.appendChild(CRG.el); }
+    CRG.el.className="on"; CRG.el.innerHTML=CRG_SVG+'<span>Consultando…</span>'; },150);
+}
+function crgFin(){
+  if(!CRG_ON||--CRG.n>0) return; CRG.n=0; clearTimeout(CRG.tm);
+  if(!CRG.el||!CRG.el.classList.contains("on")) return;
+  const s=((performance.now()-CRG.t0)/1000).toFixed(2).replace(".",",");
+  CRG.el.className="on fin"; CRG.el.innerHTML=CRG_SVG+'<span><b>'+s+' s</b> consulta</span>';
+  CRG.fin=setTimeout(()=>{ CRG.el.className=""; },750);
+}
 async function rpc(fn, args){
+  crgIni();
+  try{ return await rpc0(fn, args); }finally{ crgFin(); }
+}
+async function rpc0(fn, args){
   const ctl = typeof AbortController==="function" ? new AbortController() : null;
   const tm = ctl ? setTimeout(()=>ctl.abort(), RPC_LIMITE_MS) : null;
   let r;
@@ -690,7 +713,7 @@ let sa={signo:-1};
    hoy, se le avisa con lo que ya pidió (fn_solicitudes_mias), sin esperar. */
 const SA_MOTIVOS=[["MAQUINA","MÁQUINA PARADA"],["ARREGLOS","ARREGLOS"],["MUESTRAS","MUESTRAS"],
                   ["REPROCESOS","REPROCESOS"],["DESCOSER","DESCOSER"],["OTRA","TRABAJÉ EN OTRA ÁREA"],["OTROS","OTROS"]];
-const SA_CAUSA=[["CAMISA COSTURA","CAMISA"],["PANTALON COSTURA","PANTALÓN"],["SACO COSTURA","SACO"],["ACABADO","ACABADO"],["CORTE","CORTE"],["CLIENTE","CLIENTE"],["","NO SÉ"]];
+const SA_CAUSA=[["CAMISA COSTURA","CAMISA"],["PANTALON COSTURA","PANTALÓN"],["SACO COSTURA","SACO"],["ACABADO","ACABADO"],["CORTE","CORTE"],["UDP","UDP"],["","NO SÉ"]];
 const SA_DONDE=[["DESPACHO","DESPACHO"],["REPROCESO","REPROCESO"],["ALMACEN","ALMACÉN"],["CORTE","CORTE"],["ACABADO","ACABADO"],["COSTURA","OTRA COSTURA"]];
 const SA_CUANTO=[[60,"1 h"],[120,"2 h"],[180,"3 h"],[288,"Medio día"],[575,"Todo el día"],[0,"Otro"]];
 let SA_V2=null, SA_MIAS=null;   // SA_V2: la base tiene el parche 114 (null = aún no se sabe)
@@ -707,7 +730,7 @@ function abrirSolicitudAjuste(){
       ${SA_MOTIVOS.map((m,i)=>`<button type="button" class="sa-mot" id="saMot${i}" onclick="saElegir(${i})"${m[0]==="OTROS"?' style="grid-column:1/-1"':""}>${esc(m[1])}</button>`).join("")}
     </div>
     <div class="op-campo" id="saCausaCampo" hidden><span class="op-lbl">¿De qué área vino el reproceso?</span>
-      ${saChips("saCausa",SA_CAUSA.filter(x=>x[0]!==mia),"saCausa")}</div>
+      ${saChips("saCausa",SA_CAUSA,"saCausa")}</div>
     <div class="modal-campo" id="saOfCampo" hidden><label for="saOf">OF (si la sabes)</label>
       <input id="saOf" inputmode="numeric" maxlength="12" placeholder="Ej: 10443"></div>
     <div class="op-campo" id="saDondeCampo" hidden><span class="op-lbl">¿Dónde trabajaste?</span>
@@ -761,8 +784,7 @@ function saElegir(i){
   setTimeout(()=>{ const el=otros?$("saMotivo"):otra||rep?null:$("saMin"); if(el) el.focus(); },80);
 }
 function saCausa(i){
-  const mia=AREA_ESTAJERO||((sesionActual()||{}).area)||"";
-  const l=SA_CAUSA.filter(x=>x[0]!==mia); sa.causa=l[i][0]||null; saPulsar("saCausa",i);
+  sa.causa=SA_CAUSA[i][0]||null; saPulsar("saCausa",i);
 }
 function saDonde(i){
   const mia=AREA_ESTAJERO||((sesionActual()||{}).area)||"";
@@ -1075,7 +1097,7 @@ async function cargarTodo(s){
       await ltEntrar(s, true); return;
     }
     if(typeof ltAvisoHoy==="function") ltAvisoHoy(s);   // EN DESPACHO/REPROCESO/CORTE hoy: aviso arriba, sin esperar
-    if(ES_ACABADO){ await cargarAcabado(s, area); return; }
+    if(ES_ACABADO){ await cargarAcabado(s, area); if(typeof opiReco==="function") opiReco(); return; }
     // Las OF generadas en el sistema (parche 29) se derivan de of_detalle × bases:
     // no están en el Sheet. Las anteriores siguen saliendo del almacén, así que
     // ambas conviven y el Sheet se vacía solo conforme entren OF nuevas.

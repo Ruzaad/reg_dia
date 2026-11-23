@@ -2,7 +2,7 @@
    SAMITEX — Vista de Ingeniería (requiere app.js cargado antes)
    ============================================================ */
 let ING=null;
-let AREAS_LISTA = Object.keys(AREAS);       // se reemplaza con fn_areas_listar al iniciar
+let AREAS_LISTA = Object.keys(AREAS), AREAS_ESTR = [];   // AREAS_ESTR = con UDP, solo para Estructura y Personal       // se reemplaza con fn_areas_listar al iniciar
 const CARGOS_LISTA = ["OPERARIO","SUPERVISORA"];
 const ESTADOS_OPERARIO = ["ACTIVO","INACTIVO"];
 const CATEGORIAS_LISTA = ["","A","B","C","D"];   // "" = sin asignar (parche 34)
@@ -102,7 +102,7 @@ function cmpVal(va, vb){
 }
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoInicio","pasoTk","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
+const NAV_TABS=["pasoInicio","pasoTablero","pasoRecon","pasoTk","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
   "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoFeriados","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoPcp","pasoCrono","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
@@ -124,6 +124,8 @@ function activarTab(tab){
   aplicarSoloLectura();
   if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
   if(tab==='pasoInicio'){ irA(tab); if(INI.t0 && performance.now()-INI.t0<15000) iniPintar(); else iniCargar(); return; }
+  if(tab==='pasoTablero'){ irA(tab); tbInit(); return; }
+  if(tab==='pasoRecon'){ irA(tab); rcInit(); return; }
   if(tab==='pasoEf' || tab==='pasoDia'){ efVista(tab==='pasoDia'?'dia':'area'); TABS_VISTAS.add(tab); return; }
   irA(tab);
   if(TABS_VISTAS.has(tab)) return;      // reentrada: conserva filtros y datos
@@ -208,8 +210,8 @@ const puedeLeer  = a => PERM_LIBRE() || !!PERM.areas["*"] || !!PERM.areas[a];
 const leeTodas   = () => PERM_LIBRE() || !!PERM.areas["*"];
 /* Filtro de área de las pantallas que eran solo del administrador (parche 101):
    "Todas las áreas" solo sale a quien lee todas; los demás eligen una suya. */
-const opcionesAreaVista = () => (leeTodas() ? '<option value="">Todas las áreas</option>' : "")
-  + (AREAS_LISTA||[]).map(a=>`<option>${esc(a)}</option>`).join("");
+const opcionesAreaVista = (L=AREAS_LISTA) => (leeTodas() ? '<option value="">Todas las áreas</option>' : "")
+  + (L||[]).map(a=>`<option>${esc(a)}</option>`).join("");
 const areasEdita = () => Object.keys(PERM.areas).filter(a=>a!=="*" && PERM.areas[a]==="EDITAR");
 function puedeEditar(a){
   if(PERM_LIBRE() || PERM.areas["*"]==="EDITAR") return true;
@@ -217,8 +219,9 @@ function puedeEditar(a){
   return PERM.areas[a]==="EDITAR";
 }
 /* Subpestañas que no están en el menú: siguen el permiso de su pestaña madre. */
-const TAB_MADRE={pasoCrono:"pasoPcp",pasoAsisConf:"pasoBolSin",pasoFeriados:"pasoBolSin",pasoDia:"pasoEf",pasoOpsOF:"pasoGen",pasoExtra:"pasoGen",pasoOpAd:"pasoGen",pasoCausas:"pasoGen"};
+const TAB_MADRE={pasoRecon:"pasoInc",pasoCrono:"pasoPcp",pasoAsisConf:"pasoBolSin",pasoFeriados:"pasoBolSin",pasoDia:"pasoEf",pasoOpsOF:"pasoGen",pasoExtra:"pasoGen",pasoOpAd:"pasoGen",pasoCausas:"pasoGen"};
 function tabPermitida(tab){
+  if(tab==='pasoTablero') return tabPermitida('pasoInicio');
   if(tab==='pasoInicio') return typeof iniHayAlgo==="function" && iniHayAlgo();
   if(tab==='pasoBuscar') return true;   // solo lectura; el servidor limita a las áreas de Permisos
   if(TABS_ADMIN.includes(tab)) return ES_ADMIN();
@@ -354,6 +357,8 @@ function cerrarSidebarMovil(){ if(window.innerWidth<=900) document.body.classLis
 
 function poblarSelectsArea(){
   AREAS_LISTA = AREAS_LISTA.filter(puedeLeer);   // parche 95: solo las áreas que puede ver
+  AREAS_ESTR = [...new Set([...AREAS_ESTR, ...AREAS_LISTA])].filter(puedeLeer);
+  AREAS_LISTA = AREAS_LISTA.filter(a=>a!=="UDP");   // UDP solo sirve en Estructura
   const op = a=>`<option>${esc(a)}</option>`;
   const elige = `<option value="">— Elige área —</option>`;
   const todas = leeTodas() ? `<option value="">Todas las áreas</option>` : "";
@@ -1617,7 +1622,7 @@ async function cargarEfRango(){
     const res = await rpc("fn_eficiencia_rango",{p_dni:ING.dni,p_token:ING.token,
       p_desde:efRangoSel.desde, p_hasta:efRangoSel.hasta, p_area:$("filtroAreaEfR").value});
     if(!res.ok){ mostrarError(res.error||"Error"); $("tablaEfR").innerHTML=""; return; }
-    EFR = {dias:res.dias, personal:res.personal};
+    EFR = {dias:res.dias, personal:(res.personal||[]).filter(x=>![x.area,x.area_origen,x.area_base].includes("UDP"))};
     $("resumenEfR").textContent = `${EFR.personal.length} persona(s) · ${EFR.dias.length} día(s) · ${efRangoSel.desde} a ${efRangoSel.hasta}`;
     pintarEfRango();
   }catch(e){ $("tablaEfR").innerHTML=""; mostrarError(e.message); }
@@ -1767,7 +1772,7 @@ function cerrarModal(){
 
 /* ---- Modal: crear / editar personal ---- */
 async function abrirModalPersonal(dni){
-  let datos = {dni:"", nombres_apellidos:"", area_origen:AREAS_LISTA[0]||"", area_actual:AREAS_LISTA[0]||"",
+  let datos = {dni:"", nombres_apellidos:"", area_origen:AREAS_ESTR[0]||"", area_actual:AREAS_ESTR[0]||"",
     estado:"ACTIVO", cargo:"OPERARIO", categoria:""};
   const esEdicion = !!dni;
   if(esEdicion){
@@ -1787,7 +1792,7 @@ async function abrirModalPersonal(dni){
   const catsSel = [...new Set([...CATEGORIAS_LISTA, datos.categoria||""])];
   // Incluye siempre el área real del registro aunque no esté en AREAS_LISTA,
   // para que el select no caiga en la primera opción por defecto al editar.
-  const areasSel = [...new Set([datos.area_origen, datos.area_actual, ...AREAS_LISTA.filter(a=>puedeEditar(a))])].filter(Boolean);
+  const areasSel = [...new Set([datos.area_origen, datos.area_actual, ...AREAS_ESTR.filter(a=>puedeEditar(a))])].filter(Boolean);
   const html = `
     <h2>${esEdicion? "Editar personal":"Agregar personal"}</h2>
     <div class="modal-campo">
@@ -1932,7 +1937,7 @@ let EST={mes:"",filas:[],sin:[],hayAnt:false};
 function estMesActual(){ return ($("estMes")&&$("estMes").value||hoyISO().slice(0,7))+"-01"; }
 function estInit(){
   const m=$("estMes"); if(m && !m.value) m.value=hoyISO().slice(0,7);
-  const s=$("estArea"); if(s && !s.options.length) s.innerHTML=opcionesAreaVista();
+  const s=$("estArea"); if(s && !s.options.length) s.innerHTML=opcionesAreaVista(AREAS_ESTR);
   perCargarEst();
 }
 async function perCargarEst(){
@@ -1979,8 +1984,8 @@ function perPintarEst(){
 }
 function abrirModalEst(dni){
   const f=dni?EST.filas.find(x=>x.dni===dni):null;
-  const d=f||{dni:"",nombre:"",area:($("estArea")||{}).value||(AREAS_LISTA[0]||""),subarea:"",tipo:"MOD",cargo:"",desde:"",hasta:"",nota:""};
-  const areas=[...new Set([d.area,...AREAS_LISTA.filter(a=>puedeEditar(a)),"LIQUIDACION"])].filter(Boolean);
+  const d=f||{dni:"",nombre:"",area:($("estArea")||{}).value||(AREAS_ESTR[0]||""),subarea:"",tipo:"MOD",cargo:"",desde:"",hasta:"",nota:""};
+  const areas=[...new Set([d.area,...AREAS_ESTR.filter(a=>puedeEditar(a)),"LIQUIDACION"])].filter(Boolean);
   const cargos=[...new Set(EST.filas.map(x=>x.cargo).filter(Boolean))].sort();
   abrirModal(`<h2>${f?"Editar en la estructura":"Agregar a la estructura"}</h2>
     <div class="sub" style="margin-bottom:10px;">Mes: <b>${esc(EST.mes.slice(0,7))}</b>. El área de aquí es la <b>oficial</b>; si alguien solo apoya en otra área, no se cambia aquí.</div>
@@ -4110,7 +4115,7 @@ async function audRecargar(){
 }
 
 /* ================= TICKETS DEL DÍA ================= */
-let TK=[], TK_VISTA=[], BASES_CACHE={}, ULT_CACHE={};
+let TK=[], TK_VISTA=[], BASES_CACHE={}, ULT_CACHE={}, ULTPT_CACHE={};
 let tkSort={col:null,dir:1};
 let tkArea="";                 // filtro de área activo (select); "" = todas
 let modoLibTk=false, libSel={}; // modo liberar en lote + ids de reclamo marcados
@@ -4645,6 +4650,10 @@ async function infoUltimas(areas){
       catch(e){ BASES_CACHE[a]=[]; }
     }
     if(!ULT_CACHE[a]) await ultimasArea(a);
+    if(!ULTPT_CACHE[a]){
+      try{ const r=await rpc("fn_ultimas_prenda_area",{p_dni:ING.dni,p_token:ING.token,p_area:a}); ULTPT_CACHE[a]=Array.isArray(r)?r:[]; }
+      catch(e){ ULTPT_CACHE[a]=[]; }
+    }
   }
   const info={};   // "AREA|ARTICULO" -> {n1,n2,op1:Set,op2:Set}
   areas.forEach(a=>{
@@ -4664,8 +4673,28 @@ async function infoUltimas(areas){
         op2:n2!=null?new Set(porArt[k].filter(b=>Number(b.n_op)===n2).map(b=>norm(b.operacion)).filter(Boolean)):new Set()
       };
     });
+    // Artículos con varias prendas en la misma base (terno): cada prenda con su última y penúltima.
+    (ULTPT_CACHE[a]||[]).forEach(u=>{
+      const i=info[a+"|"+normKey(u.articulo)]; if(!i) return;
+      const fs=(BASES_CACHE[a]||[]).filter(b=>normKey(b.articulo)===normKey(u.articulo)&&normKey(b.prenda)===normKey(u.prenda));
+      const ops=n=>new Set(fs.filter(b=>Number(b.n_op)===n).map(b=>norm(b.operacion)).filter(Boolean));
+      (i.pr=i.pr||[]).push({n1:u.n1,n2:u.n2,op1:ops(u.n1),op2:u.n2!=null?ops(u.n2):new Set()});
+    });
   });
   return info;
+}
+/* 1 = última, 2 = penúltima, 0 = ninguna. Con varias prendas se mira N°OP + nombre de la operación. */
+function tkNivel(t,i){
+  const n=Number(t.nop);
+  if(i.pr&&i.pr.length){
+    const on=norm(t.op);
+    for(const p of i.pr){
+      if(n===p.n1&&p.op1.has(on)) return 1;
+      if(p.n2!=null&&n===p.n2&&p.op2.has(on)) return 2;
+    }
+    return 0;
+  }
+  return n===i.n1?1:(i.n2!=null&&n===i.n2?2:0);
 }
 /* Parche 125: última y penúltima por artículo, con la elección manual del
    analista. Sin el parche en la base queda {} y manda el N°OP como antes. */
@@ -4690,9 +4719,9 @@ async function cargarResumenUltimas(){
     const i=info[t.area+"|"+normKey(t.articulo)];
     if(!i) return;
     if(t.nop==null || t.nop===""){ sinNop++; return; }
-    const n=Number(t.nop);
-    if(n===i.n1){ c1+=Number(t.cant)||0; i.op1.forEach(x=>o1.add(x)); }
-    else if(i.n2!=null && n===i.n2){ c2+=Number(t.cant)||0; i.op2.forEach(x=>o2.add(x)); }
+    const nv=tkNivel(t,i), on=norm(t.op);
+    if(nv===1){ c1+=Number(t.cant)||0; o1.add(on); }
+    else if(nv===2){ c2+=Number(t.cant)||0; o2.add(on); }
   });
   const nom=s=>{ const l=[...s]; return l.length? l.slice(0,3).join(" / ")+(l.length>3?"…":"") : "—"; };
   z.innerHTML = `
@@ -4754,9 +4783,9 @@ const soles = v => (Math.round((+v||0)*100)/100).toFixed(2);
    cuatro son lo que la alimenta (modular, tabla de tramos, eficiencia escrita a
    mano y minutos de consideración). */
 const INC_VISTAS={mod:"incModView", q:"incQView", tabla:"incTablaView",
-                  efm:"incEfmView", cons:"incConsView", sus:"incSusView"};
+                  efm:"incEfmView", cons:"incConsView", sus:"incSusView", cmp:"incCmpView"};
 const INC_TABS  ={mod:"incTabMod",  q:"incTabQ",  tabla:"incTabTab",
-                  efm:"incTabEfm",  cons:"incTabCons", sus:"incTabSus"};
+                  efm:"incTabEfm",  cons:"incTabCons", sus:"incTabSus", cmp:"incTabCmp"};
 function incVista(v){
   if(!INC_VISTAS[v]) v="q";
   Object.keys(INC_VISTAS).forEach(k=>{
@@ -4768,6 +4797,7 @@ function incVista(v){
   if(v==="efm")   incAreaSel("efmArea",  cargarEfManual);
   if(v==="cons")  incAreaSel("consArea", cargarCons);
   if(v==="sus")   susInit();
+  if(v==="cmp")   incCmpInit();
 }
 /* Los tres selectores de área comparten relleno: el primero que se abre carga. */
 function incAreaSel(id, cargar){
@@ -4802,8 +4832,70 @@ async function cargarInc(){
     const r=await rpc("fn_incentivos_quincena",{p_dni:ING.dni,p_token:ING.token,
       p_desde:d, p_hasta:h, p_area:leeTodas()?"":(($("incArea")||{}).value||"")});
     if(!r.ok){ mostrarError(r.error||"Error"); $("tablaInc").innerHTML=""; return; }
-    INC=r; incPintar();
+    r.personas=(r.personas||[]).filter(x=>x.area!=="UDP"); INC=r; incPintar();
   }catch(e){ $("tablaInc").innerHTML=""; mostrarError(e.message); }
+}
+/* Cargar Bon. Corte (parche 167): eficiencia manual de CORTE pegada desde Excel
+   (DNI · nombre · categoría · fecha · eficiencia). Sin tabla, el % del modular de CORTE. */
+function bonCorteLeer(txt){
+  const out=[], MES={ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,set:9,sep:9,oct:10,nov:11,dic:12};
+  const anio=parseInt((($("incDesde")||{}).value||"").slice(0,4))||new Date().getFullYear();
+  const z=n=>String(n).padStart(2,"0");
+  const fecha=x=>{ x=String(x||"").trim().toLowerCase(); let m;
+    if(m=x.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)) return `${m[3]}-${z(m[2])}-${z(m[1])}`;
+    if(m=x.match(/^(\d{1,2})[-\/ ]([a-záéñ]{3,})\.?(?:[-\/ ](\d{2,4}))?$/)){
+      const mes=MES[m[2].slice(0,3)]; if(!mes) return "";
+      const y=m[3]?(m[3].length===2?2000+ +m[3]:+m[3]):anio; return `${y}-${z(mes)}-${z(m[1])}`; }
+    return ""; };
+  const pct=p=>{ p=String(p||"").trim(); if(!/^\d+([.,]\d+)?\s*%?$/.test(p)) return null;
+    let v=parseFloat(p.replace(",",".").replace("%","")); if(!/%/.test(p)&&v<=1.5) v*=100; return Math.round(v*10)/10; };
+  let cab=null;
+  String(txt||"").split(/\r?\n/).forEach(l=>{
+    const c=l.split("\t").map(x=>x.trim());
+    const fs=c.map(fecha);
+    const dni=(c.find(x=>/^\d{7,8}$/.test(x))||"");
+    if(!dni){ if(fs.filter(Boolean).length>=1) cab=fs; return; }       // encabezado con fechas (formato ancho)
+    const dd=dni.padStart(8,"0"), iD=c.indexOf(dni);
+    if(cab){                                                              // una columna por día
+      cab.forEach((f,i)=>{ if(!f||i<=iD) return; const v=pct(c[i]); if(v!=null) out.push({dni:dd,fecha:f,pct:v}); });
+      return; }
+    const f=fs.find(Boolean); const p=[...c].reverse().find(x=>pct(x)!=null&&x!==dni);   // una fila por día
+    if(f&&p!=null) out.push({dni:dd,fecha:f,pct:pct(p)});
+  });
+  return out;
+}
+function bonCorteAbrir(){
+  const d=$("incDesde").value, h=$("incHasta").value;
+  if(!d||!h){ mostrarError("Elige el rango de la quincena"); return; }
+  abrirModal(`<h2>Cargar Bon. Corte</h2>
+    <div class="sub" style="margin-bottom:10px;">${esc(d.split("-").reverse().join("/"))} al ${esc(h.split("-").reverse().join("/"))} · solo CORTE</div>
+    <div class="modal-campo"><label for="bcTxt">Tabla de eficiencias (pega desde Excel)</label>
+      <textarea id="bcTxt" rows="9" style="width:100%;font:13px var(--mono);" placeholder="DNI&#9;APELLIDO Y NOMBRES&#9;CAT.&#9;16/10/2026&#9;92%" oninput="bonCorteVista()"></textarea></div>
+    <label class="campo-check"><input type="checkbox" class="sw" id="bcMod" checked> Al resto de CORTE: eficiencia del bono modular</label>
+    <div class="modal-msg" id="bcMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" id="bcBtn" onclick="bonCorteGuardar()">CARGAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`, "modal-ancho");
+}
+function bonCorteVista(){
+  const f=bonCorteLeer($("bcTxt").value);
+  $("bcMsg").textContent=f.length?`${new Set(f.map(x=>x.dni)).size} personas · ${f.length} filas leídas`:"";
+}
+async function bonCorteGuardar(){
+  const filas=bonCorteLeer($("bcTxt").value), mod=$("bcMod").checked;
+  if(!filas.length && !mod){ $("bcMsg").textContent="Pega la tabla o marca el bono modular"; return; }
+  $("bcBtn").disabled=true; $("bcMsg").textContent="Cargando…";
+  try{
+    const r=await rpc("fn_bon_corte_cargar",{p_dni:ING.dni,p_token:ING.token,p_desde:$("incDesde").value,p_hasta:$("incHasta").value,p_filas:filas,p_modular:mod});
+    if(!r||!r.ok){ $("bcMsg").textContent=(r&&r.error)||"No se pudo cargar"; $("bcBtn").disabled=false; return; }
+    cerrarModal();
+    mostrarOk(`Bon. Corte: ${r.por_tabla} días por tabla · ${r.por_modular} por modular · ${r.ausentes} con ausencia sin cargar`);
+    cargarInc();
+  }catch(e){
+    $("bcBtn").disabled=false;
+    $("bcMsg").textContent=/Could not find the function/i.test(e.message)?"Falta correr el parche 167 en Supabase":e.message;
+  }
 }
 /* Quien lee todas trae la quincena entera y filtra aquí; quien solo ve sus
    áreas pide una a la vez, porque la base no le da "todas". */
@@ -4817,6 +4909,11 @@ async function cargarIncTabla(){
     INC_TABLA=r.items||[]; incPintarTabla();
   }catch(e){ $("tablaIncCat").innerHTML=""; mostrarError(e.message); }
 }
+/* Abreviatura del área de apoyo: lo que va entre paréntesis (UDP) o las 3 primeras letras. */
+/* «DESPACHO 3 · CORTE 2»: los días de apoyo de la persona en la quincena. */
+function incApoyoResumen(p){ const n={}; Object.values(p.dias||{}).forEach(d=>{ if(d.apoyo) n[d.apoyo]=(n[d.apoyo]||0)+1; });
+  return Object.keys(n).map(k=>k+" "+n[k]).join(" · "); }
+function incApoyoAb(a){ const m=String(a).match(/\(([^)]+)\)/); return m?m[1]:String(a).slice(0,3); }
 function incPintarTabla(){
   const cats=[...new Set(INC_TABLA.map(x=>x.categoria))].sort();
   const pcts=[...new Set(INC_TABLA.map(x=>x.pct))].sort((a,b)=>a-b);
@@ -5245,6 +5342,7 @@ function incPintar(){
     const celdas = dias.map(d=>{
       const c=(p.dias||{})[d.fecha]||{};
       if(c.etiqueta){
+        if(c.etiqueta==="FUERA") return `<td class="inc-etq inc-finde" title="Fuera de la estructura del mes">—</td>`;
         const finde = ["SABADO","DOMINGO","FERIADO"].includes(c.etiqueta);
         return `<td class="inc-etq${finde?" inc-finde":""}" title="${esc(c.etiqueta)}">${esc(c.etiqueta.slice(0,3))}</td>`;
       }
@@ -5257,6 +5355,7 @@ function incPintar(){
       const ar=c.areas&&Object.keys(c.areas).length>1
         ? " · "+Object.keys(c.areas).map(a=>a+" "+Math.round(c.areas[a])+"m").join(" · ") : "";
       const multi=c.areas&&Object.keys(c.areas).length>1;
+      if(c.apoyo) return `<td class="inc-apoyo${pct>=80?" inc-gana":""}" title="Apoyo en ${esc(c.apoyo)} · ${pct}% (promedio de sus días con ticket)">${pct}<sup>${esc(incApoyoAb(c.apoyo))}</sup></td>`;
       return `<td class="${pct>=80?"inc-gana":""}${multi?" inc-multi-dia":""}" `
         + `title="${pct}% · ${c.prod}/${c.disp} min${esc(ar)}">${pct}</td>`;
     }).join("");
@@ -5308,7 +5407,7 @@ async function descargarInc(){
   const cab=["ID","AREA","USUARIO","DNI","CATEGORIA"]
     .concat(dias.map(d=>d.fecha))
     .concat(bonos.map(b=>"BONO "+LETRA_BONO(b.n)))
-    .concat(["BONO TOTAL","FALTA","TARDANZA","BOLETA","BONIFICACION FINAL","ESTADO"]);
+    .concat(["BONO TOTAL","FALTA","TARDANZA","BOLETA","BONIFICACION FINAL","ESTADO","APOYO"]);
   const fila=(p,i)=>[i+1,p.area||"",p.nombre,p.dni,p.categoria||""]
     .concat(dias.map(d=>{
       const c=(p.dias||{})[d.fecha]||{};
@@ -5318,7 +5417,7 @@ async function descargarInc(){
     }))
     .concat(bonos.map(b=>+((p.bonos||{})[b.n]||0)))
     .concat([+(p.bono_total||0), (+p.faltas||0)||"", (+p.tardanzas||0)||"",
-             (+p.boleta||0)||"", +(p.final||0), p.cesado?"CESADO":""]);
+             (+p.boleta||0)||"", +(p.final||0), p.cesado?"CESADO":"", incApoyoResumen(p)]);
   /* Las eficiencias van como fracción (0.84): con formato % se leen 84%. */
   const hoja=aoa=>{ const ws=XLSX.utils.aoa_to_sheet(aoa);
     for(let r=1;r<aoa.length;r++) for(let c=5;c<5+dias.length;c++){
@@ -5452,7 +5551,7 @@ async function armarSustento(){
   $("susDoc").innerHTML=`<div class="vacio-msg">Armando el sustento…</div>`;
   try{
     const pedir = (x,y)=>rpc("fn_incentivos_quincena",{p_dni:ING.dni,p_token:ING.token,
-      p_desde:x, p_hasta:y, p_area:area});
+      p_desde:x, p_hasta:y, p_area:area}).then(r=>{ if(r&&r.personas) r.personas=r.personas.filter(x=>x.area!=="UDP"); return r; });
     const [act, ant] = await Promise.all([pedir(d,h), cd&&ch ? pedir(cd,ch) : Promise.resolve(null)]);
     if(!act.ok){ mostrarError(act.error||"Error"); $("susDoc").innerHTML=""; return; }
     if(ant && !ant.ok) mostrarError("La quincena anterior no se pudo leer: el sustento sale sin comparación");
@@ -5796,8 +5895,7 @@ function pintarRep(){
     // se cuenta aparte en vez de desaparecer del reporte.
     if(!i){ sinBase++; return; }
     if(t.nop==null || t.nop==="") { sinNop++; return; }
-    const n=Number(t.nop), obj=ult?i.n1:i.n2;
-    if(obj==null || n!==obj) return;
+    if(tkNivel(t,i)!==(ult?1:2)) return;
     const op=norm(t.op)||"(sin operación)", of=norm(t.of)||"(sin OF)";
     const k=op+""+of;
     (grp[k]=grp[k]||{op,of,cant:0,tks:0});
@@ -6715,6 +6813,14 @@ async function confirmarSubida(){
    (parche 52): antes llegaban como OTROS con el motivo en el detalle. */
 const TIPOS_OC = ["MAQUINA","HORA_EXTRA","PAGO_HORA","TARDANZA","SEGURO","PERMISO",
                   "ARREGLOS","MUESTRAS","REPROCESOS","DESCOSER","OTROS"];
+/* Lo que ve Ingeniería al crear una incidencia: primero lo mismo que pide el operario (app.js, SA_MOTIVOS), en su orden y con sus
+   nombres, y después lo de la supervisora. OTRA no es un tipo de la base: se guarda como OTROS (o REPROCESOS si fue a reproceso),
+   igual que cuando lo pide el operario. */
+const TIPOS_OC_ING = ["MAQUINA","ARREGLOS","MUESTRAS","REPROCESOS","DESCOSER","OTRA","OTROS","HORA_EXTRA","PAGO_HORA","TARDANZA","SEGURO","PERMISO"];
+const TIPO_ING_LBL = t => t==="OTRA" ? "TRABAJÉ EN OTRA ÁREA" : TIPO_LBL(t);
+/* «Trabajé en otra área» se guarda como OTROS (o REPROCESOS) con el detalle «TRABAJÉ EN X»: en pantalla se ve como lo pidió el operario. */
+const esTrabOtraArea = o => ["OTROS","REPROCESOS"].includes(o.tipo) && /^TRABAJ[ÉE] EN /i.test(String(o.detalle||""));
+const tipoVista = o => esTrabOtraArea(o) ? "TRABAJÉ EN OTRA ÁREA" : TIPO_LBL(o.tipo);
 /* Nombre visible del tipo: el operario ve "MÁQUINA PARADA", no "MAQUINA". */
 /* `MAQUINA` es lo que pide el operario y lo que hay en el histórico;
    `PAGO_HORA` es lo que registra la supervisora desde el parche 59. Son dos
@@ -7237,7 +7343,7 @@ function pintarOcurrencias(){
     const m=+o.minutos, col=m<0?"var(--alerta)":"var(--exito)";
     return `<tr>
       <td>${esc(o.fecha)}</td><td class="izq">${esc(soloApellidos(o.nombre))}</td>
-      <td>${esc(o.area)}</td><td>${esc(TIPO_LBL(o.tipo))}</td>
+      <td>${esc(o.area_est||o.area)}</td><td>${esc(tipoVista(o))}</td>
       <td style="color:${col};font-weight:800;">${m>0?"+":""}${m}</td>
       <td class="izq">${esc(o.detalle||"")}</td><td>${esc(soloApellidos(o.registrado_por||""))}</td>
       <td><div class="acc-base">
@@ -7254,30 +7360,52 @@ function nuevaIncidencia(){ abrirModalInci(null); }
 function editarIncidencia(id){ abrirModalInci(OCURR.find(o=>o.id===id)||null); }
 async function abrirModalInci(oc){
   const editar=!!oc;
-  const areaSel=(oc&&oc.area)|| ($("areaInci")&&$("areaInci").value)||AREAS_LISTA[0]||"";
-  const opTipo=t=>`<option value="${t}"${oc&&oc.tipo===t?" selected":""}>${esc(TIPO_LBL(t))}</option>`;
+  const areaSel=(oc&&(oc.area_est||oc.area))|| ($("areaInci")&&$("areaInci").value)||AREAS_LISTA[0]||"";
+  const otra=!!oc && esTrabOtraArea(oc);
+  const dondeOc=otra ? (SA_DONDE.find(x=>normKey(oc.detalle).includes(normKey("EN "+x[1])))||[""])[0] : "";
+  const libreOc=otra ? String(oc.detalle||"").replace(/^[^:]*:?\s*/,"").replace(/^TRABAJ[ÉE] EN [^:]*$/i,"") : (oc?oc.detalle||"":"");
+  const opTipo=t=>`<option value="${t}"${oc&&(otra?t==="OTRA":oc.tipo===t)?" selected":""}>${esc(TIPO_ING_LBL(t))}</option>`;
+  const jor=typeof IR_JORNADA!=="undefined"?IR_JORNADA:575;
+  const chips=SA_CUANTO.filter(x=>x[0]).map(x=>`<button type="button" class="btn-mini gris" onclick="miCuanto(${x[0]===575?jor:x[0]})">${esc(x[1])}</button>`).join("");
+  const mia=areaSel;
   abrirModal(`
     <h2>${editar?"Editar":"Nueva"} incidencia</h2>
-    <div class="modal-campo"><label>Área</label>
+    <div class="modal-campo"><label>Área (de la estructura)</label>
       <select id="mi_area">${AREAS_LISTA.map(a=>`<option${a===areaSel?" selected":""}>${esc(a)}</option>`).join("")}</select></div>
     <div class="modal-campo"><label>Persona</label>
       <select id="mi_dni"><option value="">Cargando…</option></select></div>
     <div class="modal-campo"><label>Tipo</label>
-      <select id="mi_tipo">${TIPOS_OC.map(opTipo).join("")}</select></div>
-    <div class="modal-campo"><label>Minutos (negativo = descuenta)</label>
-      <input id="mi_min" type="number" value="${oc?oc.minutos:""}" placeholder="Ej: -30 o 60"></div>
+      <select id="mi_tipo" onchange="miTipo()">${TIPOS_OC_ING.map(opTipo).join("")}</select></div>
+    <div class="modal-campo" id="mi_causaW" hidden><label>¿De qué área vino?</label>
+      <select id="mi_causa"><option value="">NO SÉ</option>${SA_CAUSA.filter(x=>x[0]).map(x=>`<option value="${esc(x[0])}">${esc(x[1])}</option>`).join("")}</select></div>
+    <div class="modal-campo" id="mi_ofW" hidden><label>OF (opcional)</label><input id="mi_of" maxlength="20" placeholder="Ej: 9880"></div>
+    <div class="modal-campo" id="mi_dondeW" hidden><label>¿Dónde trabajó?</label>
+      <select id="mi_donde">${SA_DONDE.filter(x=>x[0]!==mia).map(x=>`<option value="${esc(x[0])}"${x[0]===dondeOc?" selected":""}>${esc(x[1])}</option>`).join("")}</select></div>
+    <div class="modal-campo"><label>Cuánto</label><div class="ir-rap">${chips}</div>
+      <input id="mi_min" type="number" value="${oc?oc.minutos:""}" placeholder="Minutos (negativo = descuenta)"></div>
     <div class="modal-campo"><label>Fecha en que aplica</label>
       <input id="mi_fecha" type="date" value="${oc?oc.fecha:hoyLima()}"></div>
-    <div class="modal-campo"><label>Motivo</label>
-      <input id="mi_detalle" maxlength="140" value="${oc?esc(oc.detalle||""):""}" placeholder="Motivo del ajuste"></div>
+    <div class="modal-campo"><label id="mi_detLbl">Detalle</label>
+      <input id="mi_detalle" maxlength="140" value="${esc(libreOc)}" placeholder="Detalle"></div>
     <div class="modal-msg" id="mi_msg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" onclick="guardarIncidencia(${editar?oc.id:"null"})">GUARDAR</button>
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
     </div>`);
-  $("mi_area").onchange=()=>cargarPersonalInci(oc?oc.dni:null, oc&&oc.nombre);
+  $("mi_area").onchange=()=>{ cargarPersonalInci(oc?oc.dni:null, oc&&oc.nombre); miTipo(); };
+  miTipo();
   await cargarPersonalInci(oc?oc.dni:null, oc&&oc.nombre);
 }
+function miTipo(){
+  const t=($("mi_tipo")||{}).value, area=($("mi_area")||{}).value;
+  const ver=(id,on)=>{ const e=$(id); if(e) e.hidden=!on; };
+  ver("mi_causaW",t==="REPROCESOS"); ver("mi_ofW",t==="REPROCESOS"); ver("mi_dondeW",t==="OTRA");
+  const l=$("mi_detLbl"); if(l) l.textContent = t==="OTROS" ? "¿Cuál fue el motivo?" : "Detalle (opcional)";
+  const d=$("mi_detalle"); if(d) d.placeholder = t==="OTROS" ? "Escribe el motivo" : t==="OTRA" ? "Ej: despacho Scotiabank" : "Ej: OF 9880, máquina 12";
+  const w=$("mi_donde"); if(w){ [...w.options].forEach(o=>{ o.hidden=o.value===area; }); if(w.value===area) w.value=([...w.options].find(o=>!o.hidden)||{}).value||""; }
+}
+/* Atajos de tiempo del operario: suman si es hora extra y descuentan en lo demás. */
+function miCuanto(m){ const t=($("mi_tipo")||{}).value; $("mi_min").value = t==="HORA_EXTRA" ? m : -m; }
 /* Al editar, la persona de la incidencia va siempre en la lista y elegida, aunque
    hoy esté en otra área: si no, quedaba elegida la primera del área y al guardar
    la incidencia pasaba a otra persona. */
@@ -7294,13 +7422,23 @@ async function cargarPersonalInci(dniSel, nombreSel){
   }catch(e){ sel.innerHTML=`<option value="">Error al cargar</option>`; }
 }
 async function guardarIncidencia(id){
-  const dni=$("mi_dni").value, area=$("mi_area").value, tipo=$("mi_tipo").value;
-  const min=parseInt($("mi_min").value,10), fecha=$("mi_fecha").value, detalle=$("mi_detalle").value.trim();
+  const dni=$("mi_dni").value, area=$("mi_area").value, sel=$("mi_tipo").value;
+  const min=parseInt($("mi_min").value,10), fecha=$("mi_fecha").value, libre=$("mi_detalle").value.trim();
   const msg=$("mi_msg");
   if(!dni){ msg.textContent="Elige la persona"; return; }
   if(!min){ msg.textContent="Minutos no puede ser 0"; return; }
   if(!fecha){ msg.textContent="Indica la fecha"; return; }
-  if(!detalle){ msg.textContent="Indica el motivo"; return; }
+  if(sel==="OTROS" && !libre){ msg.textContent="Escribe cuál fue el motivo"; return; }
+  let tipo=sel, detalle=libre;
+  if(sel==="OTRA"){
+    const w=$("mi_donde").value, e=SA_DONDE.find(x=>x[0]===w);
+    tipo = w==="REPROCESO" ? "REPROCESOS" : "OTROS";
+    detalle = ("TRABAJÉ EN "+(e?e[1]:w)+(libre?": "+libre:"")).toUpperCase();
+  }else if(sel==="REPROCESOS"){
+    const c=$("mi_causa").value, of=($("mi_of").value||"").trim().toUpperCase(), ec=SA_CAUSA.find(x=>x[0]===c);
+    detalle=[c?"DE "+(ec?ec[1]:c):"", of?"OF "+of:"", libre].filter(Boolean).join(" · ");
+  }
+  if(!detalle) detalle=TIPO_ING_LBL(tipo);
   try{
     const r=id
       ? await rpc("fn_ocurrencia_editar",{p_dni:ING.dni,p_token:ING.token,p_id:id,p_dni_op:dni,p_tipo:tipo,p_minutos:min,p_fecha:fecha,p_detalle:detalle})

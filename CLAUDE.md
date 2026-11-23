@@ -3,9 +3,10 @@
 Responde siempre en **español**. Ruzaad (dueño del repo) no navega carpetas: dale el SQL listo para copiar y pegar, no rutas.
 
 ## Qué es
-PWA estática (HTML/CSS/JS vanilla, **sin framework y sin build**) para registrar la producción de una planta de confección. Toda la lógica y los permisos viven en Supabase (RPC de Postgres). El front solo llama `rpc("fn_x", {...})`.
+PWA estática (HTML/CSS/JS vanilla, **sin build**; React solo en Ingeniería de escritorio, ver abajo) para registrar la producción de una planta de confección. Toda la lógica y los permisos viven en Supabase (RPC de Postgres). El front solo llama `rpc("fn_x", {...})`.
 
 - **Operario**: PWA en el celular (`operario.html`). Supervisora: también celular (`supervisora.html`). **Ingeniería y oficina**: web de escritorio (`ingenieria.html`).
+- **React**: permitido solo en pantallas de Ingeniería de escritorio, cargado bajo demanda desde `vendor/` (React 18.3.1 + htm, sin build, sin CDN). Nada de React en operario ni supervisora: la PWA del celular debe seguir liviana e instalable. Primer uso: `gantt-react.js` (Gantt de PCP y Cronogramas); si no carga, queda el Gantt simple.
 - Toda mejora cuida accesibilidad y velocidad: nada que agregue demora al celular del operario.
 
 ## Mapa del código
@@ -17,7 +18,8 @@ PWA estática (HTML/CSS/JS vanilla, **sin framework y sin build**) para registra
 | `dinamico.js` | Capa dinámica que se carga al final de cada página; reutiliza las funciones y RPC existentes. |
 | `lotes.js` | Vista de lotes de REPROCESO (abrir, cerrar, avance, crear). El trabajo por tiempo de CORTE y DESPACHO quedó sin uso. |
 | `supervisora-hoy.js`, `operario-inicio.js`, `sinsenal.js`, `pedidos.js` | Pantallas de supervisora, inicio del operario, modo sin señal, pedidos de tiempo. |
-| `buscar.js`, `calidad.js`, `asistencia.js`, `feriados.js`, `incidencias.js`, `sueltos.js`, `prestadas.js`, `costos.js`, `inicio.js`, `pcp.js` | Módulos de Ingeniería (y algunos de supervisora). `pcp.js` = PCP: metas, programa de costura y salida de corte (parche 144); `pcp-seguimiento.js` = cronograma PDF, Gantt y gráficos (parches 146-147); `cronogramas.js` = Cronogramas con lo real y subida de archivos (parche 152); `inicio.js` = Inicio de Ingeniería con la meta del mes por área (parches 148-158); `bases-nuevo.js` = Bases › Agregar artículo (sin SQL nuevo). |
+| `buscar.js`, `calidad.js`, `asistencia.js`, `feriados.js`, `incidencias.js`, `sueltos.js`, `prestadas.js`, `costos.js`, `inicio.js`, `pcp.js` | Módulos de Ingeniería (y algunos de supervisora). `pcp.js` = PCP: metas, programa de costura y salida de corte (parche 144); `pcp-cronograma.js` = cronograma de costura por semanas, con STD, días hábiles, avance y observaciones, filtros tipo Excel en el encabezado y panel lateral de OF (parches 178, 180 y 181); `pcp-seguimiento.js` = cronograma PDF, Gantt y gráficos (parches 146-147); `cronogramas.js` = Cronogramas con lo real y subida de archivos (parche 152); `inicio.js` = Inicio de Ingeniería con la meta del mes por área (parches 148-158); `bases-nuevo.js` = Bases › Agregar artículo (sin SQL nuevo); `tablero.js` = Tablero de gestión debajo de Inicio: resumen de todo CHRONOS por día, semana, quincena o mes, con cifras tal cual de Inicio, PCP, Eficiencia, Cantidad, Incidencias y Calidad de BASE, sin fórmulas propias (sin SQL nuevo); `inc-nueva.js` = Incentivos › COMPARAR TABLA: tabla vigente contra la nueva (80-130 %), solo lectura, la tabla nueva vive en el archivo hasta fijar fecha de uso (sin SQL); `recon.js` = Reconocimientos: top 5 por área con eficiencia mayor a 80 % y todas sus boletas, por quincena, sale de `fn_incentivos_quincena` y se publica para el operario (parche 184). |
+| `gantt-react.js` + `vendor/` | Gantt en React (zoom, detalle al tocar, filtros) para PCP y Cronogramas; carga React solo al abrir el Gantt y solo en pantallas ≥ 760 px. |
 | `intro.js` | Intro animada del logo CHRONOS al cargar cada página (se salta con un toque, Esc o Enter). |
 | `sql/parche_N.sql` + `sql/parche_N_rollback.sql` + `parches/PARCHE_N.md` | Cambios de base, en orden. |
 | `supabase/functions/ef-gemini/` | Edge function (Gemini para Auditoría). |
@@ -36,7 +38,7 @@ Herramienta interna para ubicar código sin releer archivos enteros. **No se pub
 
 ## Base de datos (lo más delicado)
 - Proyecto Supabase `lmlwomurgbbzolgbkwtp` (samitex-cost-acab).
-- Cada cambio de base es un **parche numerado**: `sql/parche_N.sql`, su `sql/parche_N_rollback.sql` y `parches/PARCHE_N.md` (problema, cambio, cómo verificar). Aplicados hasta el **162** (al 3-nov-2026); el **163** y el **166** son de la optimización del hilo maestro. **Siguiente libre: 167.** El 161 quedó sin usar, el 117 está reservado (plantillas de permisos) y el 108 no se usa. Verifica con `ls sql` antes de tomar un número. Si hay varios hilos a la vez, el coordinador asigna los números.
+- Cada cambio de base es un **parche numerado**: `sql/parche_N.sql`, su `sql/parche_N_rollback.sql` y `parches/PARCHE_N.md` (problema, cambio, cómo verificar). Aplicados hasta el **162** (al 3-nov-2026); el **163** es la optimización del hilo maestro. **Siguiente libre: 186** (el 184 es el reconocimiento por quincena; el 185 es la optimización del Inicio). El 161 quedó sin usar, el 117 está reservado (plantillas de permisos) y el 108 no se usa. Verifica con `ls sql` antes de tomar un número. Si hay varios hilos a la vez, el coordinador asigna los números.
 - **Los PRs nunca ejecutan SQL en producción.** Solo Ruzaad lo corre en el SQL Editor de Supabase. Se puede LEER producción para verificar, nunca escribir. Si son varios parches, se le arma UN SQL maestro en una sola transacción (`begin; … commit;`), con su deshacer. Se le pasa como archivo enlazado para copiar y pegar; un maestro ya aplicado se deja con un `raise exception` al inicio para que no se corra dos veces.
 - El rol `anon` tiene **`statement_timeout` de 3 s**, y un `set statement_timeout` dentro de la función no alarga la sentencia en curso: toda RPC nueva debe medir < 3 s con datos reales.
 - Conviven despliegues con versiones viejas del front contra la misma base: **no rompas una RPC que el front ya usa**. Crea una nueva (u otra sobrecarga) y deja la vieja. Se mantienen a propósito las sobrecargas viejas de `fn_acabado_registrar`, `fn_personal_editar`, `fn_movimiento_hora` y la columna `tickets_cache.actualizado`.
@@ -60,6 +62,7 @@ Para no abrir decenas de hilos, el trabajo se concentra en dos hilos maestros:
 Nada sensible en GitHub. Las claves van en secretos de Supabase (p. ej. `GEMINI_API_KEY`) o variables de Vercel. La URL y la clave publicable (`anon`) de `app.js` son públicas por diseño; la seguridad está en las RPC.
 
 ## Cómo trabajar
+0. **Toda tabla se ordena y se filtra** (regla de Ruzaad, 13-nov): `dinamico.js` pone orden y filtro tipo Excel a cualquier tabla; usa la clase `sin-orden` o `sin-filtro` solo si la pantalla trae los suyos (p. ej. el cronograma de PCP). Solo se maneja PLANTA (SAMITEX): lo de TALLER se ignora. El logo de carga es el reloj CHRONOS (`crgIni`/`crgFin` en `app.js`) y muestra los segundos de la consulta.
 1. Cambios quirúrgicos y mínimos; no reestructures lo que ya funciona.
 2. UI: respeta la paleta y los componentes de `rediseno.css`, nada de estilos aislados. El estilo de referencia es la pantalla de Asistencia. Identidad **CHRONOS** ("El tiempo de tu planta, medido."): azul SAMITEX `#0D2177` y dorado `#BC9A48` / `#E3CB86`, fondo marfil `#F8F6EF` y azul noche en oscuro; **sin violeta** (la variable `--violeta` es un azul). Cinzel Bold solo en títulos y logotipo; IBM Plex Sans en datos e interfaz. Todo cambio visual se prueba en claro y oscuro.
 3. Antes de **borrar** cualquier cosa (archivo, función, tabla, columna) pide confirmación.

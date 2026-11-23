@@ -154,7 +154,7 @@ function bnPintar(){
         <td class="izq"><input class="base-in" value="${esc(r.modulo)}" maxlength="80" oninput="bnCampo(${i},'modulo',this.value)"></td>
         ${celdas}
         <td><input class="base-in num" id="bnS${i}" type="number" step="0.01" min="0" value="${r.std}" oninput="bnCampo(${i},'std',this.value)"></td>
-        <td class="bn-acc"><button class="btn-mini gris" onclick="bnMover(${i},-1)" title="Subir">↑</button><button class="btn-mini gris" onclick="bnMover(${i},1)" title="Bajar">↓</button>${r.manual?`<button class="btn-mini rojo" onclick="bnQuitar(${i})" title="Quitar">×</button>`:""}</td></tr>`;
+        <td class="bn-acc"><button class="btn-mini gris" onclick="bnMover(${i},-1)" title="Subir">↑</button><button class="btn-mini gris" onclick="bnMover(${i},1)" title="Bajar">↓</button><button class="btn-mini rojo" onclick="bnQuitar(${i})" title="Eliminar fila" aria-label="Eliminar fila">×</button></td></tr>`;
     }).join("")+"</tbody>";
   bnResumen();
 }
