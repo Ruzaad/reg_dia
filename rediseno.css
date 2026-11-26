@@ -2401,3 +2401,27 @@ label.ini-pn-campo{cursor:text}
 :root[data-theme="dark"] .tab.tab-reco{color:#E3CB86;}
 .tab.tab-reco:hover,.tab.tab-reco:focus-visible{background:linear-gradient(135deg,#E3CB86,#BC9A48);color:#07123F;text-shadow:0 0 8px rgba(255,236,170,.9);box-shadow:0 0 0 1px #E3CB86,0 0 14px 2px rgba(227,203,134,.75),0 0 28px 6px rgba(188,154,72,.45);animation:rcBrillo 1.6s ease-in-out infinite;}
 @media(prefers-reduced-motion:reduce){.tab.tab-reco:hover{animation:none;}}
+/* PCP · columnas Corte/Costura/Acabado y detalle por módulo (parche 187) */
+.pcs-st.pc{border:0;cursor:pointer;font:800 12.5px var(--sans);transition:transform .12s,box-shadow .12s,filter .12s;display:inline-flex;align-items:center;gap:4px}
+.pcs-st.pc:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(15,24,56,.25);filter:brightness(1.06)}.pcs-st.pc:focus-visible{outline:3px solid var(--enlace);outline-offset:2px}
+.pcs-st.pc.sel{box-shadow:0 0 0 3px color-mix(in srgb,var(--enlace) 35%,transparent)}
+.pcs-sin{color:var(--tenue)}
+.pcs-of-n{font-weight:700;color:var(--titulo)}
+.pm-box{padding:20px 22px 18px}.pm-h{display:flex;gap:12px;align-items:flex-start}.pm-h>div{flex:1;min-width:0}.pm-h small{color:var(--ocre);font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:11.5px}
+.pm-h h2{margin:2px 0 2px;font:700 21px var(--sans)}.pm-sub{color:var(--suave);font-size:13px}
+.pm-x{border:0;background:var(--sup-2);color:var(--texto);width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:15px;flex:none}.pm-x:hover{background:var(--azul-t)}
+.pm-k{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}.pm-k>div{background:var(--sup-2);border:1px solid var(--linea);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.pm-k b{font:700 22px/1.1 var(--mono)}.pm-k span{font-size:12.5px;color:var(--suave)}
+.pm-k .pcs-st{align-self:flex-start;font:800 20px/1.2 var(--mono);padding:2px 14px}
+.pm-t{width:100%;font-size:13px}.pm-t th,.pm-t td{text-align:left;padding:9px 10px;white-space:nowrap}.pm-t th.num,.pm-t td.num{text-align:right}
+.pm-mod{cursor:pointer}.pm-mod:hover td{background:var(--azul-t)!important}.pm-mod td:first-child{font-weight:700;text-transform:uppercase}
+.pm-mod .chev{display:inline-block;transition:transform .18s;margin-right:6px;color:var(--enlace)}.pm-mod.abierto .chev{transform:rotate(90deg)}
+.pm-bar{display:grid;grid-template-columns:90px 38px;gap:8px;align-items:center;justify-content:end}.pm-bar .opi-barra{margin:0}.pm-bar b{font-size:12.5px;text-align:right}
+.pm-ops td{background:var(--sup-2)!important;border-bottom:1px solid var(--linea-2)!important;font-size:12.5px;padding:6px 10px!important}
+.pm-ops td:first-child{padding-left:34px!important;text-transform:none;font-weight:500}
+.pm-ops.pen td{background:var(--ocre-t)!important}.pm-pen{display:inline-block;margin-left:6px;border-radius:8px;padding:1px 8px;font:700 11px var(--sans);background:var(--ocre);color:#fff}
+.pm-pie{margin-top:12px;font-size:12.5px;color:var(--suave);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pm-skel{height:14px;border-radius:7px;background:linear-gradient(90deg,var(--linea-2),var(--sup-2),var(--linea-2));background-size:200% 100%;animation:pmsk 1s linear infinite;margin:12px 0}@keyframes pmsk{to{background-position:-200% 0}}
+.pm-cache{color:var(--exito);font-weight:600}
+@media(max-width:680px){.pm-k{grid-template-columns:1fr}.pm-box{padding:16px 14px}.modal-overlay .modal-box.pm-box{width:100vw;max-height:100vh;height:100%;border-radius:0}.pm-t .ocu{display:none}}
+@media(max-width:680px){.pm-t th,.pm-t td{padding:8px 3px;font-size:11.5px}.pm-t td:first-child{padding-left:6px}.pm-t .opi-barra{display:none}.pm-t th:nth-child(2),.pm-t td:nth-child(2){white-space:nowrap}.pm-t{min-width:0;}.pm-l{display:none}.pm-t td:last-child,.pm-t th:last-child{padding-right:8px}.pm-t .pm-bar b{min-width:0}.pm-t tr.pm-ops td:nth-child(2){font-size:10.5px;letter-spacing:-.2px}.pm-t th{letter-spacing:0;font-size:10.5px}.pm-t .pm-bar{justify-content:flex-end}.pm-t th:first-child,.pm-t td:first-child{width:22%;white-space:normal}.pm-t th:nth-child(2){font-size:0}.pm-t th:nth-child(2)::after{content:"Ops.";font-size:10.5px}.pm-pr{display:none}.pm-t .pm-pen{display:block;margin:2px 0 0}}
