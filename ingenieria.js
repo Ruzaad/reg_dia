@@ -4263,10 +4263,16 @@ function tkIrPagina(d){ tkPag=Math.max(1, tkPag+d); pintarTk(); }
 function renderTkOpsPanel(activo){
   const panel=$("tkOpsPanel"); if(!panel) return;
   if(!activo){ panel.style.display="none"; panel.innerHTML=""; return; }
+  // Una misma operación con varios N°OP en la misma OF (p. ej. dos «CERRAR HUEQUITO») no se suma: sale por N°OP.
+  const nopsDe={};
+  TK_VISTA.forEach(t=>{ if(t.estado!=='ACTIVO') return;
+    const k=(norm(t.of)||"")+"|"+(norm(t.op)||""); (nopsDe[k]=nopsDe[k]||new Set()).add(String(t.nop==null?"":t.nop)); });
+  const etq=t=>{ const op=norm(t.op)||"(sin operación)", s=nopsDe[(norm(t.of)||"")+"|"+(norm(t.op)||"")];
+    return s&&s.size>1&&t.nop!=null&&t.nop!==""?`${op} · N°${t.nop}`:op; };
   const byOf={};
   TK_VISTA.forEach(t=>{
     if(t.estado!=='ACTIVO') return;
-    const of=norm(t.of)||"(sin OF)"; const op=norm(t.op)||"(sin operación)";
+    const of=norm(t.of)||"(sin OF)"; const op=etq(t);
     (byOf[of]=byOf[of]||{}); byOf[of][op]=(byOf[of][op]||0)+(Number(t.cant)||0);
   });
   const ofs=Object.keys(byOf).sort((a,b)=>a.localeCompare(b,"es"));
@@ -4275,7 +4281,7 @@ function renderTkOpsPanel(activo){
   const byOpTot={};
   TK_VISTA.forEach(t=>{
     if(t.estado!=='ACTIVO') return;
-    const op=norm(t.op)||"(sin operación)";
+    const op=etq(t);
     byOpTot[op]=(byOpTot[op]||0)+(Number(t.cant)||0);
   });
   const ops2=Object.keys(byOpTot).sort((a,b)=>a.localeCompare(b,"es"));
