@@ -104,7 +104,7 @@ function cmpVal(va, vb){
 // Lista de secciones navegables (para validar hash y deep-links).
 const NAV_TABS=["pasoInicio","pasoTablero","pasoRecon","pasoTk","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
   "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoFeriados","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoPcp","pasoCrono","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
+  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoFeriados","pasoBolSin","pasoPcp","pasoCrono","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -154,8 +154,6 @@ function activarTab(tab){
   else if(tab==='pasoAsisConf') acfInit();
   else if(tab==='pasoFeriados') ferInit();
   else if(tab==='pasoCalBase') calidadInit();
-  else if(tab==='pasoTmpMed') tmInit();
-  else if(tab==='pasoTmpFalta') tfInit();
   else if(tab==='pasoCarga') ccInit();
   else if(tab==='pasoPcp') pcpInit();
   else if(tab==='pasoCrono') croInit();
