@@ -1,5 +1,5 @@
 /* PCP · Cronograma de costura (parche 178). Programa de costura + STD de la base + avance real de la penúltima operación. */
-const PCS={mes:"",r:null,f:{q:""},o:{k:"",d:1},pop:null};
+const PCS={mes:"",r:null,et:null,det:{},f:{q:""},o:{k:"",d:1},pop:null};
 const PCS_META=[["PLANTA","Planta"],["CAMISA COSTURA","Camisa"],["PANTALON COSTURA","Pantalón"],["SACO COSTURA","Saco"],["CORTE","Corte"],["ACABADO","Acabado"],["REPROCESO","Reproceso"]];
 const pcsMes=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 const pcsN=n=>Math.round(+n||0).toLocaleString("es-PE");
@@ -18,12 +18,23 @@ async function pcsCargar(){
     const r=await rpc("fn_pcp_costura",{p_dni:ING.dni,p_token:ING.token,p_mes:PCS.mes});
     if(!r || !r.ok){ box.innerHTML=`<div class="acf-falta">${esc((r&&r.error)||"Error")}</div>`; return; }
     PCS.r=r; { const c=$("pcpCargas"); if(c) c.hidden=!r.puede_editar; }
-    pcsPintar();
+    PCS.et=null; PCS.det={}; pcsPintar(); pcsEtapas();
   }catch(e){
     box.innerHTML=/fn_pcp_costura|404|PGRST202|Could not find/i.test(e.message)
       ? `<div class="acf-falta"><b>Falta correr el parche 178 en la base.</b></div>` : `<div class="acf-falta">${esc(e.message)}</div>`;
   }
 }
+/* % de Corte y Acabado de todas las OF en una sola consulta (parche 187); si falta el parche quedan en «—». */
+async function pcsEtapas(){
+  const mes=PCS.mes;
+  try{
+    const r=await rpc("fn_pcp_etapas",{p_dni:ING.dni,p_token:ING.token,p_mes:mes});
+    if(mes!==PCS.mes) return;
+    PCS.et=(r&&r.ok)?r.etapas:{}; pcsPintar();
+  }catch(e){ PCS.et={}; pcsPintar(); }
+}
+const pcsPct=(x,e)=>e==="costura"?x.status:(((PCS.et||{})[x.o_f]||{})[e]);
+const pcsEtPct=e=>x=>{ const p=pcsPct(x,e); return p==null?"Sin avance":p>=80?"Verde · 80–100 %":p>=51?"Ámbar · 51–79 %":"Rojo · 0–50 %"; };
 /* Columnas: k, título, valores para filtrar (array), valor para ordenar, celda */
 const pcsCorto=a=>({"CAMISA COSTURA":"Camisa","PANTALON COSTURA":"Pantalón","SACO COSTURA":"Saco"})[a]||String(a||"").replace(" COSTURA","");
 const pcsSemEt=l=>l==="sin"?"Sin fecha":`Semana ${pcsNumSem(l)} · ${pcsRango(l)}`;
@@ -44,7 +55,7 @@ const PCS_COL=[
   {k:"dias",t:"Días háb.",n:1,v:x=>[x.dias!=null?String(x.dias).replace(".",","):"—"],o:x=>x.dias==null?-1:+x.dias},
   {k:"ini",t:"Ini costura",n:1,v:x=>[x.ini?pcsSemEt(pcsLunes(x.ini)):"Sin fecha"],o:x=>x.ini||"9"},
   {k:"fin",t:"Fin costura",n:1,v:x=>[x.fin?pcsDM(x.fin):"—"],o:x=>x.fin||"9"},
-  {k:"status",t:"Status",n:1,v:x=>[pcsStEt(x)],o:x=>x.status==null?-1:x.status},
+  ...["corte","costura","acabado"].map(e=>({k:e,t:e[0].toUpperCase()+e.slice(1),n:1,v:x=>[pcsEtPct(e)(x)],o:x=>{ const p=pcsPct(x,e); return p==null?-1:p; }})),
   {k:"obs",t:"Observación",v:x=>{ const o=pcsObs(x); return o.length?o:["(Sin observación)"]; },o:x=>pcsObs(x).length}
 ];
 /* PLANTA = SAMITEX: lo de TALLER no entra en Chronos */
@@ -63,11 +74,13 @@ function pcsCmp(){
 function pcsFila(x){
   const s=pcsSem(x.status), ob=pcsObs(x).map(t=>`<span class="pcs-ob${x.bloquea&&/BASE|REGISTRADO/.test(t)?" bl":""}">${esc(t)}</span>`).join("");
   const tip=x.est?`${x.est} personas × 9,57 h × 60 = ${pcsN(x.min_dia)} min por día`:"";
-  const of=x.o_f?`<button type="button" class="pcs-of" onclick="pcsOf('${esc(x.o_f)}')" aria-label="Ver avance de la OF ${esc(x.o_f)}">${esc(x.o_f)}</button>`:"—";
+  const of=x.o_f?`<span class="pcs-of-n">${esc(x.o_f)}</span>`:"—";
+  const et=e=>{ const p=pcsPct(x,e); return p==null?`<td class="num"><span class="pcs-sin" title="Sin registros todavía">—</span></td>`
+    :`<td class="num"><button type="button" class="pcs-st pc ${pcsSem(p)}" onclick="pcsDetalle('${esc(x.o_f)}','${e}','${esc(x.area)}',this)" aria-label="${e}: ${p} por ciento. Ver detalle">${p} %</button></td>`; };
   return `<tr><td>${esc(x.planta)}</td><td>${esc(pcsCorto(x.area))}</td><td>${esc(x.prenda)}</td><td>${esc(x.cliente)}</td><td><b>${esc(x.articulo)}</b></td><td>${esc(x.modelo)}</td><td>${esc(x.color)}</td>
     <td class="num">${of}</td><td class="num">${pcsDM(x.target)}</td><td class="num"${x.cant_plan!=null&&+x.cant_plan!==+x.cant_prog?` title="Programado ${pcsN(x.cant_plan)} · cortado ${pcsN(x.cortado)}"`:""}>${pcsN(x.cant_prog)}${x.cant_plan!=null&&+x.cant_plan!==+x.cant_prog?`<sup class="pcs-cor">●</sup>`:""}</td><td class="num">${x.std!=null?(+x.std).toFixed(1).replace(".",","):"—"}</td>
     <td class="num" title="${esc(tip)}">${x.dias!=null?String(x.dias).replace(".",","):"—"}</td><td class="num">${pcsDM(x.ini)}</td><td class="num">${pcsDM(x.fin)}</td>
-    <td class="num">${x.status!=null?`<span class="pcs-st ${s}">${x.status} %</span>`:"—"}</td><td class="pcs-obs">${ob}</td></tr>`;
+    ${et("corte")}${et("costura")}${et("acabado")}<td class="pcs-obs">${ob}</td></tr>`;
 }
 function pcsTh(c){
   const O=PCS.o, on=PCS.f[c.k], fl=on?"▼":"▾", fl2=O.k===c.k?(O.d===1?"▲":"▼"):"";
@@ -80,7 +93,7 @@ function pcsPintar(){
   const sems={}; v.forEach(x=>{ const l=x.ini?pcsLunes(x.ini):"sin"; (sems[l]=sems[l]||[]).push(x); });
   const claves=Object.keys(sems).sort((a,b)=>a==="sin"?1:b==="sin"?-1:a<b?-1:1);
   const cuerpo=claves.map(l=>{ const f=cmp?sems[l].sort(cmp):sems[l];
-    return `<tbody><tr class="pcs-sem"><th colspan="16">${pcsSemEt(l)} <i>${f.length} OF</i></th></tr>${f.map(pcsFila).join("")}</tbody>`; }).join("");
+    return `<tbody><tr class="pcs-sem"><th colspan="18">${pcsSemEt(l)} <i>${f.length} OF</i></th></tr>${f.map(pcsFila).join("")}</tbody>`; }).join("");
   const ed=r.puede_editar?`<details class="pcs-meta"><summary>Meta del mes</summary><div class="pcs-meta-g">${PCS_META.map(a=>`<label class="campo"><span>${a[1]}</span><input class="pcp-in" id="pcsM_${a[0].replace(/ /g,"_")}" inputmode="numeric" value="${(r.metas||{})[a[0]]?pcsN(r.metas[a[0]]):""}"></label>`).join("")}
       <button class="btn-mini" type="button" onclick="pcsGuardarMeta()">Guardar</button></div></details>`:"";
   const hay=Object.keys(PCS.f).some(z=>z!=="q"&&PCS.f[z])||PCS.f.q;
@@ -89,7 +102,7 @@ function pcsPintar(){
     <section class="pcp-card pcs"><div class="pcp-h"><h2>Cronograma de costura · ${pcsMes[m-1]} ${y}</h2>
       <div class="pcs-barra"><input class="pcp-in" id="pcsQ" type="search" placeholder="Artículo, OF o modelo" value="${esc(PCS.f.q)}" oninput="PCS.f.q=this.value;clearTimeout(PCS.tq);PCS.tq=setTimeout(pcsPintar,180)" aria-label="Buscar">
       ${hay?`<button class="btn-mini" type="button" onclick="pcsLimpiar()">Quitar filtros</button>`:""}</div></div>
-    <div class="tabla-scroll"><table class="tabla pcs-t sin-orden sin-filtro"><thead><tr>${PCS_COL.map(pcsTh).join("")}</tr></thead>${cuerpo||`<tbody><tr><td colspan="16" class="acf-falta">Sin OF para este filtro.</td></tr></tbody>`}</table></div></section>${ed}`;
+    <div class="tabla-scroll"><table class="tabla pcs-t sin-orden sin-filtro"><thead><tr>${PCS_COL.map(pcsTh).join("")}</tr></thead>${cuerpo||`<tbody><tr><td colspan="18" class="acf-falta">Sin OF para este filtro.</td></tr></tbody>`}</table></div></section>${ed}`;
   if(q){ const i=$("pcsQ"); i.focus(); i.setSelectionRange(i.value.length,i.value.length); }
 }
 function pcsLimpiar(){ PCS.f={q:""}; pcsCerrar(); pcsPintar(); }
@@ -138,43 +151,48 @@ function pcsTodos(on){
   pcsPintar(); pcsPopPintar();
 }
 
-/* ---------- panel lateral de la OF: Corte → Costura → Acabado ---------- */
-function pcsCerrarOf(){ const p=$("pcsOf"); if(!p) return; p.classList.remove("on"); setTimeout(()=>p.remove(),260); document.removeEventListener("keydown",pcsEscOf,true); }
-function pcsEscOf(e){ if(e.key==="Escape") pcsCerrarOf(); }
-async function pcsOf(of){
-  pcsCerrar(); const ya=$("pcsOf"); if(ya) ya.remove();
-  const p=document.createElement("div"); p.id="pcsOf"; p.className="pcs-of-p";
-  p.innerHTML=`<div class="pcs-of-bg" onclick="pcsCerrarOf()"></div><aside role="dialog" aria-label="Avance de la OF ${esc(of)}"><button type="button" class="pcs-of-x" onclick="pcsCerrarOf()" aria-label="Cerrar">✕</button><div class="pcs-of-c">${cargandoHTML("Cargando OF…")}</div></aside>`;
-  document.body.appendChild(p); void p.offsetWidth; p.classList.add("on"); document.addEventListener("keydown",pcsEscOf,true);
-  const c=p.querySelector(".pcs-of-c");
+/* ---------- detalle de una etapa: Módulo · Operaciones · Fecha de inicio · Fecha final (se pide solo al tocar el %) ---------- */
+const pcsEtNom={corte:"Corte",costura:"Costura",acabado:"Acabado"};
+const pcsF=f=>f?pcsDM(f):"—";
+const pcsCol=p=>p>=80?"#16834A":p>=51?"#D69A16":"#CB3939";
+function pcsCerrarDet(){ const o=$("pcsDet"); if(!o) return; o.classList.remove("visible"); document.removeEventListener("keydown",pcsEscDet,true);
+  const b=PCS.ult; PCS.ult=null; setTimeout(()=>o.remove(),200); if(b&&document.body.contains(b)) b.focus(); }
+function pcsEscDet(e){ if(e.key==="Escape") pcsCerrarDet(); }
+async function pcsDetalle(of,e,area,btn){
+  pcsCerrar(); const ya=$("pcsDet"); if(ya) ya.remove(); PCS.ult=btn;
+  const x=(PCS.r.filas||[]).find(z=>z.o_f===of&&(e!=="costura"||z.area===area))||{};
+  const etq=e==="costura"?"COSTURA · "+pcsCorto(area).toUpperCase():pcsEtNom[e].toUpperCase();
+  const ov=document.createElement("div"); ov.id="pcsDet"; ov.className="modal-overlay"; ov.onclick=ev=>{ if(ev.target===ov) pcsCerrarDet(); };
+  ov.innerHTML=`<div class="modal-box modal-ancho pm-box" role="dialog" aria-modal="true" aria-labelledby="pmT"><div class="pm-h"><div><small>OF ${esc(of)} › ${esc(etq)}</small><h2 id="pmT">Avance de ${pcsEtNom[e].toLowerCase()}</h2>
+    <div class="pm-sub">${esc([x.articulo,x.modelo,x.color,x.cliente].filter(Boolean).join(" · "))}</div></div><button type="button" class="pm-x" onclick="pcsCerrarDet()" aria-label="Cerrar">✕</button></div>
+    <div id="pmC"><div class="pm-skel"></div><div class="pm-skel"></div><div class="pm-skel"></div></div></div>`;
+  document.body.appendChild(ov); void ov.offsetWidth; ov.classList.add("visible"); document.addEventListener("keydown",pcsEscDet,true);
+  const x0=ov.querySelector(".pm-x"); if(x0) x0.focus();
+  const c=ov.querySelector("#pmC"), k=of+"|"+e+"|"+area;
   try{
-    const r=await rpc("fn_pcp_of_avance",{p_dni:ING.dni,p_token:ING.token,p_of:of});
-    if(!r||!r.ok) throw new Error((r&&r.error)||"Sin datos");
-    c.innerHTML=pcsOfHTML(r); pcsOfAnimar(p);
-  }catch(e){ c.innerHTML=`<div class="acf-falta">${esc(/fn_pcp_of_avance|404|PGRST202|Could not find/i.test(e.message)?"Falta correr el parche 180 en la base.":e.message)}</div>`; }
+    let d=PCS.det[k];
+    if(!d){ d=await rpc("fn_pcp_etapa_detalle",{p_dni:ING.dni,p_token:ING.token,p_of:of,p_etapa:e.toUpperCase(),p_area:e==="costura"?area:null});
+      if(!d||!d.ok) throw new Error((d&&d.error)||"Sin datos"); PCS.det[k]=d; }
+    if($("pcsDet")===ov) c.innerHTML=pcsDetHTML(d,pcsPct(x,e),e);
+  }catch(er){ c.innerHTML=`<div class="acf-falta">${esc(/fn_pcp_etapa_detalle|404|PGRST202|Could not find/i.test(er.message)?"Falta correr el parche 187 en la base.":er.message)}</div>`; }
 }
-function pcsOfHTML(r){
-  const et=[];
-  const progr=(r.costura||[]).reduce((t,z)=>t+(+z.cant||0),0);
-  if(r.corte&&(r.corte.meta||r.corte.hecho)) et.push({t:"Corte",m:+r.corte.meta||progr||+r.corte.hecho||0,h:+r.corte.hecho||0,a:r.corte.ini,b:r.corte.fin});
-  (r.costura||[]).forEach(z=>et.push({t:pcsCorto(z.area)+" · costura",m:+z.cant||0,h:+z.hecho||0,a:z.desde||z.ini,b:z.ult||z.fin}));
-  if(r.acabado&&+r.acabado.meta) et.push({t:"Acabado",m:+r.acabado.meta,h:+r.acabado.hecho||0,a:r.acabado.desde,b:r.acabado.ult});
-  const pc=e=>e.m>0?Math.min(100,Math.round(e.h/e.m*100)):0, tot=et.length?Math.round(et.reduce((s,e)=>s+pc(e),0)/et.length):0;
-  const col=p=>p>=80?"v":p>=51?"a":"r";
-  return `<div class="pcs-of-h"><small>OF</small><h3>${esc(r.of)}</h3><p>${esc([r.articulo,r.modelo,r.color].filter(Boolean).join(" · "))}</p><p class="cl">${esc(r.cliente||"")}</p></div>
-    <div class="pcs-of-tot"><svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15.9" class="bg"/><circle cx="18" cy="18" r="15.9" class="fg ${col(tot)}" pathLength="100" data-p="${tot}"/></svg><div><b data-n="${tot}">0</b><span>% avance de la OF</span></div></div>
-    <ol class="pcs-of-l">${et.map((e,i)=>`<li style="--i:${i}"><span class="pt ${e.h>0?col(pc(e)):""}"></span><div class="cd"><div class="t"><b>${esc(e.t)}</b><em class="${col(pc(e))}">${pc(e)} %</em></div>
-      <div class="bar"><i class="${col(pc(e))}" data-p="${pc(e)}"></i></div><div class="n"><span><b data-n="${e.h}">0</b> de ${pcsN(e.m)} prendas</span><span>${e.a?pcsDM(e.a)+(e.b&&e.b!==e.a?" – "+pcsDM(e.b):""):"Sin registros"}</span></div></div></li>`).join("")||`<li class="vacio">Sin datos de esta OF.</li>`}</ol>`;
+function pcsDetHTML(d,p,e){
+  const meta=+d.meta||0, hecho=+d.hecho||0, mods=d.mods||[];
+  const ini=mods.map(m=>m.ini).filter(Boolean).sort()[0], fin=mods.map(m=>m.fin).filter(Boolean).sort().pop();
+  const pm=m=>meta>0?Math.min(100,Math.round((+m.hecho||0)/meta*100)):0;
+  if(!mods.length) return `<div class="acf-falta">Todavía no hay registros de ${pcsEtNom[e].toLowerCase()} para esta OF.</div>`;
+  return `<div class="pm-k"><div><span>Avance</span><b class="pcs-st ${pcsSem(p)}">${p==null?"—":p+" %"}</b></div>
+    <div><b>${pcsN(hecho)} de ${pcsN(meta)}</b><span>prendas${d.pen_n!=null?` en la operación ${d.pen_n}`:""}</span></div>
+    <div><b>${pcsF(ini)} → ${pcsF(fin)}</b><span>fecha de inicio → final</span></div></div>
+    <div class="tabla-wrap"><table class="tabla bus-tabla pm-t sin-orden sin-filtro"><thead><tr><th>Módulo</th><th class="num">Operaciones</th><th class="num"><span class="pm-l">Fecha de </span>inicio</th><th class="num"><span class="pm-l">Fecha </span>final</th><th class="num">Avance</th></tr></thead><tbody>
+    ${mods.map((m,j)=>{ const ops=m.ops||[], q=pm(m), nom=m.mod==="CORTE"?"Corte":m.mod;
+      return `<tr class="pm-mod" onclick="pcsAlternar(this,${j})" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();pcsAlternar(this,${j})}" aria-expanded="false"><td><span class="chev">▸</span>${esc(nom)}</td>
+        <td class="num">${m.total!=null?`${m.con} de ${m.total}`:ops.length}</td><td class="num">${pcsF(m.ini)}</td><td class="num">${pcsF(m.fin)}</td>
+        <td class="num"><div class="pm-bar"><div class="opi-barra"><i style="width:${q}%;background:${pcsCol(q)}"></i></div><b>${q} %</b></div></td></tr>`
+      +ops.map(o=>`<tr class="pm-ops${o.pen?" pen":""}" data-m="${j}" hidden><td>${o.n!=null?o.n+" · ":""}${esc(o.op)}${o.pen?`<span class="pm-pen">penúltima</span>`:""}</td><td class="num">${pcsN(o.hecho)} de ${pcsN(meta)}<span class="pm-pr"> prendas</span></td><td class="num">${pcsF(o.ini)}</td><td class="num">${pcsF(o.fin)}</td><td></td></tr>`).join(""); }).join("")}</tbody></table></div>
+    <div class="pm-pie"><span>${d.pen_n!=null?`El % se calcula con la operación <b>${d.pen_n}</b> (penúltima).`:"Corte aún no tiene módulos: se muestra por fecha de salida."}</span></div>`;
 }
-function pcsOfAnimar(p){
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{
-    p.querySelectorAll(".bar i").forEach(i=>i.style.width=i.dataset.p+"%");
-    p.querySelectorAll("circle.fg").forEach(c=>c.style.strokeDashoffset=100-c.dataset.p);
-  }));
-  const red=matchMedia("(prefers-reduced-motion: reduce)").matches;
-  p.querySelectorAll("[data-n]").forEach(b=>{ const n=+b.dataset.n; if(red||!n){ b.textContent=pcsN(n); return; }
-    const t0=performance.now(), d=900; (function f(t){ const k=Math.min(1,(t-t0)/d); b.textContent=pcsN(n*(1-Math.pow(1-k,3))); if(k<1) requestAnimationFrame(f); })(t0); });
-}
+function pcsAlternar(tr,j){ const a=tr.classList.toggle("abierto"); tr.setAttribute("aria-expanded",a); document.querySelectorAll(`#pcsDet .pm-ops[data-m="${j}"]`).forEach(x=>x.hidden=!a); }
 async function pcsGuardarMeta(){
   try{
     const g=a=>pcpNum($("pcsM_"+a.replace(/ /g,"_")).value)||0, m=PCS.r.metas||{}, cambios=[];
