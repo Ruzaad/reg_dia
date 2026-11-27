@@ -102,9 +102,9 @@ function cmpVal(va, vb){
 }
 
 // Lista de secciones navegables (para validar hash y deep-links).
-const NAV_TABS=["pasoInicio","pasoRecon","pasoTk","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
-  "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoOfs","pasoExtra",
-  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoLotes","pasoAsisConf","pasoFeriados","pasoBolSin","pasoPcp","pasoCrono","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
+const NAV_TABS=["pasoInicio","pasoTablero","pasoRecon","pasoTk","pasoOpsOF","pasoEf","pasoDia","pasoBases","pasoVista","pasoAudit",
+  "pasoAsis","pasoIncid","pasoFechas","pasoGen","pasoSupArea","pasoOpArea","pasoDash","pasoAvOF","pasoOfs","pasoExtra",
+  "pasoBaseLog","pasoCalBase","pasoBuscar","pasoSueltos","pasoLotes","pasoAsisConf","pasoFeriados","pasoBolSin","pasoTmpMed","pasoTmpFalta","pasoPcp","pasoCrono","pasoCarga","pasoOpAd","pasoPermisos","pasoCorr","pasoPrestadas","pasoCostosBase","pasoCostosHoy","pasoCostosInc","pasoCostosAsis"];
 /* Pestañas ya visitadas: al reentrar NO se reinicializan, solo se muestran.
    Evita que volver a una pestaña borre los filtros que el usuario ya puso. */
 const TABS_VISTAS=new Set();
@@ -124,6 +124,7 @@ function activarTab(tab){
   aplicarSoloLectura();
   if(tab==='pasoSupArea'){ ingSupVolverAreas(); return; }
   if(tab==='pasoInicio'){ irA(tab); if(INI.t0 && performance.now()-INI.t0<15000) iniPintar(); else iniCargar(); return; }
+  if(tab==='pasoTablero'){ irA(tab); tbInit(); return; }
   if(tab==='pasoRecon'){ irA(tab); rcInit(); return; }
   if(tab==='pasoEf' || tab==='pasoDia'){ efVista(tab==='pasoDia'?'dia':'area'); TABS_VISTAS.add(tab); return; }
   irA(tab);
@@ -147,11 +148,15 @@ function activarTab(tab){
   else if(tab==='pasoBaseLog') blInit();
   else if(tab==='pasoBolSin') bslInit();
   else if(tab==='pasoBuscar') buscarInit();
+  else if(tab==='pasoSueltos') psCargar();
   else if(tab==='pasoLotes') ltCargarIng();
   else if(tab==='pasoPrestadas') prCargar();
   else if(tab==='pasoAsisConf') acfInit();
   else if(tab==='pasoFeriados') ferInit();
   else if(tab==='pasoCalBase') calidadInit();
+  else if(tab==='pasoTmpMed') tmInit();
+  else if(tab==='pasoTmpFalta') tfInit();
+  else if(tab==='pasoCarga') ccInit();
   else if(tab==='pasoPcp') pcpInit();
   else if(tab==='pasoCrono') croInit();
   else if(tab==='pasoPermisos') cargarPermisosAdmin();
@@ -173,8 +178,8 @@ function efVista(v){
   });
   if(dia && !TABS_VISTAS.has("pasoDia")){ TABS_VISTAS.add("pasoDia"); }
 }
-/* Administrador: rol `operarios.es_admin`, se asigna en Permisos; ningún DNI
-   va escrito en el código. La sesión lo trae desde fn_login. */
+/* Administrador maestro: hoy solo ALOPEZ, y lo decide `operarios.es_admin`,
+   no el DNI escrito en el código. La sesión lo trae desde fn_login. */
 function ES_ADMIN(){ return (ING && ING.admin===true); }
 /* Desde el parche 101, Incentivos, Auditoría e Historial de tiempos se reparten
    en Permisos como cualquier otra pestaña y la base filtra por área. Solo
@@ -216,10 +221,12 @@ function puedeEditar(a){
 /* Subpestañas que no están en el menú: siguen el permiso de su pestaña madre. */
 const TAB_MADRE={pasoRecon:"pasoInc",pasoCrono:"pasoPcp",pasoAsisConf:"pasoBolSin",pasoFeriados:"pasoBolSin",pasoDia:"pasoEf",pasoOpsOF:"pasoGen",pasoExtra:"pasoGen",pasoOpAd:"pasoGen",pasoCausas:"pasoGen"};
 function tabPermitida(tab){
+  if(tab==='pasoTablero') return tabPermitida('pasoInicio');
   if(tab==='pasoInicio') return typeof iniHayAlgo==="function" && iniHayAlgo();
   if(tab==='pasoBuscar') return true;   // solo lectura; el servidor limita a las áreas de Permisos
   if(TABS_ADMIN.includes(tab)) return ES_ADMIN();
   if(PERM_LIBRE()) return true;
+  if(tab==='pasoSueltos' && PERM.pestanas.includes('pasoAudit')) return true;   // parche 115: quien audita también lo ve
   return PERM.pestanas.includes(TAB_MADRE[tab]||tab);
 }
 function primeraTab(){
@@ -289,25 +296,14 @@ function pintarPermisosAdmin(){
   const lista=PERMU.filter(u=>!q || normKey(u.dni+" "+(u.nombre||"")+" "+u.cargo).includes(q));
   if(!lista.length){ z.innerHTML=`<div class="vacio-msg">Sin usuarios de oficina</div>`; return; }
   z.innerHTML=`<table class="tabla perm-tabla"><thead><tr>
-      <th class="izq">Usuario</th><th>Cargo</th><th>Estado</th><th class="izq">Áreas</th><th>Pestañas</th><th>Admin</th><th></th></tr></thead><tbody>
+      <th class="izq">Usuario</th><th>Cargo</th><th>Estado</th><th class="izq">Áreas</th><th>Pestañas</th><th></th></tr></thead><tbody>
     ${lista.map(u=>`<tr${u.estado!=="ACTIVO"?' class="perm-inactivo"':""}>
       <td class="izq"><b>${esc(u.dni)}</b><div class="perm-nom">${esc(soloApellidos(u.nombre||""))}</div></td>
       <td>${esc(u.cargo)}</td><td><span class="pill ${esc(u.estado)}">${esc(u.estado)}</span></td>
       <td class="izq">${permResumen(u)}</td>
       <td>${u.admin?"Todas":(u.pestanas.length||"Ninguna")}</td>
-      <td>${u.admin?`<button class="btn-mini rojo" onclick="permAdmin('${esc(u.dni)}',false)">Quitar</button>`
-          :(u.cargo==="INGENIERIA"?`<button class="btn-mini" onclick="permAdmin('${esc(u.dni)}',true)">Dar</button>`:"")}</td>
       <td>${u.admin?"":`<button class="btn-mini" onclick="abrirModalPermisos('${esc(u.dni)}')">Editar</button>`}</td>
     </tr>`).join("")}</tbody></table>`;
-}
-/* Admin es un rol que se da y se quita aquí (parche 195); no hay usuarios fijos. */
-async function permAdmin(dni, valor){
-  try{
-    const r=await rpc("fn_admin_asignar",{p_dni:ING.dni,p_token:ING.token,p_usuario:dni,p_admin:valor});
-    if(!r||r.ok===false){ mostrarError((r&&r.error)||"No se pudo cambiar"); return; }
-    mostrarOk(valor?`${dni} ahora es Admin`:`${dni} ya no es Admin`);
-    cargarPermisosAdmin();
-  }catch(e){ mostrarError(e.message); }
 }
 function abrirModalPermisos(dni){
   const u=PERMU.find(x=>x.dni===dni); if(!u) return;
@@ -330,7 +326,7 @@ function abrirModalPermisos(dni){
   }).join("");
   abrirModal(`
     <h2>Permisos de ${esc(u.dni)}</h2>
-    <div class="sub" style="margin-bottom:12px;">${esc(u.nombre||"")} · ${esc(u.cargo)}</div>
+    <div class="sub" style="margin-bottom:12px;">${esc(u.nombre||"")} · ${esc(u.cargo)}. "Todas las áreas" vale para las que se agreguen después. Un área suelta manda sobre "Todas" solo si da más permiso.${hayAprueba?" <b>Aprueba</b> es Edición más aprobar las incidencias de esa área.":""}</div>
     <h3 class="perm-h3">Áreas</h3>
     <div class="perm-areas"><table class="tabla"><tbody>${areas.map(filaArea).join("")}</tbody></table></div>
     <h3 class="perm-h3">Pestañas</h3>
@@ -404,7 +400,9 @@ function recargarIngenieria(){
   else if(act("pasoBases")) cargarBases();
   else if(act("pasoAsis")) perReload();
   else if(act("pasoDash")) dashTab(DASH_TAB||'asis');
+  else if(act("pasoAvOF")){ if(AVOF.items.length) cargarAvof(); }
   else if(act("pasoIncid")) cargarIncidI();
+  else if(act("pasoSueltos")) psCargar();
   else if(act("pasoLotes")) ltCargarIng();
   else if(act("pasoPrestadas")) prCargar();
   else if(act("pasoBaseLog")) cargarBaseLog();
@@ -2514,6 +2512,9 @@ function dashTab(t){
 }
 let DBCH={};                 // instancias Chart por id de canvas
 let DB={fpReady:false, efSel:{}, cantSel:{}, modSel:{}, efModo:VER_EF_AREA?"ef":"min", efData:null};
+let AVOF={items:[], _rows:[]};
+let avofSort={col:null,dir:1};
+function ordenarAvof(col){ if(avofSort.col===col) avofSort.dir*=-1; else avofSort={col,dir:1}; avofPintar(); }
 function DBCOL(i){ const c=["#0D2177","#BC9A48","#1B7A4B","#5B7FE0","#735A14","#B3261E","#3A5BD9","#8A5A00","#6F8CFF","#2E8B8B"]; return c[i%c.length]; }
 function dbSemana(){ const hoy=new Date(), lun=new Date(hoy); lun.setDate(hoy.getDate()-((hoy.getDay()+6)%7));
   return {desde:lun.toLocaleDateString("sv-SE"), hasta:hoy.toLocaleDateString("sv-SE")}; }
@@ -2939,14 +2940,13 @@ function ofsPintar(){
       <td class="izq"><b>${esc(o.articulo||"—")}</b></td><td>${esc(o.of)}</td>
       <td>${esc(ofsPrendasTxt(o))}</td><td><b>${Math.round(o.cant_prog||0)}</b></td>
       <td>${o.paquetes}${ofsPaqDesglose(o)}</td><td class="izq">${areasTxt(o)}</td>
-      <td>${esc(o.fecha_carga||"—")}</td>
-      <td class="nowrap">${ofsEsLote(o)?"":`<button class="btn-mini" onclick="ofsEditar(${i})">Editar</button> <button class="btn-mini rojo" onclick="ofsBorrar(${i})">Borrar</button>`}</td></tr>
-      <tr class="avof-det" id="ofsDet${i}" hidden><td></td><td colspan="8"></td></tr>`; }).join("")
-    : `<tr><td colspan="9"><div class="vacio-msg">Sin OF registradas todavía. Se registran subiendo su HN en Dar de alta una OF.</div></td></tr>`;
+      <td>${esc(o.fecha_carga||"—")}</td></tr>
+      <tr class="avof-det" id="ofsDet${i}" hidden><td></td><td colspan="7"></td></tr>`; }).join("")
+    : `<tr><td colspan="8"><div class="vacio-msg">Sin OF registradas todavía. Se registran subiendo su HN en Dar de alta una OF.</div></td></tr>`;
   $("ofsTabla").innerHTML=ordThead("ofsTabla",[
     {t:""},{k:"articulo",t:"Artículo",cls:"izq"},{k:"of",t:"OF"},{k:"prenda",t:"Prenda"},
     {k:"cant_prog",t:"Cant. prog."},{k:"paquetes",t:"Paquetes"},{t:"Áreas",cls:"izq"},
-    {k:"fecha_carga",t:"Cargada"},{t:""}
+    {k:"fecha_carga",t:"Cargada"}
   ], ofsPintar)+`<tbody>${body}</tbody>`;
 }
 /* Alta desde la HN: mismo parseo que Generar tickets, pero SIN escribir en el
@@ -3250,47 +3250,6 @@ async function altaOfManual(){
     cargarOfs();
   }catch(e){ mostrarError(e.message); }
 }
-/* Editar / borrar una OF registrada (parche 195). La base rechaza si la OF ya
-   tiene tickets, reclamos o lotes, o si el número nuevo ya existe. */
-function ofsEditar(i){
-  const o=OFS_VISTA[i]; if(!o) return;
-  abrirModal(`<h2>Editar OF ${esc(o.of)}</h2>
-    <div class="modal-campo"><label>OF</label><input id="ofeOf" value="${esc(o.of)}" maxlength="20"></div>
-    <div class="modal-campo"><label>Artículo</label><input id="ofeArt" value="${esc(o.articulo||"")}" maxlength="60"></div>
-    <div class="modal-campo"><label>Prenda</label><input id="ofePre" value="${esc(o.prenda||"")}" maxlength="40"></div>
-    <div class="modal-msg" id="ofeMsg"></div>
-    <div class="modal-acciones">
-      <button class="btn-principal btn-modal-guardar" id="ofeOk" onclick="ofsEditarGuardar('${esc(o.of)}')">GUARDAR</button>
-      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
-    </div>`);
-}
-async function ofsEditarGuardar(of){
-  const b=$("ofeOk"); if(b) b.disabled=true;
-  try{
-    const r=await rpc("fn_of_editar",{p_dni:ING.dni,p_token:ING.token,p_of:of,
-      p_of_nueva:$("ofeOf").value,p_articulo:$("ofeArt").value,p_prenda:$("ofePre").value});
-    if(!r||r.ok===false){ $("ofeMsg").textContent=(r&&r.error)||"No se pudo guardar"; if(b) b.disabled=false; return; }
-    cerrarModal(); mostrarOk(r.sin_cambios?"Sin cambios":"OF actualizada"); cargarOfs();
-  }catch(e){ $("ofeMsg").textContent=e.message; if(b) b.disabled=false; }
-}
-function ofsBorrar(i){
-  const o=OFS_VISTA[i]; if(!o) return;
-  abrirModal(`<h2>Borrar OF ${esc(o.of)}</h2>
-    <div class="sub">${esc(o.articulo||"—")} · ${esc(ofsPrendasTxt(o))} · ${o.paquetes} paquetes</div>
-    <div class="modal-msg" id="ofbMsg"></div>
-    <div class="modal-acciones">
-      <button class="btn-principal btn-modal-guardar" id="ofbOk" onclick="ofsBorrarOk('${esc(o.of)}')">BORRAR</button>
-      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
-    </div>`);
-}
-async function ofsBorrarOk(of){
-  const b=$("ofbOk"); if(b) b.disabled=true;
-  try{
-    const r=await rpc("fn_of_eliminar",{p_dni:ING.dni,p_token:ING.token,p_of:of});
-    if(!r||r.ok===false){ $("ofbMsg").textContent=(r&&r.error)||"No se pudo borrar"; if(b) b.disabled=false; return; }
-    cerrarModal(); mostrarOk("OF borrada"); cargarOfs();
-  }catch(e){ $("ofbMsg").textContent=e.message; if(b) b.disabled=false; }
-}
 function ofsToggle(i){
   const el=$("ofsDet"+i); if(!el) return;
   if(!el.dataset.listo){
@@ -3316,6 +3275,313 @@ function ofsToggle(i){
   }
   el.hidden=!el.hidden;
 }
+
+/* --- Resumen de OF: entrada y salida por MÓDULO (parche 61, ampliado en 68) ---
+   Acumulativo, sin rango: con fechas, una OF terminada a caballo entre dos
+   meses salía EN PROCESO porque las unidades anteriores quedaban fuera.
+   Ya no hay selector última/penúltima: la referencia del módulo es SIEMPRE su
+   operación final, y el detalle trae TODAS las operaciones del balance con su
+   porcentaje. La RPC conserva su tercer argumento `p_nivel` (con valor por
+   defecto) solo para los despliegues que aún no tengan esta versión; desde aquí
+   no se manda. El corte real viene en la respuesta: aquí no se consulta la
+   hoja "OF".
+   El periodo elige QUÉ OF se listan, no recorta el cálculo, y una OF sale tanto
+   en el mes en que empezó como en aquel en que terminó (la regla la resuelve la
+   RPC). Sin él la respuesta crece sin techo: son ~100 OF nuevas al mes y cada
+   una pesa ~12 kB con su detalle. */
+/* Por defecto, este mes y los dos anteriores: suficiente para ver lo que está
+   en planta sin arrastrar toda la historia. `new Date(y, m-3, 1)` resuelve solo
+   el salto de año. */
+function avofMesesDefecto(){
+  const [y,m]=hoyISO().split("-").map(Number);
+  const p=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  return {desde:p(new Date(y,m-3,1)), hasta:p(new Date(y,m-1,1))};
+}
+/* Los <input type="month"> dan "YYYY-MM"; la RPC espera fechas. El "hasta" se
+   estira al último día de ese mes. En blanco = sin límite por ese lado. */
+function avofRango(){
+  const d=$("avofDesde")?$("avofDesde").value:"", h=$("avofHasta")?$("avofHasta").value:"";
+  let hasta=null;
+  if(h){ const [y,m]=h.split("-").map(Number);
+         hasta=`${h}-${String(new Date(y,m,0).getDate()).padStart(2,"0")}`; }
+  return {desde:d?d+"-01":null, hasta};
+}
+async function cargarAvof(){
+  if($("avofDesde") && !$("avofDesde").value && !$("avofHasta").value){
+    const d=avofMesesDefecto(); $("avofDesde").value=d.desde; $("avofHasta").value=d.hasta;
+  }
+  const rg=avofRango();
+  pintarCargando($("avofTabla"),"Cargando resumen…"); $("avofResumen").textContent="";
+  try{
+    const r=await rpc("fn_of_trazabilidad",
+      {p_dni:ING.dni,p_token:ING.token,p_desde:rg.desde,p_hasta:rg.hasta});
+    if(!r.ok){ mostrarError(r.error||"Error"); $("avofTabla").innerHTML=""; return; }
+    AVOF={items:r.items||[], _rows:[]};
+    avofPintar();
+  }catch(e){ $("avofTabla").innerHTML=""; mostrarError(e.message); }
+}
+/* Meta por OF. Base primero (parche 26) y hoja "OF" como respaldo para las OF
+   cargadas antes de que existiera `ofs`; la base manda si están en las dos. */
+/* Cantidad programada por OF. La BD (`ofs.cant_prog`, parche 26) MANDA; la hoja
+   Google `OF` queda como respaldo para las OF anteriores a ese parche. Con
+   `p_areas` se limita el respaldo a un área; sin él, todas. */
+async function metasOF(areas){
+  const m={};
+  for(const a of (areas || Object.keys(AREAS))){
+    if(!AREAS[a] || !AREAS[a].hojaOF) continue;
+    try{ Object.assign(m, await cargarMetaOF(a)); }catch(e){}
+  }
+  try{
+    const db=await rpc("fn_of_metas",{p_dni:ING.dni,p_token:ING.token});
+    if(db && db.ok!==false) Object.assign(m, db);
+  }catch(e){}
+  return m;
+}
+/* Estado del módulo/OF/operación → clase del pill. "EN PROCESO" son dos
+   palabras, así que no se puede usar el estado como clase directamente. */
+function avofPill(estado){
+  const ok = estado==="TERMINADA" || estado==="TERMINADO" || estado==="COMPLETADO";
+  return `<span class="pill ${ok?"ACTIVO":"PROCESO"}">${esc(estado||"—")}</span>`;
+}
+/* % de avance = producida / corte real. Barra + número, para leer de un golpe
+   qué operación del balance va retrasada. */
+function avofPct(p){
+  if(p==null) return `<span class="sub">—</span>`;
+  const v=Math.min(100,Math.max(0,+p||0)), cls=v>=100?"alto":(v<50?"bajo":"");
+  return `<div class="avof-pct"><div class="avof-pct-fill ${cls}" style="width:${v}%"></div>
+    <span class="avof-pct-lbl">${(+p).toFixed(1)}%</span></div>`;
+}
+/* Se listan TODAS las OF (terminadas y en proceso) en una sola tabla: el único
+   filtro que queda es el buscador. */
+function avofPintar(){
+  const q=normKey($("avofBuscar")?$("avofBuscar").value:"");
+  let rows=(AVOF.items||[]).filter(r=>!q||normKey((r.articulo||"")+" "+(r.of||"")).includes(q));
+  const nFin=rows.filter(r=>r.estado==="TERMINADA").length;
+  if(avofSort.col){ const c=avofSort.col; rows=rows.slice().sort((a,b)=>cmpVal(a[c],b[c])*avofSort.dir); }
+  AVOF._rows=rows;
+  const rg=avofRango();
+  const per = rg.desde||rg.hasta
+    ? ` · ${rg.desde?rg.desde.slice(0,7):"inicio"} a ${rg.hasta?rg.hasta.slice(0,7):"hoy"}`
+    : " · toda la historia";
+  $("avofResumen").textContent=`${rows.length} OF · ${nFin} terminada(s) · `
+    + `${rows.length-nFin} en proceso${per} · se descarga lo listado`;
+  const fl=k=>avofSort.col===k?(avofSort.dir===1?" ▲":" ▼"):"";
+  const C=[["articulo","Artículo"],["of","OF"],["cant_prog","Corte real"],
+    ["entrada","Entrada"],["salida","Salida"],["estado","Estado"]];
+  const thead=`<thead><tr><th></th>${C.map(c=>
+    `<th class="ord${c[0]==="articulo"?" izq":""}" onclick="ordenarAvof('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}</tr></thead>`;
+  const body=rows.length? rows.map((r,i)=>`<tr>
+      <td><button class="btn-mini gris" onclick="avofToggle(${i})">▾</button></td>
+      <td class="izq"><b>${esc(r.articulo||"—")}</b></td><td>${esc(r.of)}</td>
+      <td>${r.cant_prog!=null?r.cant_prog:"—"}</td>
+      <td>${esc(r.entrada||"—")}</td><td>${esc(r.salida||"—")}</td>
+      <td>${avofPill(r.estado)}</td></tr>
+      <tr class="avof-det" id="avofDet${i}" hidden><td></td><td colspan="6"></td></tr>`).join("")
+    : `<tr><td colspan="7"><div class="vacio-msg">Sin OF con este filtro</div></td></tr>`;
+  $("avofTabla").innerHTML=thead+"<tbody>"+body+"</tbody>";
+}
+/* El detalle se arma al abrirlo: la vista es acumulativa y trae muchas OF. */
+function avofToggle(i){
+  const el=$("avofDet"+i); if(!el) return;
+  if(!el.dataset.listo && AVOF._rows[i]){
+    el.querySelector("td[colspan]").innerHTML=avofDetalle(AVOF._rows[i]); el.dataset.listo="1";
+  }
+  el.hidden=!el.hidden;
+}
+/* Dos cuadros: costura arriba y ACABADO debajo, y este último solo si la OF
+   pasó por ahí. La RPC marca cada módulo con `es_acabado`. */
+function avofDetalle(r){
+  const mods=r.modulos||[];
+  const aca=mods.filter(m=>m.es_acabado);
+  return `<div class="avof-det-wrap">`
+    + avofCuadro("Costura — por módulo", mods.filter(m=>!m.es_acabado))
+    + (aca.length ? avofCuadro("Acabado — por módulo", aca) : "")
+    + `</div>`;
+}
+/* Una fila por OPERACIÓN del balance; área y módulo se agrupan con rowspan
+   para no repetirlos en cada renglón. La última operación va marcada: es la
+   que decide la salida y el estado del módulo. */
+function avofCuadro(titulo, mods){
+  const sinRuta=`<span class="avof-aviso" title="Este módulo no tiene ruta en BASE: se usa el mayor N°OP reclamado.">*</span>`;
+  const body=mods.length? mods.map(m=>{
+    const ops=(m.operaciones&&m.operaciones.length)? m.operaciones
+      : [{nop:m.nop, operacion:m.operacion, producida:m.producida,
+          cant_prog:m.cant_prog, pct:m.pct, estado:m.estado, en_base:m.ruta_base}];
+    const n=ops.length;
+    const cab=`<td rowspan="${n}">${esc(m.area)}</td>
+      <td rowspan="${n}" class="izq"><b>${esc(m.modulo)}</b>${m.ruta_base===false?sinRuta:""}
+        <div class="sub">${esc(m.entrada||"—")} → ${esc(m.salida||"—")}</div>
+        <div>${avofPill(m.estado)}</div></td>`;
+    return ops.map((o,j)=>`<tr${o.nop===m.nop?' class="avof-op-fin"':""}>
+      ${j===0?cab:""}
+      <td class="izq">${o.nop!=null?`<span class="avof-nop">${o.nop}</span> `:""}${esc(o.operacion||"—")}${o.en_base===false?sinRuta:""}</td>
+      <td><b>${o.producida}</b> <span class="sub">/ ${o.cant_prog}</span></td>
+      <td class="avof-pct-td">${avofPct(o.pct)}</td>
+      <td>${avofPill(o.estado)}</td></tr>`).join("");
+  }).join("")
+    : `<tr><td colspan="6"><div class="vacio-msg">Sin módulos</div></td></tr>`;
+  return `<div class="tk-ops-title">${titulo}</div>
+    <table class="tabla avof-ops"><thead><tr><th>Área</th><th class="izq">Módulo</th>
+      <th class="izq">Operación</th><th>Producida</th><th>%</th><th>Estado</th></tr></thead>
+      <tbody>${body}</tbody></table>`;
+}
+/* Código de OF del ERP: 4 + la OF rellenada con ceros hasta 10 dígitos
+   (10136 → 4000010136). Lo manda la RPC; se recalcula aquí por si la respuesta
+   viene de una versión anterior. Solo se usa en el Excel: en pantalla la OF se
+   sigue leyendo corta. */
+function avofOfCod(r){
+  if(r.of_cod) return r.of_cod;
+  const of=String(r.of||"");
+  return /^\d+$/.test(of) ? "4"+of.padStart(9,"0") : of;
+}
+/* Tres hojas con el mismo criterio de columnas: la OF completa, el detalle
+   operación por operación, y el cierre de cada módulo. */
+function descargarAvof(){
+  const rows=AVOF._rows||[]; if(!rows.length){ mostrarError("No hay datos para descargar"); return; }
+  const gen=[["OF","Artículo","Cantidad X OF","Estado","Entrada","Salida"]];
+  rows.forEach(r=>gen.push([avofOfCod(r),r.articulo,r.cant_prog,r.estado,r.entrada||"",r.salida||""]));
+
+  const mod=[["OF","Artículo","Área","Módulo","N°OP","Operación","Cantidad X OF",
+              "Producida","% avance","Estado"]];
+  const fin=[["OF","Artículo","Área","Módulo","N°OP","Operación final","Cantidad X OF",
+              "Producida","% avance","Estado","Entrada","Salida"]];
+  rows.forEach(r=>{
+    const cod=avofOfCod(r);
+    (r.modulos||[]).forEach(m=>{
+      ((m.operaciones&&m.operaciones.length)?m.operaciones:[{nop:m.nop,operacion:m.operacion,
+        producida:m.producida,cant_prog:m.cant_prog,pct:m.pct,estado:m.estado}])
+        .forEach(o=>mod.push([cod,r.articulo,m.area,m.modulo,o.nop,o.operacion,
+          o.cant_prog,o.producida,o.pct,o.estado]));
+      fin.push([cod,r.articulo,m.area,m.modulo,m.nop,m.operacion,m.cant_prog,m.producida,
+        m.pct,m.estado,m.entrada||"",m.salida||""]);
+    });
+  });
+
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(gen), "GENERAL");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mod), "MODULO");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(fin), "OPERACION FINAL");
+  XLSX.writeFile(wb,"RESUMEN_OF.xlsx");
+}
+
+
+/* ============ EXPORTAR "OPERACION FINAL" A CARPETAS (parche 79) ============
+   Se elige la carpeta RAÍZ; dentro deben existir "Acabado" y "Costura". La hoja
+   OPERACION FINAL se parte por área (ACABADO → Acabado; lo que tenga COSTURA →
+   Costura) y se FUSIONA con el archivo que ya esté ahí: la fila cuya
+   OF+Área+Módulo vuelve a salir se refresca, la que no vuelve a salir se
+   respeta, y lo nuevo se agrega al final.
+   Necesita la File System Access API (Chrome/Edge). En los demás navegadores
+   cae a dos descargas normales, avisando que ahí no hay fusión. */
+const AVOF_FIN_CAB=["OF","Artículo","Área","Módulo","N°OP","Operación final","Cantidad X OF",
+                    "Producida","% avance","Estado","Entrada","Salida"];
+const AVOF_ARCHIVO="OPERACION_FINAL.xlsx";
+/* Clave de identidad de la fila: OF + Área + Módulo. */
+function avofClave(f){ return [f[0],f[2],f[3]].map(v=>normKey(v==null?"":v)).join("|"); }
+function avofDestino(area){
+  const a=normKey(area);
+  if(a==="ACABADO") return "Acabado";
+  return a.includes("COSTURA") ? "Costura" : null;
+}
+/* Filas de OPERACION FINAL (sin cabecera) a partir de lo que está en pantalla. */
+function avofFilasFinales(){
+  const out=[];
+  (AVOF._rows||[]).forEach(r=>{
+    const cod=avofOfCod(r);
+    (r.modulos||[]).forEach(m=>out.push([cod,r.articulo,m.area,m.modulo,m.nop,m.operacion,
+      m.cant_prog,m.producida,m.pct,m.estado,m.entrada||"",m.salida||""]));
+  });
+  return out;
+}
+function avofLibro(filas){
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([AVOF_FIN_CAB,...filas]), "OPERACION FINAL");
+  return wb;
+}
+/* Lee el archivo que ya está en la carpeta; si no hay, devuelve []. */
+async function avofLeerExistente(dir){
+  let fh; try{ fh=await dir.getFileHandle(AVOF_ARCHIVO); }catch(e){ return []; }
+  try{
+    const buf=await (await fh.getFile()).arrayBuffer();
+    const wb=XLSX.read(buf,{type:"array"});
+    const hoja=wb.Sheets["OPERACION FINAL"] || wb.Sheets[wb.SheetNames[0]];
+    if(!hoja) return [];
+    const filas=XLSX.utils.sheet_to_json(hoja,{header:1,blankrows:false});
+    return filas.slice(1).filter(f=>f && f.length && String(f[0]||"").trim()!=="");
+  }catch(e){ throw new Error("No se pudo leer el "+AVOF_ARCHIVO+" que ya estaba: "+e.message); }
+}
+/* Fusión: el orden del archivo viejo manda; lo nuevo que no existía va al final. */
+function avofFusionar(viejas, nuevas){
+  const idx=new Map(); viejas.forEach((f,i)=>idx.set(avofClave(f), i));
+  const out=viejas.map(f=>f.slice());
+  let act=0, add=0;
+  nuevas.forEach(f=>{
+    const k=avofClave(f), i=idx.get(k);
+    if(i===undefined){ idx.set(k, out.length); out.push(f); add++; }
+    else { out[i]=f; act++; }
+  });
+  return {filas:out, actualizadas:act, agregadas:add};
+}
+async function avofSubcarpeta(root, nombre){
+  const buscado=normKey(nombre);
+  for await (const [n,h] of root.entries()){
+    if(h.kind==="directory" && normKey(n)===buscado) return h;
+  }
+  return null;
+}
+async function avofEscribir(dir, wb){
+  const fh=await dir.getFileHandle(AVOF_ARCHIVO,{create:true});
+  const w=await fh.createWritable();
+  await w.write(new Blob([XLSX.write(wb,{bookType:"xlsx",type:"array"})],
+    {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  await w.close();
+}
+async function exportarAvofCarpetas(){
+  const filas=avofFilasFinales();
+  if(!filas.length){ mostrarError("No hay datos para exportar"); return; }
+
+  const grupos={Acabado:[], Costura:[]}, sinDestino=[];
+  filas.forEach(f=>{
+    const d=avofDestino(f[2]);
+    if(d) grupos[d].push(f); else sinDestino.push(f[2]);
+  });
+  if(sinDestino.length){
+    const areas=[...new Set(sinDestino.map(a=>norm(a)||"(sin área)"))];
+    mostrarError(`${sinDestino.length} fila(s) sin carpeta (no son ACABADO ni COSTURA): ${areas.join(", ")}`);
+  }
+
+  if(!window.showDirectoryPicker){
+    // Sin File System Access API no hay forma de leer la carpeta: dos descargas sueltas.
+    Object.keys(grupos).forEach(g=>{
+      if(grupos[g].length) XLSX.writeFile(avofLibro(grupos[g]), g.toUpperCase()+"_"+AVOF_ARCHIVO);
+    });
+    mostrarError("Este navegador no deja elegir carpeta (usa Chrome o Edge). "
+      + "Se descargaron los dos archivos sueltos, SIN fusionar con los que ya tengas.");
+    return;
+  }
+
+  let root;
+  try{ root=await window.showDirectoryPicker({mode:"readwrite"}); }
+  catch(e){ return; }   // el usuario canceló
+
+  try{
+    const dirs={};
+    for(const g of ["Acabado","Costura"]){
+      dirs[g]=await avofSubcarpeta(root,g);
+      if(!dirs[g]){ mostrarError(`La carpeta elegida no tiene una subcarpeta "${g}".`); return; }
+    }
+    const resumen=[];
+    for(const g of ["Acabado","Costura"]){
+      if(!grupos[g].length){ resumen.push(`${g}: sin filas`); continue; }
+      const viejas=await avofLeerExistente(dirs[g]);
+      const f=avofFusionar(viejas, grupos[g]);
+      await avofEscribir(dirs[g], avofLibro(f.filas));
+      resumen.push(`${g}: ${f.filas.length} fila(s) (${f.actualizadas} actualizada(s), ${f.agregadas} nueva(s))`);
+    }
+    mostrarOk(resumen.join(" · "));
+  }catch(e){ mostrarError(e.message); }
+}
+
 
 /* ================= AUDITORÍA DE EFICIENCIA (parche 80) =================
    Solo administrador maestro. Días-persona por encima del umbral, con el
@@ -3400,7 +3666,8 @@ function audFilas(){
     return normKey(x.nombre+" "+x.dni+" "+x.area+" "+x.fecha).includes(q);
   });
 }
-/* 95% o más ya es anormal. La meta de simulación (90 por defecto) es libre: cualquier valor de 0 a 100. */
+/* 95% o más ya es anormal: nadie debería llegar a 100. La simulación apunta a
+   una META por debajo de eso (90 por defecto, nunca más de 94). */
 const AUD_ANORMAL=95;
 let AUD_META=90;
 function audClaseEf(v){ return v>=AUD_ANORMAL ? "alarma" : (v>AUD_META ? "aviso" : ""); }
@@ -3473,6 +3740,8 @@ let AUDD=null;          // detalle abierto
 let AUDD_SIM={};        // id de incidencia -> {minutos, quitada}
 let AUDD_OPS=[];        // el día agrupado por operación (fn_ef_auditoria_ops)
 let AUDD_STD={};        // clave de operación -> tiempo simulado (min/prenda)
+let AUDD_IA=null;       // último análisis de Gemini del día abierto
+let AUDD_NOTA="";       // nota del analista para Gemini
 function audIniciales(n){
   const p=String(n||"").replace(/,/g," ").trim().split(/\s+/).filter(Boolean);
   return ((p[0]||"")[0]||"" ).toUpperCase() + ((p[1]||"")[0]||"").toUpperCase();
@@ -3480,7 +3749,7 @@ function audIniciales(n){
 function audCerrar(){
   $("audDrawer").classList.remove("visible");
   $("audBackdrop").classList.remove("visible");
-  AUDD=null; AUDD_SIM={}; AUDD_OPS=[]; AUDD_STD={};
+  AUDD=null; AUDD_SIM={}; AUDD_OPS=[]; AUDD_STD={}; AUDD_IA=null; AUDD_NOTA="";
 }
 /* Operaciones del día sumadas entre OF: misma operación y mismo STD. */
 function audAgruparOps(d){
@@ -3498,7 +3767,7 @@ function audAgruparOps(d){
   return Object.values(g).sort((a,b)=>b.minutos-a.minutos);
 }
 function audIniciarDia(r, ops){
-  AUDD=r; AUDD_SIM={}; AUDD_STD={};
+  AUDD=r; AUDD_SIM={}; AUDD_STD={}; AUDD_IA=null;
   AUDD_OPS=audAgruparOps(ops&&ops.ok?ops:{});
   (r.incidencias||[]).forEach(x=>{ AUDD_SIM[x.id]={minutos:Number(x.minutos), quitada:false}; });
   AUDD_OPS.forEach(o=>{ AUDD_STD[o.k]=o.std; });
@@ -3564,8 +3833,8 @@ function audUsarSugeridos(){
 }
 function audSetMeta(v){
   const n=Number(v);
-  if(!(n>=0 && n<=100)) return;
-  AUD_META=Math.round(n);
+  if(!(n>=50)) return;
+  AUD_META=Math.min(94, Math.round(n));
   audPintarDrawer();
 }
 function audPintarDrawer(){
@@ -3630,9 +3899,11 @@ function audPintarDrawer(){
       <div class="aud-kpi-lbl">Simulación</div>
       <div class="aud-sim-res" id="audSimRes">${audSimTxt()}</div>
       ${Number(d.disp)<575?`<div class="aud-sim-res">Sus incidencias le quitan ${575-Number(d.disp)} min de turno: esa parte del exceso se corrige en la incidencia, no bajando tiempos.</div>`:""}
+      <div class="aud-sim-res">Solo simula: los tickets no se tocan. Cambia el tiempo de una operación
+        o corrige una incidencia y aquí se recalcula.</div>
       <div class="aud-sim-fila" style="margin-top:8px;">
-        <label class="aud-campo"><div class="k">Meta %</div>
-          <input type="number" min="0" max="100" step="1" value="${AUD_META}" onchange="audSetMeta(this.value)"></label>
+        <label class="aud-campo"><div class="k">Meta % (menos de ${AUD_ANORMAL})</div>
+          <input type="number" min="50" max="94" step="1" value="${AUD_META}" onchange="audSetMeta(this.value)"></label>
         ${AUDD_OPS.length?`<button class="btn-mini" onclick="audUsarSugeridos()">Usar tiempos sugeridos</button>`:""}
         <button class="btn-mini gris" onclick="audSimReset()">Volver a lo real</button>
       </div>
@@ -3657,6 +3928,7 @@ function audPintarDrawer(){
     ${AUDD_OPS.length ? AUDD_OPS.map(audFilaOp).join("")
       : `<div class="vacio-msg">Sin tickets</div>`}
 
+    ${audIAHTML()}
 
     <details class="aud-det">
       <summary>Ver los ${tks.length} ticket(s) uno por uno</summary>
@@ -3712,6 +3984,65 @@ function audSimStd(k, v, repintar){
   const o=AUDD_OPS.find(x=>x.k===k);
   AUDD_STD[k]=Math.min(o?o.std:Infinity, Math.max(0, Number(v)||0));
   if(repintar) audPintarDrawer(); else audPintarDrawerSoloSim();
+}
+/* ---- Tiempo idóneo con Gemini (Edge Function ef-gemini, parche 88) ----
+   La función toma los datos de la base con esta sesión; aquí solo se manda el
+   día a analizar y, si se quiere, una nota del analista. */
+const FN_EF_GEMINI="ef-gemini";
+function audIAHTML(){
+  if(!AUDD_OPS.length) return "";
+  const a=AUDD_IA;
+  let cuerpo="";
+  if(a==="cargando") cuerpo=cargandoHTML("Gemini está analizando el día…");
+  else if(a && a.error) cuerpo=`<div class="aud-sim-res" style="color:var(--alerta);">${esc(a.error)}</div>`;
+  else if(a){
+    const nom=k=>{ const o=AUDD_OPS.find(x=>x.opk===k); return o?o.op:k; };
+    cuerpo=`<div class="aud-ia-res">
+      <div class="aud-item-tit">${esc(a.resumen||"")}</div>
+      ${(a.porques||[]).length?`<ul class="aud-ia-lista">${a.porques.map(p=>`<li>${esc(p)}</li>`).join("")}</ul>`:""}
+      ${(a.operaciones||[]).map(o=>`<div class="aud-sim-fila aud-ia-op">
+        <div style="flex:1;"><b>${esc(nom(o.opk))}</b>: ${(+o.tiempo_idoneo).toFixed(3)} min/prenda
+          <span class="aud-chip">${esc(o.confianza||"")}</span>
+          <div class="aud-item-sub">${esc(o.razon||"")}</div></div>
+        <button class="btn-mini gris" onclick="audUsarIA('${esc(o.opk)}', ${Number(o.tiempo_idoneo)})">Simular</button>
+      </div>`).join("")}
+      ${a.eficiencia_con_idoneo!=null?`<div class="aud-sim-res">Con esos tiempos el día quedaría cerca de <b>${(+a.eficiencia_con_idoneo).toFixed(1)}%</b>.</div>`:""}
+      ${a.recomendacion?`<div class="aud-sim-res"><b style="font-size:13px;">Recomendación:</b> ${esc(a.recomendacion)}</div>`:""}
+      <div class="aud-item-sub" style="margin-top:6px;">Análisis de Gemini${a.modelo?` (${esc(a.modelo)})`:""}: es una sugerencia, revísala antes de cambiar la BASE.</div>
+    </div>`;
+  }
+  return `<div class="aud-tit">Tiempo idóneo con Gemini</div>
+    <div class="aud-sim">
+      <label class="aud-campo"><div class="k">Nota para el análisis (opcional)</div>
+        <input type="text" id="audIANota" maxlength="400" placeholder="Ej.: ese día cambió de máquina"
+          value="${esc(AUDD_NOTA)}" oninput="AUDD_NOTA=this.value">
+      </label>
+      <div class="aud-sim-fila" style="margin-top:8px;">
+        <button class="btn-mini" onclick="audPedirIA()" ${a==="cargando"?"disabled":""}>Analizar con Gemini</button>
+        ${a && a.operaciones ? `<button class="btn-mini gris" onclick="audUsarIATodo()">Simular todo lo sugerido</button>`:""}
+      </div>
+      ${cuerpo}
+    </div>`;
+}
+async function audPedirIA(){
+  if(!AUDD) return;
+  const nota=AUDD_NOTA;
+  const dni=AUDD.dni, fecha=AUDD.fecha;
+  AUDD_IA="cargando"; audPintarDrawer();
+  try{
+    const r=await edgeFn(FN_EF_GEMINI,{p_dni:ING.dni,p_token:ING.token,p_dni_op:dni,p_fecha:fecha,nota,meta:AUD_META});
+    if(!AUDD || AUDD.dni!==dni || AUDD.fecha!==fecha) return;   // cerró o cambió de fila
+    AUDD_IA = r.ok ? Object.assign({}, r.analisis, {modelo:r.modelo}) : {error:r.error||"No se pudo analizar"};
+  }catch(e){ AUDD_IA={error:e.message}; }
+  audPintarDrawer();
+}
+function audUsarIA(opk, t, sinPintar){
+  AUDD_OPS.filter(o=>o.opk===opk).forEach(o=>{ AUDD_STD[o.k]=Math.min(o.std, Math.max(0, Number(t)||0)); });
+  if(!sinPintar) audPintarDrawer();
+}
+function audUsarIATodo(){
+  ((AUDD_IA&&AUDD_IA.operaciones)||[]).forEach(o=>audUsarIA(o.opk, o.tiempo_idoneo, true));
+  audPintarDrawer();
 }
 function audSimReset(){
   AUDD_OPS.forEach(o=>{ AUDD_STD[o.k]=o.std; });
@@ -3934,16 +4265,10 @@ function tkIrPagina(d){ tkPag=Math.max(1, tkPag+d); pintarTk(); }
 function renderTkOpsPanel(activo){
   const panel=$("tkOpsPanel"); if(!panel) return;
   if(!activo){ panel.style.display="none"; panel.innerHTML=""; return; }
-  // Una misma operación con varios N°OP en la misma OF (p. ej. dos «CERRAR HUEQUITO») no se suma: sale por N°OP.
-  const nopsDe={};
-  TK_VISTA.forEach(t=>{ if(t.estado!=='ACTIVO') return;
-    const k=(norm(t.of)||"")+"|"+(norm(t.op)||""); (nopsDe[k]=nopsDe[k]||new Set()).add(String(t.nop==null?"":t.nop)); });
-  const etq=t=>{ const op=norm(t.op)||"(sin operación)", s=nopsDe[(norm(t.of)||"")+"|"+(norm(t.op)||"")];
-    return s&&s.size>1&&t.nop!=null&&t.nop!==""?`${op} · N°${t.nop}`:op; };
   const byOf={};
   TK_VISTA.forEach(t=>{
     if(t.estado!=='ACTIVO') return;
-    const of=norm(t.of)||"(sin OF)"; const op=etq(t);
+    const of=norm(t.of)||"(sin OF)"; const op=norm(t.op)||"(sin operación)";
     (byOf[of]=byOf[of]||{}); byOf[of][op]=(byOf[of][op]||0)+(Number(t.cant)||0);
   });
   const ofs=Object.keys(byOf).sort((a,b)=>a.localeCompare(b,"es"));
@@ -3952,7 +4277,7 @@ function renderTkOpsPanel(activo){
   const byOpTot={};
   TK_VISTA.forEach(t=>{
     if(t.estado!=='ACTIVO') return;
-    const op=etq(t);
+    const op=norm(t.op)||"(sin operación)";
     byOpTot[op]=(byOpTot[op]||0)+(Number(t.cant)||0);
   });
   const ops2=Object.keys(byOpTot).sort((a,b)=>a.localeCompare(b,"es"));
@@ -4589,126 +4914,32 @@ async function cargarIncTabla(){
 function incApoyoResumen(p){ const n={}; Object.values(p.dias||{}).forEach(d=>{ if(d.apoyo) n[d.apoyo]=(n[d.apoyo]||0)+1; });
   return Object.keys(n).map(k=>k+" "+n[k]).join(" · "); }
 function incApoyoAb(a){ const m=String(a).match(/\(([^)]+)\)/); return m?m[1]:String(a).slice(0,3); }
-/* Soles peruanos: S/ 1,234.50 (siempre dos decimales). */
-const fmtSoles = v => "S/ " + (Number(v)||0).toLocaleString("es-PE",{minimumFractionDigits:2,maximumFractionDigits:2});
-/* Ver las dos tablas es de la pestaña; editarlas es solo del Admin (la base lo exige también).
-   Cada tabla se edita por separado: agregar, cambiar y quitar porcentajes, y se guarda completa. */
-const INC_CATS=["A","B","C","D"];
-let INC_ED={ind:null, mod:null};
-function incTabAcc(k){
-  const z=$(k==="ind"?"incTabIndAcc":"incTabModAcc"); if(!z) return;
-  if(!ES_ADMIN()){ z.innerHTML=""; return; }
-  z.innerHTML=INC_ED[k]
-    ? `<button class="btn-mini" onclick="incTabFila('${k}')">+ Agregar %</button> <button class="btn-mini verde" onclick="incTabGuardar('${k}')">Guardar</button> <button class="btn-mini gris" onclick="incTabEditar('${k}',false)">Cancelar</button>`
-    : `<button class="btn-mini" onclick="incTabEditar('${k}',true)">Editar</button>`;
-}
-function incTabEditar(k,v){
-  if(!v){ INC_ED[k]=null; $("incTabMsg").textContent=""; incPintarTabla(); return; }
-  if(k==="ind"){
-    const pcts=[...new Set(INC_TABLA.map(x=>x.pct))].sort((a,b)=>a-b);
-    INC_ED.ind=pcts.map(p=>({pct:String(p), c:Object.fromEntries(INC_CATS.map(c=>{
-      const f=INC_TABLA.find(x=>x.categoria===c&&x.pct===p); return [c, f?soles(f.soles):""]; }))}));
-  }else{
-    INC_ED.mod=[...MOD_TRAMOS].sort((a,b)=>a.pct-b.pct).map(x=>({pct:String(x.pct), c:{M:soles(x.soles)}}));
-  }
-  incPintarTabla();
-}
-function incTabFila(k){
-  incTabLeer(k);
-  const f=INC_ED[k]; if(!f) return;
-  const ult=f.length?Number(f[f.length-1].pct)+1:80;
-  f.push({pct:String(isFinite(ult)?ult:""), c:Object.fromEntries((k==="ind"?INC_CATS:["M"]).map(c=>[c,""]))});
-  incPintarTabla();
-  const z=$(k==="ind"?"tablaIncCat":"tablaModTramos"), l=z&&z.querySelector("tr:last-child .inc-pct"); if(l) l.focus();
-}
-function incTabQuitar(k,i){ INC_ED[k].splice(i,1); incPintarTabla(); }
-/* Lo escrito en las celdas vuelve al estado, para no perderlo al agregar o quitar filas. */
-function incTabLeer(k){
-  const z=$(k==="ind"?"tablaIncCat":"tablaModTramos"); if(!z||!INC_ED[k]) return;
-  z.querySelectorAll("tbody tr").forEach((tr,i)=>{
-    const f=INC_ED[k][i]; if(!f) return;
-    const p=tr.querySelector(".inc-pct"); if(p) f.pct=p.value;
-    tr.querySelectorAll(".inc-ed").forEach(inp=>{ f.c[inp.dataset.cat]=inp.value; });
-  });
-}
-function incTabValidar(k){
-  const filas=INC_ED[k], items=[], vistos=new Set(), err=[];
-  filas.forEach((f,i)=>{
-    const vacia=(k==="ind"?INC_CATS:["M"]).every(c=>String(f.c[c]||"").trim()==="") && String(f.pct).trim()==="";
-    if(vacia) return;
-    const p=String(f.pct).trim();
-    if(!/^\d{1,3}$/.test(p) || +p>300){ err.push(`Fila ${i+1}: el porcentaje debe ser un entero de 0 a 300`); return; }
-    if(vistos.has(p)){ err.push(`El ${p}% está repetido`); return; }
-    vistos.add(p);
-    let alguna=false;
-    (k==="ind"?INC_CATS:["M"]).forEach(c=>{
-      const v=String(f.c[c]||"").trim().replace(",",".");
-      if(v==="") return;
-      if(!/^\d{1,5}(\.\d{1,2})?$/.test(v)){ err.push(`${p}%${k==="ind"?" · categoría "+c:""}: monto inválido (S/ con hasta 2 decimales)`); return; }
-      alguna=true;
-      items.push(k==="ind"?{categoria:c,pct:+p,soles:+v}:{pct:+p,soles:+v});
-    });
-    if(!alguna) err.push(`El ${p}% no tiene ningún monto`);
-  });
-  if(!err.length && !items.length) err.push("La tabla no puede quedar vacía");
-  return {items,err};
-}
-async function incTabGuardar(k){
-  incTabLeer(k);
-  const {items,err}=incTabValidar(k);
-  if(err.length){ $("incTabMsg").innerHTML=err.slice(0,6).map(esc).join("<br>"); return; }
-  $("incTabMsg").textContent="";
-  try{
-    const r=await rpc(k==="ind"?"fn_incentivos_tabla_guardar":"fn_bono_modular_tabla_guardar",
-      {p_dni:ING.dni,p_token:ING.token,p_items:items});
-    if(!r||r.ok===false){ $("incTabMsg").textContent=(r&&r.error)||"No se pudo guardar"; return; }
-    INC_ED[k]=null; INC_TABLA=[]; MOD_TRAMOS=[]; mostrarOk(`Tabla guardada: ${r.filas} fila(s), ${r.nuevas} nueva(s), ${r.borradas} quitada(s)`); cargarIncTabla();
-  }catch(e){ $("incTabMsg").textContent=e.message; }
-}
 function incPintarTabla(){
-  if(INC_ED.ind && !ES_ADMIN()) INC_ED.ind=null;
-  { const g=document.querySelector("#incTablaView .inc-tablas"); if(g) g.classList.toggle("edit",!!(INC_ED.ind||INC_ED.mod)); }
-  const ed=INC_ED.ind;
-  if(ed){
-    $("tablaIncCat").innerHTML =
-      "<thead><tr><th>%</th>"+INC_CATS.map(c=>`<th>Categoría ${c}</th>`).join("")+"<th></th></tr></thead><tbody>"
-      + ed.map((f,i)=>`<tr><td><input type="number" class="inc-pct" min="0" max="300" step="1" value="${esc(f.pct)}"></td>`
-          + INC_CATS.map(c=>`<td><input type="number" class="inc-ed" data-cat="${c}" min="0" step="0.01" placeholder="S/" value="${esc(f.c[c]||"")}"></td>`).join("")
-          + `<td><button class="btn-mini rojo" onclick="incTabLeer('ind');incTabQuitar('ind',${i})" title="Quitar fila">×</button></td></tr>`).join("")
-      + "</tbody>";
-  }else{
-    const cats=[...new Set(INC_TABLA.map(x=>x.categoria))].sort();
-    const pcts=[...new Set(INC_TABLA.map(x=>x.pct))].sort((a,b)=>a-b);
-    const m={}; INC_TABLA.forEach(x=>{ m[x.categoria+"|"+x.pct]=x.soles; });
-    $("tablaIncCat").innerHTML =
-      "<thead><tr><th>%</th>"+cats.map(c=>`<th>Categoría ${esc(c)}</th>`).join("")+"</tr></thead><tbody>"
-      + pcts.map(p=>`<tr><td><b>${p}%</b></td>`+cats.map(c=>`<td class="rep-num">${m[c+"|"+p]==null?"—":fmtSoles(m[c+"|"+p])}</td>`).join("")+"</tr>").join("")
-      + "</tbody>";
-  }
-  incTabAcc("ind");
+  const cats=[...new Set(INC_TABLA.map(x=>x.categoria))].sort();
+  const pcts=[...new Set(INC_TABLA.map(x=>x.pct))].sort((a,b)=>a-b);
+  const m={}; INC_TABLA.forEach(x=>{ m[x.categoria+"|"+x.pct]=x.soles; });
+  $("tablaIncCat").innerHTML =
+    "<thead><tr><th>%</th>"+cats.map(c=>`<th>Categoría ${esc(c)}</th>`).join("")+"</tr></thead><tbody>"
+    + pcts.map(p=>`<tr><td><b>${p}%</b></td>`
+        + cats.map(c=>`<td class="rep-num">S/ ${soles(m[c+"|"+p])}</td>`).join("")+"</tr>").join("")
+    + "</tbody>";
   incPintarModTramos();
 }
-/* Tabla modular: no distingue categorías, va aparte de la individual. */
+/* La tabla del modular vive al lado de la de categorías: son las dos que deciden
+   cuánto se paga, y conviene leerlas juntas. */
 async function incPintarModTramos(){
   const z=$("tablaModTramos"); if(!z) return;
-  if(!MOD_TRAMOS.length && !INC_ED.mod){
+  if(!MOD_TRAMOS.length){
     try{
       const t=await rpc("fn_bono_modular_tabla_listar",{p_dni:ING.dni,p_token:ING.token});
       if(t&&t.ok) MOD_TRAMOS=t.items||[];
     }catch(e){}
   }
-  if(INC_ED.mod && !ES_ADMIN()) INC_ED.mod=null;
-  const ed=INC_ED.mod;
-  z.innerHTML = "<thead><tr><th>% del área</th><th>Soles por día</th>"+(ed?"<th></th>":"")+"</tr></thead><tbody>"
-    + (ed
-        ? ed.map((f,i)=>`<tr><td><input type="number" class="inc-pct" min="0" max="300" step="1" value="${esc(f.pct)}"></td>
-            <td><input type="number" class="inc-ed" data-cat="M" min="0" step="0.01" placeholder="S/" value="${esc(f.c.M||"")}"></td>
-            <td><button class="btn-mini rojo" onclick="incTabLeer('mod');incTabQuitar('mod',${i})" title="Quitar fila">×</button></td></tr>`).join("")
-        : (MOD_TRAMOS.length
-            ? MOD_TRAMOS.map(x=>`<tr><td><b>${x.pct}%</b></td><td class="rep-num">${fmtSoles(x.soles)}</td></tr>`).join("")
-            : `<tr><td colspan="2"><div class="vacio-msg">Sin tramos cargados</div></td></tr>`))
+  z.innerHTML = "<thead><tr><th>% del área</th><th>Soles por día</th></tr></thead><tbody>"
+    + (MOD_TRAMOS.length
+        ? MOD_TRAMOS.map(x=>`<tr><td><b>${x.pct}%</b></td><td class="rep-num">S/ ${soles(x.soles)}</td></tr>`).join("")
+        : `<tr><td colspan="2"><div class="vacio-msg">Sin tramos cargados</div></td></tr>`)
     + "</tbody>";
-  incTabAcc("mod");
 }
 /* ================= BONO MODULAR (área × día) ================= */
 let MOD={dias:[], filas:{}, area:""}, MOD_DIRTY={}, MOD_TRAMOS=[];
@@ -6513,13 +6744,8 @@ async function mostrarDiff(filas){
     p_area:$("areaBase").value,p_articulos:arts});
   const viejasPorArt={};
   existentes.forEach(v=>{ (viejasPorArt[v.articulo]=viejasPorArt[v.articulo]||[]).push(v); });
-  // Antes siempre decía "actualizar", aunque todo fuera nuevo: parecía que se iba a pisar algo.
-  const nNuevos=arts.filter(a=>!(viejasPorArt[a]||[]).length).length, nExist=arts.length-nNuevos;
-  const titulo=!nExist ? `Vas a crear ${nNuevos} artículo(s) nuevo(s) en ${esc($("areaBase").value)}`
-    : !nNuevos ? `Vas a reemplazar ${nExist} artículo(s) en ${esc($("areaBase").value)}`
-    : `Vas a crear ${nNuevos} y reemplazar ${nExist} artículo(s) en ${esc($("areaBase").value)}`;
-  let html=`<div class="diff-box"><h3>${titulo}</h3>
-    ${nExist?`<div class="cf-detalle">Solo se reemplazan los artículos que ya existen; el resto de la base queda intacto.</div>`:""}</div>`;
+  let html=`<div class="diff-box"><h3>Vas a actualizar ${arts.length} artículo(s) en ${esc($("areaBase").value)}</h3>
+    <div class="cf-detalle">Solo se reemplazan los artículos del archivo; el resto de la base queda intacto.</div></div>`;
   arts.forEach(a=>{
     const nuevas=filas.filter(f=>f.articulo===a);
     const viejas=viejasPorArt[a]||[];
@@ -7456,4 +7682,250 @@ function tfDescargar(){
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CAB,...filas]), "FALTA_MEDIR");
   XLSX.writeFile(wb, `FALTA_MEDIR_${$("tfDias").value}d.xlsx`);
+}
+
+/* ---- Carga vs capacidad (preview del pendiente 9; la RPC es del parche 107) ----
+   Por área: minutos de los tickets generados que nadie reclamó, frente al ritmo real
+   (minutos reclamados por día). ACABADO no tiene tickets por adelantado: su trabajo
+   es lo que costura va terminando, pasado a minutos de su propia BASE. */
+let CC=null, CC_SEL="";
+const ccN=n=>Math.round(+n||0).toLocaleString("es-PE");
+const CC_DIA=["dom","lun","mar","mié","jue","vie","sáb"];
+const ccFecha=f=>{const d=new Date(f+"T12:00:00"); return CC_DIA[d.getDay()]+" "+f.slice(8,10)+"-"+f.slice(5,7);};
+function ccInit(){
+  const s=$("ccArea"); if(s && !s.options.length) s.innerHTML=opcionesAreaVista();
+  cargarCarga();
+}
+async function cargarCarga(){
+  $("ccZona").innerHTML=cargandoHTML("Calculando carga…");
+  try{
+    const r=await rpc("fn_carga_capacidad",{p_dni:ING.dni,p_token:ING.token,p_area:""});
+    if(!r || !r.ok){ mostrarError((r&&r.error)||"Error"); $("ccZona").innerHTML=""; return; }
+    CC=r; CC_CHK=new Set(); ccPintar();
+  }catch(e){
+    if(/Could not find the function|PGRST202/i.test(e.message||"")){ $("ccZona").innerHTML=`<div class="acf-falta"><b>Falta correr el parche 107 en la base.</b> Con él, esta pantalla calcula cuántos días de trabajo le quedan a cada área frente a su ritmo real.</div>`; return; }
+    mostrarError(e.message); $("ccZona").innerHTML=""; }
+}
+/* "No vigente": la OF queda COMPLETADA en esa área (se cierran todos sus módulos), así sus tickets sin
+   reclamar dejan de contar y nadie más los reclama. Se puede reabrir desde Buscar y Seguir. */
+async function ccCompletar(area,of){
+  if(!confirm(`¿La OF ${of} ya no está vigente en ${area}?\n\nQuedará COMPLETADA: se cierran todos sus módulos, sus tickets sin reclamar dejan de contar y nadie podrá reclamarlos.\nPuedes reabrirla desde Buscar y Seguir.`)) return;
+  try{
+    const r=await rpc("fn_of_completar",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_of:String(of),p_completar:true});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"No se pudo completar"); return; }
+    mostrarOk(`OF ${of} completada en ${area} (${r.modulos} módulo${r.modulos===1?"":"s"} cerrado${r.modulos===1?"":"s"})`);
+    CC_CERR.area=null; await cargarCarga();
+  }catch(e){ mostrarError(/fn_of_completar/.test(e.message)?"Falta aplicar el parche 132 en la base":e.message); }
+}
+let CC_CHK=new Set(), CC_CERR={area:null,rows:[],abierto:false};
+function ccBtnVarias(){
+  const n=[...CC_CHK].filter(k=>k.startsWith(CC_SEL+"|")).length;
+  document.querySelectorAll(".cc-btn-varias").forEach(b=>{ b.disabled=!n; b.textContent=n?`No vigente (${n})`:"No vigente"; });
+}
+function ccMarcar(area,of,on){ const k=area+"|"+of; on?CC_CHK.add(k):CC_CHK.delete(k); ccBtnVarias(); }
+function ccMarcarTodas(el){
+  el.closest("table").querySelectorAll("tbody input[type=checkbox]").forEach(c=>{ if(c.checked!==el.checked){ c.checked=el.checked; c.onchange(); } });
+}
+async function ccCompletarVarias(){
+  const items=[...CC_CHK].filter(k=>k.startsWith(CC_SEL+"|")).map(k=>{ const i=k.indexOf("|"); return {area:k.slice(0,i),of:k.slice(i+1)}; });
+  if(!items.length) return;
+  if(!confirm(`¿Cerrar ${items.length} OF como no vigentes en ${CC_SEL}?\n\nQuedarán COMPLETADAS: se cierran todos sus módulos y nadie podrá reclamar sus tickets.\nPuedes deshacerlo desde "OFs cerradas" aquí mismo.`)) return;
+  try{
+    const r=await rpc("fn_ofs_completar_varias",{p_dni:ING.dni,p_token:ING.token,p_items:items,p_completar:true});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"No se pudo cerrar"); return; }
+    mostrarOk(`${r.ofs} OF cerrada${r.ofs===1?"":"s"} en ${CC_SEL}`);
+    CC_CHK=new Set(); CC_CERR.area=null; await cargarCarga();
+    if(CC_CERR.abierto) ccCerradasCargar();
+  }catch(e){ mostrarError(/fn_ofs_completar_varias/.test(e.message)?"Falta aplicar el parche 134 en la base":e.message); }
+}
+async function ccReabrir(items){
+  if(!items.length) return;
+  if(!confirm(`¿Reabrir ${items.length} OF en ${CC_SEL}?\n\nVuelven a contar como carga y se pueden reclamar sus tickets.`)) return;
+  try{
+    const r=await rpc("fn_ofs_completar_varias",{p_dni:ING.dni,p_token:ING.token,p_items:items,p_completar:false});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"No se pudo reabrir"); return; }
+    mostrarOk(`${r.ofs} OF reabierta${r.ofs===1?"":"s"}`);
+    CC_CERR.area=null; await cargarCarga(); ccCerradasCargar();
+  }catch(e){ mostrarError(e.message); }
+}
+function ccReabrirMarcadas(){
+  ccReabrir([...document.querySelectorAll("#ccCerrBody tbody input:checked")].map(c=>({area:CC_SEL,of:c.dataset.of})));
+}
+function ccCerradasToggle(el){ CC_CERR.abierto=el.open; if(el.open && CC_CERR.area!==CC_SEL) ccCerradasCargar(); }
+async function ccCerradasCargar(){
+  const a=CC_SEL, b=$("ccCerrBody"); if(b) b.innerHTML=cargandoHTML("Buscando OFs cerradas…");
+  try{
+    const r=await rpc("fn_ofs_completadas",{p_dni:ING.dni,p_token:ING.token,p_area:a});
+    if(!r || r.ok===false){ mostrarError((r&&r.error)||"Error"); return; }
+    CC_CERR={area:a,rows:r.ofs||[],abierto:true};
+  }catch(e){
+    mostrarError(/fn_ofs_completadas/.test(e.message)?"Falta aplicar el parche 134 en la base":e.message); return; }
+  const b2=$("ccCerrBody"); if(b2) b2.innerHTML=ccCerradasHTML();
+}
+function ccCerradasHTML(){
+  if(CC_CERR.area!==CC_SEL) return "";
+  const r=CC_CERR.rows;
+  if(!r.length) return `<p class="cc-sub">Ninguna OF cerrada en ${esc(CC_SEL)}.</p>`;
+  return `<div class="cc-barra"><button type="button" class="btn-mini" onclick="ccReabrirMarcadas()">Reabrir marcadas</button></div>
+    <div class="contenedor-ancho tabla-scroll" style="max-height:40vh"><table class="tabla cc-tabla"><thead><tr><th><input type="checkbox" onchange="ccMarcarTodas(this)" aria-label="Marcar todas"></th><th>OF</th><th class="izq">Artículo</th><th>Módulos cerrados</th><th>Cerrada por</th><th>Cuándo</th><th></th></tr></thead><tbody>
+    ${r.map(o=>`<tr><td><input type="checkbox" data-of="${esc(o.of)}"></td><td><b>${esc(o.of)}</b></td><td class="izq">${esc(o.articulo||"—")}<div class="cc-sub">${esc(o.prenda||"")}${o.cant?` · ${ccN(o.cant)} und`:""}</div></td><td>${o.modulos}</td><td>${esc(o.por||"—")}</td><td class="cc-oc">${esc(o.cuando||"")}</td>
+      <td><button type="button" class="btn-mini gris" onclick="ccReabrir([{area:CC_SEL,of:'${esc(o.of)}'}])">Reabrir</button></td></tr>`).join("")}</tbody></table></div>`;
+}
+/* Simula los próximos días hábiles: cada área de costura gasta su ritmo por día hasta
+   acabar su carga; lo que gasta se convierte en llegada a ACABADO. */
+function ccSimular(){
+  const emp=$("ccEmp").checked, dias=CC.dias, out={};
+  let llega=dias.map(()=>0);
+  CC.areas.filter(a=>a.tipo==="BASE").forEach(a=>{
+    const carga=a.curso+(emp?a.empezar:0), acab=a.acab_curso+(emp?a.acab_empezar:0);
+    let rem=carga; const fr=[];
+    dias.forEach((d,i)=>{ const f=a.ritmo? Math.min(1,rem/a.ritmo):0; rem-=f*a.ritmo; fr.push(f);
+      llega[i]+= carga? f*a.ritmo*acab/carga : 0; });
+    const k=fr.findIndex(f=>f<1);
+    out[a.area]={carga, dias:a.ritmo?carga/a.ritmo:0, fr, fin:k<0?null:dias[k]};
+  });
+  out.llega=llega;
+  return out;
+}
+function ccPintar(){
+  if(!CC) return;
+  $("ccCorte").textContent="Datos al "+CC.corte;
+  const sim=ccSimular(), ver=$("ccArea").value;
+  const areas=CC.areas.filter(a=>!ver||a.area===ver);
+  if(!CC_SEL || !areas.some(a=>a.area===CC_SEL)){
+    const b=areas.filter(a=>a.tipo==="BASE").sort((x,y)=>sim[x.area].dias-sim[y.area].dias)[0];
+    CC_SEL=(b||areas[0]||{}).area||"";
+  }
+  const ac=CC.areas.find(a=>a.tipo==="ACABADO");
+  const pp=ac? ac.ritmo/Math.max(1,ac.presentes):0;
+  const tarj=areas.map(a=>{
+    if(a.tipo==="BASE") return ccCardBase(a,sim[a.area]);
+    if(a.tipo==="ACABADO") return ccCardAcab(a,sim.llega,pp);
+    return "";
+  }).join("");
+  const sinBase=areas.filter(a=>a.tipo==="SIN_BASE" && a.area!=="UDP");   // UDP se mapea pero no es dato
+  const cardSin=sinBase.length?`<div class="cc-card g"><div class="cc-t">Sin BASE · personas activas</div>
+    <div class="cc-n cc-nm">No medible</div>
+    <div class="cc-dat">${sinBase.map(a=>`<span>${esc(a.area)}</span><b>${a.activos}${a.prestados_aqui?` + ${a.prestados_aqui} de ACABADO`:""}</b>`).join("")}</div>
+    <div class="cc-conf">Trabajan por tiempo, sin OF ni BASE: no hay minutos pendientes que sumar. Aquí solo se puede mostrar
+    cuánta gente tienen. Para medirlas haría falta registrar sus lotes pendientes (es el pendiente 3, boleta por tiempo).</div></div>`:"";
+  $("ccZona").innerHTML=ccAvisos(areas)
+    +`<div class="cc-cards">${tarj}${cardSin}</div>`
+    +ccTimeline(areas,sim,pp)
+    +ccDetalle(CC.areas.find(a=>a.area===CC_SEL),sim)
+    +ccDeDonde();
+  ccBtnVarias();
+  if(CC_CERR.abierto && CC_CERR.area!==CC_SEL) ccCerradasCargar();
+}
+function ccAvisos(areas){
+  const b=areas.filter(a=>a.tipo==="BASE"), q=b.reduce((s,a)=>s+a.quietas.min,0), nq=b.reduce((s,a)=>s+a.quietas.n,0);
+  const sg=CC.sin_generar;
+  return `<div class="cc-aviso"><span>⚠</span><div><b>Qué tan confiable es hoy:</b> los días salen solo de las OFs que ya tienen
+    tickets generados. No se cuentan ${nq} OFs sin movimiento hace más de 7 días hábiles (${ccN(q)} min, casi siempre colas que
+    nadie reclamó)${sg&&sg.n?` ni ${sg.n} OFs registradas sin generar (cargadas del ${fechaCorta(sg.desde)} al ${fechaCorta(sg.hasta)})`:""}.
+    Un área que “se queda sin trabajo” puede recibir OFs nuevas mañana: el aviso es para generar a tiempo, no un hecho.</div></div>`;
+}
+/* Parche 118: colas que el área casi nunca reclama (ya descontadas del pendiente).
+   Con el 107 no vienen los campos *_bruto y no se muestra nada. */
+function ccColas(a,emp){
+  if(a.curso_bruto==null) return "";
+  const col=(a.curso_bruto-a.curso)+(emp?(a.empezar_bruto-a.empezar):0);
+  if(col<1) return "";
+  return `<div class="cc-colas">No cuenta ${ccN(col)} min de tickets sin reclamar que en las OFs ya terminadas
+    ${a.tasa!=null?`quedan sueltos (aquí se reclama el ${Math.round(a.tasa)}% de lo generado)`:"quedan sueltos"}.</div>`;
+}
+function ccCardBase(a,s){
+  const cls=s.dias<5?"r":s.dias>12?"a":"v";
+  const est=s.dias<5?`Sin OFs nuevas, se queda sin trabajo el ${ccFecha(s.fin)}`
+    :s.dias>12?`Carga para más de dos semanas`:s.fin?`Trabajo hasta el ${ccFecha(s.fin)}`:`Trabajo para más de ${CC.dias.length} días hábiles`;
+  const emp=$("ccEmp").checked, tot=s.carga||1;
+  const conf=[]; let nv="alta";
+  if(a.quietas.min>0.1*(a.curso+a.quietas.min)){ conf.push(`${ccN(a.quietas.min)} min en ${a.quietas.n} OFs quietas no se cuentan`); nv="media"; }
+  if(a.viejas.n){ conf.push(`${a.viejas.n} OFs generadas el ${fechaCorta(a.viejas.gen)} sin ningún ticket (${ccN(a.viejas.min)} min): ¿siguen en planta?`); nv="media"; }
+  if(a.dias_ritmo<9) conf.push(`ritmo de ${a.dias_ritmo} días: ${10-a.dias_ritmo} con poco registro quedaron fuera`);
+  return `<button type="button" class="cc-card ${cls}${a.area===CC_SEL?" sel":""}" onclick="CC_SEL='${esc(a.area)}';ccPintar()">
+    <div class="cc-t">${esc(a.area)}</div>
+    <div class="cc-n">${s.dias.toFixed(1)}<small>días de trabajo</small></div>
+    <div class="cc-est">${est}</div>
+    <div class="cc-bar" title="En curso / por empezar"><i class="c1" style="width:${100*a.curso/tot}%"></i>${emp?`<i class="c2" style="width:${100*a.empezar/tot}%"></i>`:""}</div>
+    <div class="cc-dat"><span>Pendiente en curso</span><b>${ccN(a.curso)} min</b>
+      ${emp?`<span>Generadas sin empezar</span><b>${ccN(a.empezar)} min</b>`:""}
+      <span>Ritmo real</span><b>${ccN(a.ritmo)} min/día</b>
+      <span>Registran / activos</span><b>${a.registran} / ${a.activos}</b></div>
+    ${ccColas(a,emp)}
+    <div class="cc-conf"><span class="p ${nv}">${nv}</span>${conf.length?esc(conf.join(" · ")):"Los números salen limpios de los tickets."}</div>
+  </button>`;
+}
+function ccCardAcab(a,llega,pp){
+  const hoy=llega[0], nec=Math.round(hoy/pp), k=llega.findIndex(x=>Math.round(x/pp)<nec-1);
+  const prest=Object.entries(a.prestados).map(([e,n])=>`${n} ${e.replace("EN ","en ").toLowerCase()}`).join(", ");
+  const cls=nec<a.presentes-2?"a":nec>a.presentes+2?"r":"v";
+  return `<button type="button" class="cc-card ${cls}${a.area===CC_SEL?" sel":""}" onclick="CC_SEL='ACABADO';ccPintar()">
+    <div class="cc-t">ACABADO</div>
+    <div class="cc-n">${nec}<small>personas necesita hoy</small><span class="cc-n2">${k>0?`Desde el ${ccFecha(CC.dias[k])}: ${Math.round(llega[k]/pp)}`:"Igual los próximos días"}</span></div>
+    <div class="cc-est">Hoy tiene ${a.presentes} en el área y ${a.activos-a.presentes} prestadas</div>
+    <div class="cc-pres">${esc(prest)}</div>
+    <div class="cc-dat"><span>Le llega de costura</span><b>≈${ccN(hoy)} min/día</b>
+      <span>Registra hacer</span><b>${ccN(a.ritmo)} min/día</b>
+      <span>Una persona hace</span><b>${ccN(pp)} min/día</b></div>
+    <div class="cc-conf">${hoy>a.ritmo*1.1?`<span class="p baja">baja</span>Según la BASE, costura le entrega más de lo que ACABADO registra hacer.
+    Si en planta le falta trabajo, o no registra todo o sus STD están altos.`:`<span class="p media">media</span>Lo que le llega sale de la BASE de cada artículo y del ritmo de costura; los presentes salen de la última asistencia marcada.`} ${a.sin_base_acab.length?`Sin BASE de ACABADO: ${esc(a.sin_base_acab.map(x=>x.articulo+" ("+x.of+")").join(", "))}, no suma llegada.`:""}</div>
+  </button>`;
+}
+function ccTimeline(areas,sim,pp){
+  const ac=CC.areas.find(a=>a.tipo==="ACABADO");
+  const filas=areas.filter(a=>a.tipo!=="SIN_BASE").map(a=>{
+    if(a.tipo==="ACABADO") return `<tr><td class="ar">ACABADO<small>personas que necesita · tiene ${ac.presentes}</small></td>${sim.llega.map(x=>{
+      const n=Math.round(x/pp), c=n<ac.presentes-2?"so":n>ac.presentes+2?"fa":"ok"; return `<td class="${c}">${n}</td>`;}).join("")}</tr>`;
+    const s=sim[a.area];
+    return `<tr><td class="ar">${esc(a.area)}<small>${s.dias.toFixed(1)} días</small></td>${s.fr.map(f=>
+      f>=0.999?`<td class="ll"></td>`:f>0?`<td class="pa" style="--f:${Math.round(f*100)}%">${Math.round(f*100)}%</td>`:`<td class="va">sin OF</td>`).join("")}</tr>`;
+  }).join("");
+  if(!filas) return "";
+  return `<div class="cc-bloque"><h2>Próximos ${CC.dias.length} días hábiles</h2>
+    <p class="cc-sub">Cada área gasta su ritmo real por día hasta acabar lo que tiene generado. ACABADO recibe lo que costura termina.</p>
+    <div class="cc-tl-wrap"><table class="cc-tl"><tbody><tr><td class="hd"></td>${CC.dias.map(d=>`<td class="hd">${ccFecha(d)}</td>`).join("")}</tr>${filas}</tbody></table></div>
+    <div class="cc-ley"><span><i style="background:color-mix(in srgb,var(--exito) 22%,transparent)"></i>Día lleno</span>
+      <span><i style="background:color-mix(in srgb,var(--aviso) 45%,transparent)"></i>Se acaba ese día (% del día cubierto)</span>
+      <span><i style="background:var(--alerta-t)"></i>Sin OFs generadas</span>
+      <span><i style="background:var(--ocre-t)"></i>ACABADO: le sobra gente</span></div></div>`;
+}
+function ccDetalle(a,sim){
+  if(!a || a.tipo==="SIN_BASE") return "";
+  if(a.tipo==="ACABADO") return `<div class="cc-bloque"><h2>ACABADO: de dónde le llega el trabajo</h2>
+    <p class="cc-sub">Minutos de ACABADO que cada costura le entrega al día a su ritmo actual, y lo que le falta entregar de lo que ya está generado.</p>
+    <div class="contenedor-ancho tabla-scroll"><table class="tabla cc-tabla"><thead><tr><th class="izq">Costura</th><th>Entrega hoy</th><th>Por entregar (min ACABADO)</th><th>Se acaba</th></tr></thead><tbody>
+    ${CC.areas.filter(x=>x.tipo==="BASE").map(x=>{const s=sim[x.area], e=$("ccEmp").checked;
+      return `<tr><td class="izq"><b>${esc(x.area)}</b></td><td>${ccN(x.ritmo*(x.acab_curso+(e?x.acab_empezar:0))/Math.max(1,s.carga))}</td>
+      <td>${ccN(x.acab_curso+(e?x.acab_empezar:0))}</td><td>${s.fin?ccFecha(s.fin):"—"}</td></tr>`;}).join("")}</tbody></table></div></div>`;
+  const vis=a.ofs.filter(o=>o.estado!=="QUIETA"), q=a.ofs.filter(o=>o.estado==="QUIETA");
+  const fila=o=>{const av=o.tot?100*(1-(o.bruto??o.pend)/o.tot):0, st=o.estado==="POR_EMPEZAR"&&o.vieja?"VIEJA":o.estado;
+    const lb={EN_CURSO:"En curso",POR_EMPEZAR:"Por empezar",QUIETA:"Sin movimiento",VIEJA:"¿Vigente?"}[st];
+    return `<tr class="${o.estado==="QUIETA"?"quieta":""}"><td><input type="checkbox" ${CC_CHK.has(a.area+"|"+o.of)?"checked":""} onchange="ccMarcar('${esc(a.area)}','${esc(o.of)}',this.checked)" aria-label="Marcar OF ${esc(o.of)}"></td><td><b>${esc(o.of)}</b></td><td class="izq">${esc(o.articulo)}<div class="cc-sub">${esc(o.prenda||"")} · ${ccN(o.cant)} und</div></td>
+      <td><span class="cc-st ${st}">${lb}</span><div><button type="button" class="btn-mini gris cc-no-vig" onclick="ccCompletar('${esc(a.area)}','${esc(o.of)}')">No vigente</button></div></td><td class="cc-oc"><span class="cc-av"><i style="width:${av}%"></i></span>${Math.round(av)}%</td>
+      <td><b>${ccN(o.pend)}</b>${o.bruto!=null&&o.bruto-o.pend>=1?`<div class="cc-sub">de ${ccN(o.bruto)} sin reclamar</div>`:""}</td><td>${a.ritmo?(o.pend/a.ritmo).toFixed(1):"—"}</td><td class="cc-oc">${o.ult?fechaCorta(o.ult):"—"}</td><td class="cc-oc">${fechaCorta(o.gen)}</td></tr>`;};
+  const head=`<thead><tr><th><input type="checkbox" onchange="ccMarcarTodas(this)" aria-label="Marcar todas"></th><th>OF</th><th class="izq">Artículo</th><th>Estado</th><th class="cc-oc">Avance</th><th>Pendiente (min)</th><th>Días</th><th class="cc-oc">Último ticket</th><th class="cc-oc">Generada</th></tr></thead>`;
+  return `<div class="cc-bloque"><h2>${esc(a.area)}: OFs que forman la carga</h2>
+    <p class="cc-sub">Ordenadas por minutos pendientes. “Días” es lo que esa OF le ocupa al área a su ritmo de ${ccN(a.ritmo)} min/día.</p>
+    <div class="cc-barra"><button type="button" class="btn-mini cc-btn-varias" onclick="ccCompletarVarias()" disabled>No vigente</button><span class="cc-sub">Marca varias OF y ciérralas de una vez.</span></div>
+    <div class="contenedor-ancho tabla-scroll" style="max-height:60vh"><table class="tabla cc-tabla">${head}<tbody>${vis.map(fila).join("")}</tbody></table></div>
+    ${q.length?`<details class="cc-q"><summary>${q.length} OFs sin movimiento hace más de 7 días hábiles · ${ccN(a.quietas.min)} min que no se cuentan</summary>
+      <p class="cc-sub" style="margin-top:6px">Tuvieron tickets reclamados pero nada en la última semana y media. Casi siempre son operaciones sueltas que nadie marcó;
+      si de verdad están terminadas, “No vigente” las marca COMPLETADAS y las saca de aquí.</p>
+      <div class="cc-barra"><button type="button" class="btn-mini cc-btn-varias" onclick="ccCompletarVarias()" disabled>No vigente</button></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:40vh"><table class="tabla cc-tabla">${head}<tbody>${q.map(fila).join("")}</tbody></table></div></details>`:""}
+    <details class="cc-q" ${CC_CERR.abierto?"open":""} ontoggle="ccCerradasToggle(this)"><summary>OFs cerradas en ${esc(a.area)} (para reabrir si se cerraron por error)</summary><div id="ccCerrBody">${ccCerradasHTML()}</div></details>
+  </div>`;
+}
+function ccDeDonde(){
+  return `<div class="cc-bloque"><details class="cc-de"><summary>De dónde sale cada número</summary><ol>
+    <li><b>Pendiente</b>: STD × cantidad de cada ticket ya generado que nadie reclamó (tickets del área sin reclamo activo). Solo cuenta lo generado: una OF que no se generó en el área no suma.</li>
+    <li><b>Colas que no se cuentan</b>: en las OFs ya terminadas siempre quedan operaciones sin reclamar (nadie las marca). Por cada operación se mira qué parte se reclamó en las OFs terminadas del área y lo que suele quedar suelto se descuenta del pendiente; si la operación casi no tiene historia, se usa el porcentaje del área. Debajo de cada OF se ve el total sin reclamar.</li>
+    <li><b>En curso</b>: la OF tuvo al menos un ticket reclamado en los últimos 7 días hábiles. <b>Por empezar</b>: generada y sin ningún ticket reclamado; si se generó hace más de 3 semanas sale como <i>¿Vigente?</i>. <b>Sin movimiento</b>: tuvo reclamos pero nada en 7 días hábiles; no se cuenta.</li>
+    <li><b>Ritmo real</b>: promedio de minutos reclamados por día en los últimos 10 días hábiles con registro. Se descartan los días con menos de la mitad de lo normal (sábados cortos, feriados). Ya trae dentro las faltas, los permisos y la eficiencia real de la gente.</li>
+    <li><b>Días de trabajo</b> = pendiente ÷ ritmo real, en días de lunes a viernes.</li>
+    <li><b>ACABADO</b>: no recibe tickets por adelantado. Lo que le llega es lo que costura reclama cada día, pasado a minutos de ACABADO con la BASE del artículo (STD de ACABADO ÷ STD de costura). Personas que necesita = llegada ÷ lo que hace una persona de ACABADO al día (su ritmo ÷ los presentes). Los prestados salen de la asistencia (EN REPROCESO, EN CAMISAS…).</li>
+    <li><b>CORTE, REPROCESO, DESPACHO y UDP</b>: sin OF ni BASE, no hay minutos que sumar. Solo se muestra su gente.</li>
+    <li>Cada analista ve solo las áreas que tiene en Permisos; la pestaña se reparte en Gestión › Permisos como las demás.</li>
+  </ol></details></div>`;
 }

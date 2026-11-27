@@ -127,6 +127,9 @@ const VISTAS=PAG==="ingenieria"?[
   {id:"gen",tab:"pasoGen",m:"pasoGen",modo:null,area:1,areaReq:1,soloSel:1,t:"Generar tickets",
    aplicar(){const a=$("areaGen");if(a&&G.area&&a.value!==G.area&&[...a.options].some(o=>o.value===G.area)){a.value=G.area;llamar("genAreaChange");}return false;},ocultar:["areaGen"]},
   {id:"ofs",tab:"pasoOfs",m:"pasoOfs",modo:null,t:"OFs registradas",live:1,cargar:()=>llamar("cargarOfs")},
+  {id:"avof",tab:"pasoAvOF",m:"pasoAvOF",modo:"rango",def:"m3",t:"Resumen de OF",
+   aplicar(){const [d,h]=rangoDe(this);let c=put("avofDesde",d.slice(0,7));c=put("avofHasta",h.slice(0,7))||c;return c;},
+   cargar:()=>llamar("cargarAvof"),ocultar:["avofDesde","avofHasta"]},
   {id:"vista",tab:"pasoVista",m:"pasoVista",modo:null,t:"Vista del personal"},
   {id:"ef",tab:"pasoEf",m:"pasoEf",modo:"dia",area:1,areaReq:1,live:1,t:"Eficiencia · día",
    aplicar(){return put("fechaEf",G.fecha);},
@@ -191,6 +194,8 @@ const VISTAS=PAG==="ingenieria"?[
   {id:"inciPend",tab:"pasoIncid",m:"inciPendientes",modo:null,area:1,live:1,t:"Incidencias · por aprobar",
    despues(){const a=$("areaInciPend");if(a&&a.options.length){conOpcion(a);if(a.value!==G.area){a.value=G.area;llamar("pintarPendientesInci");}}},
    cargar:()=>llamar("cargarPendientesInci"),ocultar:["areaInciPend"]},
+  {id:"sueltos",tab:"pasoSueltos",m:"pasoSueltos",modo:null,area:1,t:"Paquetes sueltos",
+   aplicar(){return areaSel("psArea");},cargar:()=>llamar("psCargar"),ocultar:["psArea"]},
   {id:"prestadas",tab:"pasoPrestadas",m:"pasoPrestadas",modo:"dia",area:1,t:"Sesiones prestadas",
    aplicar(){let c=put("prFecha",G.fecha);c=areaSel("prArea")||c;return c;},cargar:()=>llamar("prCargar"),ocultar:["prFecha","prArea"]},
   {id:"lotes",tab:"pasoLotes",m:"pasoLotes",modo:null,area:0,t:"Reproceso",
@@ -571,7 +576,7 @@ function listaCk(){
       out.push({g:"Buscar y seguir",t:`Seguir «${raw}»`,k:"OF, prenda, OF/prenda, artículo o persona",go:()=>busDesde(raw)}); }
   tabs.filter(x=>!q||norm(x.t+" "+x.k).includes(q)).slice(0,q?8:12).forEach(x=>out.push(x));
   if(q&&PERS)PERS.filter(p=>norm((p.nombres||p.nombre)+" "+p.dni).includes(q)).slice(0,6).forEach(p=>out.push({g:"Personas",t:p.nombres||p.nombre,k:(p.area_actual||p.area||"")+" · "+p.dni,go:()=>{activarTab("pasoAsis");setTimeout(()=>{try{perTab("crud");}catch(e){}const b=$("perBuscar");if(b){b.value=p.dni;b.dispatchEvent(new Event("input",{bubbles:true}));}},250);}}));
-  if(q&&OFSL)OFSL.filter(o=>norm(o.of+" "+o.articulo+" "+(o.cliente||"")).includes(q)).slice(0,6).forEach(o=>out.push({g:"OF",t:"OF "+o.of+" · "+o.articulo,k:(o.prenda||"")+" · "+(o.cant_prog||o.cantidad||"")+" und",go:()=>{activarTab("pasoOfs");setTimeout(()=>{const b=$("ofsBuscar");if(b){b.value=String(o.of);b.dispatchEvent(new Event("input",{bubbles:true}));}},400);}}));
+  if(q&&OFSL)OFSL.filter(o=>norm(o.of+" "+o.articulo+" "+(o.cliente||"")).includes(q)).slice(0,6).forEach(o=>out.push({g:"OF",t:"OF "+o.of+" · "+o.articulo,k:(o.prenda||"")+" · "+(o.cant_prog||o.cantidad||"")+" und",go:()=>{activarTab("pasoAvOF");setTimeout(()=>{const b=$("avofBuscar");if(b){b.value=String(o.of);b.dispatchEvent(new Event("input",{bubbles:true}));}},400);}}));
   items=out;let g="";
   $("dynCkL").innerHTML=out.map((x,i)=>{const h=x.g!==g?`<div class="g">${x.g}</div>`:"";g=x.g;return h+`<button data-i="${i}" class="${i===sel?"on":""}"><span>${escH(x.t)}</span><span class="k">${escH(x.k)}</span></button>`;}).join("")||'<p class="dyn-ck-v">Nada coincide.</p>';
   const on=$("dynCkL").querySelector(".on");if(on)on.scrollIntoView({block:"nearest"});
@@ -681,10 +686,10 @@ function contadores(){
 /* =====================================================================
    ARRANQUE · INGENIERÍA
    ===================================================================== */
-const GRUPOS={pasoBuscar:"Tickets",pasoLotes:"Tickets",pasoPrestadas:"Gestión",pasoAsisConf:"Tickets",pasoFeriados:"Tickets",pasoTk:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoVista:"Tickets",
-  pasoEf:"Eficiencia",pasoAudit:"Eficiencia",pasoInc:"Eficiencia",pasoDash:"Dashboards",pasoPcp:"Planificación",pasoCrono:"Planificación",
+const GRUPOS={pasoBuscar:"Tickets",pasoSueltos:"Tickets",pasoLotes:"Tickets",pasoPrestadas:"Gestión",pasoAsisConf:"Tickets",pasoFeriados:"Tickets",pasoTk:"Tickets",pasoGen:"Tickets",pasoOfs:"Tickets",pasoAvOF:"Tickets",pasoVista:"Tickets",
+  pasoEf:"Eficiencia",pasoAudit:"Eficiencia",pasoInc:"Eficiencia",pasoDash:"Dashboards",pasoCarga:"Planificación",pasoPcp:"Planificación",pasoCrono:"Planificación",
   pasoAsis:"Gestión",pasoBases:"Gestión",pasoBaseLog:"Gestión",pasoCalBase:"Gestión",pasoIncid:"Gestión",pasoFechas:"Gestión",pasoPermisos:"Gestión",
-  pasoCostosBase:"Ing. Costos",pasoCostosHoy:"Ing. Costos",pasoCostosInc:"Ing. Costos",pasoCostosAsis:"Ing. Costos",
+  pasoCostosBase:"Costos",pasoCostosHoy:"Costos",pasoCostosInc:"Costos",pasoCostosAsis:"Costos",
   pasoSupArea:"Operar como",pasoOpArea:"Operar como"};
 function etiquetarGrupos(){
   document.querySelectorAll(".pantalla").forEach(p=>{const g=GRUPOS[p.id];const c=p.querySelector(".seccion-cab");
