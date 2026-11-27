@@ -1175,9 +1175,6 @@ details.mod-op[open]>summary.mod-op-head::before{content:"▾ ";}
 .aud-sim input[type=text]{width:100%;padding:6px 8px;border:1px solid var(--linea);border-radius:8px;font-size:13px;font-family:inherit;}
 .aud-det{margin-top:18px;}
 .aud-det summary{cursor:pointer;font-size:11px;font-weight:800;letter-spacing:.6px;color:var(--suave);text-transform:uppercase;}
-.aud-ia-res{margin-top:10px;}
-.aud-ia-lista{margin:6px 0 8px 18px;padding:0;font-size:13px;}
-.aud-ia-op{border-top:1px solid var(--linea-2);padding-top:8px;margin-top:8px;font-size:13px;}
 tr.aud-fila{cursor:pointer;}
 tr.aud-fila:hover{background:var(--azul-t);}
 @media(max-width:560px){ .aud-drawer{width:100%;padding:14px;} .aud-grid{grid-template-columns:1fr;} .aud-sim-fija{position:static;} }

@@ -3,66 +3,131 @@
    comparan los tiempos (STD y lo medido por el aplicativo de tiempos) y al
    guardar pasa por el mismo diff + fn_bases_subir que el Excel.
    Las imágenes de referencia viven solo en este navegador (IndexedDB): nunca se envían. */
-const BN={refs:[],rows:[],meds:{},imgs:[]};   // imgs: [{id,url}]
+/* Un bloque = un artículo nuevo (referencias, operaciones y comparación). «Agregar artículo» abre uno;
+   «Varios artículos» abre tantos como se necesiten, cada uno con sus propias referencias.
+   BN apunta al bloque activo (se fija al tocar cualquier cosa dentro de él, ver bnCtx). */
+const BNS=[]; let BN=null, BX=0, BN_MULTI=false;
+const bnEstado=i=>({i,refs:[],rows:[],meds:{},imgs:[],art:"",prenda:"",cliente:"",modulo:""});   // imgs: [{id,url}]
+function bnCtx(i){ if(BNS[i]){ BX=i; BN=BNS[i]; } }
+const bq=id=>$(id+"_"+BX);
 const BN_DESV=0.15;   // diferencia con las referencias que se marca como aviso
 
-function bnAbrir(){
-  if(!(BASE||[]).length){ mostrarError("Carga una base primero"); return; }
-  BN.refs=[]; BN.rows=[]; BN.meds={}; bnLimpiarImgs();
-  bnImgCargar("_borrador");
-  $("basesLista").hidden=true;
-  const area=$("areaBase").value;
-  $("basesNuevo").hidden=false;
-  $("basesNuevo").innerHTML=`
-    <div class="seccion-cab"><h1>Agregar artículo · ${esc(area)}</h1>
-      <p class="seccion-sub">Busca un artículo parecido, copia sus operaciones y ajusta los tiempos. Para subir un Excel sigue estando <b>SUBIR EXCEL</b> en la lista.</p></div>
+function bnBloqueHTML(i){
+  const B=BNS[i], multi=BN_MULTI, s="_"+i;
+  return `<div class="bn-blk" id="bnBlk_${i}" data-bk="${i}">
+    ${multi?`<div class="fila-filtros bn-blk-cab"><h2>Artículo ${i+1}</h2>${BNS.length>1?`<button class="btn-mini rojo" onclick="bnQuitarBloque(${i})">QUITAR ARTÍCULO</button>`:""}</div>
+    <div class="modal-msg" id="bnMsg${s}"></div>`:""}
     <div class="bn-grid">
       <div class="bn-col">
         <h3>1 · Artículo nuevo</h3>
         <div class="modal-2col">
-          <div class="modal-campo"><label>Código del artículo</label><input id="bnArt" maxlength="80" placeholder="Ej. 2FZ880" oninput="bnResumen()" onchange="bnImgDeArticulo()"></div>
-          <div class="modal-campo"><label>Prenda</label><input id="bnPrenda" maxlength="80"></div>
+          <div class="modal-campo"><label>Código del artículo</label><input id="bnArt${s}" maxlength="80" placeholder="Ej. 2FZ880" value="${esc(B.art)}" oninput="bnResumen()" onchange="${multi?"":"bnImgDeArticulo()"}"></div>
+          <div class="modal-campo"><label>Prenda</label><input id="bnPrenda${s}" maxlength="80" value="${esc(B.prenda)}"></div>
         </div>
         <div class="modal-2col">
-          <div class="modal-campo"><label>Cliente</label><input id="bnCliente" maxlength="80"></div>
-          <div class="modal-campo"><label>Módulo <span class="cf-detalle">(vacío = el de cada referencia)</span></label><input id="bnModulo" maxlength="80"></div>
+          <div class="modal-campo"><label>Cliente</label><input id="bnCliente${s}" maxlength="80" value="${esc(B.cliente)}"></div>
+          <div class="modal-campo"><label>Módulo <span class="cf-detalle">(vacío = el de cada referencia)</span></label><input id="bnModulo${s}" maxlength="80" value="${esc(B.modulo)}"></div>
         </div>
         <h3>2 · Buscar artículos de referencia</h3>
-        <input type="text" id="bnBuscar" placeholder="Código, cliente, prenda, módulo u operación… (ej. 2FZ)" oninput="bnBuscar()">
-        <div class="bn-res" id="bnRes"></div>
-        <h3>Imágenes de referencia <span class="cf-detalle">se guardan en este navegador · no se suben al sistema</span></h3>
+        <input type="text" id="bnBuscar${s}" placeholder="Código, cliente, prenda, módulo u operación… (ej. 2FZ)" value="${esc(B.q||"")}" oninput="bnBuscar()">
+        <div class="bn-res" id="bnRes${s}"></div>
+        ${multi?"":`<h3>Imágenes de referencia <span class="cf-detalle">se guardan en este navegador · no se suben al sistema</span></h3>
         <div class="fila-filtros">
           <label class="btn-mini gris" style="cursor:pointer;">+ AGREGAR IMAGEN
             <input type="file" accept="image/*" multiple style="display:none" onchange="bnImagenes(this.files);this.value=''"></label>
           <span class="cf-detalle">También puedes pegar una captura (Ctrl+V). Quedan guardadas en este navegador y equipo; si borras los datos del navegador se pierden.</span>
         </div>
-        <div class="bn-imgs" id="bnImgs"></div>
+        <div class="bn-imgs" id="bnImgs${s}"></div>`}
       </div>
       <div class="bn-col bn-ancha">
         <h3>3 · Operaciones y comparación de tiempos</h3>
-        <div id="bnRefs" class="bn-refs"></div>
-        <div class="contenedor-ancho bn-scroll"><table class="tabla" id="bnTabla"></table></div>
+        <div id="bnRefs${s}" class="bn-refs"></div>
+        <div class="contenedor-ancho bn-scroll"><table class="tabla sin-orden sin-filtro" id="bnTabla${s}"></table></div>
         <div class="fila-filtros">
           <button class="btn-mini gris" onclick="bnAgregarFila()">+ OPERACIÓN PROPIA</button>
+          ${multi?`<button class="btn-mini gris" onclick="bnPegarOps()">PEGAR OPERACIONES</button>`:""}
         </div>
-        <div id="bnResumen" class="bn-resumen"></div>
-        <div class="modal-acciones">
+        <div id="bnResumen${s}" class="bn-resumen"></div>
+        ${multi?"":`<div class="modal-acciones">
           <button class="btn-principal btn-modal-guardar" onclick="bnGuardar()">REVISAR Y GUARDAR</button>
           <button class="btn-secundario btn-modal-cancelar" onclick="bnCerrar()">CANCELAR</button>
-        </div>
+        </div>`}
       </div>
-    </div>`;
-  bnPintar(); bnBuscar();
+    </div>${multi?"<hr class=\"bn-sep\">":""}</div>`;
+}
+/* Lo escrito en los campos vuelve al estado del bloque, para repintar sin perderlo. */
+function bnGuardarCampos(){
+  BNS.forEach((B,i)=>{
+    const v=id=>{ const e=$(id+"_"+i); return e?e.value:null; };
+    const g=(k,id)=>{ const x=v(id); if(x!==null) B[k]=x; };
+    g("art","bnArt"); g("prenda","bnPrenda"); g("cliente","bnCliente"); g("modulo","bnModulo"); g("q","bnBuscar");
+  });
+}
+function bnRender(){
+  const area=$("areaBase").value;
+  $("basesNuevo").innerHTML=(BN_MULTI
+    ?`<div class="seccion-cab"><h1>Varios artículos · ${esc(area)}</h1></div><div id="bnInforme"></div>`
+    :`<div class="seccion-cab"><h1>Agregar artículo · ${esc(area)}</h1>
+      <p class="seccion-sub">Busca un artículo parecido, copia sus operaciones y ajusta los tiempos. Para subir un Excel sigue estando <b>SUBIR EXCEL</b> en la lista.</p></div>`)
+    +BNS.map((_,i)=>bnBloqueHTML(i)).join("")
+    +(BN_MULTI?`<div class="fila-filtros">
+        <button class="btn-mini azul" onclick="bnAgregarBloque()">+ OTRO ARTÍCULO</button></div>
+      <div class="modal-acciones">
+        <button class="btn-principal btn-modal-guardar" id="bnTodosOk" onclick="bnRegistrarTodos()">REGISTRAR TODOS</button>
+        <button class="btn-secundario btn-modal-cancelar" onclick="bnCerrar()">CANCELAR</button>
+      </div>`:"");
+  const z=$("basesNuevo");
+  if(!z.dataset.ctx){            // al tocar algo de un bloque, ese bloque pasa a ser el activo
+    z.dataset.ctx="1";
+    ["pointerdown","focusin","click","input","change","paste"].forEach(ev=>z.addEventListener(ev,e=>{
+      const b=e.target.closest&&e.target.closest(".bn-blk"); if(b) bnCtx(+b.dataset.bk);
+    },true));
+  }
+  BNS.forEach((_,i)=>{ bnCtx(i); bnPintar(); bnBuscar(); });
+  bnCtx(0);
+}
+function bnAbrir(multi){
+  if(!(BASE||[]).length){ mostrarError("Carga una base primero"); return; }
+  BN_MULTI=multi===true;
+  BNS.length=0; BNS.push(bnEstado(0)); bnCtx(0);
+  $("basesLista").hidden=true;
+  $("basesNuevo").hidden=false;
+  bnRender();
+  if(!BN_MULTI){ bnLimpiarImgs(); bnImgCargar("_borrador"); }
   window.scrollTo(0,0);
 }
+function bnAgregarBloque(){
+  bnGuardarCampos(); BNS.push(bnEstado(BNS.length)); bnRender();
+  const e=$("bnBlk_"+(BNS.length-1)); if(e) e.scrollIntoView({behavior:"smooth",block:"start"});
+}
+function bnQuitarBloque(i){
+  bnGuardarCampos(); BNS.splice(i,1); BNS.forEach((b,k)=>{ b.i=k; }); bnRender();
+}
 function bnCerrar(){
-  bnLimpiarImgs();
+  if(!BN_MULTI) bnLimpiarImgs();
+  BNS.length=0; BNS.push(bnEstado(0)); bnCtx(0);
   $("basesNuevo").hidden=true; $("basesNuevo").innerHTML="";
   $("basesLista").hidden=false;
 }
+/* Pegar operaciones desde Excel: Operación, STD y Módulo (tabuladas, una por fila). */
+async function bnPegarOps(){
+  const B=BN;
+  try{
+    const txt=await navigator.clipboard.readText();
+    const filas=String(txt||"").replace(/\r/g,"").split("\n").map(l=>l.split("\t")).filter(c=>norm(c[0]));
+    if(!filas.length){ mostrarError("No hay filas copiadas"); return; }
+    filas.forEach(c=>{
+      const std=parseFloat(String(c[1]||"").replace(",","."));
+      B.rows.push({manual:true,ok:"",operacion:norm(c[0]),modulo:norm(c[2]),std:isFinite(std)?std:0,on:true,refs:{},sel:""});
+    });
+    bnCtx(B.i); bnPintar(); mostrarOk(`${filas.length} operación(es) pegadas`);
+  }catch(e){ mostrarError("Copia las filas en Excel (Operación, STD, Módulo) y vuelve a pulsar"); }
+}
 
 /* ---- búsqueda de referencias (sobre la base del área ya cargada) ---- */
+let BN_MEMO={b:null,m:null};
 function bnArticulos(){
+  if(BN_MEMO.b===BASE && BN_MEMO.m) return BN_MEMO.m;
   const m={};
   (BASE||[]).forEach(b=>{
     const k=normKey(b.articulo); if(!k) return;
@@ -77,11 +142,12 @@ function bnArticulos(){
     a.ops.sort((x,y)=>(Number(x.n_op)||0)-(Number(y.n_op)||0));
     a.texto=normKey(a.articulo+a.prenda+a.cliente+[...a.mods].join(""))+a.texto;
   });
+  BN_MEMO={b:BASE,m};
   return m;
 }
 function bnBuscar(){
-  const z=$("bnRes"); if(!z) return;
-  const toks=norm(($("bnBuscar")||{}).value).split(/\s+/).map(normKey).filter(Boolean);
+  const z=bq("bnRes"); if(!z) return;
+  const toks=norm((bq("bnBuscar")||{}).value).split(/\s+/).map(normKey).filter(Boolean);
   const todos=Object.values(bnArticulos());
   let lista=todos.filter(a=>toks.every(t=>a.texto.includes(t)));
   const t0=toks[0]||"";
@@ -113,8 +179,8 @@ async function bnUsar(k){
       if(!r){ r={ok,operacion:norm(b.operacion),modulo:norm(b.modulo),std:Number(b.std)||0,on:true,refs:{},sel:k}; BN.rows.push(r); }
       r.refs[k]=Number(b.std)||0;
     });
-    if(!norm($("bnPrenda").value)) $("bnPrenda").value=a.prenda;
-    if(!norm($("bnCliente").value)) $("bnCliente").value=a.cliente;
+    if(!norm(bq("bnPrenda").value)) bq("bnPrenda").value=a.prenda;
+    if(!norm(bq("bnCliente").value)) bq("bnCliente").value=a.cliente;
     bnMedidos(a);
   }
   bnPintar(); bnBuscar();
@@ -122,21 +188,22 @@ async function bnUsar(k){
 /* Lo medido por el aplicativo de tiempos (parche 104). Si la persona no tiene
    esa pestaña la RPC falla y simplemente no se muestra la columna medida. */
 async function bnMedidos(a){
-  if(BN.meds[a.k]) return;
+  const B=BN;
+  if(B.meds[a.k]) return;
   try{
     const r=await rpc("fn_tiempos_medidos",{p_dni:ING.dni,p_token:ING.token,p_area:$("areaBase").value,p_articulo:a.articulo});
     const m={};
     if(r&&r.ok) (r.items||[]).forEach(x=>{ if(x.te_min!=null) m[normKey(x.operacion)]={te:Number(x.te_min),nivel:x.nivel,n:x.n_operarios}; });
-    BN.meds[a.k]=m;
-  }catch(e){ BN.meds[a.k]={}; }
-  if(BN.refs.includes(a.k)) bnPintar();
+    B.meds[a.k]=m;
+  }catch(e){ B.meds[a.k]={}; }
+  if(B.refs.includes(a.k)){ bnCtx(B.i); bnPintar(); }
 }
 
 /* ---- tabla de operaciones ---- */
 function bnPintar(){
-  const t=$("bnTabla"); if(!t) return;
+  const t=bq("bnTabla"); if(!t) return;
   const arts=bnArticulos();
-  $("bnRefs").innerHTML = BN.refs.length
+  bq("bnRefs").innerHTML = BN.refs.length
     ? BN.refs.map(k=>`<span class="bn-chip">${esc((arts[k]||{}).articulo||k)} <button onclick="bnUsar('${esc(k)}')" title="Quitar referencia">×</button></span>`).join("")
     : `<div class="cf-detalle">Aún sin referencias: busca a la izquierda y pulsa USAR, o agrega operaciones propias.</div>`;
   const cab=BN.refs.map(k=>`<th title="Elige de qué artículo tomar el tiempo de cada operación">${esc((arts[k]||{}).articulo||k)}<br><button class="btn-mini gris bn-todo" onclick="bnTodo('${esc(k)}')">usar todo</button></th>`).join("");
@@ -148,12 +215,12 @@ function bnPintar(){
         return `<td class="bn-ref"><button class="bn-opt${r.sel===k?" on":""}" onclick="bnElegir(${i},'${esc(k)}')" title="Usar el STD de este artículo">${v}</button>`
           +(m?`<button class="bn-opt bn-med${r.sel===k+"*"?" on":""}" onclick="bnElegir(${i},'${esc(k)}*')" title="Tiempo medido (${esc(m.nivel||"")}, ${m.n||0} operario(s)): usarlo">⏱ ${me}</button>`:"")+`</td>`;
       }).join("");
-      return `<tr id="bnF${i}"><td><input type="checkbox" ${r.on?"checked":""} onchange="bnCampo(${i},'on',this.checked)" aria-label="Incluir"></td>
+      return `<tr><td><input type="checkbox" ${r.on?"checked":""} onchange="bnCampo(${i},'on',this.checked)" aria-label="Incluir"></td>
         <td class="bn-n">${bnPos(i)}</td>
         <td class="izq"><input class="base-in" value="${esc(r.operacion)}" maxlength="120" oninput="bnCampo(${i},'operacion',this.value)"></td>
         <td class="izq"><input class="base-in" value="${esc(r.modulo)}" maxlength="80" oninput="bnCampo(${i},'modulo',this.value)"></td>
         ${celdas}
-        <td><input class="base-in num" id="bnS${i}" type="number" step="0.01" min="0" value="${r.std}" oninput="bnCampo(${i},'std',this.value)"></td>
+        <td><input class="base-in num" type="number" step="0.01" min="0" value="${r.std}" oninput="bnCampo(${i},'std',this.value)"></td>
         <td class="bn-acc"><button class="btn-mini gris" onclick="bnMover(${i},-1)" title="Subir">↑</button><button class="btn-mini gris" onclick="bnMover(${i},1)" title="Bajar">↓</button><button class="btn-mini rojo" onclick="bnQuitar(${i})" title="Eliminar fila" aria-label="Eliminar fila">×</button></td></tr>`;
     }).join("")+"</tbody>";
   bnResumen();
@@ -187,7 +254,7 @@ function bnQuitar(i){ BN.rows.splice(i,1); bnPintar(); }
 
 /* Resumen: total del nuevo contra cada referencia, y avisos por operación. */
 function bnResumen(){
-  const z=$("bnResumen"); if(!z) return;
+  const z=bq("bnResumen"); if(!z) return;
   const inc=BN.rows.filter(r=>r.on);
   const tot=inc.reduce((a,r)=>a+(Number(r.std)||0),0);
   const arts=bnArticulos();
@@ -209,7 +276,7 @@ function bnResumen(){
   const dup={}; inc.forEach(r=>{ const k=normKey(r.operacion); if(k) dup[k]=(dup[k]||0)+1; });
   const rep=Object.keys(dup).filter(k=>dup[k]>1);
   if(rep.length) av.push("Operaciones repetidas: "+rep.join(", "));
-  z.innerHTML=`<div class="bn-cmp bn-tot"><span>${esc(norm(($("bnArt")||{}).value).toUpperCase()||"Artículo nuevo")}</span><b>${redo(tot)} min</b><span class="cf-detalle">${inc.length} operación(es)</span></div>${comp}`
+  z.innerHTML=`<div class="bn-cmp bn-tot"><span>${esc(norm((bq("bnArt")||{}).value).toUpperCase()||"Artículo nuevo")}</span><b>${redo(tot)} min</b><span class="cf-detalle">${inc.length} operación(es)</span></div>${comp}`
     +(av.length?`<div class="hn-rev">${av.map(t=>`<div class="hn-rev-l av"><i>!</i><span>${esc(t)}</span></div>`).join("")}<div class="sub">Son avisos: puedes guardar igual.</div></div>`:"");
 }
 
@@ -242,7 +309,7 @@ async function bnImgCargar(slot){
 }
 /* Al escribir un código que ya tiene imágenes guardadas, y el borrador está vacío, se muestran. */
 function bnImgDeArticulo(){
-  const k=normKey($("bnArt").value);
+  const k=normKey(bq("bnArt").value);
   if(k && !BN.imgs.length) bnImgCargar(k);
 }
 async function bnImagenes(files){
@@ -260,7 +327,7 @@ async function bnImagenes(files){
   bnPintarImgs();
 }
 function bnPintarImgs(){
-  const z=$("bnImgs"); if(!z) return;
+  const z=bq("bnImgs"); if(!z) return;
   z.innerHTML=BN.imgs.map((x,i)=>`<div class="bn-img"><img src="${x.url}" alt="Referencia ${i+1}" onclick="window.open('${x.url}','_blank')"><button onclick="bnQuitarImg(${i})" title="Quitar">×</button></div>`).join("");
 }
 async function bnQuitarImg(i){
@@ -278,14 +345,15 @@ async function bnImgAArticulo(art){
   }catch(e){}
 }
 document.addEventListener("paste",e=>{
-  if(!$("basesNuevo")||$("basesNuevo").hidden) return;
+  if(BN_MULTI||!$("basesNuevo")||$("basesNuevo").hidden) return;
   const fs=[...(e.clipboardData&&e.clipboardData.files||[])];
   if(fs.length) bnImagenes(fs);
 });
 
 /* ---- guardar: reutiliza el diff y la subida del Excel ---- */
 function bnGuardar(){
-  const art=norm($("bnArt").value).toUpperCase();
+  bnCtx(0);
+  const art=norm(bq("bnArt").value).toUpperCase();
   if(!art){ mostrarError("Escribe el código del artículo"); return; }
   if((BASE||[]).some(b=>normKey(b.articulo)===normKey(art))){
     mostrarError(`${art} ya existe en ${$("areaBase").value}: edítalo con EDITAR ARTÍCULO`); return;
@@ -293,10 +361,58 @@ function bnGuardar(){
   const inc=BN.rows.filter(r=>r.on);
   if(!inc.length){ mostrarError("Marca al menos una operación"); return; }
   if(inc.some(r=>!norm(r.operacion))){ mostrarError("Hay operaciones sin nombre"); return; }
-  const prenda=norm($("bnPrenda").value).toUpperCase(), cliente=norm($("bnCliente").value).toUpperCase(), mod=norm($("bnModulo").value);
+  const prenda=norm(bq("bnPrenda").value).toUpperCase(), cliente=norm(bq("bnCliente").value).toUpperCase(), mod=norm(bq("bnModulo").value);
   const filas=inc.map((r,i)=>({prenda,cliente,modulo:mod||norm(r.modulo),articulo:art,
     operacion:norm(r.operacion),std:Number(r.std)||0,max_op:inc.length,n_op:i+1}));
   bnImgAArticulo(art);
   bnCerrar();
   mostrarDiff(filas);
+}
+
+/* ---- registrar todos los bloques en UNA sola llamada ---- */
+async function bnRegistrarTodos(){
+  bnGuardarCampos();
+  const area=$("areaBase").value, exist=new Set((BASE||[]).map(b=>normKey(b.articulo))), vistos=new Set(), filas=[];
+  BNS.forEach((B,i)=>{
+    const art=norm(B.art).toUpperCase(), k=normKey(art), inc=B.rows.filter(r=>r.on);
+    let err="";
+    if(!art) err="Escribe el código del artículo";
+    else if(exist.has(k)) err=`${art} ya existe en ${area}`;
+    else if(vistos.has(k)) err=`${art} está repetido en otro bloque`;
+    else if(!inc.length) err="Marca al menos una operación";
+    else if(inc.some(r=>!norm(r.operacion))) err="Hay operaciones sin nombre";
+    else{
+      const rep=[...new Set(inc.map(r=>normKey(r.operacion)).filter((x,j,a)=>a.indexOf(x)!==j))];
+      if(rep.length) err="Operaciones repetidas: "+rep.join(", ");
+    }
+    B.err=err;
+    if(!err){
+      vistos.add(k);
+      inc.forEach((r,j)=>filas.push({articulo:art,prenda:norm(B.prenda).toUpperCase(),cliente:norm(B.cliente).toUpperCase(),
+        modulo:norm(B.modulo)||norm(r.modulo),operacion:norm(r.operacion),std:String(Number(r.std)||0),n_op:String(j+1)}));
+    }
+  });
+  const pintaErr=()=>BNS.forEach((B,i)=>{ const m=$("bnMsg_"+i); if(m) m.textContent=B.err||""; });
+  if(!filas.length){ pintaErr(); mostrarError("Ningún artículo está listo: revisa los avisos en rojo"); return; }
+  const b=$("bnTodosOk"); if(b) b.disabled=true;
+  try{
+    const r=await rpc("fn_bases_agregar_varios",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_filas:filas});
+    if(!r||r.ok===false){ pintaErr(); mostrarError((r&&r.error)||"No se pudo registrar"); if(b) b.disabled=false; return; }
+    const hechos=new Set((r.creados||[]).map(normKey));
+    const dup=new Set((r.duplicados||[]).map(normKey)), inv={}; (r.invalidos||[]).forEach(x=>{ inv[normKey(x.articulo)]=x.motivo; });
+    BNS.forEach(B=>{ const k=normKey(B.art);
+      if(!B.err && dup.has(k)) B.err="Ya existe en la base";
+      else if(!B.err && inv[k]) B.err=inv[k]; });
+    const quedan=BNS.filter(B=>!hechos.has(normKey(B.art)));
+    BNS.length=0; quedan.forEach((B,i)=>{ B.i=i; BNS.push(B); }); if(!BNS.length) BNS.push(bnEstado(0));
+    bnRender();
+    BNS.forEach((B,i)=>{ const m=$("bnMsg_"+i); if(m) m.textContent=B.err||""; });
+    const li=(t,a,cls)=>a&&a.length?`<div class="${cls}"><b>${t} (${a.length}):</b> ${a.map(x=>esc(typeof x==="string"?x:`${x.articulo} · ${x.motivo}`)).join(" · ")}</div>`:"";
+    $("bnInforme").innerHTML=`<div class="diff-box"><h3>Resumen</h3>${li("Registrados",r.creados,"diff-add")}${li("Ya existían",r.duplicados,"diff-mod")}${li("Con errores",r.invalidos,"diff-del")}
+      ${(r.creados||[]).length?`<div class="cf-detalle">${r.filas} operación(es) guardadas</div>`:""}</div>`;
+    window.scrollTo(0,0);
+    delete BASES_CACHE[area];
+    if((r.creados||[]).length){ mostrarOk(`${r.creados.length} artículo(s) registrados`); await cargarBases(); }
+  }catch(e){ mostrarError(e.message); }
+  finally{ const x=$("bnTodosOk"); if(x) x.disabled=false; }
 }

@@ -98,7 +98,7 @@ function pcpFilasCorte(rows){
   for(let i=cab.fila+1;i<rows.length;i++){
     const r=rows[i], f=pcpFecha(g(r,"FECHA")), q=pcpNum(g(r,"CANTIDAD"));
     if(!f || f<desde || !q) continue;
-    out.push({fecha:f,of:String(g(r,"OF")).replace(/\.0+$/,"").trim(),articulo:norm(g(r,"ARTICULO")),color:norm(g(r,"COLOR")),cliente:norm(g(r,"CLIENTE")),cantidad:q,corte_real:pcpNum(g(r,"CORTE_REAL"))||null});
+    out.push({fecha:f,of:String(g(r,"OF")).replace(/\.0+$/,"").trim(),articulo:norm(g(r,"ARTICULO")),color:norm(g(r,"COLOR")),cliente:norm(g(r,"CLIENTE")),cantidad:q,corte_real:pcpNum(g(r,"CORTE_REAL"))||null,taller:norm(g(r,"TALLER"))});
   }
   return out;
 }
