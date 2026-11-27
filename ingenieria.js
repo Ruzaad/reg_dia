@@ -1820,7 +1820,7 @@ async function abrirModalPersonal(dni){
           <select id="mpAreaActual">${areasSel.map(a=>`<option ${a===datos.area_actual?"selected":""}>${esc(a)}</option>`).join("")}</select>
         </div>
       </div>
-      <div class="modal-campo">
+      <div class="modal-campo" id="mpCatBox">
         <label>Categoría</label>
         <select id="mpCategoria">${catsSel.map(c=>
           `<option value="${esc(c)}" ${c===(datos.categoria||"")?"selected":""}>${c||"— sin asignar —"}</option>`).join("")}</select>
@@ -1844,6 +1844,7 @@ function mpRol(){
   const ofi=esOficina($("mpCargo").value);
   $("mpDniLbl").textContent=ofi?"Usuario":"DNI";
   $("mpPlanta").hidden=ofi;
+  $("mpCatBox").hidden=$("mpCargo").value!=="OPERARIO";   // solo el operario tiene categoría
 }
 
 let MP_ORIG = null;   // cómo estaba la persona al abrir el modal
@@ -1856,7 +1857,7 @@ async function guardarPersonal(dniOriginal){
   let areaActual = $("mpAreaActual").value;
   let estado = dniOriginal ? $("mpEstado").value : "ACTIVO";
   let cargo = $("mpCargo").value;
-  let categoria = $("mpCategoria").value;
+  let categoria = $("mpCargo").value==="OPERARIO" ? $("mpCategoria").value : "";
   if(!dni || !nombres){ $("mpMsg").textContent = (esOficina(cargo)?"Usuario":"DNI")+" y nombres son obligatorios"; return; }
   if(esOficina(cargo)){ areaOrigen=null; areaActual="INGENIERIA"; }   // oficina no es un área de planta
   try{
