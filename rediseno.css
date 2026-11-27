@@ -2284,3 +2284,4 @@ label.ini-pn-campo{cursor:text}
 .est-cand[hidden],.est-elegido[hidden],#meCampos[hidden],#mpPlanta[hidden]{display:none;}
 #mpCatBox[hidden]{display:none;}
 #mpEst[hidden]{display:none;}
+.perm-roles-cab{display:flex;align-items:center;justify-content:space-between;margin:6px 0 8px;}.perm-roles-cab h2{font-size:17px;}#permRoles{margin-bottom:18px;}

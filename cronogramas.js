@@ -13,6 +13,7 @@ const CRO_EST={DISPONIBLE:["ok","Disponible"],INCOMPLETO:["warn","Incompleto"],"
 function croInit(){
   const d=$("croDesde"), h=$("croHasta");
   if(d && !d.value){ const [y,m]=hoyLima().split("-").map(Number); d.value=new Date(y,m-1,1).toLocaleDateString("sv-SE"); h.value=new Date(y,m,0).toLocaleDateString("sv-SE"); }
+  { const b=$("croModoArch"); if(b) b.hidden=!esIngRol(); if(!esIngRol()) CRO.modo="real"; }
   croModo(CRO.modo);
 }
 function croModo(m){

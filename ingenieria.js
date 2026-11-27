@@ -269,7 +269,7 @@ let PERMU=[];
 async function cargarPermisosAdmin(){
   const z=$("permZona"); if(!z) return;
   pintarCargando(z,"Cargando usuarios…");
-  try{ PERMU=await rpc("fn_permisos_listar",{p_dni:ING.dni,p_token:ING.token}); pintarPermisosAdmin(); }
+  try{ PERMU=await rpc("fn_permisos_listar",{p_dni:ING.dni,p_token:ING.token}); pintarPermisosAdmin(); await cargarRoles(); pintarRoles(); }
   catch(e){ z.innerHTML=""; mostrarError(e.message); }
 }
 function permResumen(u){
@@ -309,6 +309,65 @@ async function permAdmin(dni, valor){
     cargarPermisosAdmin();
   }catch(e){ mostrarError(e.message); }
 }
+/* Casillas de pestañas agrupadas como el menú; sel = pestañas marcadas. */
+function permGruposHTML(sel){
+  return [...document.querySelectorAll("details.nav-group")].map(d=>{
+    const items=[...d.querySelectorAll(".nav-item[data-tab]")].filter(x=>!TABS_ADMIN.includes(x.dataset.tab));
+    if(!items.length) return "";
+    return `<fieldset class="perm-grupo"><legend>${esc(d.querySelector("summary").textContent.trim())}</legend>
+      ${items.map(x=>`<label class="chk-inline"><input type="checkbox" class="perm-tab" value="${esc(x.dataset.tab)}"${sel.includes(x.dataset.tab)?" checked":""}> ${esc((x.firstChild&&x.firstChild.nodeType===3?x.firstChild.textContent:x.textContent).trim())}</label>`).join("")}
+    </fieldset>`;
+  }).join("");
+}
+/* Roles propios (parche 200): nombre + pestañas que abren. */
+let ROLES_SIS=[];
+async function cargarRoles(){
+  try{ const r=await rpc("fn_roles_listar",{p_dni_ing:ING.dni,p_token:ING.token}); ROLES_SIS=(r&&r.ok)?(r.roles||[]):[]; }
+  catch(e){ ROLES_SIS=[]; }
+  return ROLES_SIS;
+}
+function pintarRoles(){
+  const z=$("permRoles"); if(!z) return;
+  const nom=t=>{ const x=document.querySelector(`.nav-item[data-tab="${t}"]`); return x?(x.firstChild&&x.firstChild.nodeType===3?x.firstChild.textContent:x.textContent).trim():t; };
+  z.innerHTML=`<div class="seccion-cab perm-roles-cab"><h2>Roles</h2><button class="btn-mini verde" onclick="abrirModalRol(null)">+ Nuevo rol</button></div>`
+    +(ROLES_SIS.length?`<table class="tabla"><thead><tr><th class="izq">Rol</th><th class="izq">Ve</th><th>Personas</th><th></th></tr></thead><tbody>${ROLES_SIS.map((r,i)=>`<tr>
+      <td class="izq"><b>${esc(r.nombre)}</b></td><td class="izq">${esc(r.pestanas.map(nom).join(", ")||"Nada")}</td><td>${r.personas}</td>
+      <td><button class="btn-mini" onclick="abrirModalRol(${i})">Editar</button> <button class="btn-mini rojo" onclick="rolEliminar(${i})">Borrar</button></td></tr>`).join("")}</tbody></table>`
+    :`<div class="vacio-msg">Aún no hay roles propios</div>`);
+}
+function abrirModalRol(i){
+  const r=i==null?{nombre:"",pestanas:[]}:ROLES_SIS[i];
+  abrirModal(`<h2>${i==null?"Nuevo rol":"Rol "+esc(r.nombre)}</h2>
+    <div class="modal-campo"><label>Nombre del rol</label><input id="rolNombre" value="${esc(r.nombre)}" ${i==null?"":"disabled"} maxlength="30" placeholder="Ej. UDP"></div>
+    <h3 class="perm-h3">Páginas que ve</h3>
+    <div class="perm-tabs">${permGruposHTML(r.pestanas)}</div>
+    <div class="modal-msg" id="rolMsg"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" onclick="rolGuardar()">GUARDAR</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
+    </div>`, "modal-ancho");
+}
+async function rolGuardar(){
+  const nombre=$("rolNombre").value.trim().toUpperCase();
+  const pestanas=[...document.querySelectorAll("#modalBox .perm-tab:checked")].map(c=>c.value);
+  if(!nombre){ $("rolMsg").textContent="Escribe el nombre del rol"; return; }
+  try{
+    const r=await rpc("fn_roles_guardar",{p_dni:ING.dni,p_token:ING.token,p_nombre:nombre,p_pestanas:pestanas});
+    if(!r||r.ok===false){ $("rolMsg").textContent=(r&&r.error)||"No se pudo guardar"; return; }
+    cerrarModal(); mostrarOk(`Rol ${nombre} guardado`+(r.aplicados?` y aplicado a ${r.aplicados} persona(s)`:""));
+    await cargarRoles(); pintarRoles(); cargarPermisosAdmin();
+  }catch(e){ $("rolMsg").textContent=/fn_roles_guardar|PGRST202/i.test(e.message)?"Falta aplicar el parche 200 en la base":e.message; }
+}
+async function rolEliminar(i){
+  const r=ROLES_SIS[i]; if(!r||!confirm(`¿Borrar el rol ${r.nombre}?`)) return;
+  try{
+    const x=await rpc("fn_roles_eliminar",{p_dni:ING.dni,p_token:ING.token,p_nombre:r.nombre});
+    if(!x||x.ok===false){ mostrarError((x&&x.error)||"No se pudo borrar"); return; }
+    mostrarOk("Rol borrado"); await cargarRoles(); pintarRoles();
+  }catch(e){ mostrarError(e.message); }
+}
+/* Acciones de PCP (cargar archivos, metas): solo el rol Ingeniería o el Admin. */
+function esIngRol(){ return (ING&&ING.cargo==="INGENIERIA") || ES_ADMIN(); }
 function abrirModalPermisos(dni){
   const u=PERMU.find(x=>x.dni===dni); if(!u) return;
   const areas=["*", ...AREAS_LISTA];
@@ -321,13 +380,7 @@ function abrirModalPermisos(dni){
     return `<tr><td class="izq">${a==="*"?"<b>Todas las áreas</b>":esc(a)}</td>
       <td>${r("","Sin acceso")}</td><td>${r("LEER","Lectura")}</td><td>${r("EDITAR","Edición")}</td>${hayAprueba?`<td>${r("APRUEBA","Aprueba")}</td>`:""}</tr>`;
   };
-  const grupos=[...document.querySelectorAll("details.nav-group")].map(d=>{
-    const items=[...d.querySelectorAll(".nav-item[data-tab]")].filter(x=>!TABS_ADMIN.includes(x.dataset.tab));
-    if(!items.length) return "";
-    return `<fieldset class="perm-grupo"><legend>${esc(d.querySelector("summary").textContent.trim())}</legend>
-      ${items.map(x=>`<label class="chk-inline"><input type="checkbox" class="perm-tab" value="${esc(x.dataset.tab)}"${u.pestanas.includes(x.dataset.tab)?" checked":""}> ${esc((x.firstChild&&x.firstChild.nodeType===3?x.firstChild.textContent:x.textContent).trim())}</label>`).join("")}
-    </fieldset>`;
-  }).join("");
+  const grupos=permGruposHTML(u.pestanas);
   abrirModal(`
     <h2>Permisos de ${esc(u.dni)}</h2>
     <div class="sub" style="margin-bottom:12px;">${esc(u.nombre||"")} · ${esc(u.cargo)}</div>
@@ -1790,7 +1843,8 @@ async function abrirModalPersonal(dni){
   // el select caía en la primera y GUARDAR pisaba el cargo (INGENIERIA→OPERARIO).
   // Cargos de oficina: solo el administrador los crea (parche 95). Su acceso
   // lo dan los permisos, no el cargo.
-  const cargosSel = [...new Set([datos.cargo, ...CARGOS_LISTA, ...(ES_ADMIN()?["INGENIERIA","COSTOS"]:[])])].filter(Boolean);
+  const rolesProp = await cargarRoles();
+  const cargosSel = [...new Set([datos.cargo, ...CARGOS_LISTA, ...(ES_ADMIN()?["INGENIERIA","COSTOS"]:[]), ...rolesProp.map(r=>r.nombre)])].filter(Boolean);
   const catsSel = [...new Set([...CATEGORIAS_LISTA, datos.categoria||""])];
   // Incluye siempre el área real del registro aunque no esté en AREAS_LISTA,
   // para que el select no caiga en la primera opción por defecto al editar.
