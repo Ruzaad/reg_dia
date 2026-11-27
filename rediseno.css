@@ -2274,10 +2274,5 @@ label.ini-pn-campo{cursor:text}
 .inc-ed{width:72px;text-align:right;}
 .inc-pct{width:64px;text-align:right;}
 @media (max-width:900px){.inc-tablas{grid-template-columns:minmax(0,1fr);}}
-
-.bm-in{width:100%;min-width:90px;padding:6px 8px;font-size:13.5px;}
-#bmTabla td{padding:3px 4px;}
-#bmTabla .bm-est{font-size:12.5px;white-space:nowrap;color:var(--suave);}
-#bmTabla tr.bm-mal .bm-est{color:var(--alerta);font-weight:700;}
-#bmTabla tr.bm-mal .bm-in{border-color:var(--alerta);}
-.inc-tablas.edit{grid-template-columns:minmax(0,1fr);}
+.bn-blk-cab{align-items:center;justify-content:space-between;}
+.bn-sep{border:0;border-top:2px solid var(--linea);margin:26px 0;}
