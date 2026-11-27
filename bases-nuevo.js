@@ -300,3 +300,166 @@ function bnGuardar(){
   bnCerrar();
   mostrarDiff(filas);
 }
+
+/* ================= Bases › Varios artículos de una vez =================
+   Tabla compacta editable; se puede pegar directo desde Excel o Google Sheets
+   (columnas: ARTÍCULO, PRENDA, CLIENTE, MÓDULO, OPERACIÓN, STD, N°OP). Se valida todo
+   antes de enviar y se registra en UNA sola llamada (fn_bases_agregar_varios):
+   los que ya existen se saltan y los inválidos se quedan en la tabla para corregirlos. */
+const BM={filas:[], res:null};
+const BM_COLS=[["articulo","Artículo"],["prenda","Prenda"],["cliente","Cliente"],["modulo","Módulo"],["operacion","Operación"],["std","STD (min)"],["n_op","N°OP"]];
+const bmVacia=()=>({articulo:"",prenda:"",cliente:"",modulo:"",operacion:"",std:"",n_op:""});
+
+function bmAbrir(){
+  BM.filas=[bmVacia(),bmVacia(),bmVacia()]; BM.res=null;
+  $("basesLista").hidden=true;
+  const area=$("areaBase").value;
+  $("basesNuevo").hidden=false;
+  $("basesNuevo").innerHTML=`
+    <div class="seccion-cab"><h1>Varios artículos · ${esc(area)}</h1></div>
+    <div class="fila-filtros">
+      <button class="btn-mini" onclick="bmFila()">+ FILA</button>
+      <button class="btn-mini azul" onclick="bmPegarBoton()">PEGAR DESDE EXCEL</button>
+      <button class="btn-mini gris" onclick="bmVaciar()">VACIAR</button>
+    </div>
+    <div class="contenedor-ancho bn-scroll"><table class="tabla sin-orden sin-filtro" id="bmTabla" onpaste="bmPegar(event)"></table></div>
+    <div id="bmResumen" class="bn-resumen"></div>
+    <div id="bmInforme"></div>
+    <div class="modal-acciones">
+      <button class="btn-principal btn-modal-guardar" id="bmOk" onclick="bmRegistrar()">REGISTRAR VÁLIDOS</button>
+      <button class="btn-secundario btn-modal-cancelar" onclick="bnCerrar()">CERRAR</button>
+    </div>`;
+  bmPintar(); window.scrollTo(0,0);
+}
+function bmFila(){ bmLeer(); BM.filas.push(bmVacia()); bmPintar(); }
+function bmQuitar(i){ bmLeer(); BM.filas.splice(i,1); if(!BM.filas.length) BM.filas.push(bmVacia()); bmPintar(); }
+function bmVaciar(){ BM.filas=[bmVacia(),bmVacia(),bmVacia()]; BM.res=null; $("bmInforme").innerHTML=""; bmPintar(); }
+function bmLeer(){
+  document.querySelectorAll("#bmTabla tbody tr").forEach((tr,i)=>{
+    const f=BM.filas[i]; if(!f) return;
+    tr.querySelectorAll("input[data-c]").forEach(inp=>{ f[inp.dataset.c]=inp.value; });
+  });
+}
+const bmVacio=f=>BM_COLS.every(([k])=>!String(f[k]||"").trim());
+/* Valida fila por fila y por artículo; devuelve el motivo de cada fila (o "") */
+function bmValidar(){
+  const exist=new Set((BASE||[]).map(b=>normKey(b.articulo)));
+  const por={};
+  BM.filas.forEach((f,i)=>{ if(bmVacio(f)) return; const k=normKey(f.articulo); (por[k]=por[k]||[]).push(i); });
+  const mot=BM.filas.map(()=>""), dup=new Set(), tot={ok:0,dup:0,mal:0};
+  Object.entries(por).forEach(([k,idx])=>{
+    if(k && exist.has(k)){ idx.forEach(i=>mot[i]="Ya existe"); dup.add(k); return; }
+    const ops={}, nops={};
+    const hayNop=idx.some(i=>String(BM.filas[i].n_op||"").trim()!==""), faltaNop=idx.some(i=>String(BM.filas[i].n_op||"").trim()==="");
+    idx.forEach(i=>{
+      const f=BM.filas[i], std=String(f.std||"").trim().replace(",","."), nop=String(f.n_op||"").trim();
+      if(!norm(f.articulo)) mot[i]="Falta el artículo";
+      else if(!norm(f.operacion)) mot[i]="Falta la operación";
+      else if(std!=="" && !/^\d{1,4}(\.\d{1,3})?$/.test(std)) mot[i]="STD inválido";
+      else if(nop!=="" && !/^[1-9]\d{0,2}$/.test(nop)) mot[i]="N°OP inválido";
+      else{
+        const ko=normKey(f.operacion);
+        if(ops[ko]!==undefined){ mot[i]=mot[ops[ko]]="Operación repetida"; }
+        else if(nop!=="" && nops[nop]!==undefined){ mot[i]=mot[nops[nop]]="N°OP repetido"; }
+        else if(hayNop && faltaNop) mot[i]="N°OP incompleto";
+        ops[ko]=i; if(nop!=="") nops[nop]=i;
+      }
+    });
+  });
+  // un artículo es válido solo si todas sus filas lo son
+  const malArt=new Set();
+  Object.entries(por).forEach(([k,idx])=>{ if(!dup.has(k) && idx.some(i=>mot[i])) malArt.add(k); });
+  Object.entries(por).forEach(([k,idx])=>{
+    if(dup.has(k)) tot.dup++; else if(malArt.has(k)) tot.mal++; else tot.ok++;
+    if(malArt.has(k)) idx.forEach(i=>{ if(!mot[i]) mot[i]="Otra fila del artículo es inválida"; });
+  });
+  return {mot,tot,por,dup,malArt};
+}
+function bmPintar(){
+  const v=bmValidar();
+  $("bmTabla").innerHTML=`<thead><tr><th>#</th>${BM_COLS.map(([,t])=>`<th>${t}</th>`).join("")}<th>Estado</th><th></th></tr></thead><tbody>`
+    +BM.filas.map((f,i)=>{
+      const m=v.mot[i], vacia=bmVacio(f);
+      return `<tr class="${m?"bm-mal":""}"><td>${i+1}</td>`
+        +BM_COLS.map(([k])=>`<td><input class="bm-in" data-c="${k}" value="${esc(f[k]||"")}" ${k==="articulo"?'maxlength="80"':'maxlength="120"'} oninput="bmLive()"></td>`).join("")
+        +`<td class="bm-est">${vacia?"":(m?esc(m):"✓")}</td><td><button class="btn-mini rojo" onclick="bmQuitar(${i})">×</button></td></tr>`;
+    }).join("")+"</tbody>";
+  bmResumen(v);
+}
+function bmResumen(v){
+  v=v||bmValidar();
+  const z=$("bmResumen"); if(z) z.innerHTML=`<b>${v.tot.ok}</b> válido(s) · <b>${v.tot.dup}</b> ya existen · <b>${v.tot.mal}</b> con errores`;
+}
+/* Mientras se escribe solo se actualiza el estado, sin repintar (no se pierde el foco). */
+function bmLive(){
+  bmLeer(); const v=bmValidar();
+  document.querySelectorAll("#bmTabla tbody tr").forEach((tr,i)=>{
+    const f=BM.filas[i], m=v.mot[i]; tr.classList.toggle("bm-mal",!!m);
+    const e=tr.querySelector(".bm-est"); if(e) e.textContent=bmVacio(f)?"":(m||"✓");
+  });
+  bmResumen(v);
+}
+/* Pegado desde Excel / Google Sheets: celdas separadas por tab, filas por salto de línea. */
+function bmParsear(txt){
+  const filas=String(txt||"").replace(/\r/g,"").split("\n").filter(l=>l.trim()!=="").map(l=>l.split("\t"));
+  if(filas.length && /^ART[IÍ]CULO$/i.test(String(filas[0][0]||"").trim())) filas.shift();   // encabezado
+  return filas;
+}
+function bmPegar(e){
+  const txt=(e.clipboardData||window.clipboardData).getData("text");
+  if(!/[\t\n]/.test(txt)) return;                 // un dato suelto: pegado normal
+  e.preventDefault();
+  const inp=e.target.closest&&e.target.closest("input[data-c]");
+  const tr=inp&&inp.closest("tr"); bmLeer();
+  const fila0=tr?[...tr.parentNode.children].indexOf(tr):0, col0=inp?BM_COLS.findIndex(([k])=>k===inp.dataset.c):0;
+  bmAplicar(bmParsear(txt), fila0, Math.max(0,col0));
+}
+function bmAplicar(filas, fila0, col0){
+  // si lo pegado cae sobre filas vacías las usa; si no, agrega
+  filas.forEach((cels,j)=>{
+    const i=fila0+j; while(BM.filas.length<=i) BM.filas.push(bmVacia());
+    cels.forEach((c,x)=>{ const col=BM_COLS[col0+x]; if(col) BM.filas[i][col[0]]=String(c).trim(); });
+  });
+  BM.res=null; bmPintar();
+  mostrarOk(`${filas.length} fila(s) pegadas`);
+}
+async function bmPegarBoton(){
+  try{
+    const txt=await navigator.clipboard.readText();
+    const filas=bmParsear(txt);
+    if(!filas.length){ mostrarError("No hay filas copiadas"); return; }
+    bmLeer();
+    const prim=BM.filas.findIndex(bmVacio);
+    bmAplicar(filas, prim<0?BM.filas.length:prim, 0);
+  }catch(e){ mostrarError("Copia las filas en Excel y pégalas con Ctrl+V sobre la tabla"); }
+}
+async function bmRegistrar(){
+  bmLeer();
+  const v=bmValidar();
+  if(!v.tot.ok){ mostrarError("No hay artículos válidos para registrar"); bmPintar(); return; }
+  const b=$("bmOk"); if(b) b.disabled=true;
+  const area=$("areaBase").value;
+  const filas=[]; 
+  BM.filas.forEach((f,i)=>{
+    if(bmVacio(f)) return; const k=normKey(f.articulo);
+    if(v.dup.has(k) || v.malArt.has(k)) return;
+    filas.push({articulo:norm(f.articulo).toUpperCase(),prenda:norm(f.prenda),cliente:norm(f.cliente),modulo:norm(f.modulo),
+      operacion:norm(f.operacion),std:String(f.std||"0").trim().replace(",",".")||"0",n_op:String(f.n_op||"").trim()});
+  });
+  try{
+    const r=await rpc("fn_bases_agregar_varios",{p_dni:ING.dni,p_token:ING.token,p_area:area,p_filas:filas});
+    if(!r||r.ok===false){ mostrarError((r&&r.error)||"No se pudo registrar"); if(b) b.disabled=false; return; }
+    const hechos=new Set((r.creados||[]).map(normKey));
+    // quita de la tabla lo ya registrado; el resto queda para corregir
+    BM.filas=BM.filas.filter(f=>bmVacio(f)||!hechos.has(normKey(f.articulo)));
+    if(!BM.filas.length) BM.filas.push(bmVacia());
+    bmPintar();
+    const li=(t,a,cls)=>a&&a.length?`<div class="${cls}"><b>${t} (${a.length}):</b> ${a.map(x=>esc(typeof x==="string"?x:`${x.articulo} · ${x.motivo}`)).join(" · ")}</div>`:"";
+    $("bmInforme").innerHTML=`<div class="diff-box"><h3>Resumen</h3>
+      ${li("Registrados",r.creados,"diff-add")}${li("Ya existían",r.duplicados,"diff-mod")}${li("Con errores",r.invalidos,"diff-del")}
+      ${(r.creados||[]).length?`<div class="cf-detalle">${r.filas} operación(es) guardadas</div>`:""}</div>`;
+    delete BASES_CACHE[area];
+    if((r.creados||[]).length){ mostrarOk(`${r.creados.length} artículo(s) registrados`); await cargarBases(); }
+  }catch(e){ mostrarError(e.message); }
+  finally{ if($("bmOk")) $("bmOk").disabled=false; }
+}

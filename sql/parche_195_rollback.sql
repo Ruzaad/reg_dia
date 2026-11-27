@@ -354,6 +354,8 @@ drop function if exists public._of_uso(text);
 drop function if exists public.fn_admin_asignar(text, uuid, text, boolean);
 drop function if exists public.fn_incentivos_tabla_guardar(text, uuid, jsonb);
 drop function if exists public.fn_bono_modular_tabla_guardar(text, uuid, jsonb);
+drop function if exists public.fn_bases_agregar_varios(text, uuid, text, jsonb);
+-- Los límites de % de las tablas de incentivo se dejan abiertos (no pierde datos)
 
 -- Corte sin TALLER (la columna pcp_corte.taller se deja: no pierde datos)
 create or replace function public.fn_pcp_corte_cargar(p_dni text, p_token uuid, p_origen text, p_filas jsonb)

@@ -4589,58 +4589,124 @@ async function cargarIncTabla(){
 function incApoyoResumen(p){ const n={}; Object.values(p.dias||{}).forEach(d=>{ if(d.apoyo) n[d.apoyo]=(n[d.apoyo]||0)+1; });
   return Object.keys(n).map(k=>k+" "+n[k]).join(" · "); }
 function incApoyoAb(a){ const m=String(a).match(/\(([^)]+)\)/); return m?m[1]:String(a).slice(0,3); }
-let INC_EDIT={ind:false, mod:false};
-/* Ver las dos tablas es de la pestaña; editarlas es solo del Admin (la base lo exige también). */
+/* Soles peruanos: S/ 1,234.50 (siempre dos decimales). */
+const fmtSoles = v => "S/ " + (Number(v)||0).toLocaleString("es-PE",{minimumFractionDigits:2,maximumFractionDigits:2});
+/* Ver las dos tablas es de la pestaña; editarlas es solo del Admin (la base lo exige también).
+   Cada tabla se edita por separado: agregar, cambiar y quitar porcentajes, y se guarda completa. */
+const INC_CATS=["A","B","C","D"];
+let INC_ED={ind:null, mod:null};
 function incTabAcc(k){
   const z=$(k==="ind"?"incTabIndAcc":"incTabModAcc"); if(!z) return;
   if(!ES_ADMIN()){ z.innerHTML=""; return; }
-  z.innerHTML=INC_EDIT[k]
-    ? `<button class="btn-mini verde" onclick="incTabGuardar('${k}')">Guardar</button> <button class="btn-mini gris" onclick="incTabEditar('${k}',false)">Cancelar</button>`
+  z.innerHTML=INC_ED[k]
+    ? `<button class="btn-mini" onclick="incTabFila('${k}')">+ Agregar %</button> <button class="btn-mini verde" onclick="incTabGuardar('${k}')">Guardar</button> <button class="btn-mini gris" onclick="incTabEditar('${k}',false)">Cancelar</button>`
     : `<button class="btn-mini" onclick="incTabEditar('${k}',true)">Editar</button>`;
 }
-function incTabEditar(k,v){ INC_EDIT[k]=v; incPintarTabla(); }
+function incTabEditar(k,v){
+  if(!v){ INC_ED[k]=null; $("incTabMsg").textContent=""; incPintarTabla(); return; }
+  if(k==="ind"){
+    const pcts=[...new Set(INC_TABLA.map(x=>x.pct))].sort((a,b)=>a-b);
+    INC_ED.ind=pcts.map(p=>({pct:String(p), c:Object.fromEntries(INC_CATS.map(c=>{
+      const f=INC_TABLA.find(x=>x.categoria===c&&x.pct===p); return [c, f?soles(f.soles):""]; }))}));
+  }else{
+    INC_ED.mod=[...MOD_TRAMOS].sort((a,b)=>a.pct-b.pct).map(x=>({pct:String(x.pct), c:{M:soles(x.soles)}}));
+  }
+  incPintarTabla();
+}
+function incTabFila(k){
+  incTabLeer(k);
+  const f=INC_ED[k]; if(!f) return;
+  const ult=f.length?Number(f[f.length-1].pct)+1:80;
+  f.push({pct:String(isFinite(ult)?ult:""), c:Object.fromEntries((k==="ind"?INC_CATS:["M"]).map(c=>[c,""]))});
+  incPintarTabla();
+  const z=$(k==="ind"?"tablaIncCat":"tablaModTramos"), l=z&&z.querySelector("tr:last-child .inc-pct"); if(l) l.focus();
+}
+function incTabQuitar(k,i){ INC_ED[k].splice(i,1); incPintarTabla(); }
+/* Lo escrito en las celdas vuelve al estado, para no perderlo al agregar o quitar filas. */
+function incTabLeer(k){
+  const z=$(k==="ind"?"tablaIncCat":"tablaModTramos"); if(!z||!INC_ED[k]) return;
+  z.querySelectorAll("tbody tr").forEach((tr,i)=>{
+    const f=INC_ED[k][i]; if(!f) return;
+    const p=tr.querySelector(".inc-pct"); if(p) f.pct=p.value;
+    tr.querySelectorAll(".inc-ed").forEach(inp=>{ f.c[inp.dataset.cat]=inp.value; });
+  });
+}
+function incTabValidar(k){
+  const filas=INC_ED[k], items=[], vistos=new Set(), err=[];
+  filas.forEach((f,i)=>{
+    const vacia=(k==="ind"?INC_CATS:["M"]).every(c=>String(f.c[c]||"").trim()==="") && String(f.pct).trim()==="";
+    if(vacia) return;
+    const p=String(f.pct).trim();
+    if(!/^\d{1,3}$/.test(p) || +p>300){ err.push(`Fila ${i+1}: el porcentaje debe ser un entero de 0 a 300`); return; }
+    if(vistos.has(p)){ err.push(`El ${p}% está repetido`); return; }
+    vistos.add(p);
+    let alguna=false;
+    (k==="ind"?INC_CATS:["M"]).forEach(c=>{
+      const v=String(f.c[c]||"").trim().replace(",",".");
+      if(v==="") return;
+      if(!/^\d{1,5}(\.\d{1,2})?$/.test(v)){ err.push(`${p}%${k==="ind"?" · categoría "+c:""}: monto inválido (S/ con hasta 2 decimales)`); return; }
+      alguna=true;
+      items.push(k==="ind"?{categoria:c,pct:+p,soles:+v}:{pct:+p,soles:+v});
+    });
+    if(!alguna) err.push(`El ${p}% no tiene ningún monto`);
+  });
+  if(!err.length && !items.length) err.push("La tabla no puede quedar vacía");
+  return {items,err};
+}
 async function incTabGuardar(k){
-  const items=[...document.querySelectorAll(`#${k==="ind"?"tablaIncCat":"tablaModTramos"} input[data-pct]`)].map(i=>({
-    categoria:i.dataset.cat, pct:+i.dataset.pct, soles:+i.value}));
-  if(items.some(x=>!isFinite(x.soles)||x.soles<0)){ $("incTabMsg").textContent="Soles inválidos"; return; }
+  incTabLeer(k);
+  const {items,err}=incTabValidar(k);
+  if(err.length){ $("incTabMsg").innerHTML=err.slice(0,6).map(esc).join("<br>"); return; }
   $("incTabMsg").textContent="";
   try{
     const r=await rpc(k==="ind"?"fn_incentivos_tabla_guardar":"fn_bono_modular_tabla_guardar",
       {p_dni:ING.dni,p_token:ING.token,p_items:items});
     if(!r||r.ok===false){ $("incTabMsg").textContent=(r&&r.error)||"No se pudo guardar"; return; }
-    INC_EDIT[k]=false; INC_TABLA=[]; MOD_TRAMOS=[]; mostrarOk("Tabla guardada"); cargarIncTabla();
+    INC_ED[k]=null; INC_TABLA=[]; MOD_TRAMOS=[]; mostrarOk(`Tabla guardada: ${r.filas} fila(s), ${r.nuevas} nueva(s), ${r.borradas} quitada(s)`); cargarIncTabla();
   }catch(e){ $("incTabMsg").textContent=e.message; }
 }
 function incPintarTabla(){
-  const cats=[...new Set(INC_TABLA.map(x=>x.categoria))].sort();
-  const pcts=[...new Set(INC_TABLA.map(x=>x.pct))].sort((a,b)=>a-b);
-  const m={}; INC_TABLA.forEach(x=>{ m[x.categoria+"|"+x.pct]=x.soles; });
-  const ed=INC_EDIT.ind && ES_ADMIN();
-  const cel=(c,p)=>ed?`<td><input type="number" step="0.01" min="0" class="inc-ed" data-cat="${esc(c)}" data-pct="${p}" value="${soles(m[c+"|"+p])}"></td>`
-                     :`<td class="rep-num">S/ ${soles(m[c+"|"+p])}</td>`;
-  $("tablaIncCat").innerHTML =
-    "<thead><tr><th>%</th>"+cats.map(c=>`<th>Categoría ${esc(c)}</th>`).join("")+"</tr></thead><tbody>"
-    + pcts.map(p=>`<tr><td><b>${p}%</b></td>`+cats.map(c=>cel(c,p)).join("")+"</tr>").join("")
-    + "</tbody>";
+  if(INC_ED.ind && !ES_ADMIN()) INC_ED.ind=null;
+  { const g=document.querySelector("#incTablaView .inc-tablas"); if(g) g.classList.toggle("edit",!!(INC_ED.ind||INC_ED.mod)); }
+  const ed=INC_ED.ind;
+  if(ed){
+    $("tablaIncCat").innerHTML =
+      "<thead><tr><th>%</th>"+INC_CATS.map(c=>`<th>Categoría ${c}</th>`).join("")+"<th></th></tr></thead><tbody>"
+      + ed.map((f,i)=>`<tr><td><input type="number" class="inc-pct" min="0" max="300" step="1" value="${esc(f.pct)}"></td>`
+          + INC_CATS.map(c=>`<td><input type="number" class="inc-ed" data-cat="${c}" min="0" step="0.01" placeholder="S/" value="${esc(f.c[c]||"")}"></td>`).join("")
+          + `<td><button class="btn-mini rojo" onclick="incTabLeer('ind');incTabQuitar('ind',${i})" title="Quitar fila">×</button></td></tr>`).join("")
+      + "</tbody>";
+  }else{
+    const cats=[...new Set(INC_TABLA.map(x=>x.categoria))].sort();
+    const pcts=[...new Set(INC_TABLA.map(x=>x.pct))].sort((a,b)=>a-b);
+    const m={}; INC_TABLA.forEach(x=>{ m[x.categoria+"|"+x.pct]=x.soles; });
+    $("tablaIncCat").innerHTML =
+      "<thead><tr><th>%</th>"+cats.map(c=>`<th>Categoría ${esc(c)}</th>`).join("")+"</tr></thead><tbody>"
+      + pcts.map(p=>`<tr><td><b>${p}%</b></td>`+cats.map(c=>`<td class="rep-num">${m[c+"|"+p]==null?"—":fmtSoles(m[c+"|"+p])}</td>`).join("")+"</tr>").join("")
+      + "</tbody>";
+  }
   incTabAcc("ind");
   incPintarModTramos();
 }
 /* Tabla modular: no distingue categorías, va aparte de la individual. */
 async function incPintarModTramos(){
   const z=$("tablaModTramos"); if(!z) return;
-  if(!MOD_TRAMOS.length){
+  if(!MOD_TRAMOS.length && !INC_ED.mod){
     try{
       const t=await rpc("fn_bono_modular_tabla_listar",{p_dni:ING.dni,p_token:ING.token});
       if(t&&t.ok) MOD_TRAMOS=t.items||[];
     }catch(e){}
   }
-  const ed=INC_EDIT.mod && ES_ADMIN();
-  z.innerHTML = "<thead><tr><th>% del área</th><th>Soles por día</th></tr></thead><tbody>"
-    + (MOD_TRAMOS.length
-        ? MOD_TRAMOS.map(x=>`<tr><td><b>${x.pct}%</b></td>`+(ed
-            ?`<td><input type="number" step="0.01" min="0" class="inc-ed" data-pct="${x.pct}" value="${soles(x.soles)}"></td>`
-            :`<td class="rep-num">S/ ${soles(x.soles)}</td>`)+"</tr>").join("")
-        : `<tr><td colspan="2"><div class="vacio-msg">Sin tramos cargados</div></td></tr>`)
+  if(INC_ED.mod && !ES_ADMIN()) INC_ED.mod=null;
+  const ed=INC_ED.mod;
+  z.innerHTML = "<thead><tr><th>% del área</th><th>Soles por día</th>"+(ed?"<th></th>":"")+"</tr></thead><tbody>"
+    + (ed
+        ? ed.map((f,i)=>`<tr><td><input type="number" class="inc-pct" min="0" max="300" step="1" value="${esc(f.pct)}"></td>
+            <td><input type="number" class="inc-ed" data-cat="M" min="0" step="0.01" placeholder="S/" value="${esc(f.c.M||"")}"></td>
+            <td><button class="btn-mini rojo" onclick="incTabLeer('mod');incTabQuitar('mod',${i})" title="Quitar fila">×</button></td></tr>`).join("")
+        : (MOD_TRAMOS.length
+            ? MOD_TRAMOS.map(x=>`<tr><td><b>${x.pct}%</b></td><td class="rep-num">${fmtSoles(x.soles)}</td></tr>`).join("")
+            : `<tr><td colspan="2"><div class="vacio-msg">Sin tramos cargados</div></td></tr>`))
     + "</tbody>";
   incTabAcc("mod");
 }
@@ -6447,8 +6513,13 @@ async function mostrarDiff(filas){
     p_area:$("areaBase").value,p_articulos:arts});
   const viejasPorArt={};
   existentes.forEach(v=>{ (viejasPorArt[v.articulo]=viejasPorArt[v.articulo]||[]).push(v); });
-  let html=`<div class="diff-box"><h3>Vas a actualizar ${arts.length} artículo(s) en ${esc($("areaBase").value)}</h3>
-    <div class="cf-detalle">Solo se reemplazan los artículos del archivo; el resto de la base queda intacto.</div></div>`;
+  // Antes siempre decía "actualizar", aunque todo fuera nuevo: parecía que se iba a pisar algo.
+  const nNuevos=arts.filter(a=>!(viejasPorArt[a]||[]).length).length, nExist=arts.length-nNuevos;
+  const titulo=!nExist ? `Vas a crear ${nNuevos} artículo(s) nuevo(s) en ${esc($("areaBase").value)}`
+    : !nNuevos ? `Vas a reemplazar ${nExist} artículo(s) en ${esc($("areaBase").value)}`
+    : `Vas a crear ${nNuevos} y reemplazar ${nExist} artículo(s) en ${esc($("areaBase").value)}`;
+  let html=`<div class="diff-box"><h3>${titulo}</h3>
+    ${nExist?`<div class="cf-detalle">Solo se reemplazan los artículos que ya existen; el resto de la base queda intacto.</div>`:""}</div>`;
   arts.forEach(a=>{
     const nuevas=filas.filter(f=>f.articulo===a);
     const viejas=viejasPorArt[a]||[];

@@ -2271,5 +2271,13 @@ label.ini-pn-campo{cursor:text}
 @media(max-width:680px){.pm-t th,.pm-t td{padding:8px 3px;font-size:11.5px}.pm-t td:first-child{padding-left:6px}.pm-t .opi-barra{display:none}.pm-t th:nth-child(2),.pm-t td:nth-child(2){white-space:nowrap}.pm-t{min-width:0;}.pm-l{display:none}.pm-t td:last-child,.pm-t th:last-child{padding-right:8px}.pm-t .pm-bar b{min-width:0}.pm-t tr.pm-ops td:nth-child(2){font-size:10.5px;letter-spacing:-.2px}.pm-t th{letter-spacing:0;font-size:10.5px}.pm-t .pm-bar{justify-content:flex-end}.pm-t th:first-child,.pm-t td:first-child{width:22%;white-space:normal}.pm-t th:nth-child(2){font-size:0}.pm-t th:nth-child(2)::after{content:"Ops.";font-size:10.5px}.pm-pr{display:none}.pm-t .pm-pen{display:block;margin:2px 0 0}}
 
 .inc-tablas{display:grid;grid-template-columns:minmax(0,2.3fr) minmax(0,1fr);gap:14px;align-items:start;}
-.inc-ed{width:58px;text-align:right;}
+.inc-ed{width:72px;text-align:right;}
+.inc-pct{width:64px;text-align:right;}
 @media (max-width:900px){.inc-tablas{grid-template-columns:minmax(0,1fr);}}
+
+.bm-in{width:100%;min-width:90px;padding:6px 8px;font-size:13.5px;}
+#bmTabla td{padding:3px 4px;}
+#bmTabla .bm-est{font-size:12.5px;white-space:nowrap;color:var(--suave);}
+#bmTabla tr.bm-mal .bm-est{color:var(--alerta);font-weight:700;}
+#bmTabla tr.bm-mal .bm-in{border-color:var(--alerta);}
+.inc-tablas.edit{grid-template-columns:minmax(0,1fr);}
