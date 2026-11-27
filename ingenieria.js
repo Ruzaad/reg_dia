@@ -289,7 +289,7 @@ function pintarPermisosAdmin(){
   const lista=PERMU.filter(u=>!q || normKey(u.dni+" "+(u.nombre||"")+" "+u.cargo).includes(q));
   if(!lista.length){ z.innerHTML=`<div class="vacio-msg">Sin usuarios de oficina</div>`; return; }
   z.innerHTML=`<table class="tabla perm-tabla"><thead><tr>
-      <th class="izq">Usuario</th><th>Cargo</th><th>Estado</th><th class="izq">Áreas</th><th>Pestañas</th><th>Admin</th><th></th></tr></thead><tbody>
+      <th class="izq">Usuario</th><th>Rol</th><th>Estado</th><th class="izq">Áreas</th><th>Pestañas</th><th>Admin</th><th></th></tr></thead><tbody>
     ${lista.map(u=>`<tr${u.estado!=="ACTIVO"?' class="perm-inactivo"':""}>
       <td class="izq"><b>${esc(u.dni)}</b><div class="perm-nom">${esc(soloApellidos(u.nombre||""))}</div></td>
       <td>${esc(u.cargo)}</td><td><span class="pill ${esc(u.estado)}">${esc(u.estado)}</span></td>
@@ -1798,38 +1798,38 @@ async function abrirModalPersonal(dni){
   const html = `
     <h2>${esEdicion? "Editar personal":"Agregar personal"}</h2>
     <div class="modal-campo">
-      <label>DNI / Usuario</label>
+      <label>Rol</label>
+      <select id="mpCargo" onchange="mpRol()">${cargosSel.map(c=>`<option ${c===datos.cargo?"selected":""}>${esc(c)}</option>`).join("")}</select>
+    </div>
+    <div class="modal-campo">
+      <label id="mpDniLbl">DNI</label>
       <input id="mpDni" value="${esc(datos.dni)}" ${esEdicion?"disabled":""} maxlength="15">
     </div>
     <div class="modal-campo">
       <label>Nombres y apellidos</label>
       <input id="mpNombres" value="${esc(datos.nombres_apellidos)}" maxlength="120">
     </div>
-    <div class="modal-2col">
-      <div class="modal-campo">
-        <label>Área origen</label>
-        <select id="mpAreaOrigen">${areasSel.map(a=>`<option ${a===datos.area_origen?"selected":""}>${esc(a)}</option>`).join("")}</select>
+    <div id="mpPlanta">
+      <div class="modal-2col">
+        <div class="modal-campo">
+          <label>Área origen</label>
+          <select id="mpAreaOrigen">${areasSel.map(a=>`<option ${a===datos.area_origen?"selected":""}>${esc(a)}</option>`).join("")}</select>
+        </div>
+        <div class="modal-campo">
+          <label>Área actual</label>
+          <select id="mpAreaActual">${areasSel.map(a=>`<option ${a===datos.area_actual?"selected":""}>${esc(a)}</option>`).join("")}</select>
+        </div>
       </div>
       <div class="modal-campo">
-        <label>Área actual</label>
-        <select id="mpAreaActual">${areasSel.map(a=>`<option ${a===datos.area_actual?"selected":""}>${esc(a)}</option>`).join("")}</select>
-      </div>
-    </div>
-    <div class="modal-2col">
-      <div class="modal-campo">
-        <label>Estado</label>
-        <select id="mpEstado">${ESTADOS_OPERARIO.map(e=>`<option ${e===datos.estado?"selected":""}>${esc(e)}</option>`).join("")}</select>
-      </div>
-      <div class="modal-campo">
-        <label>Cargo</label>
-        <select id="mpCargo">${cargosSel.map(c=>`<option ${c===datos.cargo?"selected":""}>${esc(c)}</option>`).join("")}</select>
+        <label>Categoría</label>
+        <select id="mpCategoria">${catsSel.map(c=>
+          `<option value="${esc(c)}" ${c===(datos.categoria||"")?"selected":""}>${c||"— sin asignar —"}</option>`).join("")}</select>
       </div>
     </div>
-    <div class="modal-campo">
-      <label>Categoría</label>
-      <select id="mpCategoria">${catsSel.map(c=>
-        `<option value="${esc(c)}" ${c===(datos.categoria||"")?"selected":""}>${c||"— sin asignar —"}</option>`).join("")}</select>
-    </div>
+    ${esEdicion?`<div class="modal-campo">
+      <label>Estado</label>
+      <select id="mpEstado">${ESTADOS_OPERARIO.map(e=>`<option ${e===datos.estado?"selected":""}>${esc(e)}</option>`).join("")}</select>
+    </div>`:""}
     <div class="modal-msg" id="mpMsg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" onclick="guardarPersonal(${esEdicion?`'${esc(datos.dni)}'`:"null"})">GUARDAR</button>
@@ -1837,6 +1837,13 @@ async function abrirModalPersonal(dni){
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
     </div>`;
   abrirModal(html);
+  mpRol();
+}
+/* Ingeniería y Costos entran con usuario y no tienen área de planta; el resto, con DNI. */
+function mpRol(){
+  const ofi=esOficina($("mpCargo").value);
+  $("mpDniLbl").textContent=ofi?"Usuario":"DNI";
+  $("mpPlanta").hidden=ofi;
 }
 
 let MP_ORIG = null;   // cómo estaba la persona al abrir el modal
@@ -1847,10 +1854,10 @@ async function guardarPersonal(dniOriginal){
   const nombres = $("mpNombres").value.trim();
   let areaOrigen = $("mpAreaOrigen").value;
   let areaActual = $("mpAreaActual").value;
-  let estado = $("mpEstado").value;
+  let estado = dniOriginal ? $("mpEstado").value : "ACTIVO";
   let cargo = $("mpCargo").value;
   let categoria = $("mpCategoria").value;
-  if(!dni || !nombres){ $("mpMsg").textContent = "DNI y nombres son obligatorios"; return; }
+  if(!dni || !nombres){ $("mpMsg").textContent = (esOficina(cargo)?"Usuario":"DNI")+" y nombres son obligatorios"; return; }
   if(esOficina(cargo)){ areaOrigen=null; areaActual="INGENIERIA"; }   // oficina no es un área de planta
   try{
     let r;
@@ -1972,7 +1979,7 @@ function perPintarEst(){
   const cp=$("estCopiar"); if(cp) cp.hidden=!(EST.hayAnt && !todas.length);
   $("estResumen").textContent=`${lista.length} de ${todas.length} persona(s)`;
   if(!lista.length){ $("estTabla").innerHTML=""; return; }
-  $("estTabla").innerHTML=`<thead><tr><th>Tipo</th><th class="izq">Cargo</th><th class="izq">Área</th><th>DNI</th><th class="izq">Apellido y nombre</th><th>Ingreso</th><th>Baja</th><th class="izq">Hoy está en</th><th class="izq">Observación</th><th></th></tr></thead><tbody>`
+  $("estTabla").innerHTML=`<thead><tr><th>Tipo</th><th class="izq">Tipo de Operario</th><th class="izq">Área</th><th>DNI</th><th class="izq">Apellido y nombre</th><th>Ingreso</th><th>Baja</th><th class="izq">Hoy está en</th><th class="izq">Observación</th><th></th></tr></thead><tbody>`
     +lista.map(f=>{
       const apoya=f.en_sistema&&f.estado_bd==="ACTIVO"&&f.area_actual&&f.area_actual!==f.area;
       const hoy=!f.en_sistema?`<span class="tag">Sin usuario en el sistema</span>`
@@ -1989,53 +1996,83 @@ function abrirModalEst(dni){
   const d=f||{dni:"",nombre:"",area:($("estArea")||{}).value||(AREAS_ESTR[0]||""),subarea:"",tipo:"MOD",cargo:"",desde:"",hasta:"",nota:""};
   const areas=[...new Set([d.area,...AREAS_ESTR.filter(a=>puedeEditar(a)),"LIQUIDACION"])].filter(Boolean);
   const cargos=[...new Set(EST.filas.map(x=>x.cargo).filter(Boolean))].sort();
-  abrirModal(`<h2>${f?"Editar en la estructura":"Agregar a la estructura"}</h2>
-    <div class="sub" style="margin-bottom:10px;">Mes: <b>${esc(EST.mes.slice(0,7))}</b>. El área de aquí es la <b>oficial</b>; si alguien solo apoya en otra área, no se cambia aquí.</div>
-    <div class="modal-2col">
-      <div class="modal-campo"><label>DNI</label><input id="meDni" value="${esc(d.dni)}" ${f?"disabled":""} maxlength="15" oninput="estBuscarDni()"></div>
-      <div class="modal-campo"><label>Apellido y nombre</label><input id="meNombre" value="${esc(d.nombre)}" maxlength="120"></div>
-    </div>
+  const campos=`
     <div class="modal-2col">
       <div class="modal-campo"><label>Área</label><select id="meArea">${areas.map(a=>`<option ${a===d.area?"selected":""}>${esc(a)}</option>`).join("")}</select></div>
       <div class="modal-campo"><label>Subárea (opcional)</label><input id="meSub" list="meSubL" value="${esc(d.subarea||"")}" placeholder="Ej. CAMISA"><datalist id="meSubL"><option>CAMISA</option><option>SACO</option><option>PANTALÓN</option></datalist></div>
     </div>
     <div class="modal-2col">
       <div class="modal-campo"><label>Tipo</label><select id="meTipo"><option ${d.tipo==="MOD"?"selected":""}>MOD</option><option ${d.tipo==="MOI"?"selected":""}>MOI</option></select></div>
-      <div class="modal-campo"><label>Cargo</label><input id="meCargo" list="meCargoL" value="${esc(d.cargo||"")}" placeholder="Ej. COSTURERO"><datalist id="meCargoL">${cargos.map(c=>`<option>${esc(c)}</option>`).join("")}</datalist></div>
+      <div class="modal-campo"><label>Tipo de Operario</label><input id="meCargo" list="meCargoL" value="${esc(d.cargo||"")}" placeholder="Ej. COSTURERO"><datalist id="meCargoL">${cargos.map(c=>`<option>${esc(c)}</option>`).join("")}</datalist></div>
     </div>
     <div class="modal-2col">
       <div class="modal-campo"><label>Ingreso (si fue en el mes)</label><input type="date" id="meDesde" value="${esc(d.desde||"")}"></div>
-      <div class="modal-campo"><label>Baja (si se fue)</label><input type="date" id="meHasta" value="${esc(d.hasta||"")}"></div>
+      ${f?`<div class="modal-campo"><label>Baja (si se fue)</label><input type="date" id="meHasta" value="${esc(d.hasta||"")}"></div>`:""}
     </div>
-    <div class="modal-campo"><label>Observación</label><input id="meNota" value="${esc(d.nota||"")}" maxlength="200"></div>
+    <div class="modal-campo"><label>Observación</label><input id="meNota" value="${esc(d.nota||"")}" maxlength="200"></div>`;
+  const cabeza=f?`<div class="modal-2col">
+      <div class="modal-campo"><label>DNI</label><input id="meDni" value="${esc(d.dni)}" disabled></div>
+      <div class="modal-campo"><label>Apellido y nombre</label><input id="meNombre" value="${esc(d.nombre)}" maxlength="120"></div>
+    </div>`
+    :`<div class="modal-campo"><label>Buscar personal (nombre, DNI o usuario)</label><input id="meBuscar" autocomplete="off" oninput="estCandBuscar()" placeholder="Escribe para filtrar"></div>
+    <input type="hidden" id="meDni">
+    <div id="meLista" class="est-cand"></div>
+    <div id="meElegido" class="est-elegido" hidden></div>`;
+  abrirModal(`<h2>${f?"Editar en la estructura":"Agregar a la estructura"}</h2>
+    <div class="sub" style="margin-bottom:10px;">Mes: <b>${esc(EST.mes.slice(0,7))}</b>. El área de aquí es la <b>oficial</b>; si alguien solo apoya en otra área, no se cambia aquí.</div>
+    ${cabeza}
+    <div id="meCampos" ${f?"":"hidden"}>${campos}</div>
     <div class="modal-msg" id="meMsg"></div>
     <div class="modal-acciones">
       <button class="btn-principal btn-modal-guardar" onclick="estGuardar()">GUARDAR</button>
       ${f?`<button class="btn-pin" onclick="estQuitar('${esc(d.dni)}')">QUITAR DEL MES</button>`:""}
       <button class="btn-secundario btn-modal-cancelar" onclick="cerrarModal()">CANCELAR</button>
     </div>`);
+  if(!f) estCandBuscar(true);
 }
-async function estBuscarDni(){
-  const dni=$("meDni").value.trim(); if(dni.length<6||$("meNombre").value.trim()) return;
-  try{
-    const r=await rpc("fn_personal_detalle",{p_dni_ing:ING.dni,p_token:ING.token,p_dni:dni});
-    if(r&&r.ok&&r.nombres_apellidos){
-      $("meNombre").value=r.nombres_apellidos;
-      const a=$("meArea"); if(a&&[...a.options].some(o=>o.value===r.area_origen)) a.value=r.area_origen;
-      if(r.cargo==="SUPERVISORA"){ $("meTipo").value="MOI"; if(!$("meCargo").value) $("meCargo").value="SUPERVISOR"; }
-    }
-  }catch(e){}
+/* Solo viaja el personal activo que aún no está en la estructura del mes (máx. 40). */
+let EST_CAND=[], EST_CAND_T=null, EST_CAND_N=0;
+function estCandBuscar(ya){
+  clearTimeout(EST_CAND_T);
+  EST_CAND_T=setTimeout(async()=>{
+    const q=(($("meBuscar")||{}).value||"").trim(), n=++EST_CAND_N, L=$("meLista"); if(!L) return;
+    L.innerHTML=`<div class="vacio-msg">Buscando…</div>`;
+    try{
+      const r=await rpc("fn_estructura_candidatos",{p_dni_ing:ING.dni,p_token:ING.token,p_mes:EST.mes,p_q:q});
+      if(n!==EST_CAND_N||!$("meLista")) return;
+      if(!r||r.ok===false){ L.innerHTML=`<div class="vacio-msg">${esc((r&&r.error)||"No se pudo buscar")}</div>`; return; }
+      EST_CAND=r.filas||[];
+      L.innerHTML=EST_CAND.length?EST_CAND.map((p,i)=>`<button type="button" class="est-cand-fila" onclick="estCandElegir(${i})"><b>${esc(p.nombre)}</b><span>${esc(p.dni)} · ${esc(p.area||"—")} · ${esc(p.rol||"")}</span></button>`).join("")
+        :`<div class="vacio-msg">${q?"Nadie coincide: ya está en la estructura o no está registrado en Personal.":"Todo el personal activo ya está en la estructura de este mes."}</div>`;
+    }catch(e){ if($("meLista")) $("meLista").innerHTML=`<div class="vacio-msg">${esc(/fn_estructura_candidatos|PGRST202/i.test(e.message)?"Falta aplicar el parche 198 en la base":e.message)}</div>`; }
+  }, ya?0:250);
+}
+function estCandElegir(i){
+  const p=EST_CAND[i]; if(!p) return;
+  $("meDni").value=p.dni;
+  $("meElegido").hidden=false;
+  $("meElegido").innerHTML=`<div><b>${esc(p.nombre)}</b><span>${esc(p.dni)} · ${esc(p.rol||"")}</span></div><button type="button" class="btn-mini gris" onclick="estCandCambiar()">Cambiar</button>`;
+  $("meBuscar").parentNode.hidden=true; $("meLista").hidden=true; $("meCampos").hidden=false;
+  const a=$("meArea"); if(a&&[...a.options].some(o=>o.value===p.area)) a.value=p.area;
+  if(p.rol==="SUPERVISORA"){ $("meTipo").value="MOI"; if(!$("meCargo").value) $("meCargo").value="SUPERVISOR"; }
+}
+function estCandCambiar(){
+  $("meDni").value=""; $("meElegido").hidden=true; $("meBuscar").parentNode.hidden=false; $("meLista").hidden=false; $("meCampos").hidden=true;
 }
 async function estGuardar(){
-  const g=id=>$(id).value.trim();
-  if(!g("meDni")||!g("meNombre")){ $("meMsg").textContent="DNI y nombre son obligatorios"; return; }
+  const g=id=>$(id).value.trim(), nuevo=!$("meNombre");
+  if(!g("meDni")||(!nuevo&&!g("meNombre"))){ $("meMsg").textContent=nuevo?"Elige a una persona de la lista":"DNI y nombre son obligatorios"; return; }
   try{
-    const r=await rpc("fn_estructura_guardar",{p_dni_ing:ING.dni,p_token:ING.token,p_mes:EST.mes,p_dni:g("meDni"),p_nombre:g("meNombre"),
-      p_area:$("meArea").value,p_subarea:g("meSub"),p_tipo:$("meTipo").value,p_cargo:g("meCargo"),
-      p_desde:g("meDesde")||null,p_hasta:g("meHasta")||null,p_nota:g("meNota")});
+    const r=nuevo
+      ? await rpc("fn_estructura_agregar",{p_dni_ing:ING.dni,p_token:ING.token,p_mes:EST.mes,p_dni:g("meDni"),
+          p_area:$("meArea").value,p_subarea:g("meSub"),p_tipo:$("meTipo").value,p_cargo:g("meCargo"),
+          p_desde:g("meDesde")||null,p_nota:g("meNota")})
+      : await rpc("fn_estructura_guardar",{p_dni_ing:ING.dni,p_token:ING.token,p_mes:EST.mes,p_dni:g("meDni"),p_nombre:g("meNombre"),
+          p_area:$("meArea").value,p_subarea:g("meSub"),p_tipo:$("meTipo").value,p_cargo:g("meCargo"),
+          p_desde:g("meDesde")||null,p_hasta:g("meHasta")||null,p_nota:g("meNota")});
     if(!r||r.ok===false){ $("meMsg").textContent=(r&&r.error)||"No se pudo guardar"; return; }
     cerrarModal(); mostrarOk("Estructura guardada"); await perCargarEst();
-  }catch(e){ $("meMsg").textContent=e.message; }
+  }catch(e){ $("meMsg").textContent=/fn_estructura_agregar|PGRST202/i.test(e.message)?"Falta aplicar el parche 198 en la base":e.message; }
 }
 async function estQuitar(dni){
   if(!confirm(`¿Quitar a ${dni} de la estructura de ${EST.mes.slice(0,7)}? Úsalo solo si fue un error; para una renuncia pon la fecha de baja.`)) return;
@@ -2178,7 +2215,7 @@ function perPintarCrud(){
   if(perCrudSort.col){ const c=perCrudSort.col; lista=[...lista].sort((a,b)=>{ return cmpVal(a[c],b[c])*perCrudSort.dir; }); }
   $("perResumenCrud").textContent=`${lista.length} persona(s)`;
   const fl=k=>perCrudSort.col===k?(perCrudSort.dir===1?" ▲":" ▼"):"";
-  const C=[["nombre","Nombre"],["dni","DNI"],["area_actual","Área actual"],["area_origen","Área origen"],["categoria","Cat."],["cargo","Cargo"],["estado","Estado"]];
+  const C=[["nombre","Nombre"],["dni","DNI"],["area_actual","Área actual"],["area_origen","Área origen"],["categoria","Cat."],["cargo","Rol"],["estado","Estado"]];
   const thead=`<thead><tr><th class="col-check"></th>${C.map(c=>`<th class="ord${c[0]==="nombre"?" izq":""}" onclick="ordenarPerCrud('${c[0]}')">${c[1]}${fl(c[0])}</th>`).join("")}<th></th></tr></thead>`;
   const body=lista.length? lista.map(p=>`<tr${p.estado!=="ACTIVO"?' style="opacity:.6;"':''}>
       <td class="col-check"><input type="checkbox" class="sw" ${PER.crudSel[p.dni]?"checked":""} onclick="perToggleSel('${esc(p.dni)}')"></td>
