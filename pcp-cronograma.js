@@ -17,7 +17,7 @@ async function pcsCargar(){
   try{
     const r=await rpc("fn_pcp_costura",{p_dni:ING.dni,p_token:ING.token,p_mes:PCS.mes});
     if(!r || !r.ok){ box.innerHTML=`<div class="acf-falta">${esc((r&&r.error)||"Error")}</div>`; return; }
-    PCS.r=r; { const c=$("pcpCargas"); if(c) c.hidden=!r.puede_editar; }
+    PCS.r=r; { const c=$("pcpCargas"); if(c) c.hidden=!(r.puede_editar&&esIngRol()); }
     PCS.et=null; PCS.det={}; pcsPintar(); pcsEtapas();
   }catch(e){
     box.innerHTML=/fn_pcp_costura|404|PGRST202|Could not find/i.test(e.message)
@@ -94,7 +94,7 @@ function pcsPintar(){
   const claves=Object.keys(sems).sort((a,b)=>a==="sin"?1:b==="sin"?-1:a<b?-1:1);
   const cuerpo=claves.map(l=>{ const f=cmp?sems[l].sort(cmp):sems[l];
     return `<tbody><tr class="pcs-sem"><th colspan="18">${pcsSemEt(l)} <i>${f.length} OF</i></th></tr>${f.map(pcsFila).join("")}</tbody>`; }).join("");
-  const ed=r.puede_editar?`<details class="pcs-meta"><summary>Meta del mes</summary><div class="pcs-meta-g">${PCS_META.map(a=>`<label class="campo"><span>${a[1]}</span><input class="pcp-in" id="pcsM_${a[0].replace(/ /g,"_")}" inputmode="numeric" value="${(r.metas||{})[a[0]]?pcsN(r.metas[a[0]]):""}"></label>`).join("")}
+  const ed=(r.puede_editar&&esIngRol())?`<details class="pcs-meta"><summary>Meta del mes</summary><div class="pcs-meta-g">${PCS_META.map(a=>`<label class="campo"><span>${a[1]}</span><input class="pcp-in" id="pcsM_${a[0].replace(/ /g,"_")}" inputmode="numeric" value="${(r.metas||{})[a[0]]?pcsN(r.metas[a[0]]):""}"></label>`).join("")}
       <button class="btn-mini" type="button" onclick="pcsGuardarMeta()">Guardar</button></div></details>`:"";
   const hay=Object.keys(PCS.f).some(z=>z!=="q"&&PCS.f[z])||PCS.f.q;
   const q=document.activeElement&&document.activeElement.id==="pcsQ";
