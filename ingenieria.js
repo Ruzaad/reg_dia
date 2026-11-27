@@ -1826,6 +1826,13 @@ async function abrirModalPersonal(dni){
           `<option value="${esc(c)}" ${c===(datos.categoria||"")?"selected":""}>${c||"— sin asignar —"}</option>`).join("")}</select>
       </div>
     </div>
+    ${esEdicion?"":`<div id="mpEst">
+      <div class="modal-2col">
+        <div class="modal-campo"><label>Tipo</label><select id="mpTipo"><option>MOD</option><option>MOI</option></select></div>
+        <div class="modal-campo"><label>Tipo de Operario</label><input id="mpTipoOp" list="mpTipoOpL" maxlength="60" placeholder="Ej. COSTURERO"><datalist id="mpTipoOpL">${[...new Set(EST.filas.map(x=>x.cargo).filter(Boolean))].sort().map(c=>`<option>${esc(c)}</option>`).join("")}</datalist></div>
+      </div>
+      <div class="modal-campo"><label>Subárea (opcional)</label><input id="mpSub" list="mpSubL" maxlength="40" placeholder="Ej. CAMISA"><datalist id="mpSubL"><option>CAMISA</option><option>SACO</option><option>PANTALÓN</option></datalist></div>
+    </div>`}
     ${esEdicion?`<div class="modal-campo">
       <label>Estado</label>
       <select id="mpEstado">${ESTADOS_OPERARIO.map(e=>`<option ${e===datos.estado?"selected":""}>${esc(e)}</option>`).join("")}</select>
@@ -1845,6 +1852,12 @@ function mpRol(){
   $("mpDniLbl").textContent=ofi?"Usuario":"DNI";
   $("mpPlanta").hidden=ofi;
   $("mpCatBox").hidden=$("mpCargo").value!=="OPERARIO";   // solo el operario tiene categoría
+  const e=$("mpEst"); if(e){            // Tipo y Tipo de Operario: la estructura nace junto con la persona
+    e.hidden=ofi;
+    const sup=$("mpCargo").value==="SUPERVISORA"; $("mpTipo").value=sup?"MOI":"MOD";
+    if(sup&&!$("mpTipoOp").value) $("mpTipoOp").value="SUPERVISOR";
+    else if(!sup&&$("mpTipoOp").value==="SUPERVISOR") $("mpTipoOp").value="";
+  }
 }
 
 let MP_ORIG = null;   // cómo estaba la persona al abrir el modal
@@ -1883,7 +1896,18 @@ async function guardarPersonal(dniOriginal){
         p_estado:estado,p_cargo:cargo,p_categoria:categoria});
     }
     if(!r.ok){ $("mpMsg").textContent = r.error||"No se pudo guardar"; return; }
-    if(r.pin_inicial) mostrarOk(`${nombres} creado. Clave inicial: ${r.pin_inicial}`);
+    let avisoEst="";
+    if(!dniOriginal && !esOficina(cargo)){
+      /* El alta ya deja a la persona en la estructura del mes (trigger); aquí se le ponen Tipo y Tipo de Operario. */
+      const g=id=>($(id)||{value:""}).value.trim();
+      try{
+        const e=await rpc("fn_estructura_guardar",{p_dni_ing:ING.dni,p_token:ING.token,p_mes:hoyISO().slice(0,7)+"-01",p_dni:dni,p_nombre:nombres,
+          p_area:areaOrigen,p_subarea:g("mpSub"),p_tipo:$("mpTipo").value,p_cargo:g("mpTipoOp"),p_desde:hoyISO(),p_hasta:null,p_nota:""});
+        if(!e||e.ok===false) avisoEst=" (no se pudo asignar a la estructura: "+((e&&e.error)||"error")+")";
+      }catch(x){ avisoEst=" (no se pudo asignar a la estructura: "+x.message+")"; }
+    }
+    if(r.pin_inicial) mostrarOk(`${nombres} creado. Clave inicial: ${r.pin_inicial}${avisoEst}`);
+    else if(avisoEst) mostrarError(`${nombres} creado${avisoEst}`);
     PMETA=null;   // cambió área origen o categoría: el Excel debe releerlas
     cerrarModal();
     AREAS_DB=null; AREAS_LISTA = await cargarAreasDB(); poblarSelectsArea();  // por si se creó un área nueva
