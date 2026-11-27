@@ -50,6 +50,7 @@ function bnBloqueHTML(i){
         <div id="bnResumen${s}" class="bn-resumen"></div>
         ${multi?"":`<div class="modal-acciones">
           <button class="btn-principal btn-modal-guardar" onclick="bnGuardar()">REVISAR Y GUARDAR</button>
+          <button class="btn-mini azul" onclick="bnPasarAVarios()">+ OTRO ARTÍCULO</button>
           <button class="btn-secundario btn-modal-cancelar" onclick="bnCerrar()">CANCELAR</button>
         </div>`}
       </div>
@@ -95,6 +96,10 @@ function bnAbrir(multi){
   bnRender();
   if(!BN_MULTI){ bnLimpiarImgs(); bnImgCargar("_borrador"); }
   window.scrollTo(0,0);
+}
+/* Desde un solo artículo: pasa a varios conservando lo ya armado (sin imágenes de referencia). */
+function bnPasarAVarios(){
+  bnGuardarCampos(); bnLimpiarImgs(); BN_MULTI=true; bnAgregarBloque();
 }
 function bnAgregarBloque(){
   bnGuardarCampos(); BNS.push(bnEstado(BNS.length)); bnRender();
