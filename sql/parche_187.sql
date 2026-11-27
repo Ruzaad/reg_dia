@@ -8,7 +8,7 @@
 begin;
 
 create or replace function public.fn_pcp_etapas(p_dni text, p_token uuid, p_mes date default null)
- returns json language plpgsql volatile security definer set search_path to 'public'
+ returns json language plpgsql stable security definer set search_path to 'public'
 as $function$
 declare
   o operarios; v_mes date := date_trunc('month', coalesce(p_mes, _hoy()))::date; v_d date; v_h date; j json;
@@ -48,7 +48,7 @@ revoke all on function public.fn_pcp_etapas(text, uuid, date) from public;
 grant execute on function public.fn_pcp_etapas(text, uuid, date) to anon, authenticated;
 
 create or replace function public.fn_pcp_etapa_detalle(p_dni text, p_token uuid, p_of text, p_etapa text, p_area text default null)
- returns json language plpgsql volatile security definer set search_path to 'public'
+ returns json language plpgsql stable security definer set search_path to 'public'
 as $function$
 declare
   o operarios; v text := _of_planta(p_of); e text := upper(coalesce(p_etapa, ''));

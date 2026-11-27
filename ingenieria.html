@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="rediseno.css?v=c49">
+<link rel="stylesheet" href="rediseno.css?v=c45">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
 </head>
 <body data-pagina="ingenieria">
@@ -32,22 +32,26 @@
   <aside class="ing-sidebar">
     <nav class="ing-nav" aria-label="Secciones de ingeniería">
       <a class="nav-item nav-inicio" data-tab="pasoInicio" href="#pasoInicio">Inicio</a>
+      <a class="nav-item nav-inicio" data-tab="pasoTablero" href="#pasoTablero">Tablero de gestión</a>
       <details class="nav-group" open>
         <summary class="nav-sep">Tickets</summary>
         <a class="nav-item" data-tab="pasoBuscar" href="#pasoBuscar">Buscar y seguir</a>
         <a class="nav-item" data-tab="pasoAsisConf" href="#pasoAsisConf">Asistencia por confirmar</a>
         <a class="nav-item" data-tab="pasoFeriados" href="#pasoFeriados">Feriados y fin de semana</a>
         <a class="nav-item" data-tab="pasoBolSin" href="#pasoBolSin">Boletas sin llenar<b class="dyn-cnt" id="bslNavCnt" hidden></b></a>
+        <a class="nav-item" data-tab="pasoSueltos" href="#pasoSueltos">Paquetes sueltos</a>
         <a class="nav-item" data-tab="pasoLotes" href="#pasoLotes">Reproceso</a>
         <a class="nav-item activo" data-tab="pasoTk" href="#pasoTk">Actual</a>
         <a class="nav-item" data-tab="pasoGen" href="#pasoGen">Generar tickets</a>
         <a class="nav-item" data-tab="pasoOfs" href="#pasoOfs">OFs registradas</a>
+        <a class="nav-item" data-tab="pasoAvOF" href="#pasoAvOF">Resumen de OF</a>
         <a class="nav-item" data-tab="pasoVista" href="#pasoVista">Vista del personal</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Planificación</summary>
         <a class="nav-item" data-tab="pasoPcp" href="#pasoPcp">PCP · Meta y programa</a>
         <a class="nav-item" data-tab="pasoCrono" href="#pasoCrono">Cronogramas</a>
+        <a class="nav-item" data-tab="pasoCarga" href="#pasoCarga">Carga vs capacidad</a>
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Eficiencia</summary>
@@ -62,6 +66,8 @@
       </details>
       <details class="nav-group" open>
         <summary class="nav-sep">Tiempos</summary>
+        <a class="nav-item" data-tab="pasoTmpMed" href="#pasoTmpMed">Tiempos medidos</a>
+        <a class="nav-item" data-tab="pasoTmpFalta" href="#pasoTmpFalta">Qué falta medir</a>
         <a class="nav-item" data-tab="pasoTmpTomar" href="https://estudios-tiempos.vercel.app/entrar" target="_blank" rel="noopener">Tomar tiempos ↗</a>
       </details>
       <details class="nav-group" open>
@@ -77,7 +83,7 @@
         <a class="nav-item" data-tab="pasoPrestadas" href="#pasoPrestadas">Sesiones prestadas</a>
       </details>
       <details class="nav-group" open>
-        <summary class="nav-sep">Ing. Costos</summary>
+        <summary class="nav-sep">Costos</summary>
         <a class="nav-item" data-tab="pasoCostosBase" href="#pasoCostosBase">Base y balance</a>
         <a class="nav-item" data-tab="pasoCostosHoy" href="#pasoCostosHoy">Reporte de hoy</a>
         <a class="nav-item" data-tab="pasoCostosInc" href="#pasoCostosInc">Incidencias</a>
@@ -164,11 +170,14 @@
     <section class="pantalla" id="pasoInc">
       <div class="seccion-cab">
         <h1>Incentivos</h1>
+        <p class="seccion-sub">Bonificación por eficiencia diaria, de quincena a quincena. Se gana el día que llega a <b>80%</b> o más, según la <b>categoría</b> de la persona; el porcentaje se topa en 100%. Los bonos (A, B, C…) son las semanas laborables del rango. Cualquier penalidad anula la quincena.
+        Aparte va el <b>bono modular</b>, que es del área y no mira categorías: se suma al último bono y solo a quien tenga promedio de eficiencia <b>≥ 70%</b>.
+        El área que agrupa es la de <b>origen</b>, no donde esté prestada la persona.</p>
       </div>
       <div class="tabs sup-subtabs">
         <button id="incTabMod" class="tab" onclick="incVista('mod')">BONO MODULAR</button>
         <button id="incTabQ" class="tab activo" onclick="incVista('q')">QUINCENA</button>
-        <button id="incTabTab" class="tab" onclick="incVista('tabla')">TABLAS</button>
+        <button id="incTabTab" class="tab" onclick="incVista('tabla')">TABLA DE INC.</button>
         <button id="incTabEfm" class="tab" onclick="incVista('efm')">EFICIENCIA MANUAL</button>
         <button id="incTabCons" class="tab" onclick="incVista('cons')">MIN. CONSIDERACIÓN</button>
         <button id="incTabSus" class="tab" onclick="incVista('sus')">SUSTENTO</button>
@@ -288,21 +297,15 @@
       </div>
 
       <div id="incTablaView" hidden>
-        <div class="inc-tablas">
-          <section class="ini-card">
-            <div class="ini-card-h"><b>Tabla individual</b> <span id="incTabIndAcc"></span></div>
-            <div class="contenedor-ancho tabla-scroll" style="max-height:52vh;">
-              <table class="tabla" id="tablaIncCat"></table>
-            </div>
-          </section>
-          <section class="ini-card">
-            <div class="ini-card-h"><b>Tabla modular</b> <span id="incTabModAcc"></span></div>
-            <div class="contenedor-ancho tabla-scroll" style="max-height:52vh;">
-              <table class="tabla" id="tablaModTramos"></table>
-            </div>
-          </section>
+        <p class="seccion-sub" style="margin-bottom:14px;">Soles por día según categoría y porcentaje alcanzado. Es la <b>TABLA DE INC.</b> del formato de bonificaciones, guardada en la base (<code>incentivos_tabla</code>): se puede corregir un tramo sin tocar código.</p>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:44vh;">
+          <table class="tabla" id="tablaIncCat"></table>
         </div>
-        <div class="modal-msg" id="incTabMsg"></div>
+        <h2 class="tk-ops-title" style="margin-top:22px;">Tabla del bono modular</h2>
+        <p class="seccion-sub" style="margin-bottom:14px;">Esta <b>no distingue categorías</b>: es el esfuerzo del área en el día. Solo se suma cuando el promedio de eficiencia de la persona es <b>≥ 70%</b>.</p>
+        <div class="contenedor-ancho tabla-scroll" style="max-height:44vh;">
+          <table class="tabla" id="tablaModTramos"></table>
+        </div>
       </div>
     </section>
 
@@ -511,8 +514,7 @@
         <button class="btn-mini" onclick="cargarBases()">↻ CARGAR</button>
         <button class="btn-mini verde" onclick="descargarBase()">DESCARGAR XLSX</button>
         <button data-edita class="btn-mini" id="btnEditLote" onclick="basesModoEdicion()">✎ EDITAR EN LOTE</button>
-        <button data-edita class="btn-mini azul" onclick="bnAbrir(false)">+ AGREGAR ARTÍCULO</button>
-        <button data-edita class="btn-mini azul" onclick="bnAbrir(true)">+ VARIOS ARTÍCULOS</button>
+        <button data-edita class="btn-mini azul" onclick="bnAbrir()">+ AGREGAR ARTÍCULO</button>
         <button data-edita class="btn-mini" onclick="abrirModalBaseOp(null)">+ AGREGAR OPERACIÓN</button>
         <button data-edita class="btn-mini" id="btnEditArt" onclick="abrirModalArticulo()" hidden>EDITAR ARTÍCULO</button>
         <button data-edita class="btn-mini" onclick="abrirModalUltimas()">★ ÚLTIMA / PENÚLTIMA</button>
@@ -877,6 +879,31 @@
       <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="ofsTabla"></table></div>
     </section>
 
+    <!-- ===================== RESUMEN DE OF ===================== -->
+    <section class="pantalla" id="pasoAvOF">
+      <div class="seccion-cab"><h1>Resumen de OF</h1>
+        <p class="seccion-sub">Acumulado de toda la historia de cada OF registrada (sin rango de fechas), con <b>entrada y salida por módulo</b>.
+        Salen <b>todas las OF</b> del periodo, terminadas y en proceso. Una OF aparece en el mes en que <b>empezó</b> y también en el mes en que
+        <b>terminó</b>: si arrancó en agosto y cerró en setiembre, sale en los dos, siempre con sus fechas reales.
+        El periodo solo elige <b>qué OF</b> se listan — lo producido, el porcentaje y el estado se siguen acumulando sobre toda la historia.
+        Deja los meses en blanco para traerlas todas (pesa más y demora más).
+        <b>Entrada</b> = primer ticket reclamado de ese módulo en esa área.
+        <b>Salida</b> = cuando la <b>operación final del módulo</b> alcanzó el corte real; si el módulo se cerró sin llegar, la fecha de su último ticket.
+        La OF pasa a <b>TERMINADA</b> cuando todos sus módulos tienen salida.
+        Toca ▾ para el detalle: área, módulo y <b>todas las operaciones del balance</b> con lo producido y su porcentaje, con Acabado en su propio cuadro.</p></div>
+      <div class="barra-control">
+        <label class="campo"><span>Desde</span><input type="month" id="avofDesde" onchange="cargarAvof()"></label>
+        <label class="campo"><span>Hasta</span><input type="month" id="avofHasta" onchange="cargarAvof()"></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="avofBuscar" placeholder="Artículo / OF…" oninput="avofPintar()"></label>
+        <button class="btn-mini" onclick="cargarAvof()">Cargar</button>
+        <button class="btn-mini verde" onclick="descargarAvof()">⬇ Descargar</button>
+        <button class="btn-mini" onclick="exportarAvofCarpetas()"
+          title="Elige la carpeta raíz que contiene Acabado y Costura. La hoja OPERACION FINAL se reparte por área y se fusiona con lo que ya haya.">📁 Exportar a carpetas</button>
+      </div>
+      <div class="sub" id="avofResumen"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="avofTabla"></table></div>
+    </section>
+
     <!-- ===================== HISTORIAL DE TIEMPOS DE BASE (parche 86; por área desde el 101) ===================== -->
     <section class="pantalla" id="pasoBaseLog">
       <div class="seccion-cab">
@@ -918,6 +945,68 @@
       <div id="cqLista"></div>
     </section>
 
+    <!-- ===================== TIEMPOS MEDIDOS vs BASE (parche 104) ===================== -->
+    <section class="pantalla" id="pasoTmpMed">
+      <div class="seccion-cab">
+        <h1>Tiempos medidos vs BASE</h1>
+        <p class="seccion-sub">Lo que los analistas midieron con el cronómetro, al lado del STD que hoy tiene la BASE.
+        Una operación se mide una vez por área y vale para todos los artículos que la tienen. Aplicar cambia el STD y queda
+        en el Historial de tiempos como origen ESTUDIO.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="tmArea" onchange="tmArts()"></select></label>
+        <label class="campo"><span>Artículo</span><select id="tmArt" onchange="cargarTmpMed()"></select></label>
+        <label class="campo"><span>Mostrar</span><select id="tmFiltro" onchange="tmPintar()">
+          <option value="">Todas las operaciones</option>
+          <option value="dif">Solo las que difieren 5% o más</option>
+          <option value="sin">Solo las que no tienen estudio</option>
+          <option value="con">Solo las medidas</option>
+        </select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="tmBuscar" placeholder="Operación / módulo…" oninput="tmPintar()"></label>
+        <button class="btn-mini" onclick="cargarTmpMed()">Cargar</button>
+        <button class="btn-mini verde" id="tmBtnAplicar" onclick="tmAplicarMarcados()" disabled>Aplicar los marcados</button>
+        <button class="btn-mini" onclick="tmDescargar()">⬇ Descargar XLSX</button>
+      </div>
+      <div class="kpis" id="tmKpis" style="margin-bottom:14px;"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:62vh;"><table class="tabla" id="tmTabla"></table></div>
+    </section>
+
+    <!-- ===================== QUÉ FALTA MEDIR (parche 104) ===================== -->
+    <section class="pantalla" id="pasoTmpFalta">
+      <div class="seccion-cab">
+        <h1>Qué falta medir</h1>
+        <p class="seccion-sub">Las operaciones que más se produjeron y todavía no tienen un estudio consolidado
+        (tres operarios o más). Arriba las de más minutos producidos: ahí un estudio es el que más pesa.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="tfArea" onchange="cargarTmpFalta()"></select></label>
+        <label class="campo"><span>Producción de los últimos</span><select id="tfDias" onchange="cargarTmpFalta()">
+          <option value="15">15 días</option><option value="30" selected>30 días</option>
+          <option value="60">60 días</option><option value="90">90 días</option>
+        </select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="tfBuscar" placeholder="Artículo / operación…" oninput="tfPintar()"></label>
+        <button class="btn-mini" onclick="cargarTmpFalta()">Cargar</button>
+        <button class="btn-mini" onclick="tfDescargar()">⬇ Descargar XLSX</button>
+      </div>
+      <div class="kpis" id="tfKpis" style="margin-bottom:14px;"></div>
+      <div class="contenedor-ancho tabla-scroll" style="max-height:64vh;"><table class="tabla" id="tfTabla"></table></div>
+    </section>
+
+    <!-- ===================== CARGA vs CAPACIDAD (preview, parche 107) ===================== -->
+    <section class="pantalla" id="pasoCarga">
+      <div class="seccion-cab">
+        <h1>Carga vs capacidad</h1>
+        <p class="seccion-sub">Cuántos días de trabajo le quedan a cada área con las OFs que ya tiene generadas y el ritmo
+        real de su gente. Sirve para ver con anticipación a quién le va a faltar o sobrar trabajo.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="ccArea" onchange="ccPintar()"></select></label>
+        <label class="cc-chk"><input type="checkbox" id="ccEmp" checked onchange="ccPintar()"> Contar las OFs generadas que aún no empiezan</label>
+        <button class="btn-mini" onclick="cargarCarga()">Actualizar</button>
+        <span class="cc-corte" id="ccCorte"></span>
+      </div>
+      <div id="ccZona"></div>
+    </section>
 
     <!-- ===================== SESIONES PRESTADAS (parche 109) ===================== -->
     <section class="pantalla" id="pasoPrestadas" data-area-sel="prArea">
@@ -946,6 +1035,26 @@
         <button class="btn-mini verde" id="ltRepBtn" hidden onclick="ltRepAbrir()">+ Crear lote</button>
       </div>
       <div id="ltIngZona" aria-live="polite"></div>
+    </section>
+
+    <!-- ===================== PAQUETES SUELTOS (parche 115) ===================== -->
+    <section class="pantalla" id="pasoSueltos" data-area-sel="psArea">
+      <div class="seccion-cab">
+        <h1>Paquetes sueltos</h1>
+        <p class="seccion-sub">Paquetes que nadie reclamó en OFs que ya avanzaron. Sale una OF cuando lleva <b>7 días hábiles sin ningún reclamo</b> en el área,
+        o cuando una operación siguió con paquetes posteriores hace <b>3 días hábiles</b> y dejó atrás algunos. Es solo lectura: no reasigna ni cierra nada.</p>
+      </div>
+      <div class="barra-control">
+        <label class="campo"><span>Área</span><select id="psArea" onchange="psCargar()"></select></label>
+        <label class="campo"><span>Antigüedad</span><select id="psEdad" onchange="psPintar()">
+          <option value="">Todas</option><option value="5">De 5 a 10 días hábiles</option><option value="11">De 11 a 20</option><option value="21">Más de 20</option></select></label>
+        <label class="campo"><span>Por qué</span><select id="psMot" onchange="psPintar()">
+          <option value="">Todos los motivos</option><option value="saltados">Saltados</option><option value="sin_registrar">Operación sin registrar en la OF</option><option value="nadie">Operación que nadie registra</option></select></label>
+        <label class="campo"><span>Buscar</span><input type="text" id="psQ" placeholder="OF o artículo…" oninput="psPintar()"></label>
+        <span style="flex:1"></span>
+        <button class="btn-mini verde" onclick="psDescargar()">⬇ Descargar XLSX</button>
+      </div>
+      <div id="psZona" aria-live="polite"></div>
     </section>
 
     <!-- ===================== BOLETAS SIN LLENAR (parche 103) ===================== -->
@@ -1065,6 +1174,18 @@
       <div class="tb-kpis" id="rcKpis" aria-live="polite"></div>
       <div class="rc-areas" id="rcAreas"></div>
       <section class="ini-card"><div class="ini-card-h"><b>Todos los reconocidos</b></div><div class="tabla-scroll" id="rcTabla"></div></section>
+    </section>
+
+    <section class="pantalla" id="pasoTablero">
+      <div class="seccion-cab"><h1>Tablero de gestión</h1></div>
+      <div class="tb-periodo" id="tbPeriodo"></div>
+      <div class="tb-areas" id="tbAreas" role="group" aria-label="Área"></div>
+      <div class="tb8" id="tb8"></div>
+      <div class="tb-kpis" id="tbKpis" aria-live="polite"></div>
+      <div class="tb-g2">
+        <section class="ini-card"><div class="ini-card-h"><b>Cumplimiento por línea</b></div><div class="tabla-scroll" id="tbTabla"></div></section>
+      </div>
+      <section class="ini-card"><div class="ini-card-h"><b>OF del cronograma de costura (PCP, estado de hoy)</b></div><div class="tabla-scroll" id="tbTabla2"></div></section>
     </section>
 
     <section class="pantalla" id="pasoInicio">
@@ -1222,6 +1343,10 @@
     <section class="pantalla" id="pasoAudit">
       <div class="seccion-cab">
         <h1>Auditoría de eficiencia</h1>
+        <p class="seccion-sub">Días-persona por encima del umbral (más de <b>95%</b> es anormal) y <b>picos</b>:
+        días que saltan sobre el promedio de la propia persona aunque no pasen el umbral. Cada fila dice
+        <b>por qué</b> probablemente salió así. Toca una fila para ver su día resumido por operación,
+        con cantidades y minutos, y simular el tiempo idóneo.</p>
       </div>
       <div class="barra-control">
         <label class="campo"><span>Área</span><select id="audArea"></select></label>
@@ -1273,6 +1398,9 @@
     <section class="pantalla" id="pasoPermisos">
       <div class="seccion-cab">
         <h1>Permisos</h1>
+        <p class="seccion-sub">Qué áreas <b>lee</b> o <b>edita</b> cada usuario de oficina y qué pestañas abre.
+        Sin acceso a un área no la ve; con lectura la ve y la filtra pero no guarda nada en ella.
+        Operarios y supervisoras no pasan por aquí: siguen atados a su área.</p>
       </div>
       <div class="barra-control">
         <label class="campo"><span>Buscar</span><input type="text" id="permBuscar" placeholder="Usuario, nombre o cargo…" oninput="pintarPermisosAdmin()"></label>
@@ -1632,10 +1760,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="app.js?v=c17"></script>
-<script src="of-detalle.js?v=c1"></script>
-<script src="ingenieria.js?v=c23"></script>
+<script src="ingenieria.js?v=c19"></script>
 <script src="costos.js"></script>
 <script src="inicio.js?v=c23"></script>
+<script src="tablero.js?v=c4"></script>
 <script src="recon.js?v=c1"></script>
 <script src="inc-nueva.js?v=c1"></script>
 <script src="calidad.js"></script>
@@ -1643,15 +1771,17 @@
 <script src="feriados.js"></script>
 <script src="buscar.js"></script>
 <script src="incidencias.js"></script>
+<script src="sueltos.js"></script>
 <script src="lotes.js"></script>
 <script src="prestadas.js"></script>
-<script src="pcp.js?v=c18"></script>
+<script src="pcp.js?v=c17"></script>
 <script src="pcp-cronograma.js?v=c6"></script>
 <script src="gantt-react.js?v=1"></script>
 <script src="pcp-seguimiento.js?v=c15"></script>
-<script src="bases-nuevo.js?v=c5"></script>
+<script src="bases-nuevo.js?v=c2"></script>
 <script src="cronogramas.js?v=c3"></script>
-<script src="dinamico.js?v=c15"></script>
+<script src="dinamico.js?v=c14"></script>
+<script src="asistente.js?v=c1"></script>
 <script src="intro.js?v=c13"></script>
 </body>
 </html>

@@ -1123,7 +1123,7 @@ async function cargarTodo(s){
     MISPAQ = Array.isArray(mp) ? mp : [];
     aplicarBotonMisPaq();
     ALM = alm;
-    RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora,cant:x.cant,asig:x.asig,padre:x.padre}; });
+    RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
     OF_CARGADAS = new Set();
     OF_LISTA = armarOFS(alm.tickets, ofs);
     if(alm._err && !OF_LISTA.length) throw new Error(alm._err);
@@ -1804,7 +1804,7 @@ async function recargarMiEficiencia(){
       const prev = ALM, prevOF = OF_LISTA;
       ALM = alm;
       if(alm._err && !alm.tickets.length && prev) ALM = prev;   // no perder lo que ya había
-      RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora,cant:x.cant,asig:x.asig,padre:x.padre}; });
+      RECL = {}; recl.forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
       // Si fn_ofs_area no respondió (base lenta), se queda la lista de antes:
       // sin esto la OF que estaba marcando desaparecía y se perdía lo marcado.
       OF_LISTA = ofs===null ? prevOF : armarOFS(alm.tickets, ofs);
@@ -1874,7 +1874,7 @@ async function cargarTicketsDeOF(of, forzar){
   // Estado de reclamo de ESTA OF: se limpia lo viejo (pudieron liberar) y se
   // reemplaza por lo que dice el servidor.
   r.tickets.forEach(t=>{ delete RECL[t.codigo]; });
-  (r.reclamados||[]).forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora,cant:x.cant,asig:x.asig,padre:x.padre}; });
+  (r.reclamados||[]).forEach(x=>{ RECL[x.codigo]={nombre:x.nombre,hora:x.hora}; });
   NOPS_FIN={};
   OF_CARGADAS.add(k);
 }
@@ -2266,8 +2266,6 @@ function pintarTickets(){
       ? `${lib} libre${lib===1?"":"s"} de ${lista.length}, en orden de numeración. Toca todos los que hiciste.`
       : "No quedan paquetes libres en esta operación.";
   }
-  // Paquetes ajustados (parche 192): el original queda con lo hecho y el resto sale como «‑R» que otra persona toma.
-  const hijos={}; Object.keys(RECL).forEach(k=>{ const p=RECL[k].padre; if(p) (hijos[p]=hijos[p]||[]).push(RECL[k]); });
   const pintar=t=>{
     const r = RECL[t.codigo];
     const marcado = modoSel && marcados[t.codigo];
@@ -2310,8 +2308,7 @@ function pintarTickets(){
           : ""}
         ${fila}
       </div>
-      ${r?`<div class="tk-tomado-por">${r.cant!=null&&r.asig>r.cant?`Hizo ${qty(r.cant)} de ${qty(r.asig)} und · `:"Tomado por "}${esc(soloApellidos(r.nombre))} · ${esc(r.hora)}</div>`
-         +(hijos[t.codigo]||[]).map(h=>`<div class="tk-tomado-por">Resto ${qty(h.cant)} und · ${esc(soloApellidos(h.nombre))} · ${esc(h.hora)}</div>`).join(""):""}`;
+      ${r?`<div class="tk-tomado-por">Tomado por ${esc(soloApellidos(r.nombre))} · ${esc(r.hora)}</div>`:""}`;
     if(!r){
       c.onclick=()=>{
         if(modoSel){
@@ -2560,7 +2557,7 @@ async function refrescarReclamos(s){
     if(info && info.sys){ await cargarTicketsDeOF(sel.of, true); return; }
     const area = AREA_ESTAJERO || s.area;
     const recl = await rpc("fn_reclamados",{p_dni:s.dni,p_token:s.token,p_area:area});
-    RECL={}; recl.forEach(x=>{RECL[x.codigo]={nombre:x.nombre,hora:x.hora,cant:x.cant,asig:x.asig,padre:x.padre};});
+    RECL={}; recl.forEach(x=>{RECL[x.codigo]={nombre:x.nombre,hora:x.hora};});
   }catch(e){}
 }
 let timerReset=null;
