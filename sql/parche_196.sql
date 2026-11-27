@@ -126,7 +126,8 @@ begin
       when articulo = '' then 'Sin artículo'
       when operacion = '' then 'Sin operación'
       when std_t !~ '^[0-9]{1,4}([.][0-9]{1,3})?$' then 'STD inválido'
-      when nop_t <> '' and nop_t !~ '^[1-9][0-9]{0,2}$' then 'N°OP inválido' end;
+      when nop_t <> '' and nop_t !~ '^[1-9][0-9]{0,2}$' then 'N°OP inválido' end
+   where true;
   update _bv b set motivo = 'Operación repetida'
    where b.motivo is null and exists (select 1 from _bv z where z.ka = b.ka and z.ko = b.ko and z.n <> b.n);
   update _bv b set motivo = 'N°OP repetido'
